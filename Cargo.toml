@@ -6,3 +6,10 @@ resolver = "3"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+
+# The embedded Typst compiler dominates the binary size. These settings cut
+# the release binary roughly in half; they change nothing about behaviour.
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1
