@@ -64,14 +64,38 @@ escaped for you, so `$5` stays five dollars and never opens math mode:
 \  #  $  *  _  `  @  <  >  [  ]  ~  -  +  =  /
 ```
 
-A leading `---` frontmatter block is **ignored**, with a warning on stderr. The next
-release parses it and uses `title`, `author`, and `columns` to control the layout.
+## Frontmatter
+
+A leading `---` block controls the layout. It takes three keys, all optional:
+
+```markdown
+---
+title: A Minimal Example
+author: Iva Po
+columns: 1        # 1 or 2; the default is 2
+---
+```
+
+Without a `title` and an `author`, the PDF gets no title block. Without `columns`, it
+gets two columns. Without the block altogether, it gets both defaults.
+
+A key outside those three, or a `columns` value other than `1` or `2`, is an error that
+names the key and its line:
+
+```console
+$ md2pdf paper.md
+error: frontmatter error at line 3: unknown key 'subtitle'
+```
+
+The block is a small YAML subset, not full YAML: one `key: value` pair per line, blank
+lines and `#` comments skipped, and one pair of quotes stripped from a value. Nesting
+and lists are errors.
 
 ## Styling
 
-`core/assets/template.typ` owns all styling: the page setup, the text font, and the
-heading style. Change that file to change the look. The parser and the emitter do not
-need to know.
+`core/assets/template.typ` owns all styling: the page setup, the text font, the heading
+style, the title block, and the column count. Change that file to change the look. The
+parser and the emitter do not need to know.
 
 ## Licence
 

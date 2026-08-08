@@ -15,7 +15,7 @@ phases:
     by: null
   - name: "Phase 2 — frontmatter and column layout"
     reviewed: 2026-08-08
-    shipped: null
+    shipped: 2026-08-08
     cut: null
     by: null
 
