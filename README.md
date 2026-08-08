@@ -14,6 +14,19 @@ $ cargo build --release
 $ ./target/release/md2pdf --help
 ```
 
+## Try it
+
+`samples/article.md` is a ready-made document that exercises everything the tool
+supports. Convert it and open the result:
+
+```console
+$ ./target/release/md2pdf samples/article.md
+$ open samples/article.pdf
+```
+
+Then change `columns` in its frontmatter from `2` to `1` and convert it again, to see
+the same text across the full width of the page.
+
 ## Use
 
 ```console

@@ -1,1 +1,4 @@
 /target
+
+# Converting a sample writes its PDF beside it.
+/samples/*.pdf
