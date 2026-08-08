@@ -2,6 +2,54 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 4 — Phase 3 only — 2026-08-08 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking findings, none newly introduced. The reviewer
+verified both round-3 blockers against the file, not the changelog, and
+re-derived the supporting claims from sources: `typst_string` escapes exactly
+`\` and `"`, so gate case (2)'s literal is reproducible from the named
+function; pulldown-cmark 0.13.4's `make_code_span` folds every `\r`/`\n` in a
+code span to a space, so inline code never needs the newline escape OQ-4
+defers to Phase 4; `tests/golden/` holds exactly the four files the scope
+says change on the import line; and the `[`/`]` entries in `SPECIAL` are what
+keep escaped body text from terminating an emitter-written content block
+early. The three non-blocking fixes were spot-checked and confirmed landed.
+
+On this convergence: `reviewed: 2026-08-08` on Phase 3. Phases 4 and 5 are
+separate episodes and remain unreviewed.
+
+### Round 3 — Phase 3 only — 2026-08-08 — fresh clean-room reviewer with repo access — **NOT READY**
+
+Round 0 (once for this episode, the appended Phase 3): the phase produces
+the observable — a PDF from prose the shipped dialect rejects, which is the
+consumer's real input. The episode proceeded.
+
+Verdict: `NOT READY` — two blocking findings, three non-blocking. The author
+accepted all five, rejected none, deferred none.
+
+Blockers, and how each was resolved:
+
+1. **OQ-4 unresolved while Phase 3's scope and gate were keyed to it** — the
+   same pattern round 1 blocked on OQ-1/2/3. Resolved as a recorded
+   decision: the `#raw(...)` function form always, content as a Typst string
+   literal through `typst_string`, no delimiter counting; gate case (2)
+   rewritten to name the reproducible literal.
+2. **The mandated `_…_`/`*…*` markup breaks on CommonMark intraword
+   emphasis** — verified against the Typst 0.15.1 lexer: `foo*bar*baz`
+   would render literal underscores (a PDF that lies about its source), and
+   `*foo*bar` would fail to compile with an unnamed error. Resolved: the
+   scope mandates the function forms `#emph[…]`/`#strong[…]`, with both
+   failure modes recorded inline as the reason.
+
+Non-blocking, all accepted: the import line becomes
+`#import "template.typ": template, divider` on every document, all four
+golden files named as changing, and the full suite added to the gate; a
+descriptive clause pins `divider` as a column-width horizontal rule; the `\`
+line break gains the escape-sequence trap — `\` before a newline, never
+before text.
+
+Rejections: none.
+
 ### Round 2 — 2026-08-08 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking findings. The reviewer verified every fix

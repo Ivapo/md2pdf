@@ -19,7 +19,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 3 — inline constructs"
-    reviewed: null
+    reviewed: 2026-08-08
     shipped: null
     cut: null
     by: null
@@ -201,11 +201,18 @@ failure, and support arrives construct by construct in later phases or specs.
   valid, and every default applies. An unknown key, or an invalid `columns`
   value, is an error that names the key. Landed in Phase 2's scope; the §1
   example is settled, not provisional.
-- **OQ-4** — How does code content reach Typst verbatim — always the
+- **OQ-4** — ~~How does code content reach Typst verbatim — always the
   `#raw(...)` function form, or backtick fences with delimiter counting when
   the content itself contains backticks? One mechanism should serve both
   inline code and code blocks. Design call; blocks Phase 3's hostile gate
-  case and Phase 4's fenced-block case.
+  case and Phase 4's fenced-block case.~~ **RESOLVED (2026-08-08):** the
+  function form, always — `#raw("…")` inline, `#raw(block: true, lang: …)`
+  for Phase 4's blocks. The content travels as a Typst string literal
+  through `typst_string`; Phase 4 extends that escape with a newline as
+  `\n`, which inline code never needs because CommonMark folds its line
+  endings to spaces. No delimiter counting anywhere: one mechanism,
+  deterministic for any content, reusing the escape that already exists.
+  Landed in Phase 3's and Phase 4's scope.
 - **OQ-5** — How do tight and loose markdown lists map to Typst list
   spacing, and does the template own that look through `show` rules on
   `list` and `enum`? Design call; blocks Phase 4.
@@ -283,22 +290,33 @@ unmodified.** The dialect is the bottleneck — real prose contains emphasis
 and inline code, and today one pair of backticks is a fatal error.
 
 - **Scope:** In `core/src/emit.rs`: map five constructs that today reach the
-  reject arm. Emphasis wraps its translated content in `_…_`; strong emphasis
-  in `*…*`. Inline code becomes Typst raw content, encoded per OQ-4, and its
-  content is **not** run through the markup escape — it must reach the PDF
-  verbatim. A hard line break becomes Typst's `\` line break. A thematic
-  break becomes a call to a `divider` function that `template.typ` exports
-  beside `template` — the emitter names it and owns nothing about its look,
-  per the styling decision in §2. The escape rule for plain text runs is
-  unchanged: the emitter writes delimiter characters itself, and body text
-  around them stays escaped.
-- **Exit gate:** Golden-file tests, three cases. (1) A fixture with emphasis,
-  strong emphasis, inline code, a hard break, and a thematic break produces
-  Typst source matching its golden file and compiles to a PDF with the `%PDF`
-  magic bytes. (2) A hostile fixture whose inline code contains a backtick, a
-  `#`, a `$`, and a `\` shows in its golden file that the content is encoded
-  per OQ-4 and never markup-escaped. (3) A bullet list still exits non-zero
-  naming the construct — rejection survives the widening.
+  reject arm. Emphasis wraps its translated content in `#emph[…]` and strong
+  emphasis in `#strong[…]` — the function forms, not Typst's `_…_`/`*…*`
+  markup, because Typst's delimiters are word-boundary sensitive and
+  CommonMark permits intraword emphasis: through `_…_`, `foo*bar*baz` would
+  render literal underscores and `*foo*bar` would fail to compile with an
+  unnamed error, each breaking the §2 faithfulness decision in its own way.
+  Inline code becomes `#raw("…")` per OQ-4's resolution, its content a Typst
+  string literal through `typst_string` — never the markup escape — so it
+  reaches the PDF verbatim. A hard line break becomes Typst's `\` line
+  break, a `\` followed by a newline — a `\` followed directly by text is an
+  escape sequence instead. A thematic break becomes a call to `divider`, a
+  column-width horizontal rule, which `template.typ` exports beside
+  `template`; the emitter names it and owns nothing about its look, per the
+  styling decision in §2. The header's import line becomes
+  `#import "template.typ": template, divider` on every document, so all four
+  checked-in golden files change on that line. The escape rule for plain
+  text runs is unchanged: the emitter writes the calls itself, and body text
+  inside and around them stays escaped.
+- **Exit gate:** Golden-file tests, three cases, plus the full existing
+  golden suite, which the import-line change touches. (1) A fixture with
+  emphasis, strong emphasis, inline code, a hard break, and a thematic break
+  produces Typst source matching its golden file and compiles to a PDF with
+  the `%PDF` magic bytes. (2) A hostile fixture whose inline code contains a
+  backtick, a `#`, a `$`, and a `\` shows in its golden file the `#raw`
+  string literal with only the `\` string-escaped — the markup escape never
+  applied. (3) A bullet list still exits non-zero naming the construct —
+  rejection survives the widening.
 - **Close-out:** Update `rules/pipeline.md`'s dialect section and the
   README's "What the markdown may contain" against the code. One push.
 
