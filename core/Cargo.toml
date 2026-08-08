@@ -1,0 +1,16 @@
+[package]
+name = "md2pdf-core"
+description = "Converts markdown to Typst markup and compiles it to a PDF."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "md2pdf_core"
+path = "src/lib.rs"
+
+[dependencies]
+pulldown-cmark = "0.13.4"
+thiserror = "2"
+typst = "0.15.1"
+typst-pdf = "0.15.1"
