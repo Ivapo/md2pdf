@@ -18,6 +18,21 @@ phases:
     shipped: 2026-08-08
     cut: null
     by: null
+  - name: "Phase 3 — inline constructs"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
+  - name: "Phase 4 — block constructs"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
+  - name: "Phase 5 — links"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -186,6 +201,14 @@ failure, and support arrives construct by construct in later phases or specs.
   valid, and every default applies. An unknown key, or an invalid `columns`
   value, is an error that names the key. Landed in Phase 2's scope; the §1
   example is settled, not provisional.
+- **OQ-4** — How does code content reach Typst verbatim — always the
+  `#raw(...)` function form, or backtick fences with delimiter counting when
+  the content itself contains backticks? One mechanism should serve both
+  inline code and code blocks. Design call; blocks Phase 3's hostile gate
+  case and Phase 4's fenced-block case.
+- **OQ-5** — How do tight and loose markdown lists map to Typst list
+  spacing, and does the template own that look through `show` rules on
+  `list` and `enum`? Design call; blocks Phase 4.
 
 ## 4. Implementation phases
 
@@ -251,6 +274,76 @@ produces and carries a checkable exit gate.
   the CLI exit non-zero with a message that names the key.
 - **Close-out:** Add `core/src/frontmatter.rs` to `rules/pipeline.md`'s
   `sources`, then update the rule against them. One push.
+
+### Phase 3 — inline constructs
+*Produces the observable: yes — a PDF from prose that Phase 2 rejects.*
+
+The aim of Phases 3–5 together: **an ordinary markdown article converts
+unmodified.** The dialect is the bottleneck — real prose contains emphasis
+and inline code, and today one pair of backticks is a fatal error.
+
+- **Scope:** In `core/src/emit.rs`: map five constructs that today reach the
+  reject arm. Emphasis wraps its translated content in `_…_`; strong emphasis
+  in `*…*`. Inline code becomes Typst raw content, encoded per OQ-4, and its
+  content is **not** run through the markup escape — it must reach the PDF
+  verbatim. A hard line break becomes Typst's `\` line break. A thematic
+  break becomes a call to a `divider` function that `template.typ` exports
+  beside `template` — the emitter names it and owns nothing about its look,
+  per the styling decision in §2. The escape rule for plain text runs is
+  unchanged: the emitter writes delimiter characters itself, and body text
+  around them stays escaped.
+- **Exit gate:** Golden-file tests, three cases. (1) A fixture with emphasis,
+  strong emphasis, inline code, a hard break, and a thematic break produces
+  Typst source matching its golden file and compiles to a PDF with the `%PDF`
+  magic bytes. (2) A hostile fixture whose inline code contains a backtick, a
+  `#`, a `$`, and a `\` shows in its golden file that the content is encoded
+  per OQ-4 and never markup-escaped. (3) A bullet list still exits non-zero
+  naming the construct — rejection survives the widening.
+- **Close-out:** Update `rules/pipeline.md`'s dialect section and the
+  README's "What the markdown may contain" against the code. One push.
+
+### Phase 4 — block constructs
+*Produces the observable: yes — a PDF from documents with lists, code
+blocks, and quotes.*
+
+- **Scope:** In `core/src/emit.rs`: bullet lists become `- ` items and
+  ordered lists `N. ` items, keeping a non-`1` start number and nesting by
+  indentation; spacing between tight and loose items follows OQ-5. Fenced and
+  indented code blocks become block-level raw content, encoded per OQ-4's
+  mechanism, with a fence's language tag carried through for Typst's
+  highlighting. Block quotes become Typst's `quote`, block form, styled by
+  the template. List items, not lists alone, stop being errors. The Phase 1
+  fixture `tests/fixtures/unsupported_list.md` stops failing: the rejection
+  tests move to a construct this spec still excludes — a table.
+- **Exit gate:** Golden-file tests, three cases. (1) A fixture with a nested
+  bullet list, an ordered list starting at 3, a fenced code block with a
+  language tag, an indented code block, and a block quote matches its golden
+  file and compiles to a PDF with the `%PDF` magic bytes. (2) A loose list
+  and a tight list render distinguishably, pinned by the golden file per
+  OQ-5. (3) A fixture with a table makes the CLI exit non-zero naming the
+  construct and its line.
+- **Close-out:** Update `rules/pipeline.md`'s dialect section and the README
+  against the code. One push.
+
+### Phase 5 — links
+*Produces the observable: yes — a PDF whose links resolve.*
+
+- **Scope:** In `core/src/emit.rs`: inline links, reference links (already
+  resolved by `pulldown-cmark`), and autolinks become `#link("url")[…]`, the
+  URL through the string-literal escape that `typst_string` already
+  implements, the link text translated as normal inline content. An email
+  autolink gets a `mailto:` URL. Images stay errors: they need file access,
+  and the `World` holds exactly two files by design — a later spec's
+  subject, not a construct.
+- **Exit gate:** Golden-file tests, two cases. (1) A fixture with an inline
+  link, a reference link, and an autolink matches its golden file — the URL
+  in a string literal, the text escaped — and compiles to a PDF with the
+  `%PDF` magic bytes. (2) An image makes the CLI exit non-zero naming the
+  construct and its line.
+- **Close-out:** Update `rules/pipeline.md`'s dialect section and the README
+  against the code. A corpus check closes the ladder: this repository's own
+  README converts without error, or the gap is named in the review record.
+  One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
