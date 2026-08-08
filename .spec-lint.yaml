@@ -1,0 +1,47 @@
+# spec-lint configuration.
+#
+# This file lives at the TARGET repo root, not with the tool: it describes
+# THIS corpus, so it travels with it and is reviewed in the same commit as
+# the citations it counts. Every key is optional; the values below are the
+# defaults except where a comment says otherwise.
+
+specs_glob: "specs/*_spec.md"     # one level only
+rules_glob: "rules/*.md"
+exclude:                          # a linter does not lint its own output
+  - "specs/INDEX.md"
+  - "rules/INDEX.md"
+exclude_trees:                    # append-only record, not ratcheted
+  - "specs/reviews/"
+templates:                        # shape-only: keys required, values are not
+  - "specs/_template.md"
+  - "rules/_template.md"
+
+# Identity. Chosen once for this repo and never renumbered. This is the
+# AUTHORITATIVE home for the prefix -- it is the one the linter reads.
+id_prefix: mpdf
+id_min_digits: 3
+
+# Citations. Cite `file:symbol`; a `file:line` citation is an error. Migration
+# is a ratchet, not a cliff: `baseline` is a map of file -> count that a HUMAN
+# lowers, in the commit that converts the citations. The linter never writes it.
+citation_extensions: [ts, tsx, rs, css, py, go, java, rb]
+source_roots: ["."]
+source_index: git
+baseline: {}
+
+# A rule declaring nothing about its own provenance is a finding. Demote to
+# `warning` mid-migration, deliberately.
+rules_unmanaged_severity: error
+
+# The deliverable set: files that must stand alone, and the names that may not
+# appear in them. Both empty means the check is off.
+deliverables: []
+forbidden_names: []
+
+# The bound on a status artifact, in lines. An empty map means the check is off.
+status_artifacts: {}
+
+index:
+  specs: "specs/INDEX.md"
+  rules: "rules/INDEX.md"
+  mode: check                     # check | write | off
