@@ -2,11 +2,12 @@
 // template call and the translated body, so a new look is a new .typ file
 // rather than a change to the parser or the emitter.
 //
-// Phase 1 owns the page setup and the heading style. Phase 2 adds the title
-// block and the column toggle.
+// The emitter names every argument on every call. The defaults below are the
+// fallback for a hand-written call; core/src/frontmatter.rs holds the ones a
+// document actually gets.
 
-#let template(doc) = {
-  set page(paper: "a4", margin: 2.5cm)
+#let template(title: none, author: none, columns: 2, doc) = {
+  set page(paper: "a4", margin: 2.5cm, columns: columns)
   set text(font: "Libertinus Serif", size: 10pt, lang: "en")
   set par(justify: true, leading: 0.65em)
 
@@ -17,6 +18,27 @@
   set heading(numbering: none)
   show heading: set text(weight: "bold")
   show heading: set block(above: 1.4em, below: 0.8em)
+
+  // The title block spans every column. `scope: "parent"` is what lifts it out
+  // of the column grid, and Typst supports that only together with `float`.
+  // A document with neither key gets no title block at all.
+  if title != none or author != none {
+    place(top + center, scope: "parent", float: true, clearance: 1.6em, {
+      set par(justify: false)
+      align(center, {
+        if title != none {
+          text(size: 17pt, weight: "bold", title)
+        }
+        if author != none {
+          if title != none {
+            linebreak()
+            v(0.4em, weak: true)
+          }
+          text(size: 11pt, author)
+        }
+      })
+    })
+  }
 
   doc
 }

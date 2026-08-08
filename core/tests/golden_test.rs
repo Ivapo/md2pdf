@@ -1,4 +1,4 @@
-//! The Phase 1 exit gate, at the library level.
+//! The exit gates for Phase 1 and Phase 2, at the library level.
 //!
 //! Fixtures and golden files live at the workspace root because the CLI tests
 //! read the same ones.
@@ -10,6 +10,11 @@ const BASIC_TYP: &str = include_str!("../../tests/golden/basic.typ");
 const HOSTILE_MD: &str = include_str!("../../tests/fixtures/hostile.md");
 const HOSTILE_TYP: &str = include_str!("../../tests/golden/hostile.typ");
 const LIST_MD: &str = include_str!("../../tests/fixtures/unsupported_list.md");
+const FRONTMATTER_MD: &str = include_str!("../../tests/fixtures/frontmatter.md");
+const FRONTMATTER_TYP: &str = include_str!("../../tests/golden/frontmatter.typ");
+const SINGLE_COLUMN_MD: &str = include_str!("../../tests/fixtures/single_column.md");
+const SINGLE_COLUMN_TYP: &str = include_str!("../../tests/golden/single_column.typ");
+const UNKNOWN_KEY_MD: &str = include_str!("../../tests/fixtures/unknown_key.md");
 
 #[test]
 fn basic_fixture_matches_its_golden_file() {
@@ -69,24 +74,107 @@ fn a_bullet_list_is_an_error_that_names_the_construct_and_the_line() {
     }
 }
 
-/// Phase 1 ignores a leading frontmatter block. Phase 2 parses it.
+/// A construct after the frontmatter still reports its true line number.
+///
+/// Nothing strips the block from the input, which is what this guards.
 #[test]
-fn a_leading_frontmatter_block_is_ignored() {
-    let md = "---\ntitle: Ignored\n---\n\n# Heading\n\nBody.\n";
-    let typst_source = md_to_typst(md).unwrap();
-    assert!(
-        !typst_source.contains("Ignored"),
-        "the frontmatter leaked into the body"
-    );
-    assert!(typst_source.contains("= Heading"));
-}
-
-/// A construct after ignored frontmatter still reports its true line number.
-#[test]
-fn line_numbers_survive_an_ignored_frontmatter_block() {
-    let md = "---\ntitle: Ignored\n---\n\n# Heading\n\n- a bullet\n";
+fn line_numbers_survive_a_frontmatter_block() {
+    let md = "---\ntitle: A Title\n---\n\n# Heading\n\n- a bullet\n";
     match md_to_typst(md) {
         Err(Error::UnsupportedConstruct { line, .. }) => assert_eq!(line, 7),
         other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
+    }
+}
+
+// -- Phase 2: frontmatter and column layout ---------------------------------
+
+#[test]
+fn the_frontmatter_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(FRONTMATTER_MD).unwrap(), FRONTMATTER_TYP);
+}
+
+#[test]
+fn the_frontmatter_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(FRONTMATTER_MD).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+#[test]
+fn the_single_column_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(SINGLE_COLUMN_MD).unwrap(), SINGLE_COLUMN_TYP);
+}
+
+#[test]
+fn the_single_column_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(SINGLE_COLUMN_MD).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// The title and the author reach the generated source.
+///
+/// The equality tests above pin the whole output, but they cannot say *why* it
+/// is right. This one names the rule, so an edit that drops a key fails with a
+/// message that points at the key it dropped.
+#[test]
+fn the_generated_source_carries_the_title_and_the_author() {
+    let typst_source = md_to_typst(FRONTMATTER_MD).unwrap();
+    assert!(
+        typst_source.contains("title: \"A Minimal Example\""),
+        "the title is missing"
+    );
+    assert!(
+        typst_source.contains("author: \"Iva Po\""),
+        "the author is missing"
+    );
+}
+
+/// Absent frontmatter is valid, and every default applies.
+#[test]
+fn absent_frontmatter_gets_every_default() {
+    assert!(
+        md_to_typst(BASIC_MD)
+            .unwrap()
+            .contains("template.with(title: none, author: none, columns: 2)"),
+        "the defaults did not reach the template call"
+    );
+}
+
+#[test]
+fn an_unknown_frontmatter_key_is_an_error_that_names_it() {
+    match md_to_typst(UNKNOWN_KEY_MD) {
+        Err(Error::Frontmatter { line, problem }) => {
+            assert_eq!(line, 3);
+            assert!(problem.contains("subtitle"), "problem was: {problem}");
+        }
+        other => panic!("expected a Frontmatter error, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_columns_value_outside_the_schema_is_an_error_that_names_the_key() {
+    let md = "---\ncolumns: 3\n---\n\n# Heading\n";
+    match md_to_typst(md) {
+        Err(Error::Frontmatter { line, problem }) => {
+            assert_eq!(line, 2);
+            assert!(problem.contains("columns"), "problem was: {problem}");
+        }
+        other => panic!("expected a Frontmatter error, got {other:?}"),
+    }
+}
+
+/// A bad key is reported before a later unsupported construct.
+///
+/// The frontmatter is the first thing the user reads, so it is the first thing
+/// the error should name.
+#[test]
+fn a_frontmatter_error_wins_over_a_later_construct_error() {
+    let md = "---\nsubtitle: Bad\n---\n\n- a bullet\n";
+    match md_to_typst(md) {
+        Err(Error::Frontmatter { problem, .. }) => {
+            assert!(problem.contains("subtitle"), "problem was: {problem}");
+        }
+        other => panic!("expected a Frontmatter error, got {other:?}"),
     }
 }

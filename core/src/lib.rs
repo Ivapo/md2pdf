@@ -5,6 +5,7 @@
 //! what lets the same crate compile natively and to `wasm32` without a rewrite.
 
 mod emit;
+mod frontmatter;
 
 use std::sync::LazyLock;
 
@@ -23,6 +24,10 @@ pub enum Error {
     /// A markdown construct outside the supported dialect.
     #[error("unsupported markdown construct '{construct}' at line {line}")]
     UnsupportedConstruct { construct: String, line: usize },
+
+    /// The frontmatter block does not match the schema.
+    #[error("frontmatter error at line {line}: {problem}")]
+    Frontmatter { line: usize, problem: String },
 
     /// The Typst compiler rejected the generated source.
     #[error("typst compilation failed: {0}")]

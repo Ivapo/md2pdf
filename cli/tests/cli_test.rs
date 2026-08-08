@@ -1,4 +1,4 @@
-//! The Phase 1 exit gate, at the binary level.
+//! The exit gates for Phase 1 and Phase 2, at the binary level.
 //!
 //! These run the real `md2pdf` binary, so they cover the argument contract and
 //! the exit codes that the library tests cannot reach.
@@ -34,7 +34,12 @@ fn scratch(name: &str) -> PathBuf {
 
 #[test]
 fn emit_typst_prints_the_golden_file() {
-    for (fixture_name, golden_name) in [("basic.md", "basic.typ"), ("hostile.md", "hostile.typ")] {
+    for (fixture_name, golden_name) in [
+        ("basic.md", "basic.typ"),
+        ("hostile.md", "hostile.typ"),
+        ("frontmatter.md", "frontmatter.typ"),
+        ("single_column.md", "single_column.typ"),
+    ] {
         let out = run(&[fixture(fixture_name).as_ref(), "--emit-typst".as_ref()]);
         assert!(out.status.success(), "{fixture_name} did not exit 0");
         assert_eq!(String::from_utf8(out.stdout).unwrap(), golden(golden_name));
@@ -78,19 +83,26 @@ fn an_unsupported_construct_exits_non_zero_and_names_it() {
 }
 
 #[test]
-fn frontmatter_warns_on_stderr_but_still_succeeds() {
-    let input = scratch("frontmatter.md");
-    std::fs::write(&input, "---\ntitle: Ignored\n---\n\n# Heading\n\nBody.\n").unwrap();
-
-    let out = run(&[input.as_ref(), "--emit-typst".as_ref()]);
-    assert!(out.status.success(), "the run failed: {:?}", out);
+fn an_unknown_frontmatter_key_exits_non_zero_and_names_it() {
+    let out = run(&[fixture("unknown_key.md").as_ref()]);
+    assert!(!out.status.success(), "the run should have failed");
 
     let stderr = String::from_utf8(out.stderr).unwrap();
-    assert!(stderr.contains("frontmatter"), "stderr: {stderr}");
+    assert!(stderr.contains("subtitle"), "stderr: {stderr}");
+    assert!(stderr.contains("line 3"), "stderr: {stderr}");
+}
 
-    let stdout = String::from_utf8(out.stdout).unwrap();
-    assert!(
-        !stdout.contains("Ignored"),
-        "the frontmatter leaked into the body"
-    );
+/// A frontmatter document writes a PDF, not just Typst source.
+#[test]
+fn a_frontmatter_document_writes_a_pdf() {
+    let output = scratch("columns.pdf");
+    let out = run(&[
+        fixture("single_column.md").as_ref(),
+        "-o".as_ref(),
+        output.as_ref(),
+    ]);
+    assert!(out.status.success(), "the run failed: {:?}", out);
+
+    let bytes = std::fs::read(&output).unwrap();
+    assert!(bytes.starts_with(b"%PDF"), "the output is not a PDF");
 }

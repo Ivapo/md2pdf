@@ -7,12 +7,8 @@
 
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 
+use crate::frontmatter::{self, Frontmatter};
 use crate::{Error, Result};
-
-/// The header the emitter puts above every document. `template.typ` reaches the
-/// compiler as bytes in the world's virtual filesystem, so this import resolves
-/// there and nowhere else.
-const HEADER: &str = "#import \"template.typ\": template\n#show: template.with()\n";
 
 /// Characters that Typst markup mode interprets inside a text run.
 ///
@@ -26,19 +22,28 @@ const SPECIAL: &[char] = &[
 /// Translate one markdown document into Typst markup.
 pub(crate) fn emit(md: &str) -> Result<String> {
     let mut options = Options::empty();
-    // Recognising the metadata block is what lets this phase ignore frontmatter
-    // without editing the input, so every reported line number stays true to
-    // the user's file. Phase 2 parses the block instead of ignoring it.
+    // The parser is what recognises the frontmatter block, so nothing strips it
+    // from the input and every reported line number stays true to the user's
+    // file. `frontmatter.rs` then reads the text between the delimiters.
     options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
 
-    let mut out = String::from(HEADER);
     let mut body = String::new();
     let mut in_metadata = false;
+    let mut meta = String::new();
+    let mut meta_offset = None;
+    let mut front = Frontmatter::default();
 
     for (event, range) in Parser::new_ext(md, options).into_offset_iter() {
         match event {
             Event::Start(Tag::MetadataBlock(_)) => in_metadata = true,
-            Event::End(TagEnd::MetadataBlock(_)) => in_metadata = false,
+
+            // The block is parsed here rather than after the walk, so a bad
+            // frontmatter key is reported before any later construct error.
+            Event::End(TagEnd::MetadataBlock(_)) => {
+                in_metadata = false;
+                let first_line = line_of(md, meta_offset.unwrap_or(range.start));
+                front = frontmatter::parse(&meta, first_line)?;
+            }
 
             Event::Start(Tag::Paragraph) => body.push('\n'),
             Event::End(TagEnd::Paragraph) => body.push('\n'),
@@ -53,7 +58,10 @@ pub(crate) fn emit(md: &str) -> Result<String> {
             Event::End(TagEnd::Heading(_)) => body.push('\n'),
 
             Event::Text(text) => {
-                if !in_metadata {
+                if in_metadata {
+                    meta_offset.get_or_insert(range.start);
+                    meta.push_str(&text);
+                } else {
                     escape_into(&mut body, &text);
                 }
             }
@@ -68,9 +76,47 @@ pub(crate) fn emit(md: &str) -> Result<String> {
         }
     }
 
+    let mut out = header(&front);
     out.push_str(body.trim_end_matches('\n'));
     out.push('\n');
     Ok(out)
+}
+
+/// The two lines the emitter puts above every document.
+///
+/// `template.typ` reaches the compiler as bytes in the world's virtual
+/// filesystem, so this import resolves there and nowhere else. Every argument
+/// is named on every call, including the ones the frontmatter left out, so the
+/// `--emit-typst` output shows the layout the document actually gets.
+fn header(front: &Frontmatter) -> String {
+    format!(
+        "#import \"template.typ\": template\n\
+         #show: template.with(title: {}, author: {}, columns: {})\n",
+        typst_string(front.title.as_deref()),
+        typst_string(front.author.as_deref()),
+        front.columns,
+    )
+}
+
+/// Render an optional frontmatter value as a Typst string literal, or `none`.
+///
+/// This is a different escape from `escape_into`. That one escapes what markup
+/// mode interprets; a string literal interprets only `\` and `"`, and escaping
+/// the markup set inside one would put the backslashes into the PDF.
+fn typst_string(value: Option<&str>) -> String {
+    let Some(value) = value else {
+        return String::from("none");
+    };
+
+    let mut out = String::from("\"");
+    for ch in value.chars() {
+        if ch == '\\' || ch == '"' {
+            out.push('\\');
+        }
+        out.push(ch);
+    }
+    out.push('"');
+    out
 }
 
 /// Append `text` to `out`, escaping everything Typst would otherwise interpret.

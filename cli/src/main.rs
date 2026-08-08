@@ -45,13 +45,6 @@ fn run() -> Result<(), String> {
     let markdown = std::fs::read_to_string(&args.input)
         .map_err(|e| format!("cannot read {}: {e}", args.input.display()))?;
 
-    // The core crate ignores a leading frontmatter block. The warning lives
-    // here because the core crate must reach wasm32, where stderr has no
-    // destination. Phase 2 parses the block and this warning goes away.
-    if starts_with_frontmatter(&markdown) {
-        eprintln!("warning: frontmatter is ignored in this version");
-    }
-
     if args.emit_typst {
         let typst_source = md2pdf_core::md_to_typst(&markdown).map_err(|e| e.to_string())?;
         print!("{typst_source}");
@@ -70,10 +63,4 @@ fn run() -> Result<(), String> {
 /// The input path with its extension replaced by `.pdf`.
 fn default_output(input: &Path) -> PathBuf {
     input.with_extension("pdf")
-}
-
-/// True when the document opens with a YAML frontmatter block.
-fn starts_with_frontmatter(markdown: &str) -> bool {
-    let first = markdown.lines().next().unwrap_or_default().trim_end();
-    first == "---"
 }
