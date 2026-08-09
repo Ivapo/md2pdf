@@ -8,9 +8,10 @@ sources:
   - cli/src/main.rs
 covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
-  escape rule, the rejection rule, the template's title block and column toggle,
-  the Typst world and its bundled fonts, and the CLI contract
-max_lines: 155
+  escape rule, the rejection rule, the image asset channel, the template's title
+  block and column toggle, the Typst world and its bundled fonts, and the CLI
+  contract
+max_lines: 205
 generated: 2026-08-09
 ---
 
@@ -18,18 +19,21 @@ generated: 2026-08-09
 
 Markdown in, PDF out, in three steps. `pulldown-cmark` parses; `core/src/emit.rs:emit`
 walks the event stream and writes Typst markup; the embedded Typst compiler produces the
-PDF. `core/src/lib.rs:md_to_typst` returns the source, `core/src/lib.rs:md_to_pdf` the
-bytes. Neither touches the filesystem, the clock, or the network; `cli/src/main.rs` does
-all file I/O and all terminal output.
+PDF. `core/src/lib.rs:md_to_typst` returns the source. `core/src/lib.rs:md_to_pdf` takes
+the markdown and a slice of `core/src/lib.rs:Asset` — one image file each, named by the
+path the markdown wrote — and returns the bytes; `core/src/lib.rs:image_paths` is the
+shopping list that names those files. None of the three touches the filesystem, the
+clock, or the network; `cli/src/main.rs` does all file I/O and all terminal output, and
+it supplies no assets yet.
 
 ## The dialect
 
-Fifteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
-emphasis, strong emphasis, inline code, hard line breaks, thematic breaks, links, bullet
-lists, ordered lists, code blocks, block quotes, pipe tables, and a leading YAML
-frontmatter block. Heading levels map to Typst headings of the same level.
+Sixteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
+emphasis, strong emphasis, inline code, hard line breaks, thematic breaks, links,
+images, bullet lists, ordered lists, code blocks, block quotes, pipe tables, and a
+leading YAML frontmatter block. Heading levels map to Typst headings of the same level.
 
-The six inline constructs reach Typst as function calls, not as its own markup.
+The inline constructs reach Typst as function calls, not as its own markup.
 `#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
 while CommonMark permits intraword emphasis, so `foo*bar*baz` would either keep literal
 underscores or fail to compile. Inline code is `#raw("…")`, its content a string literal
@@ -44,6 +48,8 @@ through `typst_string`, so a `#` in a destination survives, and the text keeps t
 escape, which is what stops Typst reading an autolink's own text as a second link. An
 email autolink's destination is the bare address, because pulldown-cmark leaves the scheme
 to the renderer, so the emitter prepends `mailto:`.
+
+An image is `#image(…)` or `#box(image(…))`; the section below holds the whole subject.
 
 Lists become `- ` and `N. ` items, every ordered item carrying its own number, so a start
 other than 1 needs no mechanism of its own. A code block becomes
@@ -73,7 +79,7 @@ on the same stack, so the inline arms serve cell content unchanged. The emitter 
 cells: pulldown-cmark pads a short row and drops the excess, following GFM, so the padding
 arrives as the empty content block `[]`.
 
-**Everything else is an error** — an image, raw HTML, a footnote, strikethrough, and math.
+**Everything else is an error** — raw HTML, a footnote, strikethrough, and math.
 `core/src/emit.rs:describe` names the construct, and `Error::UnsupportedConstruct` carries
 that name with the 1-based line. The CLI prints it to stderr and exits 1. Nothing is ever
 dropped or flattened silently.
@@ -84,6 +90,45 @@ whose compile error names neither construct nor line; the test is on the resolve
 destination, so a reference definition with an empty destination is caught with it. A
 non-empty link title is something neither `link` nor the PDF can carry, so passing the link
 on would drop it. An empty title is not a title, and the link stays in-dialect.
+
+## Images and their files
+
+An image is `#image("…", alt: "…")` where its paragraph holds it and nothing else, and
+`#box(image(…))` everywhere else — Typst lays an image out as a block and documents `box`
+as the inline form, so a bare call mid-sentence would split the paragraph around it. The
+form is known one event late, so `core/src/emit.rs:emit` parks the finished call in a
+pending slot and the next event settles it; `core/src/emit.rs:write_image` writes either.
+The path and the alt go through `typst_string`, and an empty alt leaves the argument out.
+No size is emitted: with neither dimension forced, Typst bounds an image by the available
+space and keeps its aspect ratio.
+
+Alt text is flattened, not emitted, because Typst's `alt` is a plain string.
+`core/src/emit.rs:AltCapture` takes every event between the image's two: text and code
+contribute their text, a soft or hard break contributes one space, emphasis, strong and
+link wrappers contribute nothing, and an out-of-dialect construct still errors. A nested
+image flattens the same way under a depth count, contributing only its inner text; its
+destination and title are not content under that reading, so they are neither checked nor
+listed.
+
+`core/src/emit.rs:check_image` refuses seven destination shapes, each an
+`UnsupportedConstruct` naming the shape and the line, so `--emit-typst` rejects them too.
+An empty destination and a title mirror the link arm. A URI scheme is a fetch request and
+nothing fetches, which catches `data:` and the drive path `C:\figure.png` with it; an
+absolute path converts on one machine only; a `..` segment escapes the document's
+directory and the world's virtual root; a backslash is a segment `VirtualPath` cannot
+hold. Last, the extension must sit in Typst's own table — `png`, `jpg`, `jpeg`, `gif`,
+`webp`, `svg`, `svgz`, `pdf` — read case-sensitively through `VirtualPath::extension`,
+the function Typst's own detection reads.
+
+`core/src/lib.rs:collect` then checks the bytes before the compile, once per path at its
+first reference: no asset is `Error::MissingImage`, bytes that disagree with the extension
+are `Error::ImageFormat`, and both name the path and the line. That order is the point —
+Typst's own error would name a span in `main.typ`, which the user has never seen.
+`core/src/lib.rs:bytes_match` mirrors typst-library 0.15.1 by hand: the magic bytes for
+the raster formats and PDF, the gzip magic for `svgz`, and a search for the SVG namespace
+over the first 2048 bytes. Typst's fallback to content detection is not mirrored, because
+the emitter has already refused every extension it would apply to. A file corrupt past its
+magic still fails at compile time, with the compiler's own message.
 
 ## The frontmatter
 
@@ -138,9 +183,15 @@ the markdown source draws.
 
 ## The world
 
-`core/src/lib.rs:TypstWorld` holds exactly two files, `main.typ` and `template.typ`, both
-under `VirtualRoot::Project`. It implements no package resolution, so no import can reach
-the network on any target.
+`core/src/lib.rs:TypstWorld` holds two source files, `main.typ` and `template.typ`, and
+the images the document names, all under `VirtualRoot::Project`. It implements no package
+resolution, so no import can reach the network on any target.
+
+An asset rides that same virtual filesystem rather than a channel of its own, because
+`World::file` already serves `template.typ` from it. `main.typ` sits at the virtual root,
+so a relative path in the generated source resolves to the file id built from that same
+path, and `collect` keys the map by it. `World::source` is untouched by the assets — an
+image is never Typst source — which is what keeps the import story exactly as it was.
 
 Fonts are embedded with `include_bytes!` from `core/assets/fonts/`, under the OFL: five
 faces from one Libertinus release, so their metrics agree. Serif Regular, Bold, Italic and

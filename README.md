@@ -94,12 +94,12 @@ link shapes do not: a link with an empty destination, `[text]()`, and a link tha
 a title, `[text](url "a title")`. Neither Typst nor the PDF can hold a title, and an empty
 destination has nothing to resolve to.
 
-**Every other construct is an error.** An image makes `md2pdf` exit with code 1 and print
-the construct and its line:
+**Every other construct is an error.** A block of raw HTML makes `md2pdf` exit with code
+1 and print the construct and its line:
 
 ```console
 $ md2pdf notes.md
-error: unsupported markdown construct 'image' at line 5
+error: unsupported markdown construct 'raw HTML block' at line 5
 ```
 
 That is deliberate. Dropping or flattening content would ship a PDF that lies about its
