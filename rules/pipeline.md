@@ -23,8 +23,8 @@ PDF. `core/src/lib.rs:md_to_typst` returns the source. `core/src/lib.rs:md_to_pd
 the markdown and a slice of `core/src/lib.rs:Asset` — one image file each, named by the
 path the markdown wrote — and returns the bytes; `core/src/lib.rs:image_paths` is the
 shopping list that names those files. None of the three touches the filesystem, the
-clock, or the network; `cli/src/main.rs` does all file I/O and all terminal output, and
-it supplies no assets yet.
+clock, or the network; `cli/src/main.rs` does all file I/O and all terminal output, the
+image files included.
 
 ## The dialect
 
@@ -211,3 +211,11 @@ PDF differ between machines. No template uses a date.
 path with a `.pdf` extension. `--emit-typst` prints the Typst source and ignores `-o`; that
 output names `template.typ`, which exists only inside the world, so it serves inspection
 and not a standalone `typst compile`.
+
+`cli/src/main.rs:read_assets` fills the shopping list: each path joins the parent
+directory of the input file, so a figure is found beside the document and not beside the
+current directory, and a repeated path is read once. The asset keeps the path the
+markdown wrote, never the resolved one, because that is the name the generated source
+asks for. A file that will not read is exit 1 naming the resolved path, the line, and the
+message the OS gave. `--emit-typst` returns before that call, so emission reads no image
+and works on a document whose figures are absent.

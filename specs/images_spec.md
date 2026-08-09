@@ -15,7 +15,7 @@ phases:
     by: null
   - name: "Phase 2 — the CLI reads the files"
     reviewed: 2026-08-09
-    shipped: null
+    shipped: 2026-08-09
     cut: null
     by: null
 

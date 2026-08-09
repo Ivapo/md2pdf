@@ -2,6 +2,36 @@
 
 Append-only. One heading per round, newest first.
 
+### Phase 2 implementation — 2026-08-09 — **SHIPPED**
+
+One departure from the reviewed text, and one risk that did not materialize.
+
+**`samples/` gained two SVG files rather than one.** The scope names "a small
+hand-written SVG figure", singular. The sample must show both emitted forms,
+and the diagram's natural width is wider than a column, so an inline
+reference to it would wrap to a line of its own and read as a broken block.
+`samples/check.svg` is therefore the inline one, which is the pair §1's own
+example draws — a figure and a check mark. Both files use shapes alone and no
+`<text>` element, because SVG text resolves its font through the world's font
+book and a sample figure should not depend on that.
+
+**The subdirectory case held.** Phase 1 pinned flat paths only. A path such as
+`figures/mark.svg` asks Typst to resolve a relative path from `main.typ` at
+the virtual root against the `FileId` that `core/src/lib.rs:collect` built
+from the same string, which the rule asserts but nothing had tested. Gate
+case (1) tests it, and it passes; `core` needed no change and the phase did
+not widen.
+
+All three gate cases pass, and the whole suite passes at 67 tests. The corpus
+check closes the phase with no gap: `samples/article.md` converts, and its PDF
+was rendered and read by eye — the diagram sits alone in its column at column
+width, the check mark sits inside its sentence. The README's two markdown
+examples were extracted and converted as documents, and its error console
+block was reproduced from the binary, character for character.
+
+`rules/pipeline.md` keeps `max_lines: 205`; the CLI section grew by seven
+lines and the body stands at the cap exactly.
+
 ### Phase 1 implementation — 2026-08-09 — **SHIPPED**
 
 Two departures from the reviewed text, both decided with the author before

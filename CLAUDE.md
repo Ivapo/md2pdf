@@ -15,8 +15,8 @@ frontmatter schema, the phase gate, the review loop. Spec ids are `mpdf-NNN`, al
 as `max(existing) + 1` and never reused.
 
 **The observable this project produces is: the typeset PDF that Typst compiles from the
-user's markdown — "Single file in, single PDF out."** Every phase says whether it
-produces one; a phase that does not is argued for explicitly.
+user's markdown — "One markdown file plus the images it names in, single PDF out."**
+Every phase says whether it produces one; a phase that does not is argued for explicitly.
 
 **Before drafting or changing a spec, read `specs/INDEX.md`. Before changing a
 subsystem, read `rules/INDEX.md`.** Both are generated from frontmatter by
