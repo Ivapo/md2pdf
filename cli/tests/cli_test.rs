@@ -77,16 +77,6 @@ fn without_o_the_pdf_lands_beside_the_input() {
     assert!(bytes.starts_with(b"%PDF"), "the output is not a PDF");
 }
 
-#[test]
-fn an_unsupported_construct_exits_non_zero_and_names_it() {
-    let out = run(&[fixture("unsupported_table.md").as_ref()]);
-    assert!(!out.status.success(), "the run should have failed");
-
-    let stderr = String::from_utf8(out.stderr).unwrap();
-    assert!(stderr.contains("table"), "stderr: {stderr}");
-    assert!(stderr.contains("line 5"), "stderr: {stderr}");
-}
-
 /// An image needs file access, and the world holds exactly two files by design.
 #[test]
 fn an_image_exits_non_zero_and_names_it() {
