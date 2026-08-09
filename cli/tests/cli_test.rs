@@ -76,11 +76,11 @@ fn without_o_the_pdf_lands_beside_the_input() {
 
 #[test]
 fn an_unsupported_construct_exits_non_zero_and_names_it() {
-    let out = run(&[fixture("unsupported_list.md").as_ref()]);
+    let out = run(&[fixture("unsupported_table.md").as_ref()]);
     assert!(!out.status.success(), "the run should have failed");
 
     let stderr = String::from_utf8(out.stderr).unwrap();
-    assert!(stderr.contains("bullet list"), "stderr: {stderr}");
+    assert!(stderr.contains("table"), "stderr: {stderr}");
     assert!(stderr.contains("line 5"), "stderr: {stderr}");
 }
 

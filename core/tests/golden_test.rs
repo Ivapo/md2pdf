@@ -9,7 +9,7 @@ const BASIC_MD: &str = include_str!("../../tests/fixtures/basic.md");
 const BASIC_TYP: &str = include_str!("../../tests/golden/basic.typ");
 const HOSTILE_MD: &str = include_str!("../../tests/fixtures/hostile.md");
 const HOSTILE_TYP: &str = include_str!("../../tests/golden/hostile.typ");
-const LIST_MD: &str = include_str!("../../tests/fixtures/unsupported_list.md");
+const TABLE_MD: &str = include_str!("../../tests/fixtures/unsupported_table.md");
 const FRONTMATTER_MD: &str = include_str!("../../tests/fixtures/frontmatter.md");
 const FRONTMATTER_TYP: &str = include_str!("../../tests/golden/frontmatter.typ");
 const SINGLE_COLUMN_MD: &str = include_str!("../../tests/fixtures/single_column.md");
@@ -68,10 +68,10 @@ fn hostile_fixture_compiles_to_a_pdf() {
 }
 
 #[test]
-fn a_bullet_list_is_an_error_that_names_the_construct_and_the_line() {
-    match md_to_typst(LIST_MD) {
+fn a_table_is_an_error_that_names_the_construct_and_the_line() {
+    match md_to_typst(TABLE_MD) {
         Err(Error::UnsupportedConstruct { construct, line }) => {
-            assert_eq!(construct, "bullet list");
+            assert_eq!(construct, "table");
             assert_eq!(line, 5);
         }
         other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
@@ -83,7 +83,7 @@ fn a_bullet_list_is_an_error_that_names_the_construct_and_the_line() {
 /// Nothing strips the block from the input, which is what this guards.
 #[test]
 fn line_numbers_survive_a_frontmatter_block() {
-    let md = "---\ntitle: A Title\n---\n\n# Heading\n\n- a bullet\n";
+    let md = "---\ntitle: A Title\n---\n\n# Heading\n\n| a | b |\n| - | - |\n";
     match md_to_typst(md) {
         Err(Error::UnsupportedConstruct { line, .. }) => assert_eq!(line, 7),
         other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
@@ -174,7 +174,7 @@ fn a_columns_value_outside_the_schema_is_an_error_that_names_the_key() {
 /// the error should name.
 #[test]
 fn a_frontmatter_error_wins_over_a_later_construct_error() {
-    let md = "---\nsubtitle: Bad\n---\n\n- a bullet\n";
+    let md = "---\nsubtitle: Bad\n---\n\n| a | b |\n| - | - |\n";
     match md_to_typst(md) {
         Err(Error::Frontmatter { problem, .. }) => {
             assert!(problem.contains("subtitle"), "problem was: {problem}");

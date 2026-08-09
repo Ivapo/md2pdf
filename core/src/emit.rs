@@ -26,6 +26,11 @@ pub(crate) fn emit(md: &str) -> Result<String> {
     // from the input and every reported line number stays true to the user's
     // file. `frontmatter.rs` then reads the text between the delimiters.
     options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
+    // Tables are outside the dialect, and this is what makes them rejectable.
+    // Without the option the parser reads a pipe table as paragraph text, so
+    // the pipes would reach the PDF as prose and the arm below would never see
+    // the construct it is meant to name.
+    options.insert(Options::ENABLE_TABLES);
 
     let mut body = String::new();
     let mut in_metadata = false;
