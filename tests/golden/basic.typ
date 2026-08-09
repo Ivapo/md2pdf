@@ -1,4 +1,4 @@
-#import "template.typ": template
+#import "template.typ": template, divider
 #show: template.with(title: none, author: none, columns: 2)
 
 = Introduction

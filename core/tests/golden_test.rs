@@ -1,4 +1,4 @@
-//! The exit gates for Phase 1 and Phase 2, at the library level.
+//! The exit gates for Phases 1 to 3, at the library level.
 //!
 //! Fixtures and golden files live at the workspace root because the CLI tests
 //! read the same ones.
@@ -15,6 +15,10 @@ const FRONTMATTER_TYP: &str = include_str!("../../tests/golden/frontmatter.typ")
 const SINGLE_COLUMN_MD: &str = include_str!("../../tests/fixtures/single_column.md");
 const SINGLE_COLUMN_TYP: &str = include_str!("../../tests/golden/single_column.typ");
 const UNKNOWN_KEY_MD: &str = include_str!("../../tests/fixtures/unknown_key.md");
+const INLINE_MD: &str = include_str!("../../tests/fixtures/inline.md");
+const INLINE_TYP: &str = include_str!("../../tests/golden/inline.typ");
+const HOSTILE_CODE_MD: &str = include_str!("../../tests/fixtures/hostile_code.md");
+const HOSTILE_CODE_TYP: &str = include_str!("../../tests/golden/hostile_code.typ");
 
 #[test]
 fn basic_fixture_matches_its_golden_file() {
@@ -176,5 +180,79 @@ fn a_frontmatter_error_wins_over_a_later_construct_error() {
             assert!(problem.contains("subtitle"), "problem was: {problem}");
         }
         other => panic!("expected a Frontmatter error, got {other:?}"),
+    }
+}
+
+// -- Phase 3: inline constructs ---------------------------------------------
+
+#[test]
+fn the_inline_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(INLINE_MD).unwrap(), INLINE_TYP);
+}
+
+#[test]
+fn the_inline_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(INLINE_MD).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each inline construct reaches Typst as the form the spec chose.
+///
+/// The equality test above pins the whole output, but it cannot say *why* the
+/// output is right. This one names the rule, so an edit that swaps a function
+/// call for Typst's own markup fails with a message that points at it.
+#[test]
+fn the_inline_golden_uses_the_function_forms() {
+    for (form, what) in [
+        ("#emph[emphasis]", "emphasis"),
+        ("#strong[strong emphasis]", "strong emphasis"),
+        ("#emph[#strong[both at once]]", "the two nested"),
+        ("#raw(\"inline code\")", "inline code"),
+        ("#divider()", "the thematic break"),
+        // A `\` before a newline is Typst's line break. The same `\` before
+        // text is an escape sequence instead.
+        ("this line,\\\n", "the hard line break"),
+        // Typst's own `_…_` and `*…*` cannot express this one, which is the
+        // whole reason the emitter writes function calls.
+        ("foo#emph[bar]baz", "intraword emphasis"),
+    ] {
+        assert!(
+            INLINE_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+}
+
+#[test]
+fn the_hostile_code_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(HOSTILE_CODE_MD).unwrap(), HOSTILE_CODE_TYP);
+}
+
+#[test]
+fn the_hostile_code_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(HOSTILE_CODE_MD).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Inline code travels as a string literal, so only `\` and `"` are escaped.
+///
+/// A string literal interprets nothing else, and applying the markup escape
+/// inside one would put the backslashes into the PDF. Each case below holds a
+/// character the markup escape *would* have touched.
+#[test]
+fn the_hostile_code_golden_applies_only_the_string_escape() {
+    for (literal, what) in [
+        // `r##` throughout, because `("#` would close an `r#` string.
+        (r##"#raw("\\backslash")"##, "a backslash, doubled"),
+        (r##"#raw("#hash")"##, "a hash, untouched"),
+        (r##"#raw("$dollar")"##, "a dollar sign, untouched"),
+        (r##"#raw("`backtick`")"##, "backticks, untouched"),
+    ] {
+        assert!(
+            HOSTILE_CODE_TYP.contains(literal),
+            "the golden file does not show {what} as `{literal}`"
+        );
     }
 }

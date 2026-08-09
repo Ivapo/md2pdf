@@ -67,6 +67,31 @@ pub(crate) fn emit(md: &str) -> Result<String> {
             }
             Event::SoftBreak => body.push('\n'),
 
+            // The function forms, not Typst's own `_…_` and `*…*`. Those
+            // delimiters are word-boundary sensitive and CommonMark permits
+            // intraword emphasis, so `foo*bar*baz` would reach the PDF with
+            // literal underscores through one and would not compile at all
+            // through the other.
+            Event::Start(Tag::Emphasis) => body.push_str("#emph["),
+            Event::End(TagEnd::Emphasis) => body.push(']'),
+            Event::Start(Tag::Strong) => body.push_str("#strong["),
+            Event::End(TagEnd::Strong) => body.push(']'),
+
+            // The content is a string literal, never the markup escape, so it
+            // reaches the PDF verbatim whatever it holds.
+            Event::Code(code) => {
+                body.push_str("#raw(");
+                body.push_str(&typst_string(&code));
+                body.push(')');
+            }
+
+            // Typst's line break is a `\` before a newline. The same `\`
+            // directly before text is an escape sequence instead.
+            Event::HardBreak => body.push_str("\\\n"),
+
+            // The emitter names the rule and owns nothing about its look.
+            Event::Rule => body.push_str("\n#divider()\n"),
+
             other => {
                 return Err(Error::UnsupportedConstruct {
                     construct: describe(&other).to_string(),
@@ -90,24 +115,31 @@ pub(crate) fn emit(md: &str) -> Result<String> {
 /// `--emit-typst` output shows the layout the document actually gets.
 fn header(front: &Frontmatter) -> String {
     format!(
-        "#import \"template.typ\": template\n\
+        "#import \"template.typ\": template, divider\n\
          #show: template.with(title: {}, author: {}, columns: {})\n",
-        typst_string(front.title.as_deref()),
-        typst_string(front.author.as_deref()),
+        typst_string_or_none(front.title.as_deref()),
+        typst_string_or_none(front.author.as_deref()),
         front.columns,
     )
 }
 
-/// Render an optional frontmatter value as a Typst string literal, or `none`.
+/// Render a frontmatter value as a Typst string literal, or `none` where the
+/// document left the key out.
+fn typst_string_or_none(value: Option<&str>) -> String {
+    match value {
+        Some(value) => typst_string(value),
+        None => String::from("none"),
+    }
+}
+
+/// Render a string as a Typst string literal.
 ///
 /// This is a different escape from `escape_into`. That one escapes what markup
 /// mode interprets; a string literal interprets only `\` and `"`, and escaping
-/// the markup set inside one would put the backslashes into the PDF.
-fn typst_string(value: Option<&str>) -> String {
-    let Some(value) = value else {
-        return String::from("none");
-    };
-
+/// the markup set inside one would put the backslashes into the PDF. Two things
+/// travel this way: the title and the author, and the content of every `#raw`
+/// call the walk writes for inline code.
+fn typst_string(value: &str) -> String {
     let mut out = String::from("\"");
     for ch in value.chars() {
         if ch == '\\' || ch == '"' {
@@ -163,8 +195,6 @@ fn describe(event: &Event) -> &'static str {
             Tag::List(None) => "bullet list",
             Tag::List(Some(_)) => "ordered list",
             Tag::Item => "list item",
-            Tag::Emphasis => "emphasis",
-            Tag::Strong => "strong emphasis",
             Tag::Strikethrough => "strikethrough",
             Tag::CodeBlock(_) => "code block",
             Tag::BlockQuote(_) => "block quote",
@@ -179,8 +209,6 @@ fn describe(event: &Event) -> &'static str {
             TagEnd::List(false) => "bullet list",
             TagEnd::List(true) => "ordered list",
             TagEnd::Item => "list item",
-            TagEnd::Emphasis => "emphasis",
-            TagEnd::Strong => "strong emphasis",
             TagEnd::Strikethrough => "strikethrough",
             TagEnd::CodeBlock => "code block",
             TagEnd::BlockQuote(_) => "block quote",
@@ -191,15 +219,14 @@ fn describe(event: &Event) -> &'static str {
             TagEnd::HtmlBlock => "raw HTML block",
             _ => "markdown construct",
         },
-        Event::Code(_) => "inline code",
         Event::Html(_) | Event::InlineHtml(_) => "raw HTML",
-        Event::HardBreak => "hard line break",
-        Event::Rule => "thematic break",
         Event::FootnoteReference(_) => "footnote reference",
         Event::TaskListMarker(_) => "task list marker",
         Event::InlineMath(_) | Event::DisplayMath(_) => "math",
-        // The walk handles these two, so they never reach this function. The
-        // match must still cover them.
-        Event::Text(_) | Event::SoftBreak => "text",
+        // The walk handles these, so they never reach this function. The match
+        // must still cover them.
+        Event::Text(_) | Event::SoftBreak | Event::Code(_) | Event::HardBreak | Event::Rule => {
+            "supported construct"
+        }
     }
 }

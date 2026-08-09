@@ -1,4 +1,4 @@
-//! The exit gates for Phase 1 and Phase 2, at the binary level.
+//! The exit gates for Phases 1 to 3, at the binary level.
 //!
 //! These run the real `md2pdf` binary, so they cover the argument contract and
 //! the exit codes that the library tests cannot reach.
@@ -39,6 +39,8 @@ fn emit_typst_prints_the_golden_file() {
         ("hostile.md", "hostile.typ"),
         ("frontmatter.md", "frontmatter.typ"),
         ("single_column.md", "single_column.typ"),
+        ("inline.md", "inline.typ"),
+        ("hostile_code.md", "hostile_code.typ"),
     ] {
         let out = run(&[fixture(fixture_name).as_ref(), "--emit-typst".as_ref()]);
         assert!(out.status.success(), "{fixture_name} did not exit 0");

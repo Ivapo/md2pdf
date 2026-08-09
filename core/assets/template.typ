@@ -15,6 +15,11 @@
   // escape them, and this line is why.
   set smartquote(enabled: false)
 
+  // Inline code and, later, code blocks. Typst's own default here is a family
+  // this binary does not carry, so the family is named rather than left to a
+  // fallback that would render code as body text.
+  show raw: set text(font: "Libertinus Mono", size: 9pt)
+
   set heading(numbering: none)
   show heading: set text(weight: "bold")
   show heading: set block(above: 1.4em, below: 0.8em)
@@ -42,3 +47,13 @@
 
   doc
 }
+
+// A thematic break. The emitter calls this and decides nothing about the rule's
+// weight or its spacing; both live here, with the rest of the styling. The
+// length is 100% of the containing column, so the rule matches the text width
+// under either column count.
+#let divider() = block(
+  above: 1.2em,
+  below: 1.2em,
+  line(length: 100%, stroke: 0.5pt + luma(60%)),
+)
