@@ -32,6 +32,14 @@ fn scratch(name: &str) -> PathBuf {
     dir.join(name)
 }
 
+/// A scratch directory of its own, for a test that needs a document and the
+/// files beside it rather than one file.
+fn scratch_dir(name: &str) -> PathBuf {
+    let dir = scratch(name);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
 #[test]
 fn emit_typst_prints_the_golden_file() {
     for (fixture_name, golden_name) in [
@@ -45,8 +53,8 @@ fn emit_typst_prints_the_golden_file() {
         ("list_spacing.md", "list_spacing.typ"),
         ("links.md", "links.typ"),
         ("table.md", "table.typ"),
-        // Emission reads paths and no bytes, so this one prints its golden file
-        // although the binary supplies no assets and the files sit elsewhere.
+        // Emission reads paths and no bytes. This fixture names `fig#2.png`,
+        // which no directory holds, and it still prints its golden file.
         ("images.md", "images.typ"),
     ] {
         let out = run(&[fixture(fixture_name).as_ref(), "--emit-typst".as_ref()]);
@@ -93,17 +101,54 @@ fn a_raw_html_block_exits_non_zero_and_names_it() {
     assert!(stderr.contains("line 5"), "stderr: {stderr}");
 }
 
-/// The binary supplies no assets yet, so an image document is an honest error
-/// that names the file it needs and the line that asked for it. Reading those
-/// files is Phase 2 of `specs/images_spec.md`.
+/// A document and the files it names convert together.
+///
+/// The images live in the scratch directory and the test runs from the crate
+/// directory, so this pins that a path resolves against the input file rather
+/// than against the current directory. The nested `figures/mark.svg` pins that
+/// a path in a subdirectory reaches the compiler too.
 #[test]
-fn an_image_exits_non_zero_and_names_the_file_it_needs() {
-    let out = run(&[fixture("images.md").as_ref()]);
+fn a_document_and_its_images_convert() {
+    let dir = scratch_dir("figure-doc");
+    let input = dir.join("figure.md");
+    std::fs::copy(fixture("figure.md"), &input).unwrap();
+    std::fs::copy(fixture("dot.png"), dir.join("dot.png")).unwrap();
+    std::fs::create_dir_all(dir.join("figures")).unwrap();
+    std::fs::copy(fixture("mark.svg"), dir.join("figures/mark.svg")).unwrap();
+
+    let out = run(&[input.as_ref()]);
+    assert!(out.status.success(), "the run failed: {:?}", out);
+
+    let bytes = std::fs::read(input.with_extension("pdf")).unwrap();
+    assert!(bytes.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// The same document beside no images at all. `dot.png` sits next to the
+/// fixture, `figures/mark.svg` does not, so the second reference fails.
+#[test]
+fn a_missing_image_file_names_the_path_the_line_and_the_reason() {
+    let out = run(&[fixture("figure.md").as_ref()]);
     assert!(!out.status.success(), "the run should have failed");
 
     let stderr = String::from_utf8(out.stderr).unwrap();
-    assert!(stderr.contains("dot.png"), "stderr: {stderr}");
-    assert!(stderr.contains("line 3"), "stderr: {stderr}");
+    assert!(stderr.contains("mark.svg"), "stderr: {stderr}");
+    assert!(stderr.contains("line 5"), "stderr: {stderr}");
+    assert!(stderr.contains("os error"), "stderr: {stderr}");
+}
+
+/// Emission needs paths and no bytes, so the flag works on the same document
+/// whose second image is absent.
+#[test]
+fn emit_typst_reads_no_image() {
+    let out = run(&[fixture("figure.md").as_ref(), "--emit-typst".as_ref()]);
+    assert!(out.status.success(), "the run failed: {:?}", out);
+
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains(r#"#image("dot.png""#), "stdout: {stdout}");
+    assert!(
+        stdout.contains(r#"#box(image("figures/mark.svg""#),
+        "stdout: {stdout}"
+    );
 }
 
 #[test]
