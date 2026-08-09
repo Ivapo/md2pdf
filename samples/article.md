@@ -32,7 +32,7 @@ lying about its source.
 
 # What the body may contain
 
-Headings and paragraph text, and that is all for now. Heading levels 1 to 6
+Headings, paragraph text, and the inline constructs. Heading levels 1 to 6
 map to Typst headings of the same level, so the two below are real headings,
 not bold paragraphs.
 
@@ -45,9 +45,28 @@ it.
 
 ### A third level heading
 
-Text under a third level heading. Anything else — a bullet list, emphasis, a
-link, a code block, a table, a block quote — is an error today, and support
-arrives construct by construct.
+Text under a third level heading. Anything else — a bullet list, a link, a
+code block, a table, a block quote — is an error today, and support arrives
+construct by construct.
+
+# The inline constructs
+
+A word in *emphasis* comes out italic, a word in **strong emphasis** comes out
+bold, and ***both markers at once*** give you bold italic. Each one is written
+as a Typst function call rather than as Typst's own markup, because Typst
+reads its markers only at a word boundary while markdown does not: that is
+what lets emphasis land mid*word*here.
+
+Text in `backticks` becomes inline code, and it reaches the page exactly as
+you typed it. Nothing inside a pair of backticks is escaped and nothing needs
+to be, because the content travels to Typst as a string rather than as markup.
+So `#5`, `$5` and `C:\path` all keep their characters.
+
+End a line with a backslash to break it without starting a paragraph,\
+like this. Three or more dashes on a line of their own draw a rule across the
+column, as below.
+
+---
 
 # Characters you do not have to think about
 
@@ -62,9 +81,10 @@ write what you mean, and it reaches the page.
 
 # Where the look lives
 
-One file owns every visual decision: the page size, the margins, the font,
-the heading style, the title block, and the column count. That file is
-core/assets/template.typ, and the fonts ship inside the binary beside it.
+One file owns every visual decision: the page size, the margins, the body
+font, the code font, the heading style, the rule a thematic break draws, the
+title block, and the column count. That file is core/assets/template.typ, and
+the fonts ship inside the binary beside it.
 
 Nothing is fetched over the network at any point, and no font is read from
 your operating system. The same markdown therefore compiles to the same PDF

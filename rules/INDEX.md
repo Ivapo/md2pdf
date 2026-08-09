@@ -2,5 +2,5 @@
 
 # Rules
 
-- **[pipeline](pipeline.md)** — generated 2026-08-08 · 5 sources · 80/80 lines
+- **[pipeline](pipeline.md)** — generated 2026-08-08 · 5 sources · 94/95 lines
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the escape rule, the rejection rule, the template's title block and column toggle, the Typst world and its bundled fonts, and the CLI contract

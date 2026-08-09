@@ -2,6 +2,35 @@
 
 Append-only. One heading per round, newest first.
 
+### Implementation note — Phase 3 — 2026-08-08 — the font bundle widened during the build
+
+Not a review round. Phase 3's build found §2's font decision under-specified,
+and the fix changed what the spec describes, so it is recorded here rather
+than left only in the code.
+
+"Why fonts are bundled, not discovered" names Libertinus Serif as the default
+family but does not say which faces, and the shipped bundle carried two:
+Regular and Bold. Typst renders the closest match it finds and synthesises
+nothing. So `#emph[…]` compiled cleanly and reached the page identical to body
+text, and `#raw("…")` fell back to the serif, because Typst's own default for
+`raw` names a family this binary does not carry. The emitted Typst was correct
+and the gate's `%PDF` assertion passed on both counts — but the observable,
+the typeset PDF, did not show emphasis at all. That is the failure the same
+section's faithfulness decision exists to prevent, reached through the fonts
+rather than through the emitter.
+
+Resolved during the build, with the author's approval: the bundle now carries
+five faces, all from one Libertinus release so their metrics agree — Serif
+Regular, Bold, Italic and BoldItalic, plus Libertinus Mono, which
+`template.typ` names in a `show raw` rule. Regular and Bold were replaced from
+that same release rather than left at their earlier provenance. The inline
+fixture gained a `***both at once***` clause, so no bundled face goes
+unexercised.
+
+This widens §2's decision. §2 is append-only and therefore unchanged;
+`rules/pipeline.md` carries the current state. A later spec that revisits
+fonts starts here.
+
 ### Round 4 — Phase 3 only — 2026-08-08 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking findings, none newly introduced. The reviewer

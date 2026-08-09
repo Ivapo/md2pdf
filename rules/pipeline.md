@@ -10,7 +10,7 @@ covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the template's title block and column toggle,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 80
+max_lines: 95
 generated: 2026-08-08
 ---
 
@@ -24,8 +24,17 @@ all file I/O and all terminal output.
 
 ## The dialect
 
-Four things are supported: headings at levels 1–6, paragraph text, soft breaks, and a
-leading YAML frontmatter block. Heading levels map to Typst headings of the same level.
+Nine things are supported: headings at levels 1–6, paragraph text, soft breaks, emphasis,
+strong emphasis, inline code, hard line breaks, thematic breaks, and a leading YAML
+frontmatter block. Heading levels map to Typst headings of the same level.
+
+The five inline constructs reach Typst as function calls, not as its own markup.
+`#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
+while CommonMark permits intraword emphasis, so `foo*bar*baz` would either keep literal
+underscores or fail to compile. Inline code is `#raw("…")`, its content a string literal
+through `core/src/emit.rs:typst_string`. A hard break is a `\` before a newline; the same
+`\` before text is an escape sequence instead. A thematic break calls
+`core/assets/template.typ:divider`, whose look the emitter decides nothing about.
 
 **Everything else is an error.** `core/src/emit.rs:describe` names the construct, and
 `Error::UnsupportedConstruct` carries that name with the 1-based line. The CLI prints it to
@@ -57,8 +66,9 @@ One rule depends on position: a `.` is escaped when every character before it on
 output line is a digit, because `2. text` at a line start opens a Typst enumeration.
 `core/src/emit.rs:line_is_all_digits` is that test.
 
-`core/src/emit.rs:typst_string` is a second, smaller escape: the title and the author reach
-the template as string literals, where only `\` and `"` mean anything.
+`core/src/emit.rs:typst_string` is a second, smaller escape, for what reaches Typst as a
+string literal rather than as markup: the title, the author, and every `#raw` content. A
+literal interprets only `\` and `"`; the markup escape inside one would reach the PDF.
 
 Quotation marks in body text are **not** escaped. `core/assets/template.typ` sets
 `smartquote(enabled: false)` instead, which is why they still reach the PDF verbatim.
@@ -79,9 +89,13 @@ document with neither `title` nor `author` gets no title block at all.
 under `VirtualRoot::Project`. It implements no package resolution, so no import can reach
 the network on any target.
 
-Fonts are embedded with `include_bytes!` from `core/assets/fonts/`: Libertinus Serif
-Regular and Bold, under the OFL. No target discovers fonts from the OS, so the same
-markdown compiles to the same PDF on every machine.
+Fonts are embedded with `include_bytes!` from `core/assets/fonts/`, under the OFL: five
+faces from one Libertinus release, so their metrics agree. Serif Regular, Bold, Italic and
+BoldItalic carry body text; Libertinus Mono carries `#raw`, which
+`core/assets/template.typ:template` names in a `show raw` rule. Every face the dialect can
+reach is bundled, because Typst renders the closest match it finds and synthesises none —
+without the italic, `#emph` would come out as body text. No target discovers fonts from
+the OS, so the same markdown compiles to the same PDF on every machine.
 
 `World::today` returns `None`. The spec's §2 lists the current date among what the world
 supplies, but an OS clock would break the same section's no-OS-access rule and make the
