@@ -43,9 +43,10 @@ inspection rather than a standalone `typst compile`.
 
 ## What the markdown may contain
 
-This release supports **headings, paragraph text, and the inline constructs**:
+This release supports **headings, paragraph text, the inline constructs, and the block
+constructs**:
 
-```markdown
+````markdown
 # Introduction
 
 Body text with *emphasis*, **strong emphasis**, and `inline code`.
@@ -53,21 +54,36 @@ Body text with *emphasis*, **strong emphasis**, and `inline code`.
 A hard line break ends this line,\
 and this line follows it in the same paragraph.
 
+- a bullet list
+- whose second item nests one
+  - like this
+
+3. an ordered list that starts at three
+4. and keeps counting
+
+```rust
+fn main() {}
+```
+
+> A block quote.
+
 ---
 
 ## Background
 
 Text after a thematic break.
-```
+````
 
-Heading levels 1 to 6 map to Typst headings of the same level.
+Heading levels 1 to 6 map to Typst headings of the same level. A list whose items are
+separated by blank lines is set with more space between them than one whose items are
+not, which is the distinction markdown itself draws.
 
-**Every other construct is an error.** A list, a code block, a link, an image, a table,
-or a block quote makes `md2pdf` exit with code 1 and print the construct and its line:
+**Every other construct is an error.** A link, an image, or a table makes `md2pdf` exit
+with code 1 and print the construct and its line:
 
 ```console
 $ md2pdf notes.md
-error: unsupported markdown construct 'bullet list' at line 5
+error: unsupported markdown construct 'table' at line 5
 ```
 
 That is deliberate. Dropping or flattening content would ship a PDF that lies about its
@@ -81,9 +97,10 @@ escaped for you, so `$5` stays five dollars and never opens math mode:
 \  #  $  *  _  `  @  <  >  [  ]  ~  -  +  =  /
 ```
 
-Inline code reaches the PDF verbatim too, by a different route: its content travels as a
-string rather than as markup, so nothing inside a pair of backticks is escaped and
-nothing needs to be. ``` `` #5 $5 \ `x` `` ``` prints exactly those characters.
+Code reaches the PDF verbatim too, by a different route: its content travels as a string
+rather than as markup, so nothing inside a pair of backticks or a fence is escaped and
+nothing needs to be. ``` `` #5 $5 \ `x` `` ``` prints exactly those characters. A fence's
+language tag is carried through, so Typst highlights the block.
 
 ## Frontmatter
 

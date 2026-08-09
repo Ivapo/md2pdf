@@ -32,9 +32,9 @@ lying about its source.
 
 # What the body may contain
 
-Headings, paragraph text, and the inline constructs. Heading levels 1 to 6
-map to Typst headings of the same level, so the two below are real headings,
-not bold paragraphs.
+Headings, paragraph text, the inline constructs, and the block constructs.
+Heading levels 1 to 6 map to Typst headings of the same level, so the two
+below are real headings, not bold paragraphs.
 
 ## A second level heading
 
@@ -45,9 +45,8 @@ it.
 
 ### A third level heading
 
-Text under a third level heading. Anything else — a bullet list, a link, a
-code block, a table, a block quote — is an error today, and support arrives
-construct by construct.
+Text under a third level heading. Anything else — a link, an image, a table —
+is an error today, and support arrives construct by construct.
 
 # The inline constructs
 
@@ -67,6 +66,48 @@ like this. Three or more dashes on a line of their own draw a rule across the
 column, as below.
 
 ---
+
+# The block constructs
+
+A bullet list uses a dash, and an ordered list a number and a dot:
+
+- the first item
+- the second item, which nests a list of its own
+  - a nested item
+  - another nested item
+
+3. an ordered list that starts at three
+4. and keeps counting from there
+
+Items that sit on adjacent lines make a tight list, and items separated by a
+blank line make a loose one, which is set with more space between the items.
+That is markdown's own distinction, and it reaches the page unchanged:
+
+- a loose item
+
+- a second loose item, which holds two paragraphs
+
+  This is the second paragraph of that item. It is indented under the item's
+  marker, so it belongs to the item rather than to the list.
+
+A fenced code block keeps every character you typed, and its language tag
+tells Typst how to highlight it:
+
+```rust
+fn main() {
+    println!("hello, world");
+}
+```
+
+Four spaces of indentation make a code block too. It carries no language
+tag, so nothing is highlighted:
+
+    $ md2pdf paper.md -o paper.pdf
+
+A line beginning with a greater-than sign makes a block quote:
+
+> The observable this project produces is the typeset PDF that Typst
+> compiles from your markdown.
 
 # Characters you do not have to think about
 

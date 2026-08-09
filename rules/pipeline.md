@@ -10,7 +10,7 @@ covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the template's title block and column toggle,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 95
+max_lines: 120
 generated: 2026-08-08
 ---
 
@@ -24,9 +24,10 @@ all file I/O and all terminal output.
 
 ## The dialect
 
-Nine things are supported: headings at levels 1–6, paragraph text, soft breaks, emphasis,
-strong emphasis, inline code, hard line breaks, thematic breaks, and a leading YAML
-frontmatter block. Heading levels map to Typst headings of the same level.
+Thirteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
+emphasis, strong emphasis, inline code, hard line breaks, thematic breaks, bullet lists,
+ordered lists, code blocks, block quotes, and a leading YAML frontmatter block. Heading
+levels map to Typst headings of the same level.
 
 The five inline constructs reach Typst as function calls, not as its own markup.
 `#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
@@ -36,9 +37,29 @@ through `core/src/emit.rs:typst_string`. A hard break is a `\` before a newline;
 `\` before text is an escape sequence instead. A thematic break calls
 `core/assets/template.typ:divider`, whose look the emitter decides nothing about.
 
-**Everything else is an error.** `core/src/emit.rs:describe` names the construct, and
+Lists become `- ` and `N. ` items, every ordered item carrying its own number, so a start
+other than 1 needs no mechanism of its own. A code block becomes
+`#raw(block: true, lang: …)`, the tag the first word of the fence's info string and absent
+for an indented block; one trailing newline is stripped, because pulldown-cmark reports the
+final line's terminator as part of the content and a literal that kept it would typeset a
+phantom empty line. A block quote becomes `#quote(block: true)[…]`. Neither lists nor
+quotes get a template rule: the Typst defaults stand.
+
+Tightness passes through structurally. pulldown-cmark wraps a loose list's item content in
+paragraph events, and Typst derives `tight` from the blank lines between items and lets no
+`set` rule override it, so the emitter writes adjacent items for one and separated items for
+the other, and owns nothing about the spacing. Nesting is by indentation, which
+`core/src/emit.rs:prefixed` applies. A list item and a block quote each open a buffer in a
+stack and indent it as they close, so nothing is ever indented while it is written — which
+keeps `core/src/emit.rs:line_is_all_digits` reading an un-indented line, and is why a code
+block, one markup line holding a string literal, survives the indentation around it.
+
+**Everything else is an error** — a link, an image, a table, raw HTML, a footnote,
+strikethrough, and math. `core/src/emit.rs:describe` names the construct, and
 `Error::UnsupportedConstruct` carries that name with the 1-based line. The CLI prints it to
-stderr and exits 1. Nothing is ever dropped or flattened silently.
+stderr and exits 1. Nothing is ever dropped or flattened silently. `Options::ENABLE_TABLES`
+is on for that rejection alone: without it a pipe table parses as paragraph text, so the
+pipes would reach the PDF as prose and the reject arm would never see the construct.
 
 ## The frontmatter
 
@@ -68,7 +89,9 @@ output line is a digit, because `2. text` at a line start opens a Typst enumerat
 
 `core/src/emit.rs:typst_string` is a second, smaller escape, for what reaches Typst as a
 string literal rather than as markup: the title, the author, and every `#raw` content. A
-literal interprets only `\` and `"`; the markup escape inside one would reach the PDF.
+literal interprets only `\` and `"`, and the markup escape inside one would reach the PDF.
+A newline becomes `\n`, which only a code block needs, because CommonMark folds a code
+span's line endings to spaces.
 
 Quotation marks in body text are **not** escaped. `core/assets/template.typ` sets
 `smartquote(enabled: false)` instead, which is why they still reach the PDF verbatim.

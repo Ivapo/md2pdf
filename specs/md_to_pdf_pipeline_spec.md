@@ -25,7 +25,7 @@ phases:
     by: null
   - name: "Phase 4 — block constructs"
     reviewed: 2026-08-08
-    shipped: null
+    shipped: 2026-08-08
     cut: null
     by: null
   - name: "Phase 5 — links"
