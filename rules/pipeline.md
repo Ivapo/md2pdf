@@ -10,7 +10,7 @@ covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the template's title block and column toggle,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 120
+max_lines: 140
 generated: 2026-08-08
 ---
 
@@ -24,18 +24,26 @@ all file I/O and all terminal output.
 
 ## The dialect
 
-Thirteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
-emphasis, strong emphasis, inline code, hard line breaks, thematic breaks, bullet lists,
-ordered lists, code blocks, block quotes, and a leading YAML frontmatter block. Heading
-levels map to Typst headings of the same level.
+Fourteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
+emphasis, strong emphasis, inline code, hard line breaks, thematic breaks, links, bullet
+lists, ordered lists, code blocks, block quotes, and a leading YAML frontmatter block.
+Heading levels map to Typst headings of the same level.
 
-The five inline constructs reach Typst as function calls, not as its own markup.
+The six inline constructs reach Typst as function calls, not as its own markup.
 `#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
 while CommonMark permits intraword emphasis, so `foo*bar*baz` would either keep literal
 underscores or fail to compile. Inline code is `#raw("…")`, its content a string literal
 through `core/src/emit.rs:typst_string`. A hard break is a `\` before a newline; the same
 `\` before text is an escape sequence instead. A thematic break calls
 `core/assets/template.typ:divider`, whose look the emitter decides nothing about.
+
+A link is `#link("…")[…]`. The inline, reference and autolink forms all arrive as one
+`Tag::Link` with the destination already resolved, so one arm serves them all; an
+unresolved reference produces no link event at all and stays literal text. The URL goes
+through `typst_string`, so a `#` in a destination survives, and the text keeps the markup
+escape, which is what stops Typst reading an autolink's own text as a second link. An
+email autolink's destination is the bare address, because pulldown-cmark leaves the scheme
+to the renderer, so the emitter prepends `mailto:`.
 
 Lists become `- ` and `N. ` items, every ordered item carrying its own number, so a start
 other than 1 needs no mechanism of its own. A code block becomes
@@ -54,12 +62,19 @@ stack and indent it as they close, so nothing is ever indented while it is writt
 keeps `core/src/emit.rs:line_is_all_digits` reading an un-indented line, and is why a code
 block, one markup line holding a string literal, survives the indentation around it.
 
-**Everything else is an error** — a link, an image, a table, raw HTML, a footnote,
-strikethrough, and math. `core/src/emit.rs:describe` names the construct, and
+**Everything else is an error** — an image, a table, raw HTML, a footnote, strikethrough,
+and math. `core/src/emit.rs:describe` names the construct, and
 `Error::UnsupportedConstruct` carries that name with the 1-based line. The CLI prints it to
 stderr and exits 1. Nothing is ever dropped or flattened silently. `Options::ENABLE_TABLES`
 is on for that rejection alone: without it a pipe table parses as paragraph text, so the
 pipes would reach the PDF as prose and the reject arm would never see the construct.
+
+Two link shapes are errors too, and the link arm names them itself rather than through
+`describe`. An empty destination, legal CommonMark, would reach Typst as `#link("")`,
+whose compile error names neither construct nor line; the test is on the resolved
+destination, so a reference definition with an empty destination is caught with it. A
+non-empty link title is something neither `link` nor the PDF can carry, so passing the link
+on would drop it. An empty title is not a title, and the link stays in-dialect.
 
 ## The frontmatter
 
@@ -88,8 +103,9 @@ output line is a digit, because `2. text` at a line start opens a Typst enumerat
 `core/src/emit.rs:line_is_all_digits` is that test.
 
 `core/src/emit.rs:typst_string` is a second, smaller escape, for what reaches Typst as a
-string literal rather than as markup: the title, the author, and every `#raw` content. A
-literal interprets only `\` and `"`, and the markup escape inside one would reach the PDF.
+string literal rather than as markup: the title, the author, every `#raw` content, and
+every link destination. A literal interprets only `\` and `"`, and the markup escape
+inside one would reach the PDF.
 A newline becomes `\n`, which only a code block needs, because CommonMark folds a code
 span's line endings to spaces.
 

@@ -32,9 +32,9 @@ lying about its source.
 
 # What the body may contain
 
-Headings, paragraph text, the inline constructs, and the block constructs.
-Heading levels 1 to 6 map to Typst headings of the same level, so the two
-below are real headings, not bold paragraphs.
+Headings, paragraph text, the inline constructs, the block constructs, and
+links. Heading levels 1 to 6 map to Typst headings of the same level, so the
+two below are real headings, not bold paragraphs.
 
 ## A second level heading
 
@@ -45,8 +45,8 @@ it.
 
 ### A third level heading
 
-Text under a third level heading. Anything else — a link, an image, a table —
-is an error today, and support arrives construct by construct.
+Text under a third level heading. Anything else — an image, a table — is an
+error today, and support arrives construct by construct.
 
 # The inline constructs
 
@@ -109,6 +109,25 @@ A line beginning with a greater-than sign makes a block quote:
 > The observable this project produces is the typeset PDF that Typst
 > compiles from your markdown.
 
+# Links
+
+A link written inline points at [the Typst website](https://typst.app), and a
+[reference link][commonmark] points at the CommonMark specification through a
+definition at the foot of this file. Both reach the PDF as real links that
+your reader can follow.
+
+An address between angle brackets becomes a link on its own, so
+<https://github.com/> and <ivapo@example.com> both resolve. The email address
+gets a mailto destination, which the markdown itself does not carry.
+
+A destination travels to Typst as a string rather than as markup, so it keeps
+every character you typed, a # fragment included. The text of the link is
+ordinary body text, and it is escaped like any other.
+
+Two shapes are errors rather than links. A link with an empty destination has
+nothing to resolve to, and a link that carries a title holds something neither
+Typst nor the PDF can show, so passing it on would drop it in silence.
+
 # Characters you do not have to think about
 
 Typst reads several characters as markup, and the emitter escapes all of them
@@ -130,3 +149,5 @@ the fonts ship inside the binary beside it.
 Nothing is fetched over the network at any point, and no font is read from
 your operating system. The same markdown therefore compiles to the same PDF
 on every machine, which is what makes the golden-file tests worth having.
+
+[commonmark]: https://spec.commonmark.org/0.31.2/

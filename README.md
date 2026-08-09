@@ -3,9 +3,9 @@
 Convert one markdown file into one typeset PDF. Everything happens on your machine —
 no server, no SaaS, and no LaTeX toolchain.
 
-`pulldown-cmark` parses the markdown, a small emitter maps it to Typst markup, and an
-embedded Typst compiler produces the PDF. The fonts ship inside the binary, so the same
-markdown compiles to the same PDF on every machine.
+`pulldown-cmark` parses the markdown, a small emitter maps it to [Typst](https://typst.app)
+markup, and an embedded Typst compiler produces the PDF. The fonts ship inside the binary,
+so the same markdown compiles to the same PDF on every machine.
 
 ## Install
 
@@ -43,8 +43,8 @@ inspection rather than a standalone `typst compile`.
 
 ## What the markdown may contain
 
-This release supports **headings, paragraph text, the inline constructs, and the block
-constructs**:
+This release supports **headings, paragraph text, the inline constructs, the block
+constructs, and links**:
 
 ````markdown
 # Introduction
@@ -53,6 +53,9 @@ Body text with *emphasis*, **strong emphasis**, and `inline code`.
 
 A hard line break ends this line,\
 and this line follows it in the same paragraph.
+
+An [inline link](https://typst.app), a bare autolink <https://typst.app>, and
+an email address at <you@example.com>.
 
 - a bullet list
 - whose second item nests one
@@ -78,8 +81,13 @@ Heading levels 1 to 6 map to Typst headings of the same level. A list whose item
 separated by blank lines is set with more space between them than one whose items are
 not, which is the distinction markdown itself draws.
 
-**Every other construct is an error.** A link, an image, or a table makes `md2pdf` exit
-with code 1 and print the construct and its line:
+A reference link works too, and an email autolink becomes a `mailto:` destination. Two
+link shapes do not: a link with an empty destination, `[text]()`, and a link that carries
+a title, `[text](url "a title")`. Neither Typst nor the PDF can hold a title, and an empty
+destination has nothing to resolve to.
+
+**Every other construct is an error.** An image or a table makes `md2pdf` exit with code 1
+and print the construct and its line:
 
 ```console
 $ md2pdf notes.md
@@ -100,7 +108,8 @@ escaped for you, so `$5` stays five dollars and never opens math mode:
 Code reaches the PDF verbatim too, by a different route: its content travels as a string
 rather than as markup, so nothing inside a pair of backticks or a fence is escaped and
 nothing needs to be. ``` `` #5 $5 \ `x` `` ``` prints exactly those characters. A fence's
-language tag is carried through, so Typst highlights the block.
+language tag is carried through, so Typst highlights the block. A link's destination takes
+that same route, so a `#` fragment in a URL arrives intact.
 
 ## Frontmatter
 
