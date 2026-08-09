@@ -2,6 +2,66 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 6 — Phase 4 only — 2026-08-08 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking findings, none newly introduced. The reviewer
+verified every fix against the file, not the changelog, and re-grounded the
+new clauses in the pinned sources: pulldown-cmark 0.13.4 reports the final
+line's terminator as part of a code block's content, and Typst's
+`split_newlines` keeps the trailing empty segment, so the phantom line was
+real and the strip clause removes it. The clause is bounded — "one … when
+present" — so an authored trailing blank line survives and an empty block is
+covered. The test-migration census was re-verified complete at three, and
+`a_frontmatter_error_wins_over_a_later_construct_error` correctly stays: its
+frontmatter error still precedes construct handling after the widening. The
+gate's embedded claim — no shipped golden file changes — was re-derived: no
+existing fixture contains a pipe, no existing string literal contains a
+newline, and Phase 4 adds nothing to the import line.
+
+On this convergence: `reviewed: 2026-08-08` on Phase 4. Phase 5 is a
+separate episode and remains unreviewed.
+
+### Round 5 — Phase 4 only — 2026-08-08 — fresh clean-room reviewer with repo access — **NOT READY**
+
+Round 0 (once for this episode, the appended Phase 4): the phase produces
+the observable — a PDF from documents with lists, code blocks and quotes,
+which the shipped dialect rejects and which the §1 aim, an ordinary markdown
+article converting unmodified, needs most. The episode proceeded.
+
+Before the round, the author resolved OQ-5 as a recorded decision, grounded
+in the pinned sources rather than memory: tight and loose lists map
+structurally through Typst's own markup adjacency rule, verified in
+typst-library 0.15.1 — `tight` is derived from blank-line separation, and no
+`set` rule overrides it — and in a pulldown-cmark 0.13.4 probe, which shows
+loose items wrapping their content in paragraph events. The same probe
+caught a grounding gap the author folded in: without `Options::ENABLE_TABLES`
+a pipe table parses as paragraph text, so the phase's own rejection gate was
+unimplementable as written. The scope now names the option and the reason.
+
+Verdict: `NOT READY` — one blocking finding, six non-blocking. The author
+accepted all seven, rejected none, deferred none.
+
+The blocker: **OQ-4's mechanism, applied to what pulldown-cmark actually
+delivers, typesets a phantom empty line after every code block, and the
+gate would pin it rather than catch it.** The parser reports the final
+line's terminator as part of a fenced or indented block's content, and
+Typst's function-form `raw` keeps a trailing empty segment — the trimming
+that drops it belongs to Typst's backtick markup, not to the function call.
+Resolved: the scope strips one trailing newline from the block's content,
+when present, with the reason recorded inline.
+
+Non-blocking, all accepted: a no-quote-rule clause mirroring OQ-5's
+pattern; the language tag pinned to the first word of the info string, with
+no `lang` argument for an indented block or an empty info string; the test
+migration enumerated in full — the fixture is deleted, and the inline list
+in `line_numbers_survive_a_frontmatter_block` moves too; the full existing
+suite added to the gate, with the no-golden-changes claim and its reason;
+the pipes reach the PDF as prose, not "escaped prose", since `|` is not in
+`SPECIAL`; and a loose item holding two paragraphs added to gate case (1),
+so continuation indentation is exercised and pinned.
+
+Rejections: none.
+
 ### Implementation note — Phase 3 — 2026-08-08 — the font bundle widened during the build
 
 Not a review round. Phase 3's build found §2's font decision under-specified,

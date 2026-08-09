@@ -24,7 +24,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 4 — block constructs"
-    reviewed: null
+    reviewed: 2026-08-08
     shipped: null
     cut: null
     by: null
@@ -213,9 +213,22 @@ failure, and support arrives construct by construct in later phases or specs.
   endings to spaces. No delimiter counting anywhere: one mechanism,
   deterministic for any content, reusing the escape that already exists.
   Landed in Phase 3's and Phase 4's scope.
-- **OQ-5** — How do tight and loose markdown lists map to Typst list
+- **OQ-5** — ~~How do tight and loose markdown lists map to Typst list
   spacing, and does the template own that look through `show` rules on
-  `list` and `enum`? Design call; blocks Phase 4.
+  `list` and `enum`? Design call; blocks Phase 4.~~ **RESOLVED
+  (2026-08-08):** structurally, through Typst's own markup, which draws
+  the same distinction markdown does: items that directly follow each
+  other make a tight list, spaced by paragraph leading, and items
+  separated by a blank line make a loose one, spaced by paragraph
+  spacing. The emitter writes adjacent items for a tight markdown list
+  and blank-line-separated items for a loose one — pulldown-cmark
+  signals looseness by wrapping item content in paragraph events — and
+  owns nothing about the look. Typst derives `tight` from exactly that
+  adjacency and does not let a `set` rule override it, so tightness is
+  not a template matter; every other list property (marker, indent, the
+  spacing distances) remains one, and Phase 4 adds no such rule because
+  the defaults already render the two forms distinguishably, which the
+  gate pins. Landed in Phase 4's scope.
 
 ## 4. Implementation phases
 
@@ -326,20 +339,40 @@ blocks, and quotes.*
 
 - **Scope:** In `core/src/emit.rs`: bullet lists become `- ` items and
   ordered lists `N. ` items, keeping a non-`1` start number and nesting by
-  indentation; spacing between tight and loose items follows OQ-5. Fenced and
-  indented code blocks become block-level raw content, encoded per OQ-4's
-  mechanism, with a fence's language tag carried through for Typst's
-  highlighting. Block quotes become Typst's `quote`, block form, styled by
-  the template. List items, not lists alone, stop being errors. The Phase 1
-  fixture `tests/fixtures/unsupported_list.md` stops failing: the rejection
-  tests move to a construct this spec still excludes — a table.
-- **Exit gate:** Golden-file tests, three cases. (1) A fixture with a nested
-  bullet list, an ordered list starting at 3, a fenced code block with a
-  language tag, an indented code block, and a block quote matches its golden
-  file and compiles to a PDF with the `%PDF` magic bytes. (2) A loose list
-  and a tight list render distinguishably, pinned by the golden file per
-  OQ-5. (3) A fixture with a table makes the CLI exit non-zero naming the
-  construct and its line.
+  indentation; a tight list's items sit on adjacent lines and a loose
+  list's items are separated by a blank line, per OQ-5's resolution.
+  Fenced and indented code blocks become block-level raw content, encoded
+  per OQ-4's mechanism, with one trailing newline stripped from the
+  block's content when present: pulldown-cmark reports the final line's
+  terminator as part of the content, and a string literal that kept it
+  would typeset a phantom empty line after every code block. A fence's
+  language tag — the first word of its info string — is carried through
+  for Typst's highlighting; an indented block, or an empty info string,
+  yields no `lang` argument. Block quotes become Typst's `quote`, block
+  form; as with lists under OQ-5, Phase 4 adds no quote rule to the
+  template — the default look stands, and any future styling is a
+  `template.typ` rule per §2's styling decision. List items, not lists
+  alone, stop being errors. The Phase 1 fixture
+  `tests/fixtures/unsupported_list.md` is deleted, and every test keyed
+  to a list rejection — the two on that fixture, and the inline list in
+  `line_numbers_survive_a_frontmatter_block` — moves to a construct this
+  spec still excludes: a table. The parser gains `Options::ENABLE_TABLES`
+  for exactly that rejection: without it, pulldown-cmark reads a pipe
+  table as paragraph text, so the pipes would reach the PDF as prose and
+  the reject arm would never see the construct it is meant to name.
+- **Exit gate:** Golden-file tests, three cases, plus the full existing
+  suite, which the option change and the test migration touch — no
+  shipped golden file changes, because no existing fixture contains a
+  pipe table. (1) A fixture with a nested bullet list, an ordered list
+  starting at 3, a loose item holding two paragraphs, a fenced code block
+  with a language tag, an indented code block, and a block quote matches
+  its golden file and compiles to a PDF with the `%PDF` magic bytes.
+  (2) A tight list
+  and a loose list of the same items produce Typst source that differs
+  exactly in the blank lines between the loose items — Typst derives
+  `tight` from that adjacency, per OQ-5 — pinned by the golden file, and
+  both compile. (3) A fixture with a table makes the CLI exit non-zero
+  naming the construct and its line.
 - **Close-out:** Update `rules/pipeline.md`'s dialect section and the README
   against the code. One push.
 
