@@ -2,6 +2,86 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 11 — Phase 6 only — 2026-08-09 — same reviewer, resumed for the one fold-in — **READY**
+
+Verdict: `READY`, zero blocking findings, nothing newly broken. Round 10
+folded one change in, and the loop resumes the reviewer after any fold-in.
+The reviewer verified it against the file: gate case (1) places emphasis,
+inline code and the link inside body cells, with the mechanism recorded
+inline — `show raw` names Libertinus Mono, only its regular face is
+bundled, and Typst synthesizes no bold, so `strong` could not carry a
+code span in the header row. The narrowing contradicts nothing: the
+header row is still exercised through its plain text, where Serif Bold
+is bundled, and case (2) pins the template rule independently.
+
+On this convergence: `reviewed: 2026-08-09` on Phase 6.
+
+### Round 10 — Phase 6 only — 2026-08-09 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, one new non-blocking finding. The
+reviewer verified every fix against the file, not the changelog. The
+blocker is resolved: OQ-6 is struck through and `RESOLVED` inline — the
+header row is set in strong type through
+`show table.cell.where(y: 0): strong` in `template.typ` — and gate case
+(2) is restated as a checkable artifact: a test reads
+`core/assets/template.typ` and asserts the row-0 rule, because golden
+files pin emitter output only. The resolution's own claims were
+re-grounded in typst-library 0.15.1: the selector is the library's own
+documented idiom, verbatim in its `table.header` example over bare
+content blocks — the exact shape this emitter will produce — `TableCell`
+carries a zero-indexed `y`, and both bold faces are bundled. The three
+non-blocking fixes were confirmed in the file: the four-test census with
+its two fates, and the `ENABLE_TABLES` comment rewrite.
+
+The new finding, accepted: a code span inside a header cell renders at
+regular weight, because `show raw` names Libertinus Mono and only its
+regular face ships — no compile failure, no gate failure, but the
+fixture should keep inline code in body cells knowingly. Folded into
+gate case (1); Round 11 confirms it.
+
+### Round 9 — Phase 6 only — 2026-08-08 — fresh clean-room reviewer with repo access — **NOT READY**
+
+Round 0 (once for this episode, the appended Phase 6): the phase
+produces the observable — a PDF from documents with pipe tables — and it
+is the right one: tables are a common construct in an ordinary article,
+the parser already reads them behind `ENABLE_TABLES`, and the widening
+continues the Phases 3–5 ladder. The episode proceeded.
+
+The reviewer's grounding pass confirmed every parser and compiler claim
+against the pinned sources: pulldown-cmark 0.13.4 pads a short row with
+empty cells and drops excess ones per GFM, so every delivered row
+carries the header's cell count — with a verified aside, the
+`MAX_AUTOCOMPLETED_CELLS` DoS cap, which never changes what the emitter
+receives; the column count is the alignment vector's length; an integer
+`columns:` casts to that many auto-sized columns in typst-library
+0.15.1; `table.header` repeats across page breaks and carries the
+accessibility tagging; `align` takes a per-column array including
+`auto`. It also re-derived the no-golden-changes and empty-corpus
+claims: no fixture, sample or README line holds a pipe table outside
+`unsupported_table.md`.
+
+Verdict: `NOT READY` — one blocking finding, three non-blocking. The
+author accepted all four, rejected none, deferred none.
+
+The blocker: **gate case (2) was keyed to OQ-6, which was open, and the
+gate's pinning mechanism itself depended on the resolution** — if the
+answer was a `show` rule in `template.typ`, the golden files, which pin
+emitter output only, could not pin the look at all. Resolved: OQ-6 is a
+decision now — the header row in strong type, the template owning the
+rule — and gate case (2) names its own artifact, a test on
+`core/assets/template.typ`.
+
+Non-blocking, all accepted: the test migration under-enumerated its
+census relative to Phase 4's practice, and one test degraded silently —
+`a_frontmatter_error_wins_over_a_later_construct_error` would keep
+passing while ceasing to test precedence over a construct error, which
+no suite run can catch because nothing fails; two of the four migrated
+tests would duplicate Phase 5's image tests, so they are deletions; and
+the comment above `ENABLE_TABLES`, which says tables are outside the
+dialect, becomes false and is rewritten.
+
+Rejections: none.
+
 ### Round 8 — Phase 5 only — 2026-08-08 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking findings, none newly introduced. The

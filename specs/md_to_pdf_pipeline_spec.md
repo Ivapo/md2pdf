@@ -5,7 +5,7 @@ note: >
   The core .md → .pdf pipeline: pulldown-cmark parses, a hand-written emitter maps
   events to Typst markup, and embedded Typst compiles the PDF, behind a CLI.
 status: accepted
-last_updated: 2026-08-08
+last_updated: 2026-08-09
 
 phases:
   - name: "Phase 1 — end-to-end pipeline behind a CLI"
@@ -34,7 +34,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 6 — tables"
-    reviewed: null
+    reviewed: 2026-08-09
     shipped: null
     cut: null
     by: null
@@ -234,7 +234,7 @@ failure, and support arrives construct by construct in later phases or specs.
   spacing distances) remains one, and Phase 4 adds no such rule because
   the defaults already render the two forms distinguishably, which the
   gate pins. Landed in Phase 4's scope.
-- **OQ-6** — Does the header row of a table get a look of its own, and
+- **OQ-6** — ~~Does the header row of a table get a look of its own, and
   does `template.typ` own it through a `show` rule? Typst's default table
   sets the header row in the same body type as every other row:
   `table.header` carries the distinction semantically — it repeats the
@@ -244,7 +244,18 @@ failure, and support arrives construct by construct in later phases or specs.
   indistinguishably from the body arguably flattens it — the worry OQ-5
   resolved for tight and loose lists, except there the Typst defaults
   already rendered the two forms distinguishably, and here they do not.
-  Design call; blocks Phase 6's gate case (2).
+  Design call; blocks Phase 6's gate case (2).~~ **RESOLVED
+  (2026-08-08):** yes, and the template owns it. `template.typ` gains
+  `show table.cell.where(y: 0): strong`, so the header row is set in
+  strong type; a GFM table has exactly one header row and it is always
+  the first, so row 0 is the header by construction, and the bundled
+  Bold and BoldItalic faces carry the result. The emitter owns nothing
+  about the look, per §2's styling decision. Where OQ-5 found the
+  defaults already rendering markdown's distinction, here they do not,
+  so a rule is the honest floor — without it the PDF flattens a
+  distinction the source draws. Because golden files pin emitter output
+  only, gate case (2) pins the rule in `template.typ` itself. Landed in
+  Phase 6's scope.
 
 ## 4. Implementation phases
 
@@ -454,26 +465,40 @@ set to the supported set is the same widening Phases 3–5 performed.
   a buffer on the existing stack, and the markup escape on cell text is
   what keeps a `]` in a cell from closing its block. Alignments map
   `None → auto`, `Left → left`, `Center → center`, `Right → right`; when
-  every column is `None`, the `align` argument is omitted. The header
-  row's look is OQ-6's subject; any styling it resolves to lives in
-  `template.typ`, per §2's styling decision. The rejection moves:
-  `describe` drops its table arms, the tests keyed to a table rejection
-  move to the image — whose fixture Phase 5 added — and
-  `tests/fixtures/unsupported_table.md` is deleted. `Options::ENABLE_TABLES`
-  stays on, now serving support rather than rejection.
+  every column is `None`, the `align` argument is omitted. Per OQ-6's
+  resolution, `template.typ` gains `show table.cell.where(y: 0): strong`,
+  the header row in strong type — the emitter owns nothing about the
+  look, per §2's styling decision. The rejection moves: `describe` drops
+  its table arms, and the four tests keyed to a table rejection resolve
+  in two ways. The two on `tests/fixtures/unsupported_table.md` are
+  deleted — Phase 5's image tests already assert the same shape at both
+  levels — and that fixture with them. The inline pipe tables in
+  `line_numbers_survive_a_frontmatter_block` and
+  `a_frontmatter_error_wins_over_a_later_construct_error` become images,
+  which keeps the second testing frontmatter precedence over a construct
+  error rather than passing vacuously once a table stops being one.
+  `Options::ENABLE_TABLES` stays on, now serving support rather than
+  rejection, and the comment above it — which says tables are outside
+  the dialect — is rewritten to say so.
 - **Exit gate:** Golden-file tests, three cases, plus the full existing
   suite, which the `describe` change and the test migration touch; no
   shipped golden file changes, because `table` and `table.header` are
   standard-library names and the import line is untouched. (1) A fixture
   whose table carries a default, a left, a center and a right column,
-  emphasis, inline code and a link inside cells, an escaped pipe in a
-  cell, and one body row a cell short matches its golden file — the short
-  row padded with an empty cell — and compiles to a PDF with the `%PDF`
-  magic bytes. (2) The golden shows the header row inside
-  `table.header(…)`, and its look matches OQ-6's resolution, which the
-  gate pins the way OQ-5's gate case did. (3) An image still makes the
-  CLI exit non-zero naming the construct and its line — rejection
-  survives the widening, through the migrated tests.
+  emphasis, inline code and a link inside body cells — the inline code
+  stays out of the header row, because `show raw` names Libertinus Mono,
+  only its regular face is bundled, and Typst synthesizes no bold, so
+  `strong` could not carry a code span there — an escaped pipe in a
+  cell, and one body row a cell short matches its golden file — the
+  short row padded with an empty cell — and compiles to a PDF with the
+  `%PDF` magic bytes. (2) The golden shows the header row inside
+  `table.header(…)`, and the header rule is pinned where it lives: a
+  test reads `core/assets/template.typ` and asserts the `show` rule on
+  row 0 is present — golden files pin emitter output only, so the
+  template's side of OQ-6 needs its own artifact — and case (1)'s
+  compile exercises the rule. (3) An image still makes the CLI exit
+  non-zero naming the construct and its line — rejection survives the
+  widening, through the migrated tests.
 - **Close-out:** Update `rules/pipeline.md`'s dialect section, the README
   and `samples/article.md` against the code; the sample gains a real
   table, which is what keeps the corpus check from passing vacuously —
