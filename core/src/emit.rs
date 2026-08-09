@@ -12,7 +12,7 @@
 //! code block, which reaches Typst as one line holding a string literal, cannot
 //! be corrupted by the indentation around it.
 
-use pulldown_cmark::{CodeBlockKind, Event, LinkType, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Alignment, CodeBlockKind, Event, LinkType, Options, Parser, Tag, TagEnd};
 
 use crate::frontmatter::{self, Frontmatter};
 use crate::{Error, Result};
@@ -38,6 +38,23 @@ struct ListFrame {
     items: Vec<String>,
 }
 
+/// The table the walk is inside.
+///
+/// A GFM table never nests, so one frame serves the whole walk, as one slot
+/// serves a code block. The parser pads a short row with empty cells and drops
+/// the excess, following GFM, so every row arrives with the header's cell count
+/// and the emitter counts nothing itself.
+struct TableFrame {
+    /// One entry per column, from the delimiter row.
+    align: Vec<Alignment>,
+    /// The cells of the row being read.
+    cells: Vec<String>,
+    /// The header row, filled when the head closes.
+    header: Vec<String>,
+    /// Every body row, each cell already translated.
+    rows: Vec<Vec<String>>,
+}
+
 /// What the walk is directly inside, for the one question that needs the answer:
 /// whether a paragraph is a list item's own child.
 enum Container {
@@ -52,10 +69,9 @@ pub(crate) fn emit(md: &str) -> Result<String> {
     // from the input and every reported line number stays true to the user's
     // file. `frontmatter.rs` then reads the text between the delimiters.
     options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
-    // Tables are outside the dialect, and this is what makes them rejectable.
-    // Without the option the parser reads a pipe table as paragraph text, so
-    // the pipes would reach the PDF as prose and the arm below would never see
-    // the construct it is meant to name.
+    // A pipe table is a GFM extension rather than CommonMark, so the parser
+    // reads one only with this option on. Without it the pipes would reach the
+    // PDF as prose, which is the silent flattening the dialect refuses.
     options.insert(Options::ENABLE_TABLES);
 
     // The base buffer is the document body; a list item and a block quote push
@@ -64,6 +80,7 @@ pub(crate) fn emit(md: &str) -> Result<String> {
     let mut containers: Vec<Container> = Vec::new();
     let mut lists: Vec<ListFrame> = Vec::new();
     let mut code: Option<(Option<String>, String)> = None;
+    let mut table: Option<TableFrame> = None;
 
     let mut in_metadata = false;
     let mut meta = String::new();
@@ -155,6 +172,46 @@ pub(crate) fn emit(md: &str) -> Result<String> {
                 out.push_str("\n#quote(block: true)[\n");
                 out.push_str(&prefixed("  ", content.trim_matches('\n')));
                 out.push_str("\n]\n");
+            }
+
+            // Each cell opens a buffer on the same stack a list item uses, so
+            // the emphasis, code and link arms serve cell content unchanged,
+            // and the markup escape is what keeps a `]` in a cell from closing
+            // its block. A GFM cell holds inline content only, so nothing
+            // inside one needs the indentation a nested block would.
+            Event::Start(Tag::Table(align)) => {
+                table = Some(TableFrame {
+                    align,
+                    cells: Vec::new(),
+                    header: Vec::new(),
+                    rows: Vec::new(),
+                });
+            }
+            Event::End(TagEnd::Table) => {
+                let frame = table.take().expect("a table end follows its start");
+                let out = top(&mut bufs);
+                out.push('\n');
+                out.push_str(&table_call(&frame));
+                out.push('\n');
+            }
+
+            // The head holds its cells directly; no row event wraps them.
+            Event::Start(Tag::TableHead | Tag::TableRow) => {}
+            Event::End(TagEnd::TableHead) => {
+                let frame = table.as_mut().expect("a head sits inside a table");
+                frame.header = std::mem::take(&mut frame.cells);
+            }
+            Event::End(TagEnd::TableRow) => {
+                let frame = table.as_mut().expect("a row sits inside a table");
+                let row = std::mem::take(&mut frame.cells);
+                frame.rows.push(row);
+            }
+
+            Event::Start(Tag::TableCell) => bufs.push(String::new()),
+            Event::End(TagEnd::TableCell) => {
+                let content = bufs.pop().expect("a cell end follows its start");
+                let frame = table.as_mut().expect("a cell sits inside a table");
+                frame.cells.push(content.trim_matches('\n').to_string());
             }
 
             // The language tag is the first word of the info string. An
@@ -317,6 +374,66 @@ fn prefixed(prefix: &str, content: &str) -> String {
     out
 }
 
+/// Render one table as a Typst `table` call, one markdown row to one line.
+///
+/// The column count is the alignment vector's length, and an integer `columns`
+/// gives that many auto-sized columns. The header row travels as
+/// `table.header`, which is what repeats it across page breaks and carries the
+/// accessibility tagging; `template.typ` owns how it looks. A row a cell short
+/// arrives padded, so its last cell is the empty content block `[]`.
+fn table_call(frame: &TableFrame) -> String {
+    let mut out = format!("#table(\n  columns: {},\n", frame.align.len());
+
+    // A delimiter row that sets no alignment at all leaves the argument out,
+    // rather than naming `auto` for every column and saying nothing with it.
+    if frame
+        .align
+        .iter()
+        .any(|align| !matches!(align, Alignment::None))
+    {
+        let names: Vec<&str> = frame.align.iter().map(align_name).collect();
+        out.push_str("  align: (");
+        out.push_str(&names.join(", "));
+        // One column needs the trailing comma, or Typst reads a parenthesised
+        // word where an array is meant.
+        if names.len() == 1 {
+            out.push(',');
+        }
+        out.push_str("),\n");
+    }
+
+    out.push_str("  table.header(");
+    out.push_str(&row_cells(&frame.header));
+    out.push_str("),\n");
+
+    for row in &frame.rows {
+        out.push_str("  ");
+        out.push_str(&row_cells(row));
+        out.push_str(",\n");
+    }
+
+    out.push(')');
+    out
+}
+
+/// One row's cells, each a content block.
+fn row_cells(row: &[String]) -> String {
+    row.iter()
+        .map(|cell| format!("[{cell}]"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// The Typst alignment for one column, `auto` where the delimiter row set none.
+fn align_name(align: &Alignment) -> &'static str {
+    match align {
+        Alignment::None => "auto",
+        Alignment::Left => "left",
+        Alignment::Center => "center",
+        Alignment::Right => "right",
+    }
+}
+
 /// The two lines the emitter puts above every document.
 ///
 /// `template.typ` reaches the compiler as bytes in the world's virtual
@@ -419,7 +536,6 @@ fn describe(event: &Event) -> &'static str {
         Event::Start(tag) => match tag {
             Tag::Strikethrough => "strikethrough",
             Tag::Image { .. } => "image",
-            Tag::Table(_) => "table",
             Tag::FootnoteDefinition(_) => "footnote definition",
             Tag::HtmlBlock => "raw HTML block",
             _ => "markdown construct",
@@ -427,7 +543,6 @@ fn describe(event: &Event) -> &'static str {
         Event::End(tag) => match tag {
             TagEnd::Strikethrough => "strikethrough",
             TagEnd::Image => "image",
-            TagEnd::Table => "table",
             TagEnd::FootnoteDefinition => "footnote definition",
             TagEnd::HtmlBlock => "raw HTML block",
             _ => "markdown construct",

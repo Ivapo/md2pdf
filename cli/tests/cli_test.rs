@@ -44,6 +44,7 @@ fn emit_typst_prints_the_golden_file() {
         ("blocks.md", "blocks.typ"),
         ("list_spacing.md", "list_spacing.typ"),
         ("links.md", "links.typ"),
+        ("table.md", "table.typ"),
     ] {
         let out = run(&[fixture(fixture_name).as_ref(), "--emit-typst".as_ref()]);
         assert!(out.status.success(), "{fixture_name} did not exit 0");

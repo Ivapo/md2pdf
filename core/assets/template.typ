@@ -20,6 +20,12 @@
   // fallback that would render code as body text.
   show raw: set text(font: "Libertinus Mono", size: 9pt)
 
+  // The header row of a table. A GFM table has exactly one, and it is always
+  // the first, so row zero is the header by construction. Typst's own default
+  // sets it in body type, which would flatten a distinction the markdown
+  // source draws with its delimiter row.
+  show table.cell.where(y: 0): strong
+
   set heading(numbering: none)
   show heading: set text(weight: "bold")
   show heading: set block(above: 1.4em, below: 0.8em)

@@ -1,4 +1,4 @@
-//! The exit gates for Phases 1 to 4, at the library level.
+//! The exit gates for Phases 1 to 6, at the library level.
 //!
 //! Fixtures and golden files live at the workspace root because the CLI tests
 //! read the same ones.
@@ -25,6 +25,9 @@ const LIST_SPACING_TYP: &str = include_str!("../../tests/golden/list_spacing.typ
 const LINKS_MD: &str = include_str!("../../tests/fixtures/links.md");
 const LINKS_TYP: &str = include_str!("../../tests/golden/links.typ");
 const IMAGE_MD: &str = include_str!("../../tests/fixtures/unsupported_image.md");
+const TABLE_MD: &str = include_str!("../../tests/fixtures/table.md");
+const TABLE_TYP: &str = include_str!("../../tests/golden/table.typ");
+const TEMPLATE_TYP: &str = include_str!("../assets/template.typ");
 
 #[test]
 fn basic_fixture_matches_its_golden_file() {
@@ -465,5 +468,103 @@ fn an_empty_link_title_is_not_an_error() {
     assert!(
         typst.contains(r#"#link("https://typst.app")[link]"#),
         "the link did not survive its empty title: {typst}"
+    );
+}
+
+// -- Phase 6: tables --------------------------------------------------------
+
+#[test]
+fn the_table_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(TABLE_MD).unwrap(), TABLE_TYP);
+}
+
+/// The compile is what exercises the template's header rule, which no golden
+/// file can pin.
+#[test]
+fn the_table_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(TABLE_MD).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each part of the table reaches Typst as the form the spec chose.
+///
+/// The equality test above pins the whole output, but it cannot say *why* the
+/// output is right. This one names the rule, so an edit that drops the column
+/// count, an alignment, the header row, or a cell's own translation fails with
+/// a message that points at what it dropped.
+#[test]
+fn the_table_golden_carries_each_part() {
+    for (form, what) in [
+        // An integer gives that many auto-sized columns.
+        ("columns: 4,", "the column count"),
+        // The delimiter row set one column of each kind, and a column it left
+        // alone is `auto` rather than a guess.
+        ("align: (auto, left, center, right),", "the four alignments"),
+        // This is what repeats the header across a page break and carries the
+        // accessibility tagging.
+        (
+            "table.header([Construct], [Left], [Center], [Right]),",
+            "the header row",
+        ),
+        // A cell holds inline content, so the arms that already exist serve it.
+        ("[#emph[emphasis in a cell]]", "emphasis inside a cell"),
+        (r#"[#raw("inline code")]"#, "inline code inside a cell"),
+        (
+            r#"[#link("https://typst.app")[Typst]]"#,
+            "a link inside a cell",
+        ),
+        // A pipe is not Typst markup, so an escaped one reaches the cell as
+        // itself and the markup escape leaves it alone.
+        ("[a | pipe]", "the escaped pipe"),
+        // pulldown-cmark pads a short row, following GFM, so the emitter counts
+        // no cells and the padding arrives as an empty content block.
+        (
+            "[short row], [three cells], [only], [],",
+            "the padded short row",
+        ),
+    ] {
+        assert!(
+            TABLE_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+}
+
+/// The header row is set in strong type, and the template owns that rule.
+///
+/// Golden files pin emitter output only, so the template's side of the decision
+/// needs an artifact of its own. Without the rule the PDF would set the header
+/// in body type and flatten a distinction the markdown source draws.
+#[test]
+fn the_template_sets_the_header_row_in_strong_type() {
+    assert!(
+        TEMPLATE_TYP.contains("show table.cell.where(y: 0): strong"),
+        "the template does not set row zero in strong type"
+    );
+}
+
+/// One column still emits an array, not a parenthesised word.
+///
+/// The fixture cannot reach this: it has four columns, and `(left, right)` is
+/// an array whatever else happens. `(left)` alone is not one.
+#[test]
+fn a_single_column_table_emits_an_array_of_one_alignment() {
+    let md = "| head |\n| :--- |\n| body |\n";
+    let typst = md_to_typst(md).unwrap();
+    assert!(
+        typst.contains("align: (left,),"),
+        "the one alignment is not an array: {typst}"
+    );
+}
+
+/// A table whose delimiter row sets no alignment leaves the argument out.
+#[test]
+fn a_table_without_alignments_omits_the_argument() {
+    let md = "| a | b |\n| - | - |\n| 1 | 2 |\n";
+    let typst = md_to_typst(md).unwrap();
+    assert!(
+        !typst.contains("align:"),
+        "an alignment argument that says nothing was written: {typst}"
     );
 }
