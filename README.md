@@ -44,7 +44,7 @@ inspection rather than a standalone `typst compile`.
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
-constructs, and links**:
+constructs, links, and tables**:
 
 ````markdown
 # Introduction
@@ -70,6 +70,10 @@ fn main() {}
 
 > A block quote.
 
+| Construct | Supported |
+| --------- | :-------: |
+| a table   | yes       |
+
 ---
 
 ## Background
@@ -81,17 +85,21 @@ Heading levels 1 to 6 map to Typst headings of the same level. A list whose item
 separated by blank lines is set with more space between them than one whose items are
 not, which is the distinction markdown itself draws.
 
+A table's header row is set in bold, and its columns take the alignment the delimiter row
+gives them. A row with too few cells is padded with empty ones, and a row with too many
+loses the extra, which is what GitHub-flavoured markdown does.
+
 A reference link works too, and an email autolink becomes a `mailto:` destination. Two
 link shapes do not: a link with an empty destination, `[text]()`, and a link that carries
 a title, `[text](url "a title")`. Neither Typst nor the PDF can hold a title, and an empty
 destination has nothing to resolve to.
 
-**Every other construct is an error.** An image or a table makes `md2pdf` exit with code 1
-and print the construct and its line:
+**Every other construct is an error.** An image makes `md2pdf` exit with code 1 and print
+the construct and its line:
 
 ```console
 $ md2pdf notes.md
-error: unsupported markdown construct 'table' at line 5
+error: unsupported markdown construct 'image' at line 5
 ```
 
 That is deliberate. Dropping or flattening content would ship a PDF that lies about its

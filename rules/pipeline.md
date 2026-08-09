@@ -10,8 +10,8 @@ covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the template's title block and column toggle,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 140
-generated: 2026-08-08
+max_lines: 155
+generated: 2026-08-09
 ---
 
 # Pipeline
@@ -24,10 +24,10 @@ all file I/O and all terminal output.
 
 ## The dialect
 
-Fourteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
+Fifteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
 emphasis, strong emphasis, inline code, hard line breaks, thematic breaks, links, bullet
-lists, ordered lists, code blocks, block quotes, and a leading YAML frontmatter block.
-Heading levels map to Typst headings of the same level.
+lists, ordered lists, code blocks, block quotes, pipe tables, and a leading YAML
+frontmatter block. Heading levels map to Typst headings of the same level.
 
 The six inline constructs reach Typst as function calls, not as its own markup.
 `#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
@@ -62,12 +62,21 @@ stack and indent it as they close, so nothing is ever indented while it is writt
 keeps `core/src/emit.rs:line_is_all_digits` reading an un-indented line, and is why a code
 block, one markup line holding a string literal, survives the indentation around it.
 
-**Everything else is an error** — an image, a table, raw HTML, a footnote, strikethrough,
-and math. `core/src/emit.rs:describe` names the construct, and
-`Error::UnsupportedConstruct` carries that name with the 1-based line. The CLI prints it to
-stderr and exits 1. Nothing is ever dropped or flattened silently. `Options::ENABLE_TABLES`
-is on for that rejection alone: without it a pipe table parses as paragraph text, so the
-pipes would reach the PDF as prose and the reject arm would never see the construct.
+A table becomes `#table(columns: N, align: (…), table.header(…), …)`, one markdown row to
+one line. `Options::ENABLE_TABLES` is what parses it at all, a pipe table being GFM rather
+than CommonMark. The column count is the alignment vector's length, which an integer
+`columns` turns into that many auto-sized columns; `align` maps `None` to `auto` and is
+omitted where the delimiter row set none. `table.header` repeats the header row across a
+page break and carries the accessibility tagging. `core/src/emit.rs:TableFrame` holds the
+one table a walk can be inside, since a GFM table never nests, and each cell opens a buffer
+on the same stack, so the inline arms serve cell content unchanged. The emitter counts no
+cells: pulldown-cmark pads a short row and drops the excess, following GFM, so the padding
+arrives as the empty content block `[]`.
+
+**Everything else is an error** — an image, raw HTML, a footnote, strikethrough, and math.
+`core/src/emit.rs:describe` names the construct, and `Error::UnsupportedConstruct` carries
+that name with the 1-based line. The CLI prints it to stderr and exits 1. Nothing is ever
+dropped or flattened silently.
 
 Two link shapes are errors too, and the link arm names them itself rather than through
 `describe`. An empty destination, legal CommonMark, would reach Typst as `#link("")`,
@@ -121,6 +130,11 @@ of its own, so a new look is a new `.typ` file. Its own defaults never reach a d
 The title block uses `place(scope: "parent", float: true)`, which lifts it out of the
 column grid so it spans the page; Typst supports that scope only together with `float`. A
 document with neither `title` nor `author` gets no title block at all.
+
+`show table.cell.where(y: 0): strong` sets a table's header row in strong type. A GFM table
+has exactly one header row and it is always the first, so row zero is the header by
+construction. Typst's own default sets it in body type, which would flatten a distinction
+the markdown source draws.
 
 ## The world
 

@@ -32,9 +32,9 @@ lying about its source.
 
 # What the body may contain
 
-Headings, paragraph text, the inline constructs, the block constructs, and
-links. Heading levels 1 to 6 map to Typst headings of the same level, so the
-two below are real headings, not bold paragraphs.
+Headings, paragraph text, the inline constructs, the block constructs, links,
+and tables. Heading levels 1 to 6 map to Typst headings of the same level, so
+the two below are real headings, not bold paragraphs.
 
 ## A second level heading
 
@@ -45,7 +45,7 @@ it.
 
 ### A third level heading
 
-Text under a third level heading. Anything else — an image, a table — is an
+Text under a third level heading. Anything else — an image, for one — is an
 error today, and support arrives construct by construct.
 
 # The inline constructs
@@ -108,6 +108,19 @@ A line beginning with a greater-than sign makes a block quote:
 
 > The observable this project produces is the typeset PDF that Typst
 > compiles from your markdown.
+
+A row of pipes makes a table. The colons in the second row set each column's
+alignment, and the header row comes out in bold:
+
+| Column | Meaning     | Width |
+| ------ | :---------- | ----: |
+| first  | left        |    10 |
+| second | *emphasis*  |   200 |
+| third  | `code`      |  3000 |
+
+A row with too few cells is padded with empty ones, and a row with too many
+loses the extra. That is what GitHub-flavoured markdown does, and the emitter
+follows it rather than deciding anything of its own.
 
 # Links
 
