@@ -29,7 +29,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 5 — links"
-    reviewed: null
+    reviewed: 2026-08-08
     shipped: null
     cut: null
     by: null
@@ -380,21 +380,41 @@ blocks, and quotes.*
 *Produces the observable: yes — a PDF whose links resolve.*
 
 - **Scope:** In `core/src/emit.rs`: inline links, reference links (already
-  resolved by `pulldown-cmark`), and autolinks become `#link("url")[…]`, the
-  URL through the string-literal escape that `typst_string` already
+  resolved by `pulldown-cmark` — the full, collapsed and shortcut forms
+  all arrive as the same `Tag::Link`, so there is no `link_type`
+  distinction to draw), and autolinks become `#link("url")[…]`, the URL
+  through the string-literal escape that `typst_string` already
   implements, the link text translated as normal inline content. An email
-  autolink gets a `mailto:` URL. Images stay errors: they need file access,
-  and the `World` holds exactly two files by design — a later spec's
-  subject, not a construct.
-- **Exit gate:** Golden-file tests, two cases. (1) A fixture with an inline
-  link, a reference link, and an autolink matches its golden file — the URL
-  in a string literal, the text escaped — and compiles to a PDF with the
-  `%PDF` magic bytes. (2) An image makes the CLI exit non-zero naming the
-  construct and its line.
-- **Close-out:** Update `rules/pipeline.md`'s dialect section and the README
-  against the code. A corpus check closes the ladder: this repository's own
-  README converts without error, or the gap is named in the review record.
-  One push.
+  autolink's destination arrives as the bare address, so the emitter
+  prepends `mailto:`. Two link shapes are errors that name the construct
+  and its line, per the §2 escape-and-reject decision: an empty
+  destination — `[text]()` is legal CommonMark, and `#link("")` fails
+  Typst's compile with an error naming neither construct nor line, the
+  first input-dependent break of the guarantee that generated source
+  always compiles — and a non-empty link title, which neither Typst's
+  `link` nor the PDF can carry, and which dropping silently would
+  flatten. Images stay errors: they need file access, and the `World`
+  holds exactly two files by design — a later spec's subject, not a
+  construct.
+- **Exit gate:** Golden-file tests, three cases; no shipped golden file
+  changes, because `link` is a standard-library name and the import line
+  is untouched. (1) A fixture with an inline link, a reference link, an
+  autolink, and an email autolink matches its golden file — every URL in
+  a string literal, the `mailto:` prefix present, the link text escaped —
+  and compiles to a PDF with the `%PDF` magic bytes. At least one URL is
+  hostile, carrying a `#` and a `"`, so the golden shows the string
+  escape doing the work the markup escape must not. (2) An image makes
+  the CLI exit non-zero naming the construct and its line. (3) A link
+  with an empty destination, and a link with a title, are each an error
+  naming the construct and its line.
+- **Close-out:** Update `rules/pipeline.md`'s dialect section, the README
+  and `samples/article.md` against the code; the sample gains a real link
+  and an email autolink, which is what keeps the corpus check from
+  passing vacuously — the README holds no link construct outside code
+  fences, so on its own it would demonstrate nothing about this phase. The
+  corpus check closes the ladder: the repository's own README and the
+  sample both convert without error, or the gap is named in the review
+  record. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

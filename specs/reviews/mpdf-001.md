@@ -2,6 +2,70 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 8 — Phase 5 only — 2026-08-08 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking findings, none newly introduced. The
+reviewer verified every fix against the file, not the changelog. Blocker 1:
+the empty destination is an error clause now, its grounding recorded inline
+and re-verified in the pinned sources — pulldown-cmark 0.13.4 delivers
+`dest_url: ""` for `[text]()`, and `typst-library-0.15.1`'s `Url::new`
+rejects the empty string — and the generic wording also covers the
+reference-definition route to an empty destination. Blocker 2: a non-empty
+link title is an error clause now, and the reviewer confirmed the
+"non-empty" qualifier is right, because `[x](url "")` delivers `title: ""`
+and stays in-dialect. The new material was checked too: the hostile-URL
+case is implementable — CommonMark separates a destination from a title by
+whitespace, so one bare destination can carry both `#` and `"` — and the
+no-golden-changes claim holds because `link` is a standard-library element
+with no template export. Gate case (3) leaves the exact error strings to
+the implementer, which matches the precision of every shipped phase's
+rejection gate.
+
+On this convergence: `reviewed: 2026-08-08` on Phase 5. No phase of this
+spec remains unreviewed.
+
+### Round 7 — Phase 5 only — 2026-08-08 — fresh clean-room reviewer with repo access — **NOT READY**
+
+Round 0 (once for this episode, the appended Phase 5): the phase produces
+the observable — a PDF whose links resolve — and it is the right one: links
+are the last family in the Phases 3–5 ladder, whose stated aim is an
+ordinary markdown article converting unmodified, and real prose carries
+links. The episode proceeded.
+
+The reviewer's grounding pass confirmed the phase's parser claims against
+the pinned sources: reference links arrive with `dest_url` already
+resolved, an unresolved reference produces no Link event at all (it stays
+literal text, which the existing escape handles), and an email autolink
+delivers the bare address — the `mailto:` prefix is pulldown's HTML
+renderer's work, so prepending it is correctly emitter scope.
+
+Verdict: `NOT READY` — two blocking findings, five non-blocking. The
+author accepted all seven, rejected none, deferred none.
+
+The blockers. First: **an empty link destination, legal CommonMark,
+produced the pipeline's first unnamed input-dependent compile error** —
+`[text]()` delivers `dest_url: ""`, `#link("")` fails Typst's compile
+naming neither construct nor line, breaking the guarantee that generated
+source always compiles. Resolved: an empty destination is an error naming
+the construct and its line, pinned by a new gate case. Second: **the link
+`title` field was unspecified**, and the spec's own recorded policy made
+both readings defensible — a silent drop flattens content, an error was
+nowhere stated. Resolved: a non-empty title is an error, pinned by the
+same gate case.
+
+Non-blocking, all accepted: an email autolink in gate case (1), since the
+`mailto:` prepend was the one scoped behavior with a branch and no gate;
+a hostile URL carrying `#` and `"`, so the golden shows the string escape
+doing the work the markup escape must not; the corpus check's vacuity
+named — the README holds no link construct outside code fences — and the
+sample gaining a real link and an email autolink to fix it; the sample
+named in the close-out, as Phase 4's close-out was interpreted in
+practice; and two wording tightenings — the reference forms all arrive as
+the same `Tag::Link`, and the gate now states the no-golden-changes claim
+with its reason.
+
+Rejections: none.
+
 ### Round 6 — Phase 4 only — 2026-08-08 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking findings, none newly introduced. The reviewer
