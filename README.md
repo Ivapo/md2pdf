@@ -44,7 +44,7 @@ inspection rather than a standalone `typst compile`.
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
-constructs, links, and tables**:
+constructs, links, tables, and images**:
 
 ````markdown
 # Introduction
@@ -73,6 +73,8 @@ fn main() {}
 | Construct | Supported |
 | --------- | :-------: |
 | a table   | yes       |
+
+![A diagram of the three steps](figures/pipeline.svg)
 
 ---
 
@@ -118,6 +120,43 @@ rather than as markup, so nothing inside a pair of backticks or a fence is escap
 nothing needs to be. ``` `` #5 $5 \ `x` `` ``` prints exactly those characters. A fence's
 language tag is carried through, so Typst highlights the block. A link's destination takes
 that same route, so a `#` fragment in a URL arrives intact.
+
+## Images
+
+An image points at a file that travels with the document:
+
+```markdown
+![The three steps, drawn as boxes](figures/pipeline.svg)
+
+A small icon ![a check mark](check.svg) sits inside this sentence.
+```
+
+The path is relative to the markdown file, and `md2pdf` reads the file from there. An
+image alone in its paragraph is set as a block and scales down to the column; an image
+with text beside it stays in the line. Eight formats work, and the extension decides
+which one a file holds:
+
+```
+png  jpg  jpeg  gif  webp  svg  svgz  pdf
+```
+
+The text in the square brackets is alt text. It reaches the accessibility layer of the
+PDF rather than the page, so it is not a caption and nothing numbers it. There is no
+syntax for a width, a rotation or a crop; the image takes its natural size, bounded by
+the column.
+
+A file that `md2pdf` cannot read is an error that names the path, the line that asked
+for it, and the reason:
+
+```console
+$ md2pdf paper.md
+error: cannot read figures/pipeline.svg for the image at line 12: No such file or directory (os error 2)
+```
+
+Bytes that disagree with their extension are an error too. So are four destinations:
+a URL and a `data:` URI, because nothing is fetched over the network; an absolute path,
+which converts on one machine only; and a path with a `..` segment, which escapes the
+document's own folder.
 
 ## Frontmatter
 

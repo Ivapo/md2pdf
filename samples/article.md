@@ -33,8 +33,8 @@ lying about its source.
 # What the body may contain
 
 Headings, paragraph text, the inline constructs, the block constructs, links,
-and tables. Heading levels 1 to 6 map to Typst headings of the same level, so
-the two below are real headings, not bold paragraphs.
+tables, and images. Heading levels 1 to 6 map to Typst headings of the same
+level, so the two below are real headings, not bold paragraphs.
 
 ## A second level heading
 
@@ -45,8 +45,9 @@ it.
 
 ### A third level heading
 
-Text under a third level heading. Anything else — an image, for one — is an
-error today, and support arrives construct by construct.
+Text under a third level heading. A construct outside the list above is an
+error rather than a silent omission, and support arrives construct by
+construct.
 
 # The inline constructs
 
@@ -140,6 +141,30 @@ ordinary body text, and it is escaped like any other.
 Two shapes are errors rather than links. A link with an empty destination has
 nothing to resolve to, and a link that carries a title holds something neither
 Typst nor the PDF can show, so passing it on would drop it in silence.
+
+# Images
+
+Name a file that sits beside this one, and it reaches the page:
+
+![The three steps, drawn as boxes](pipeline.svg)
+
+That image sits alone in its paragraph, so it is set as a block of its own and
+it scales down to the column. An image with text beside it stays in the line
+instead, the way this check mark ![a check mark](check.svg) sits in this
+sentence.
+
+The path is relative to this file, and it stays inside this file's directory.
+A URL is an error rather than a download, because nothing is fetched over the
+network. So are an absolute path and a path that climbs out with a `..`
+segment, because a document and its figures travel as one folder.
+
+The text in the square brackets is alt text. It reaches the accessibility layer
+of the PDF rather than the page, so it is not a caption and nothing numbers it.
+Leave it empty and the image carries none.
+
+Eight formats work: png, jpg, jpeg, gif, webp, svg, svgz, and pdf. The
+extension decides which one a file holds, so bytes that disagree with the name
+are an error that names both.
 
 # Characters you do not have to think about
 
