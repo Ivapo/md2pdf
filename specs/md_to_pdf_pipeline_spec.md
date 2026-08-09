@@ -33,6 +33,11 @@ phases:
     shipped: 2026-08-08
     cut: null
     by: null
+  - name: "Phase 6 — tables"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -229,6 +234,17 @@ failure, and support arrives construct by construct in later phases or specs.
   spacing distances) remains one, and Phase 4 adds no such rule because
   the defaults already render the two forms distinguishably, which the
   gate pins. Landed in Phase 4's scope.
+- **OQ-6** — Does the header row of a table get a look of its own, and
+  does `template.typ` own it through a `show` rule? Typst's default table
+  sets the header row in the same body type as every other row:
+  `table.header` carries the distinction semantically — it repeats the
+  row across page breaks and tags it for assistive technology — but
+  draws nothing differently. Markdown's pipe-table syntax draws the
+  header distinction in the source, so a header row that renders
+  indistinguishably from the body arguably flattens it — the worry OQ-5
+  resolved for tight and loose lists, except there the Typst defaults
+  already rendered the two forms distinguishably, and here they do not.
+  Design call; blocks Phase 6's gate case (2).
 
 ## 4. Implementation phases
 
@@ -415,6 +431,55 @@ blocks, and quotes.*
   corpus check closes the ladder: the repository's own README and the
   sample both convert without error, or the gap is named in the review
   record. One push.
+
+### Phase 6 — tables
+*Produces the observable: yes — a PDF from documents with pipe tables.*
+
+Appended 2026-08-08, after Phase 5 shipped, per the methodology's §6.1: the
+dialect is this spec's subject, and a construct migrating from the reject
+set to the supported set is the same widening Phases 3–5 performed.
+
+- **Scope:** In `core/src/emit.rs`: GFM pipe tables become Typst's `table`.
+  `Tag::Table(alignments)` opens a frame beside `ListFrame`; the column
+  count is the alignment vector's length, and every row arrives with
+  exactly that many cells — pulldown-cmark pads a short row with empty
+  cells and drops excess ones, following GFM, so the emitter never counts
+  cells itself. The call is `#table(columns: N, align: (…),
+  table.header([…], …), […], …)`: an integer `columns` yields N auto-sized
+  columns; the header row travels as `table.header`, which is what repeats
+  it across page breaks and carries the accessibility tagging; each cell
+  is a content block whose content is translated as normal inline content
+  — a GFM cell holds inline content only, so emphasis, code and links
+  inside cells arrive through the arms that already exist, each cell opens
+  a buffer on the existing stack, and the markup escape on cell text is
+  what keeps a `]` in a cell from closing its block. Alignments map
+  `None → auto`, `Left → left`, `Center → center`, `Right → right`; when
+  every column is `None`, the `align` argument is omitted. The header
+  row's look is OQ-6's subject; any styling it resolves to lives in
+  `template.typ`, per §2's styling decision. The rejection moves:
+  `describe` drops its table arms, the tests keyed to a table rejection
+  move to the image — whose fixture Phase 5 added — and
+  `tests/fixtures/unsupported_table.md` is deleted. `Options::ENABLE_TABLES`
+  stays on, now serving support rather than rejection.
+- **Exit gate:** Golden-file tests, three cases, plus the full existing
+  suite, which the `describe` change and the test migration touch; no
+  shipped golden file changes, because `table` and `table.header` are
+  standard-library names and the import line is untouched. (1) A fixture
+  whose table carries a default, a left, a center and a right column,
+  emphasis, inline code and a link inside cells, an escaped pipe in a
+  cell, and one body row a cell short matches its golden file — the short
+  row padded with an empty cell — and compiles to a PDF with the `%PDF`
+  magic bytes. (2) The golden shows the header row inside
+  `table.header(…)`, and its look matches OQ-6's resolution, which the
+  gate pins the way OQ-5's gate case did. (3) An image still makes the
+  CLI exit non-zero naming the construct and its line — rejection
+  survives the widening, through the migrated tests.
+- **Close-out:** Update `rules/pipeline.md`'s dialect section, the README
+  and `samples/article.md` against the code; the sample gains a real
+  table, which is what keeps the corpus check from passing vacuously —
+  neither corpus file holds a pipe table today. The corpus check repeats:
+  the repository's own README and the sample both convert without error,
+  or the gap is named in the review record. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

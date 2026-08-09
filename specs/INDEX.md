@@ -2,5 +2,5 @@
 
 # Specs
 
-- **[md-to-pdf-pipeline](md_to_pdf_pipeline_spec.md)** — `mpdf-001` · accepted · done
+- **[md-to-pdf-pipeline](md_to_pdf_pipeline_spec.md)** — `mpdf-001` · accepted · partial
   The core .md → .pdf pipeline: pulldown-cmark parses, a hand-written emitter maps events to Typst markup, and embedded Typst compiles the PDF, behind a CLI.
