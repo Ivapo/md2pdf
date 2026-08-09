@@ -77,11 +77,20 @@ fn join(diags: &[SourceDiagnostic]) -> String {
 // Fonts are bundled and embedded at compile time on every target. A browser
 // sandbox has no OS font access, and OS discovery would make the compiled PDF
 // depend on the machine that produced it.
+//
+// Every face the dialect can reach is here, because Typst renders what it
+// finds and never synthesises a missing one. Without the italic, `#emph` would
+// come out identical to body text; without the mono, `#raw` would come out as
+// the serif. Both would be a PDF that lies about its source. All five files
+// come from one Libertinus release, so their metrics agree.
 const REGULAR: &[u8] = include_bytes!("../assets/fonts/LibertinusSerif-Regular.otf");
 const BOLD: &[u8] = include_bytes!("../assets/fonts/LibertinusSerif-Bold.otf");
+const ITALIC: &[u8] = include_bytes!("../assets/fonts/LibertinusSerif-Italic.otf");
+const BOLD_ITALIC: &[u8] = include_bytes!("../assets/fonts/LibertinusSerif-BoldItalic.otf");
+const MONO: &[u8] = include_bytes!("../assets/fonts/LibertinusMono-Regular.otf");
 
 static FONTS: LazyLock<Vec<Font>> = LazyLock::new(|| {
-    [REGULAR, BOLD]
+    [REGULAR, BOLD, ITALIC, BOLD_ITALIC, MONO]
         .into_iter()
         .flat_map(|data| Font::iter(Bytes::new(data)))
         .collect()
