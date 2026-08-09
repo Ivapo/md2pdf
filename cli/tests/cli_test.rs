@@ -45,6 +45,9 @@ fn emit_typst_prints_the_golden_file() {
         ("list_spacing.md", "list_spacing.typ"),
         ("links.md", "links.typ"),
         ("table.md", "table.typ"),
+        // Emission reads paths and no bytes, so this one prints its golden file
+        // although the binary supplies no assets and the files sit elsewhere.
+        ("images.md", "images.typ"),
     ] {
         let out = run(&[fixture(fixture_name).as_ref(), "--emit-typst".as_ref()]);
         assert!(out.status.success(), "{fixture_name} did not exit 0");
@@ -78,15 +81,29 @@ fn without_o_the_pdf_lands_beside_the_input() {
     assert!(bytes.starts_with(b"%PDF"), "the output is not a PDF");
 }
 
-/// An image needs file access, and the world holds exactly two files by design.
+/// Rejection survives the widening. Images left the out-of-dialect list in
+/// `mpdf-002`'s Phase 1, and a raw HTML block took over this gate.
 #[test]
-fn an_image_exits_non_zero_and_names_it() {
-    let out = run(&[fixture("unsupported_image.md").as_ref()]);
+fn a_raw_html_block_exits_non_zero_and_names_it() {
+    let out = run(&[fixture("unsupported_html.md").as_ref()]);
     assert!(!out.status.success(), "the run should have failed");
 
     let stderr = String::from_utf8(out.stderr).unwrap();
-    assert!(stderr.contains("image"), "stderr: {stderr}");
+    assert!(stderr.contains("raw HTML block"), "stderr: {stderr}");
     assert!(stderr.contains("line 5"), "stderr: {stderr}");
+}
+
+/// The binary supplies no assets yet, so an image document is an honest error
+/// that names the file it needs and the line that asked for it. Reading those
+/// files is Phase 2 of `specs/images_spec.md`.
+#[test]
+fn an_image_exits_non_zero_and_names_the_file_it_needs() {
+    let out = run(&[fixture("images.md").as_ref()]);
+    assert!(!out.status.success(), "the run should have failed");
+
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(stderr.contains("dot.png"), "stderr: {stderr}");
+    assert!(stderr.contains("line 3"), "stderr: {stderr}");
 }
 
 #[test]

@@ -13,9 +13,10 @@
 //! be corrupted by the indentation around it.
 
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, LinkType, Options, Parser, Tag, TagEnd};
+use typst::syntax::VirtualPath;
 
 use crate::frontmatter::{self, Frontmatter};
-use crate::{Error, Result};
+use crate::{Error, ImageRef, Result};
 
 /// Characters that Typst markup mode interprets inside a text run.
 ///
@@ -25,6 +26,14 @@ use crate::{Error, Result};
 const SPECIAL: &[char] = &[
     '\\', '#', '$', '*', '_', '`', '@', '<', '>', '[', ']', '~', '-', '+', '=', '/',
 ];
+
+/// The file extensions Typst's own `determine_format_from_path` names.
+///
+/// An extension outside this table is a construct error at the image arm, so
+/// everything that survives the walk has an extension the table names. That is
+/// what lets the pre-compile check say "the extension decides the format" and
+/// mean it.
+const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "svg", "svgz", "pdf"];
 
 /// One list the walk is inside.
 struct ListFrame {
@@ -62,8 +71,31 @@ enum Container {
     Quote,
 }
 
+/// The alt text being flattened out of one image's content.
+///
+/// CommonMark reads alt text as the plain text of everything inside the image,
+/// which is what pulldown-cmark's own HTML renderer implements, and Typst's
+/// `alt` is a plain string too. So the walk collects rather than emits between
+/// the image's two events.
+struct AltCapture {
+    /// The destination, exactly as the markdown wrote it.
+    path: String,
+    /// Whether the image opened its paragraph. Half of the standalone test; the
+    /// next event settles the other half.
+    opened: bool,
+    /// The text collected so far.
+    text: String,
+    /// How many nested images are open. A nested image flattens by the same
+    /// rule, so its own end event must not close the capture.
+    depth: usize,
+}
+
 /// Translate one markdown document into Typst markup.
-pub(crate) fn emit(md: &str) -> Result<String> {
+///
+/// The second half of the result is every image the document names, in document
+/// order. One walk produces both, so the source and the shopping list cannot
+/// disagree about which paths the dialect accepts.
+pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>)> {
     let mut options = Options::empty();
     // The parser is what recognises the frontmatter block, so nothing strips it
     // from the input and every reported line number stays true to the user's
@@ -87,7 +119,53 @@ pub(crate) fn emit(md: &str) -> Result<String> {
     let mut meta_offset = None;
     let mut front = Frontmatter::default();
 
+    let mut images: Vec<ImageRef> = Vec::new();
+    let mut alt: Option<AltCapture> = None;
+    let mut pending: Option<(String, bool)> = None;
+    let mut para: Option<usize> = None;
+
     for (event, range) in Parser::new_ext(md, options).into_offset_iter() {
+        // An open capture takes every event, because alt text is collected and
+        // never emitted. A construct outside the dialect still errors here.
+        if let Some(capture) = alt.as_mut() {
+            match &event {
+                Event::Text(text) => capture.text.push_str(text),
+                Event::Code(code) => capture.text.push_str(code),
+                // A break is whitespace under the alt reading, and one space is
+                // what pulldown-cmark's own flattening writes for it.
+                Event::SoftBreak | Event::HardBreak => capture.text.push(' '),
+                // A wrapper contributes nothing of its own; its content still
+                // arrives as text events inside it.
+                Event::Start(Tag::Emphasis | Tag::Strong | Tag::Link { .. })
+                | Event::End(TagEnd::Emphasis | TagEnd::Strong | TagEnd::Link) => {}
+                // A nested image's destination and title are not content under
+                // the alt reading, so they are neither checked nor listed.
+                Event::Start(Tag::Image { .. }) => capture.depth += 1,
+                Event::End(TagEnd::Image) => {
+                    if capture.depth > 0 {
+                        capture.depth -= 1;
+                    } else {
+                        let capture = alt.take().expect("the capture is open");
+                        pending = Some((image_call(&capture.path, &capture.text), capture.opened));
+                    }
+                }
+                other => {
+                    return Err(Error::UnsupportedConstruct {
+                        construct: describe(other).to_string(),
+                        line: line_of(md, range.start),
+                    });
+                }
+            }
+            continue;
+        }
+
+        // Which form an image takes is known one event late, so the finished
+        // call waits here until the next event settles it.
+        if let Some((call, opened)) = pending.take() {
+            let standalone = opened && matches!(&event, Event::End(TagEnd::Paragraph));
+            write_image(&mut bufs, &call, standalone);
+        }
+
         match event {
             Event::Start(Tag::MetadataBlock(_)) => in_metadata = true,
 
@@ -110,9 +188,16 @@ pub(crate) fn emit(md: &str) -> Result<String> {
                 {
                     frame.loose = true;
                 }
+                // The length here is what an image compares itself against, to
+                // learn whether it opened the paragraph.
+                let out = top(&mut bufs);
+                out.push('\n');
+                para = Some(out.len());
+            }
+            Event::End(TagEnd::Paragraph) => {
+                para = None;
                 top(&mut bufs).push('\n');
             }
-            Event::End(TagEnd::Paragraph) => top(&mut bufs).push('\n'),
 
             Event::Start(Tag::Heading { level, .. }) => {
                 let out = top(&mut bufs);
@@ -320,6 +405,27 @@ pub(crate) fn emit(md: &str) -> Result<String> {
             }
             Event::End(TagEnd::Link) => top(&mut bufs).push(']'),
 
+            // An image is the one construct that needs a file, so this arm is
+            // where the pipeline decides which files it will ever ask for.
+            // `check_image` refuses every shape it cannot carry; what survives
+            // opens the alt capture and joins the shopping list.
+            Event::Start(Tag::Image {
+                dest_url, title, ..
+            }) => {
+                let line = line_of(md, range.start);
+                check_image(&dest_url, &title, line)?;
+                images.push(ImageRef {
+                    path: dest_url.to_string(),
+                    line,
+                });
+                alt = Some(AltCapture {
+                    opened: para == Some(top(&mut bufs).len()),
+                    path: dest_url.into_string(),
+                    text: String::new(),
+                    depth: 0,
+                });
+            }
+
             // Typst's line break is a `\` before a newline. The same `\`
             // directly before text is an escape sequence instead.
             Event::HardBreak => top(&mut bufs).push_str("\\\n"),
@@ -336,16 +442,122 @@ pub(crate) fn emit(md: &str) -> Result<String> {
         }
     }
 
+    // Every image sits inside a block whose end event follows it, so the stream
+    // never runs out with a call still waiting. This writes one anyway, in the
+    // inline form, rather than let a future change drop an image silently.
+    if let Some((call, _)) = pending.take() {
+        write_image(&mut bufs, &call, false);
+    }
+
     let body = bufs.pop().expect("the document body outlives the walk");
     let mut out = header(&front);
     out.push_str(body.trim_end_matches('\n'));
     out.push('\n');
-    Ok(out)
+    Ok((out, images))
 }
 
 /// The buffer the walk is currently writing into.
 fn top(bufs: &mut [String]) -> &mut String {
     bufs.last_mut().expect("the document body is always open")
+}
+
+// -- images -----------------------------------------------------------------
+
+/// Refuse every image destination the pipeline cannot carry, naming the shape.
+///
+/// The first two mirror the link arm, for the same two reasons. The next three
+/// are the relative-path rule: a scheme is a fetch request and nothing fetches,
+/// an absolute path converts on one machine only, and a `..` segment escapes
+/// both the document's directory and the world's virtual root. The sixth is a
+/// path Typst's own virtual filesystem cannot hold; a Windows separator is the
+/// way to write one. The last is the format gate's first half — Typst reads the
+/// extension before the content, so an extension it does not name leaves the
+/// format undecided, and the dialect refuses to guess.
+fn check_image(dest: &str, title: &str, line: usize) -> Result<()> {
+    let refuse = |construct: String| Err(Error::UnsupportedConstruct { construct, line });
+
+    if dest.is_empty() {
+        return refuse("image with an empty destination".to_string());
+    }
+    if !title.is_empty() {
+        return refuse("image with a title".to_string());
+    }
+    if has_scheme(dest) {
+        return refuse("image with a URL destination".to_string());
+    }
+    if dest.starts_with('/') {
+        return refuse("image with an absolute path".to_string());
+    }
+    if dest.split('/').any(|segment| segment == "..") {
+        return refuse("image with a '..' path segment".to_string());
+    }
+
+    let Ok(vpath) = VirtualPath::new(dest) else {
+        return refuse("image with a backslash in its path".to_string());
+    };
+    match vpath.extension() {
+        None => refuse("image with no file extension".to_string()),
+        Some(extension) if !IMAGE_EXTENSIONS.contains(&extension) => {
+            refuse(format!("image with a .{extension} extension"))
+        }
+        Some(_) => Ok(()),
+    }
+}
+
+/// The extension of a path the walk has already accepted.
+///
+/// This reads `VirtualPath::extension`, the function Typst's own format
+/// detection reads, so the two can never disagree about where a name ends and
+/// its extension begins.
+pub(crate) fn extension_of(path: &str) -> Option<String> {
+    VirtualPath::new(path).ok()?.extension().map(str::to_string)
+}
+
+/// True when the destination opens with a URI scheme, as RFC 3986 writes one.
+///
+/// This is what turns `https:` and `data:` into errors, and the Windows drive
+/// path `C:\figure.png` with them. The relative form is the portable one.
+fn has_scheme(dest: &str) -> bool {
+    let Some(colon) = dest.find(':') else {
+        return false;
+    };
+    let mut chars = dest[..colon].chars();
+    chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+}
+
+/// One image as a Typst call, without the leading `#`.
+///
+/// The path and the alt both travel as string literals, never as markup, so a
+/// `#` in a filename and a `"` in an alt text both survive. An empty alt leaves
+/// the argument out rather than naming an empty description.
+fn image_call(path: &str, alt: &str) -> String {
+    let mut out = String::from("image(");
+    out.push_str(&typst_string(path));
+    if !alt.is_empty() {
+        out.push_str(", alt: ");
+        out.push_str(&typst_string(alt));
+    }
+    out.push(')');
+    out
+}
+
+/// Write a finished image call in the form the source drew.
+///
+/// Typst lays an image out as a block, and its documented inline form is
+/// `box(image(..))`. A paragraph holding one image and nothing else is a block
+/// in the source too, so it stays one; every other occurrence would otherwise
+/// split the paragraph around it, which rewrites the user's prose.
+fn write_image(bufs: &mut [String], call: &str, standalone: bool) {
+    let out = top(bufs);
+    if standalone {
+        out.push('#');
+        out.push_str(call);
+    } else {
+        out.push_str("#box(");
+        out.push_str(call);
+        out.push(')');
+    }
 }
 
 /// Lay a block out under a prefix: the first line takes `prefix`, and every
@@ -535,14 +747,12 @@ fn describe(event: &Event) -> &'static str {
     match event {
         Event::Start(tag) => match tag {
             Tag::Strikethrough => "strikethrough",
-            Tag::Image { .. } => "image",
             Tag::FootnoteDefinition(_) => "footnote definition",
             Tag::HtmlBlock => "raw HTML block",
             _ => "markdown construct",
         },
         Event::End(tag) => match tag {
             TagEnd::Strikethrough => "strikethrough",
-            TagEnd::Image => "image",
             TagEnd::FootnoteDefinition => "footnote definition",
             TagEnd::HtmlBlock => "raw HTML block",
             _ => "markdown construct",

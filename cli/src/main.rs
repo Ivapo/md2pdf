@@ -54,7 +54,10 @@ fn run() -> Result<(), String> {
         return Ok(());
     }
 
-    let pdf = md2pdf_core::md_to_pdf(&markdown).map_err(|e| e.to_string())?;
+    // No assets yet. Reading the image files beside the input is Phase 2 of
+    // `specs/images_spec.md`, so a document that names one errors here, naming
+    // the file it needs and the line that asked for it.
+    let pdf = md2pdf_core::md_to_pdf(&markdown, &[]).map_err(|e| e.to_string())?;
     let output = args.output.unwrap_or_else(|| default_output(&args.input));
 
     std::fs::write(&output, pdf).map_err(|e| format!("cannot write {}: {e}", output.display()))

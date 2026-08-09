@@ -1,9 +1,10 @@
-//! The exit gates for Phases 1 to 6, at the library level.
+//! The exit gates for `mpdf-001`'s six phases and `mpdf-002`'s first, at the
+//! library level.
 //!
 //! Fixtures and golden files live at the workspace root because the CLI tests
 //! read the same ones.
 
-use md2pdf_core::{Error, md_to_pdf, md_to_typst};
+use md2pdf_core::{Asset, Error, ImageRef, image_paths, md_to_pdf, md_to_typst};
 
 const BASIC_MD: &str = include_str!("../../tests/fixtures/basic.md");
 const BASIC_TYP: &str = include_str!("../../tests/golden/basic.typ");
@@ -24,10 +25,33 @@ const LIST_SPACING_MD: &str = include_str!("../../tests/fixtures/list_spacing.md
 const LIST_SPACING_TYP: &str = include_str!("../../tests/golden/list_spacing.typ");
 const LINKS_MD: &str = include_str!("../../tests/fixtures/links.md");
 const LINKS_TYP: &str = include_str!("../../tests/golden/links.typ");
-const IMAGE_MD: &str = include_str!("../../tests/fixtures/unsupported_image.md");
+const HTML_MD: &str = include_str!("../../tests/fixtures/unsupported_html.md");
 const TABLE_MD: &str = include_str!("../../tests/fixtures/table.md");
 const TABLE_TYP: &str = include_str!("../../tests/golden/table.typ");
+const IMAGES_MD: &str = include_str!("../../tests/fixtures/images.md");
+const IMAGES_TYP: &str = include_str!("../../tests/golden/images.typ");
 const TEMPLATE_TYP: &str = include_str!("../assets/template.typ");
+
+/// The two image files the `images.md` fixture names, and one more name for the
+/// same PNG, because a path carrying a `#` is one of the shapes that fixture
+/// pins. An asset's name is the path the markdown wrote, not a real filename.
+const DOT_PNG: &[u8] = include_bytes!("../../tests/fixtures/dot.png");
+const MARK_SVG: &[u8] = include_bytes!("../../tests/fixtures/mark.svg");
+
+fn images_assets() -> Vec<Asset> {
+    vec![
+        asset("dot.png", DOT_PNG),
+        asset("mark.svg", MARK_SVG),
+        asset("fig#2.png", DOT_PNG),
+    ]
+}
+
+fn asset(path: &str, bytes: &[u8]) -> Asset {
+    Asset {
+        path: path.to_string(),
+        bytes: bytes.to_vec(),
+    }
+}
 
 #[test]
 fn basic_fixture_matches_its_golden_file() {
@@ -36,7 +60,7 @@ fn basic_fixture_matches_its_golden_file() {
 
 #[test]
 fn basic_fixture_compiles_to_a_pdf() {
-    let pdf = md_to_pdf(BASIC_MD).unwrap();
+    let pdf = md_to_pdf(BASIC_MD, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
     assert!(pdf.len() > 1000, "the PDF is suspiciously small");
 }
@@ -71,7 +95,7 @@ fn hostile_golden_escapes_every_typst_significant_character() {
 
 #[test]
 fn hostile_fixture_compiles_to_a_pdf() {
-    let pdf = md_to_pdf(HOSTILE_MD).unwrap();
+    let pdf = md_to_pdf(HOSTILE_MD, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
     assert!(pdf.len() > 1000, "the PDF is suspiciously small");
 }
@@ -81,7 +105,7 @@ fn hostile_fixture_compiles_to_a_pdf() {
 /// Nothing strips the block from the input, which is what this guards.
 #[test]
 fn line_numbers_survive_a_frontmatter_block() {
-    let md = "---\ntitle: A Title\n---\n\n# Heading\n\n![a diagram](diagram.png)\n";
+    let md = "---\ntitle: A Title\n---\n\n# Heading\n\n<div>a block</div>\n";
     match md_to_typst(md) {
         Err(Error::UnsupportedConstruct { line, .. }) => assert_eq!(line, 7),
         other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
@@ -97,7 +121,7 @@ fn the_frontmatter_fixture_matches_its_golden_file() {
 
 #[test]
 fn the_frontmatter_fixture_compiles_to_a_pdf() {
-    let pdf = md_to_pdf(FRONTMATTER_MD).unwrap();
+    let pdf = md_to_pdf(FRONTMATTER_MD, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
     assert!(pdf.len() > 1000, "the PDF is suspiciously small");
 }
@@ -109,7 +133,7 @@ fn the_single_column_fixture_matches_its_golden_file() {
 
 #[test]
 fn the_single_column_fixture_compiles_to_a_pdf() {
-    let pdf = md_to_pdf(SINGLE_COLUMN_MD).unwrap();
+    let pdf = md_to_pdf(SINGLE_COLUMN_MD, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
     assert!(pdf.len() > 1000, "the PDF is suspiciously small");
 }
@@ -172,7 +196,7 @@ fn a_columns_value_outside_the_schema_is_an_error_that_names_the_key() {
 /// the error should name.
 #[test]
 fn a_frontmatter_error_wins_over_a_later_construct_error() {
-    let md = "---\nsubtitle: Bad\n---\n\n![a diagram](diagram.png)\n";
+    let md = "---\nsubtitle: Bad\n---\n\n<div>a block</div>\n";
     match md_to_typst(md) {
         Err(Error::Frontmatter { problem, .. }) => {
             assert!(problem.contains("subtitle"), "problem was: {problem}");
@@ -190,7 +214,7 @@ fn the_inline_fixture_matches_its_golden_file() {
 
 #[test]
 fn the_inline_fixture_compiles_to_a_pdf() {
-    let pdf = md_to_pdf(INLINE_MD).unwrap();
+    let pdf = md_to_pdf(INLINE_MD, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
     assert!(pdf.len() > 1000, "the PDF is suspiciously small");
 }
@@ -229,7 +253,7 @@ fn the_hostile_code_fixture_matches_its_golden_file() {
 
 #[test]
 fn the_hostile_code_fixture_compiles_to_a_pdf() {
-    let pdf = md_to_pdf(HOSTILE_CODE_MD).unwrap();
+    let pdf = md_to_pdf(HOSTILE_CODE_MD, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
     assert!(pdf.len() > 1000, "the PDF is suspiciously small");
 }
@@ -264,7 +288,7 @@ fn the_blocks_fixture_matches_its_golden_file() {
 
 #[test]
 fn the_blocks_fixture_compiles_to_a_pdf() {
-    let pdf = md_to_pdf(BLOCKS_MD).unwrap();
+    let pdf = md_to_pdf(BLOCKS_MD, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
     assert!(pdf.len() > 1000, "the PDF is suspiciously small");
 }
@@ -318,7 +342,7 @@ fn the_list_spacing_fixture_matches_its_golden_file() {
 
 #[test]
 fn the_list_spacing_fixture_compiles_to_a_pdf() {
-    let pdf = md_to_pdf(LIST_SPACING_MD).unwrap();
+    let pdf = md_to_pdf(LIST_SPACING_MD, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
     assert!(pdf.len() > 1000, "the PDF is suspiciously small");
 }
@@ -349,7 +373,7 @@ fn the_links_fixture_matches_its_golden_file() {
 
 #[test]
 fn the_links_fixture_compiles_to_a_pdf() {
-    let pdf = md_to_pdf(LINKS_MD).unwrap();
+    let pdf = md_to_pdf(LINKS_MD, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
     assert!(pdf.len() > 1000, "the PDF is suspiciously small");
 }
@@ -407,11 +431,15 @@ fn the_links_golden_carries_each_form() {
     );
 }
 
+/// Rejection survives the widening. Images left the out-of-dialect list in
+/// `mpdf-002`'s Phase 1, and a raw HTML block took over this gate: the parser
+/// reads one with no option at all, where strikethrough, footnotes and math
+/// would each need one.
 #[test]
-fn an_image_is_an_error_that_names_the_construct_and_the_line() {
-    match md_to_typst(IMAGE_MD) {
+fn a_raw_html_block_is_an_error_that_names_the_construct_and_the_line() {
+    match md_to_typst(HTML_MD) {
         Err(Error::UnsupportedConstruct { construct, line }) => {
-            assert_eq!(construct, "image");
+            assert_eq!(construct, "raw HTML block");
             assert_eq!(line, 5);
         }
         other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
@@ -482,7 +510,7 @@ fn the_table_fixture_matches_its_golden_file() {
 /// file can pin.
 #[test]
 fn the_table_fixture_compiles_to_a_pdf() {
-    let pdf = md_to_pdf(TABLE_MD).unwrap();
+    let pdf = md_to_pdf(TABLE_MD, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
     assert!(pdf.len() > 1000, "the PDF is suspiciously small");
 }
@@ -567,4 +595,305 @@ fn a_table_without_alignments_omits_the_argument() {
         !typst.contains("align:"),
         "an alignment argument that says nothing was written: {typst}"
     );
+}
+
+// -- mpdf-002 Phase 1: images -----------------------------------------------
+
+#[test]
+fn the_images_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(IMAGES_MD).unwrap(), IMAGES_TYP);
+}
+
+/// The compile is the phase's observable, at the library level: markdown that
+/// names image files becomes a PDF that holds them.
+#[test]
+fn the_images_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(IMAGES_MD, &images_assets()).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each image form reaches Typst as the form the spec chose.
+///
+/// The equality test above pins the whole output, but it cannot say *why* the
+/// output is right. This one names the rule, so an edit that boxes a standalone
+/// image, drops a box, or sends a path or an alt through the markup escape
+/// fails with a message that points at what it dropped.
+#[test]
+fn the_images_golden_carries_each_form() {
+    for (form, what) in [
+        // A paragraph holding one image and nothing else stays a block, which
+        // is what a later figure treatment can address.
+        (
+            "\n#image(\"dot.png\", alt: \"The three steps, drawn as boxes\")\n",
+            "the standalone image, bare",
+        ),
+        // Typst lays an image out as a block, so mid-sentence it needs the box.
+        (
+            r#"icon #box(image("mark.svg", alt: "a check mark")) sits"#,
+            "the inline image, boxed",
+        ),
+        // An image that opens its paragraph and is followed by text is inline
+        // too. An implementation that decides on what preceded gets this wrong.
+        (
+            r#"#box(image("fig#2.png", alt: "an \"outline\" of the whole idea")) opens"#,
+            "the image that opens its paragraph, boxed",
+        ),
+        // An empty alt leaves the argument out rather than naming an empty
+        // description.
+        ("\n#image(\"dot.png\")\n", "the empty alt, omitted"),
+    ] {
+        assert!(
+            IMAGES_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+
+    // The path and the alt travel as string literals. The markup escape would
+    // put its backslashes into the PDF, and it would break the `#` in a path.
+    assert!(
+        !IMAGES_TYP.contains(r"\#2.png"),
+        "the markup escape reached an image path"
+    );
+}
+
+/// The alt text is the flattened plain text of the image's content.
+///
+/// This is CommonMark's own reading of alt, and what pulldown-cmark's HTML
+/// renderer implements. Typst's `alt` is a plain string, so there is nothing
+/// else it could carry.
+#[test]
+fn the_alt_text_flattens_the_image_content() {
+    for (md, expected, what) in [
+        (
+            "![plain *emphasis* and `code`](dot.png)\n",
+            r#"alt: "plain emphasis and code""#,
+            "styling and code",
+        ),
+        // A break is whitespace under the alt reading, and one space is what
+        // pulldown-cmark's own flattening writes for it.
+        (
+            "![a break\nfollows](dot.png)\n",
+            r#"alt: "a break follows""#,
+            "the soft break, as one space",
+        ),
+        (
+            "![a break\\\nfollows](dot.png)\n",
+            r#"alt: "a break follows""#,
+            "the hard break, as one space",
+        ),
+        // A nested image contributes its own inner text and nothing else. Its
+        // end event must not close the outer capture.
+        (
+            "![outer ![inner](in.png) end](dot.png)\n",
+            r#"alt: "outer inner end""#,
+            "the nested image, flattened by the same rule",
+        ),
+        (
+            "![a [linked](https://typst.app) word](dot.png)\n",
+            r#"alt: "a linked word""#,
+            "the link wrapper, contributing nothing",
+        ),
+    ] {
+        let typst = md_to_typst(md).unwrap();
+        assert!(
+            typst.contains(expected),
+            "the alt capture does not flatten {what} as `{expected}`: {typst}"
+        );
+    }
+}
+
+/// A construct outside the dialect still errors inside alt text.
+#[test]
+fn an_out_of_dialect_construct_inside_alt_text_is_still_an_error() {
+    match md_to_typst("![before <b>bold</b> after](dot.png)\n") {
+        Err(Error::UnsupportedConstruct { construct, line }) => {
+            assert_eq!(construct, "raw HTML");
+            assert_eq!(line, 1);
+        }
+        other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
+    }
+}
+
+/// The shopping list keeps document order and repeats a repeated path.
+///
+/// A nested image's destination is not content under the alt reading, so it
+/// stays out of the list and out of the validation with it.
+#[test]
+fn image_paths_lists_every_reference_in_document_order() {
+    let md = "![one](a.png)\n\nText ![two](b.svg) more.\n\n![again](a.png)\n\n![outer ![in](c.png) x](d.png)\n";
+    assert_eq!(
+        image_paths(md).unwrap(),
+        vec![
+            ImageRef {
+                path: "a.png".to_string(),
+                line: 1
+            },
+            ImageRef {
+                path: "b.svg".to_string(),
+                line: 3
+            },
+            ImageRef {
+                path: "a.png".to_string(),
+                line: 5
+            },
+            ImageRef {
+                path: "d.png".to_string(),
+                line: 7
+            },
+        ]
+    );
+}
+
+/// Every destination shape the pipeline cannot carry names itself and its line.
+///
+/// The first two mirror the link arm. The next four are the relative-path rule.
+/// The last two are the format gate's first half: Typst reads the extension
+/// before the content, so an extension it does not name leaves the format
+/// undecided, and the dialect refuses to guess.
+#[test]
+fn each_bad_image_destination_names_its_shape_and_its_line() {
+    for (md, construct) in [
+        (
+            "# H\n\nA ![alt]() here.\n",
+            "image with an empty destination",
+        ),
+        (
+            "# H\n\nA ![alt](a.png \"a title\") here.\n",
+            "image with a title",
+        ),
+        (
+            "# H\n\nA ![alt](https://example.com/a.png) here.\n",
+            "image with a URL destination",
+        ),
+        (
+            "# H\n\nA ![alt](data:image/png;base64,iVBOR) here.\n",
+            "image with a URL destination",
+        ),
+        // A Windows drive path reads as a scheme, and the error says so.
+        (
+            "# H\n\nA ![alt](C:/figure.png) here.\n",
+            "image with a URL destination",
+        ),
+        (
+            "# H\n\nA ![alt](/figures/a.png) here.\n",
+            "image with an absolute path",
+        ),
+        (
+            "# H\n\nA ![alt](../a.png) here.\n",
+            "image with a '..' path segment",
+        ),
+        // Typst's virtual filesystem cannot hold a backslash segment, so this
+        // path would fail the compile with a message naming generated source.
+        (
+            "# H\n\nA ![alt](figures\\a.png) here.\n",
+            "image with a backslash in its path",
+        ),
+        (
+            "# H\n\nA ![alt](a.bmp) here.\n",
+            "image with a .bmp extension",
+        ),
+        // Typst's own table is lowercase, and its fallback to content detection
+        // is deliberately not mirrored.
+        (
+            "# H\n\nA ![alt](a.PNG) here.\n",
+            "image with a .PNG extension",
+        ),
+        (
+            "# H\n\nA ![alt](figure) here.\n",
+            "image with no file extension",
+        ),
+    ] {
+        match md_to_typst(md) {
+            Err(Error::UnsupportedConstruct {
+                construct: found,
+                line,
+            }) => {
+                assert_eq!(found, construct, "for: {md}");
+                assert_eq!(line, 3, "for: {md}");
+            }
+            other => panic!("expected `{construct}`, got {other:?}"),
+        }
+    }
+}
+
+/// An empty title is not a title, so the image stays inside the dialect. This
+/// mirrors the link arm, which draws the same line.
+#[test]
+fn an_empty_image_title_is_not_an_error() {
+    let typst = md_to_typst("# H\n\nA ![alt](a.png \"\") here.\n").unwrap();
+    assert!(
+        typst.contains(r#"#box(image("a.png", alt: "alt"))"#),
+        "the image did not survive its empty title: {typst}"
+    );
+}
+
+/// A file the caller never supplied is an error naming the path and the line.
+///
+/// Typst's own error would name a span in `main.typ`, which the user has never
+/// seen, so the check runs before the compile.
+#[test]
+fn a_missing_image_file_names_the_path_and_the_line() {
+    match md_to_pdf("# H\n\n![alt](missing.png)\n", &[]) {
+        Err(Error::MissingImage { path, line }) => {
+            assert_eq!(path, "missing.png");
+            assert_eq!(line, 3);
+        }
+        other => panic!("expected a MissingImage error, got {other:?}"),
+    }
+}
+
+/// A path used twice reports once, at its first reference's line.
+#[test]
+fn a_repeated_missing_path_reports_its_first_reference() {
+    match md_to_pdf("# H\n\n![one](twice.png)\n\n![two](twice.png)\n", &[]) {
+        Err(Error::MissingImage { path, line }) => {
+            assert_eq!(path, "twice.png");
+            assert_eq!(line, 3);
+        }
+        other => panic!("expected a MissingImage error, got {other:?}"),
+    }
+}
+
+/// Bytes that disagree with the extension are an error before the compile.
+///
+/// The extension decides the format, because that is the order Typst's own
+/// detection follows, so `core` requires the content to agree with the name.
+#[test]
+fn image_bytes_that_the_extension_does_not_name_are_an_error() {
+    let assets = vec![asset("mark.svg", DOT_PNG)];
+    match md_to_pdf("# H\n\n![alt](mark.svg)\n", &assets) {
+        Err(Error::ImageFormat { path, line, format }) => {
+            assert_eq!(path, "mark.svg");
+            assert_eq!(line, 3);
+            assert_eq!(format, "SVG");
+        }
+        other => panic!("expected an ImageFormat error, got {other:?}"),
+    }
+}
+
+/// The check reads each format the table names, not the PNG magic alone.
+#[test]
+fn each_format_check_reads_the_magic_its_extension_names() {
+    for (path, bytes, ok) in [
+        ("a.png", DOT_PNG, true),
+        ("a.svg", MARK_SVG, true),
+        ("a.jpg", b"\xff\xd8\xff\x00rest".as_slice(), true),
+        ("a.jpeg", b"\xff\xd8\xff\x00rest".as_slice(), true),
+        ("a.gif", b"GIF89a-rest".as_slice(), true),
+        ("a.webp", b"RIFF\x00\x00\x00\x00WEBPrest".as_slice(), true),
+        ("a.svgz", b"\x1f\x8b-rest".as_slice(), true),
+        ("a.pdf", b"%PDF-1.7 rest".as_slice(), true),
+        ("a.gif", b"GIF88a-rest".as_slice(), false),
+        ("a.webp", b"RIFF\x00\x00\x00\x00WAVErest".as_slice(), false),
+        ("a.svgz", DOT_PNG, false),
+        ("a.pdf", DOT_PNG, false),
+        // An SVG without the namespace declaration is one usvg would reject.
+        ("a.svg", b"<svg><rect/></svg>".as_slice(), false),
+    ] {
+        let md = format!("# H\n\n![alt]({path})\n");
+        let result = md_to_pdf(&md, &[asset(path, bytes)]);
+        let rejected = matches!(result, Err(Error::ImageFormat { .. }));
+        assert_eq!(!rejected, ok, "for {path} with {} bytes", bytes.len());
+    }
 }
