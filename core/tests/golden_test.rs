@@ -1,4 +1,4 @@
-//! The exit gates for Phases 1 to 3, at the library level.
+//! The exit gates for Phases 1 to 4, at the library level.
 //!
 //! Fixtures and golden files live at the workspace root because the CLI tests
 //! read the same ones.
@@ -19,6 +19,10 @@ const INLINE_MD: &str = include_str!("../../tests/fixtures/inline.md");
 const INLINE_TYP: &str = include_str!("../../tests/golden/inline.typ");
 const HOSTILE_CODE_MD: &str = include_str!("../../tests/fixtures/hostile_code.md");
 const HOSTILE_CODE_TYP: &str = include_str!("../../tests/golden/hostile_code.typ");
+const BLOCKS_MD: &str = include_str!("../../tests/fixtures/blocks.md");
+const BLOCKS_TYP: &str = include_str!("../../tests/golden/blocks.typ");
+const LIST_SPACING_MD: &str = include_str!("../../tests/fixtures/list_spacing.md");
+const LIST_SPACING_TYP: &str = include_str!("../../tests/golden/list_spacing.typ");
 
 #[test]
 fn basic_fixture_matches_its_golden_file() {
@@ -255,4 +259,89 @@ fn the_hostile_code_golden_applies_only_the_string_escape() {
             "the golden file does not show {what} as `{literal}`"
         );
     }
+}
+
+// -- Phase 4: block constructs ----------------------------------------------
+
+#[test]
+fn the_blocks_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(BLOCKS_MD).unwrap(), BLOCKS_TYP);
+}
+
+#[test]
+fn the_blocks_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(BLOCKS_MD).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each block construct reaches Typst as the form the spec chose.
+///
+/// The equality test above pins the whole output, but it cannot say *why* the
+/// output is right. This one names the rule, so an edit that drops the nesting,
+/// the start number, or the language tag fails with a message that points at it.
+#[test]
+fn the_blocks_golden_carries_each_construct() {
+    for (form, what) in [
+        ("- second item\n  - a nested item", "the nested bullet list"),
+        // Every item carries its own number, so nothing depends on how Typst
+        // continues an implicit counter.
+        ("3. third\n4. fourth", "the ordered list starting at three"),
+        // Two paragraphs in one item, the second indented past the marker.
+        (
+            "- The first paragraph of a loose item.\n\n  The second",
+            "the loose item's continuation",
+        ),
+        ("#raw(block: true, lang: \"rust\", ", "the language tag"),
+        ("#quote(block: true)[", "the block quote"),
+    ] {
+        assert!(
+            BLOCKS_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+
+    // An indented block has no info string, so it gets no `lang` argument. Its
+    // content is a string literal, so the `#` inside it is untouched too.
+    assert!(
+        BLOCKS_TYP.contains(r##"#raw(block: true, "#raw text"##),
+        "the indented block carries a language argument"
+    );
+
+    // pulldown-cmark reports the final line's terminator as part of a code
+    // block's content, and a literal that kept it would typeset a phantom empty
+    // line after every block. This is the escape sequence, not a real newline.
+    assert!(
+        !BLOCKS_TYP.contains("\\n\")"),
+        "a code block kept its trailing newline"
+    );
+}
+
+#[test]
+fn the_list_spacing_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(LIST_SPACING_MD).unwrap(), LIST_SPACING_TYP);
+}
+
+#[test]
+fn the_list_spacing_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(LIST_SPACING_MD).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// A tight list and a loose one differ in the blank lines and nothing else.
+///
+/// Typst derives `tight` from exactly that adjacency and no `set` rule overrides
+/// it, so the blank line is the whole mechanism. The emitter passes the
+/// distinction through structurally and owns nothing about the spacing.
+#[test]
+fn the_two_list_spacings_differ_only_in_the_blank_lines() {
+    assert!(
+        LIST_SPACING_TYP.contains("- alpha\n- beta\n- gamma"),
+        "the tight list is not on adjacent lines"
+    );
+    assert!(
+        LIST_SPACING_TYP.contains("- alpha\n\n- beta\n\n- gamma"),
+        "the loose list is not separated by blank lines"
+    );
 }

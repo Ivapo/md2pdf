@@ -41,6 +41,8 @@ fn emit_typst_prints_the_golden_file() {
         ("single_column.md", "single_column.typ"),
         ("inline.md", "inline.typ"),
         ("hostile_code.md", "hostile_code.typ"),
+        ("blocks.md", "blocks.typ"),
+        ("list_spacing.md", "list_spacing.typ"),
     ] {
         let out = run(&[fixture(fixture_name).as_ref(), "--emit-typst".as_ref()]);
         assert!(out.status.success(), "{fixture_name} did not exit 0");
