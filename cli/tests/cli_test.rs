@@ -1,4 +1,4 @@
-//! The exit gates for Phases 1 to 3, at the binary level.
+//! The exit gates for Phases 1 to 5, at the binary level.
 //!
 //! These run the real `md2pdf` binary, so they cover the argument contract and
 //! the exit codes that the library tests cannot reach.
@@ -43,6 +43,7 @@ fn emit_typst_prints_the_golden_file() {
         ("hostile_code.md", "hostile_code.typ"),
         ("blocks.md", "blocks.typ"),
         ("list_spacing.md", "list_spacing.typ"),
+        ("links.md", "links.typ"),
     ] {
         let out = run(&[fixture(fixture_name).as_ref(), "--emit-typst".as_ref()]);
         assert!(out.status.success(), "{fixture_name} did not exit 0");
@@ -83,6 +84,17 @@ fn an_unsupported_construct_exits_non_zero_and_names_it() {
 
     let stderr = String::from_utf8(out.stderr).unwrap();
     assert!(stderr.contains("table"), "stderr: {stderr}");
+    assert!(stderr.contains("line 5"), "stderr: {stderr}");
+}
+
+/// An image needs file access, and the world holds exactly two files by design.
+#[test]
+fn an_image_exits_non_zero_and_names_it() {
+    let out = run(&[fixture("unsupported_image.md").as_ref()]);
+    assert!(!out.status.success(), "the run should have failed");
+
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(stderr.contains("image"), "stderr: {stderr}");
     assert!(stderr.contains("line 5"), "stderr: {stderr}");
 }
 

@@ -12,7 +12,7 @@
 //! code block, which reaches Typst as one line holding a string literal, cannot
 //! be corrupted by the indentation around it.
 
-use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, LinkType, Options, Parser, Tag, TagEnd};
 
 use crate::frontmatter::{self, Frontmatter};
 use crate::{Error, Result};
@@ -220,6 +220,49 @@ pub(crate) fn emit(md: &str) -> Result<String> {
                 out.push(')');
             }
 
+            // A URL reaches Typst as a string literal, never as markup, so
+            // `typst_string` carries it whatever it holds. The link text is
+            // ordinary inline content, so the markup escape still applies to
+            // it — which is what stops Typst reading an autolink's own text as
+            // a second link, or an email address as a reference.
+            Event::Start(Tag::Link {
+                link_type,
+                dest_url,
+                title,
+                ..
+            }) => {
+                // Neither shape can be emitted honestly. `#link("")` fails the
+                // compile naming neither construct nor line, and a title is
+                // something neither `link` nor the PDF can carry, so passing it
+                // on would mean dropping it.
+                if dest_url.is_empty() {
+                    return Err(Error::UnsupportedConstruct {
+                        construct: "link with an empty destination".to_string(),
+                        line: line_of(md, range.start),
+                    });
+                }
+                if !title.is_empty() {
+                    return Err(Error::UnsupportedConstruct {
+                        construct: "link with a title".to_string(),
+                        line: line_of(md, range.start),
+                    });
+                }
+
+                // Every other form arrives with its destination resolved, so
+                // the email autolink is the one case with work left: its
+                // destination is the bare address, and the scheme is ours.
+                let url = match link_type {
+                    LinkType::Email => format!("mailto:{dest_url}"),
+                    _ => dest_url.into_string(),
+                };
+
+                let out = top(&mut bufs);
+                out.push_str("#link(");
+                out.push_str(&typst_string(&url));
+                out.push_str(")[");
+            }
+            Event::End(TagEnd::Link) => top(&mut bufs).push(']'),
+
             // Typst's line break is a `\` before a newline. The same `\`
             // directly before text is an escape sequence instead.
             Event::HardBreak => top(&mut bufs).push_str("\\\n"),
@@ -375,7 +418,6 @@ fn describe(event: &Event) -> &'static str {
     match event {
         Event::Start(tag) => match tag {
             Tag::Strikethrough => "strikethrough",
-            Tag::Link { .. } => "link",
             Tag::Image { .. } => "image",
             Tag::Table(_) => "table",
             Tag::FootnoteDefinition(_) => "footnote definition",
@@ -384,7 +426,6 @@ fn describe(event: &Event) -> &'static str {
         },
         Event::End(tag) => match tag {
             TagEnd::Strikethrough => "strikethrough",
-            TagEnd::Link => "link",
             TagEnd::Image => "image",
             TagEnd::Table => "table",
             TagEnd::FootnoteDefinition => "footnote definition",

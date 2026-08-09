@@ -23,6 +23,9 @@ const BLOCKS_MD: &str = include_str!("../../tests/fixtures/blocks.md");
 const BLOCKS_TYP: &str = include_str!("../../tests/golden/blocks.typ");
 const LIST_SPACING_MD: &str = include_str!("../../tests/fixtures/list_spacing.md");
 const LIST_SPACING_TYP: &str = include_str!("../../tests/golden/list_spacing.typ");
+const LINKS_MD: &str = include_str!("../../tests/fixtures/links.md");
+const LINKS_TYP: &str = include_str!("../../tests/golden/links.typ");
+const IMAGE_MD: &str = include_str!("../../tests/fixtures/unsupported_image.md");
 
 #[test]
 fn basic_fixture_matches_its_golden_file() {
@@ -343,5 +346,136 @@ fn the_two_list_spacings_differ_only_in_the_blank_lines() {
     assert!(
         LIST_SPACING_TYP.contains("- alpha\n\n- beta\n\n- gamma"),
         "the loose list is not separated by blank lines"
+    );
+}
+
+// -- Phase 5: links ---------------------------------------------------------
+
+#[test]
+fn the_links_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(LINKS_MD).unwrap(), LINKS_TYP);
+}
+
+#[test]
+fn the_links_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(LINKS_MD).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each link form reaches Typst as the form the spec chose.
+///
+/// The equality test above pins the whole output, but it cannot say *why* the
+/// output is right. This one names the rule, so an edit that drops the scheme,
+/// the string escape, or the escape on the link text fails with a message that
+/// points at what it dropped.
+#[test]
+fn the_links_golden_carries_each_form() {
+    for (form, what) in [
+        (
+            r#"#link("https://typst.app")[inline link]"#,
+            "the inline link",
+        ),
+        // pulldown-cmark resolves the definition, so a reference link arrives
+        // carrying the destination and needs no mechanism of its own.
+        (
+            r#"#link("https://spec.commonmark.org/0.31.2/")[reference"#,
+            "the reference link, resolved",
+        ),
+        // An autolink's text is ordinary inline content, so the markup escape
+        // still applies to it. Without that, Typst would read the text as a
+        // second link of its own.
+        (
+            r#"#link("https://github.com/")[https:\/\/github.com\/]"#,
+            "the autolink",
+        ),
+        // The destination arrives as the bare address, so the scheme is the
+        // emitter's to add. The text keeps its own escape.
+        (
+            r#"#link("mailto:ivapo@example.com")[ivapo\@example.com]"#,
+            "the email autolink",
+        ),
+        // A string literal interprets only `\` and `"`, so the `#` travels
+        // untouched while the `"` is escaped.
+        (
+            r#"#link("https://example.com/a\"b#frag")[a hostile URL]"#,
+            "the hostile URL",
+        ),
+    ] {
+        assert!(
+            LINKS_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+
+    // The markup escape must never reach a URL. It would put the backslashes
+    // into the PDF, and no character in this fixture's prose asks for one.
+    assert!(
+        !LINKS_TYP.contains(r"\#"),
+        "the markup escape reached a URL"
+    );
+}
+
+#[test]
+fn an_image_is_an_error_that_names_the_construct_and_the_line() {
+    match md_to_typst(IMAGE_MD) {
+        Err(Error::UnsupportedConstruct { construct, line }) => {
+            assert_eq!(construct, "image");
+            assert_eq!(line, 5);
+        }
+        other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
+    }
+}
+
+/// `#link("")` fails Typst's compile naming neither construct nor line, so the
+/// emitter names both before the compiler ever sees the document.
+#[test]
+fn an_empty_link_destination_is_an_error_that_names_the_construct_and_the_line() {
+    let md = "# Heading\n\nAn [empty destination]() in a sentence.\n";
+    match md_to_typst(md) {
+        Err(Error::UnsupportedConstruct { construct, line }) => {
+            assert_eq!(construct, "link with an empty destination");
+            assert_eq!(line, 3);
+        }
+        other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
+    }
+}
+
+/// A reference definition is the second route to an empty destination, and the
+/// test is on the resolved destination, so it catches this one too.
+#[test]
+fn an_empty_reference_definition_is_the_same_error() {
+    let md = "# Heading\n\nA [reference link][ref] in a sentence.\n\n[ref]: <>\n";
+    match md_to_typst(md) {
+        Err(Error::UnsupportedConstruct { construct, line }) => {
+            assert_eq!(construct, "link with an empty destination");
+            assert_eq!(line, 3);
+        }
+        other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
+    }
+}
+
+/// Neither Typst's `link` nor the PDF can carry a title, so passing the link on
+/// would mean dropping it silently.
+#[test]
+fn a_link_title_is_an_error_that_names_the_construct_and_the_line() {
+    let md = "# Heading\n\nA [titled link](https://typst.app \"a title\") in a sentence.\n";
+    match md_to_typst(md) {
+        Err(Error::UnsupportedConstruct { construct, line }) => {
+            assert_eq!(construct, "link with a title");
+            assert_eq!(line, 3);
+        }
+        other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
+    }
+}
+
+/// An empty title is not a title, so the link stays inside the dialect.
+#[test]
+fn an_empty_link_title_is_not_an_error() {
+    let md = "# Heading\n\nA [link](https://typst.app \"\") in a sentence.\n";
+    let typst = md_to_typst(md).unwrap();
+    assert!(
+        typst.contains(r#"#link("https://typst.app")[link]"#),
+        "the link did not survive its empty title: {typst}"
     );
 }
