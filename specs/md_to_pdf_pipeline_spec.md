@@ -5,7 +5,7 @@ note: >
   The core .md → .pdf pipeline: pulldown-cmark parses, a hand-written emitter maps
   events to Typst markup, and embedded Typst compiles the PDF, behind a CLI.
 status: accepted
-last_updated: 2026-08-09
+last_updated: 2026-08-10
 
 phases:
   - name: "Phase 1 — end-to-end pipeline behind a CLI"
@@ -41,6 +41,11 @@ phases:
   - name: "Phase 7 — footnotes"
     reviewed: 2026-08-09
     shipped: 2026-08-09
+    cut: null
+    by: null
+  - name: "Phase 8 — the constructs the reject arm names but never sees"
+    reviewed: null
+    shipped: null
     cut: null
     by: null
 
@@ -276,6 +281,22 @@ failure, and support arrives construct by construct in later phases or specs.
   rule. That is the standard two-column article convention, so the phase's
   no-template-rule claim stands on OQ-5's precedent, and gate case (1)'s
   by-eye read confirms the answer rather than supplying it.
+
+- **OQ-8** — does the dialect refuse both math forms, and what does refusing
+  them cost prose that converts correctly today? `Options::ENABLE_MATH` is what
+  makes math reach the walk at all, and §1.1 parks LaTeX math via `mitex` for a
+  later spec, so this phase's answer is a named error rather than support. The
+  cost is the open part. pulldown-cmark 0.13.4 opens a math span at a `$` whose
+  next byte is not ASCII whitespace and closes one at a `$` whose previous byte
+  is not — the flanking test in its `firstpass.rs` scanner — so `it costs $5 or
+  $10` stays text while `the range $5–$10` becomes math, and under a reject arm
+  that second document stops converting where today it converts and prints
+  exactly what its author wrote. Three answers are open: refuse both forms and
+  accept the cost; refuse the display form only, which no prose produces by
+  accident, and leave the inline form flattened with the gap still named; or
+  leave the option off, which keeps `describe` claiming a rejection it cannot
+  perform. Answerable from code for the mechanism, a design call for the cost.
+  Blocks Phase 8's math half and its gate case (2).
 
 ## 4. Implementation phases
 
@@ -664,6 +685,74 @@ close-out names that gap.
   statement. The corpus check repeats: the
   repository's own README and the sample both convert without error, or the
   gap is named in the review record. One push.
+
+### Phase 8 — the constructs the reject arm names but never sees
+*Produces the observable: yes — a PDF whose struck text is struck, from
+documents that today print their tildes as prose.*
+
+Appended 2026-08-10, after Phase 7 shipped, per the methodology's §6.1: the
+dialect is this spec's subject, and this phase closes the gap Phase 7's
+close-out was obliged to name rather than opening a subject of its own.
+
+The motivation is Phase 7's, and the criterion is sharper than "what is
+missing". `core/src/emit.rs:describe` names six constructs it can reject, and
+three of them can never arrive: strikethrough, a task list marker and math each
+need a parser option, and none of those three options is set. So `~~struck~~`,
+`- [ ] a` and `$x$` reach the walk as ordinary text, the escape rule escapes
+their markers, and the PDF prints them as prose while the code claims it
+refuses them. That is one shipped instance of the §2 faithfulness failure per
+unreachable arm. When this phase ships, every arm in `describe` is reachable,
+which is the property that keeps that function honest — and the property a
+later reader can check in one sitting.
+
+- **Scope:** In `core/src/emit.rs`: set `Options::ENABLE_STRIKETHROUGH`,
+  `Options::ENABLE_TASKLISTS` and `Options::ENABLE_MATH` in `options`, the one
+  builder both walks read, since a difference between them would be a
+  difference in what the document means.
+
+  Strikethrough joins the dialect. `Tag::Strikethrough` wraps its translated
+  content in `#strike[…]`, and Phase 3's delimiter argument does not arise
+  here: Typst has no markup form for a strike, so the function form is the only
+  form there is. `describe` drops its two strikethrough arms, the way Phase 6
+  dropped its table arms.
+
+  A task list marker becomes an error that names the construct and its line.
+  Typst has no checkbox element, and a marker drawn as a character would be a
+  look decision, which §2 gives to `template.typ` rather than to the emitter.
+  Support is a later phase or a later spec; the named error is the honest floor
+  meanwhile, and it is strictly better than the brackets the PDF prints today.
+  `Event::TaskListMarker` keeps its `describe` arm, which the option makes
+  reachable.
+
+  Math becomes an error too, per §1.1, which parks LaTeX math via `mitex` for a
+  later spec — in the shape OQ-8 lands. `InlineMath` and `DisplayMath` keep
+  their `describe` arm. OQ-8 is the one question in this phase whose wrong
+  answer ships a regression rather than a delay: a document that converts
+  correctly today would stop converting.
+
+- **Exit gate:** Golden-file tests, three cases, plus the full existing suite,
+  which the option change touches — `tests/fixtures/hostile.md` carries a lone
+  `~` and `samples/article.md` carries "a ~ tilde", so their goldens are what
+  pin that a single tilde still reaches the page as itself. (1) A fixture with
+  strikethrough alone, strikethrough nested inside emphasis, and strikethrough
+  around a link matches its golden file, shows the `#strike[…]` form, and
+  compiles to a PDF with the `%PDF` magic bytes. The same fixture pins what
+  stays text beside it: a lone `~`, and a `~~` inside inline code, which the
+  string escape carries verbatim rather than reading as a construct. (2) Math
+  and a task list marker each make the CLI exit non-zero naming the construct
+  and its line, in the shape OQ-8 lands. (3) A raw HTML block still exits
+  non-zero naming the construct and its line at both levels — rejection
+  survives the widening.
+- **Close-out:** Update `rules/pipeline.md`'s dialect section, the README and
+  `samples/article.md` against the code. This phase deletes prose where the
+  others added it: the gap paragraph Phase 7 was obliged to write — in the
+  rule, in the README and in the sample, three artifacts saying the same thing
+  — goes away, because nothing flattens any more, and the README's "Almost
+  every other construct is an error" returns to the sentence it corrected. The
+  sample gains a struck phrase, which is what keeps the corpus check from
+  passing vacuously; no corpus file carries one today. The corpus check
+  repeats: the repository's own README and the sample both convert without
+  error, or the gap is named in the review record. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
