@@ -15,20 +15,25 @@ it again, and the same text runs across the full width of the page instead.
 
 # What the frontmatter controls
 
-The block at the top of this file carries three keys, and all three are
-optional. The title and the author become the block centred at the top of the
-first page. That block spans every column, whatever the column count is,
+The block at the top of this file carries three of the five keys, and all five
+are optional. The title and the author become the block centred at the top of
+the first page. That block spans every column, whatever the column count is,
 because it is placed outside the column grid rather than inside the first
-column.
+column. A date key joins them there, set beneath the author line.
 
-The columns key takes 1 or 2, and 2 is what you get when the key is absent.
-Delete the whole frontmatter block and the PDF still compiles: it simply
-arrives with no title block and two columns.
+The template key picks the look, and takes article or press-release. This file
+names none, so it gets the article look you are reading. The press-release
+sample beside it names the other one.
 
-A key outside those three is an error rather than a silent omission. So is a
-columns value of 3. The tool names the key and the line, and exits with code
-1, because a PDF that quietly ignored half of its own frontmatter would be
-lying about its source.
+The columns key takes 1 or 2. Leave it out and you get the count your look
+brings: 2 for an article, 1 for a press release. Delete the whole frontmatter
+block and the PDF still compiles: it simply arrives with no title block and
+two columns.
+
+A key outside those five is an error rather than a silent omission. So is a
+columns value of 3, and so is a template name outside the two. The tool names
+the key and the line, and exits with code 1, because a PDF that quietly
+ignored half of its own frontmatter would be lying about its source.
 
 # What the body may contain
 
@@ -208,8 +213,9 @@ write what you mean, and it reaches the page.
 
 One file owns every visual decision: the page size, the margins, the body
 font, the code font, the heading style, the rule a thematic break draws, the
-title block, and the column count. That file is core/assets/template.typ, and
-the fonts ship inside the binary beside it.
+title block, and the column count. Two such files ship —
+core/assets/template.typ is the article look and core/assets/press-release.typ
+is the other — and the fonts ship inside the binary beside them.
 
 Nothing is fetched over the network at any point, and no font is read from
 your operating system. The same markdown therefore compiles to the same PDF

@@ -37,7 +37,7 @@
 
   set heading(numbering: none)
   show heading: set text(weight: "bold", size: 12pt)
-  show heading: set block(above: 1.6em, below: 0.6em)
+  show heading: set block(above: 1.8em, below: 0.85em)
 
   // The masthead. The dateline sits above the title, where a press release
   // carries it, and the title is set flush left rather than centred, which is
@@ -50,8 +50,13 @@
       if date != none {
         block(below: 0.9em, text(size: 9.5pt, weight: "bold", date))
       }
+      // A headline that wraps wants its own leading. The body's is set for
+      // 11pt lines and reads as a gap at 20pt.
       if title != none {
-        block(below: 0.45em, text(size: 20pt, weight: "bold", title))
+        block(below: 0.5em, {
+          set par(leading: 0.35em)
+          text(size: 20pt, weight: "bold", title)
+        })
       }
       if author != none {
         block(text(size: 10.5pt, style: "italic", author))

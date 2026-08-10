@@ -5,13 +5,14 @@ sources:
   - core/src/emit.rs
   - core/src/frontmatter.rs
   - core/assets/template.typ
+  - core/assets/press-release.typ
   - cli/src/main.rs
 covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the two walks footnotes need, the image asset
-  channel, the template's title block and column toggle, the Typst world and its
-  bundled fonts, and the CLI contract
-max_lines: 255
+  channel, the bundled looks and the call contract they meet, the Typst world and
+  its bundled fonts, and the CLI contract
+max_lines: 280
 generated: 2026-08-10
 ---
 
@@ -44,8 +45,8 @@ at all; `Options::ENABLE_STRIKETHROUGH` parses one, and a delimiter run of one t
 as well as one of two, so `~struck~` strikes as `~~struck~~` does. Inline code is
 `#raw("…")`, its content a string literal through `core/src/emit.rs:typst_string`. A hard
 break is a `\` before a newline; the same `\` before text is an escape sequence instead. A
-thematic break calls
-`core/assets/template.typ:divider`, whose look the emitter decides nothing about.
+thematic break calls `divider`, which every look exports and whose look the emitter decides
+nothing about.
 
 A link is `#link("…")[…]`. The inline, reference and autolink forms all arrive as one
 `Tag::Link` with the destination already resolved, so one arm serves them all; an
@@ -172,9 +173,18 @@ magic still fails at compile time, with the compiler's own message.
 
 ## The frontmatter
 
-Three keys: `title` and `author`, optional strings, and `columns`, `1` or `2`. An absent
-block is valid; `core/src/frontmatter.rs:Frontmatter::default` gives no title block and two
-columns. Every document gets those, because `core/src/emit.rs:header` always names all three.
+Five keys, all optional: `title` and `author`, strings; `date`, a free string the template
+typesets verbatim; `columns`, `1` or `2`; and `template`, the look, `article` or
+`press-release`. An absent block is valid, and `core/src/frontmatter.rs:Frontmatter::default`
+gives the article look, no title block, no date and two columns. Every document gets a value
+for all five, because `core/src/emit.rs:header` always names all four arguments and the
+selected file.
+
+An absent `columns` takes the selected look's convention — `2` for `article`, `1` for
+`press-release` — resolved in `core/src/frontmatter.rs:parse` after the whole block is read,
+because `template` may sit below `columns`. An explicit value wins either way. The schema is
+the home of every default; a template's own defaults are the fallback for a hand-written
+call and never reach a document.
 
 `Options::ENABLE_YAML_STYLE_METADATA_BLOCKS` recognises the block, so nothing strips it
 from the input and every reported line number stays true to the user's file.
@@ -184,7 +194,9 @@ key is reported before any later construct error.
 That parser is hand-written over a documented YAML subset, not a dependency, and applies
 the dialect's policy: one `key: value` scalar per line, blank and `#` comment lines
 skipped, one pair of quotes stripped. Nesting, a missing colon, an unknown key, a repeated
-key, and any other `columns` value are `Error::Frontmatter`, naming the key and the line.
+key, any other `columns` value, and a `template` name outside the set are
+`Error::Frontmatter`, naming the key and the line. The `template` error lists the names it
+accepts.
 
 ## The escape rule
 
@@ -203,20 +215,32 @@ inside one would reach the PDF.
 A newline becomes `\n`, which only a code block needs, because CommonMark folds a code
 span's line endings to spaces.
 
-Quotation marks in body text are **not** escaped. `core/assets/template.typ` sets
+Quotation marks in body text are **not** escaped. Every look sets
 `smartquote(enabled: false)` instead, which is why they still reach the PDF verbatim.
 
-## The template
+## The templates
 
-`core/assets/template.typ:template` owns all styling: page, fonts, heading style, title
-block, and column count. The emitter passes the three frontmatter keys and adds no styling
-of its own, so a new look is a new `.typ` file. Its own defaults never reach a document.
+Two looks are bundled, and `core/src/frontmatter.rs:Template` names both:
+`core/assets/template.typ` is `article`, the default, and `core/assets/press-release.typ` is
+`press-release`. Each owns all styling — page, fonts, heading style, title block, column
+count — and the emitter passes the frontmatter through and adds no styling of its own, so a
+third look is a third `.typ` file and one enum variant.
 
-The title block uses `place(scope: "parent", float: true)`, which lifts it out of the
-column grid so it spans the page; Typst supports that scope only together with `float`. A
-document with neither `title` nor `author` gets no title block at all.
+Every look exports `template` and `divider`, and its `template` takes `title`, `author`,
+`columns` and `date` before the trailing `doc`. That is the contract, because
+`core/src/emit.rs:header` names all four on every call; a look missing one would fail the
+compile with an error naming neither the document nor the key. No golden file pins it, so a
+test in `core/tests/golden_test.rs` reads each look's source and asserts it.
 
-`show table.cell.where(y: 0): strong` sets a table's header row in strong type. A GFM table
+The article's title block uses `place(scope: "parent", float: true)`, which lifts it out of
+the column grid so it spans the page; Typst supports that scope only together with `float`.
+The date sets beneath the author. The press release sets its dateline above a flush-left
+title, over a `divider` rule, and runs in one column. Either look omits its title block when
+`title`, `author` and `date` are all absent — the date joins that test, because a key the
+author wrote that reached no page would vanish.
+
+Both looks carry `show table.cell.where(y: 0): strong`, which sets a table's header row in
+strong type. A GFM table
 has exactly one header row and it is always the first, so row zero is the header by
 construction. Typst's own default sets it in body type, which would flatten a distinction
 the markdown source draws.
@@ -228,33 +252,39 @@ keeps its footnote insertions per column.
 
 ## The world
 
-`core/src/lib.rs:TypstWorld` holds two source files, `main.typ` and `template.typ`, and
-the images the document names, all under `VirtualRoot::Project`. It implements no package
-resolution, so no import can reach the network on any target.
+`core/src/lib.rs:TypstWorld` holds `main.typ`, every bundled template, and the images the
+document names, all under `VirtualRoot::Project`. It implements no package resolution, so no
+import can reach the network on any target. It binds every look rather than the selected one,
+so the walk never has to plumb its choice out: the looks are compile-time constants either
+way, and `core/src/lib.rs:template_source` maps each `Template` variant to its `include_str!`,
+so the same enum drives the filename and the bytes.
 
 An asset rides that same virtual filesystem rather than a channel of its own, because
-`World::file` already serves `template.typ` from it. `main.typ` sits at the virtual root,
+`World::file` already serves the templates from it. `main.typ` sits at the virtual root,
 so a relative path in the generated source resolves to the file id built from that same
 path, and `collect` keys the map by it. `World::source` is untouched by the assets — an
 image is never Typst source — which is what keeps the import story exactly as it was.
 
 Fonts are embedded with `include_bytes!` from `core/assets/fonts/`, under the OFL: five
 faces from one Libertinus release, so their metrics agree. Serif Regular, Bold, Italic and
-BoldItalic carry body text; Libertinus Mono carries `#raw`, which
-`core/assets/template.typ:template` names in a `show raw` rule. Every face the dialect can
+BoldItalic carry body text; Libertinus Mono carries `#raw`, which every look names in a
+`show raw` rule. Every face the dialect can
 reach is bundled, because Typst renders the closest match it finds and synthesises none —
 without the italic, `#emph` would come out as body text. No target discovers fonts from
 the OS, so the same markdown compiles to the same PDF on every machine.
 
 `World::today` returns `None`. The spec's §2 lists the current date among what the world
 supplies, but an OS clock would break the same section's no-OS-access rule and make the
-PDF differ between machines. No template uses a date.
+PDF differ between machines — silently, because this call touches the compile alone and never
+the emitted source, so the golden files would stay byte-stable over a PDF that differed by
+machine. Every look does typeset a date, and takes it from the frontmatter's `date` key: the
+author writes the dateline.
 
 ## The CLI
 
 `md2pdf input.md [-o output.pdf] [--emit-typst]`. Without `-o` the PDF lands at the input
 path with a `.pdf` extension. `--emit-typst` prints the Typst source and ignores `-o`; that
-output names `template.typ`, which exists only inside the world, so it serves inspection
+output imports the selected look, which exists only inside the world, so it serves inspection
 and not a standalone `typst compile`.
 
 `cli/src/main.rs:read_assets` fills the shopping list: each path joins the parent

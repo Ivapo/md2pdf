@@ -27,6 +27,14 @@ $ open samples/article.pdf
 Then change `columns` in its frontmatter from `2` to `1` and convert it again, to see
 the same text across the full width of the page.
 
+`samples/press-release.md` is the same tool in its second look. Convert it the same way,
+and compare the two pages:
+
+```console
+$ ./target/release/md2pdf samples/press-release.md
+$ open samples/press-release.pdf
+```
+
 ## Use
 
 ```console
@@ -37,9 +45,9 @@ $ md2pdf paper.md --emit-typst    # prints the generated Typst source
 
 Without `-o`, the PDF lands at the input path with a `.pdf` extension.
 
-`--emit-typst` prints the Typst source instead of compiling it. That output imports
-`template.typ`, which exists only inside the compiler's virtual filesystem, so it serves
-inspection rather than a standalone `typst compile`.
+`--emit-typst` prints the Typst source instead of compiling it. That output imports the
+look the frontmatter chose, which exists only inside the compiler's virtual filesystem, so
+it serves inspection rather than a standalone `typst compile`.
 
 ## What the markdown may contain
 
@@ -198,25 +206,42 @@ reference does.
 
 ## Frontmatter
 
-A leading `---` block controls the layout. It takes three keys, all optional:
+A leading `---` block controls the layout. It takes five keys, all optional:
 
 ```markdown
 ---
 title: A Minimal Example
 author: Iva Po
-columns: 1        # 1 or 2; the default is 2
+date: 10 August 2026        # a free string, typeset as you wrote it
+template: article           # article or press-release
+columns: 1                  # 1 or 2
 ---
 ```
 
-Without a `title` and an `author`, the PDF gets no title block. Without `columns`, it
-gets two columns. Without the block altogether, it gets both defaults.
+`template` picks the look:
 
-A key outside those three, or a `columns` value other than `1` or `2`, is an error that
-names the key and its line:
+| Name | The look | Columns without a `columns` key |
+| --- | --- | :---: |
+| `article` | the default: a centred title block, and the date under the author | 2 |
+| `press-release` | a dateline above a flush-left title, over a rule | 1 |
+
+Each look brings its own column count, so a press release is a single column without
+saying so. A `columns` key of your own beats it.
+
+`date` is your text and nothing else. `md2pdf` never reads a clock, so the same file
+makes the same PDF on every machine and on any day.
+
+Without `title`, `author` and `date` together, the PDF gets no title block. Without the
+frontmatter altogether, it gets every default.
+
+A key outside the five, a `columns` value other than `1` or `2`, or a `template` name
+outside the two, is an error that names the key and its line:
 
 ```console
 $ md2pdf paper.md
 error: frontmatter error at line 3: unknown key 'subtitle'
+$ md2pdf release.md
+error: frontmatter error at line 3: key 'template' takes article or press-release, not 'ieee'
 ```
 
 The block is a small YAML subset, not full YAML: one `key: value` pair per line, blank
@@ -225,10 +250,16 @@ and lists are errors.
 
 ## Styling
 
-`core/assets/template.typ` owns all styling: the page setup, the text font, the code
-font, the heading style, the rule a thematic break draws, the title block, and the column
-count. Change that file to change the look. The parser and the emitter do not need to
-know.
+A look owns all styling: the page setup, the text font, the code font, the heading style,
+the rule a thematic break draws, the title block, and the column count. Two ship —
+`core/assets/template.typ` is `article` and `core/assets/press-release.typ` is
+`press-release`. Change one of those files to change how its look reads. The parser and
+the emitter do not need to know.
+
+A third look is a third `.typ` file plus one name in `core/src/frontmatter.rs`. It has one
+contract to meet: export `template` and `divider`, and let `template` take `title`,
+`author`, `columns` and `date` before its trailing document argument. `md2pdf` names all
+four on every call.
 
 ## Licence
 
