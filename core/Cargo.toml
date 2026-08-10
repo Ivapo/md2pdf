@@ -12,5 +12,9 @@ path = "src/lib.rs"
 [dependencies]
 pulldown-cmark = "0.13.4"
 thiserror = "2"
+# The parser keys its own footnote labels by `UniCase`, so the emitter matches
+# them the same way rather than by their raw spelling. This is already in the
+# tree as pulldown-cmark's own dependency.
+unicase = "2"
 typst = "0.15.1"
 typst-pdf = "0.15.1"

@@ -11,11 +11,18 @@
 //! what lets `escape_into` keep reading an un-indented line, and it is why a
 //! code block, which reaches Typst as one line holding a string literal, cannot
 //! be corrupted by the indentation around it.
+//!
+//! One document takes two walks of the same stream. Typst takes a footnote's
+//! content at the reference site, and a markdown definition may sit after the
+//! reference that cites it, so `collect_definitions` translates every
+//! definition first and `emit` then writes the document.
 
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, LinkType, Options, Parser, Tag, TagEnd};
 use typst::syntax::VirtualPath;
+use unicase::UniCase;
 
 use crate::frontmatter::{self, Frontmatter};
 use crate::{Error, ImageRef, Result};
@@ -179,18 +186,186 @@ fn options() -> Options {
     // reads one only with this option on. Without it the pipes would reach the
     // PDF as prose, which is the silent flattening the dialect refuses.
     options.insert(Options::ENABLE_TABLES);
+    // A footnote is a GFM extension too, and the same argument applies to it:
+    // without this option `[^1]` and `[^1]: The source.` are ordinary text, and
+    // the escape rule prints the brackets on the page.
+    options.insert(Options::ENABLE_FOOTNOTES);
     options
+}
+
+/// One footnote label, folded the way the parser folds it.
+///
+/// pulldown-cmark keys its own label map by `UniCase`, so `[^A]` cites a
+/// definition written `[^a]:`, and the events carry each label's original
+/// spelling. Everything here that touches a label — the map, the citedness
+/// test, the generated name — runs over that same equivalence. Keying by the
+/// raw spelling would miss on valid input.
+type Label = UniCase<String>;
+
+fn label_of(text: &str) -> Label {
+    UniCase::new(text.to_string())
+}
+
+/// What one walk of the definitions found.
+#[derive(Default)]
+struct Definitions {
+    /// Each definition's translated content and the images inside it, or the
+    /// first error its translation produced. A label defined twice is held
+    /// once: the second definition is refused where it stands.
+    bodies: HashMap<Label, Result<(String, Vec<ImageRef>)>>,
+    /// Every label that a reference outside a definition names.
+    cited: HashSet<Label>,
+}
+
+impl Definitions {
+    /// One definition's translation.
+    ///
+    /// Every reference the parser emits has a definition somewhere in the
+    /// document — an unresolved one produces no event at all and stays literal
+    /// text — so a lookup at a reference finds one, and so does a lookup at a
+    /// region the walk has just entered.
+    fn body(&self, label: &Label) -> &Result<(String, Vec<ImageRef>)> {
+        self.bodies
+            .get(label)
+            .expect("the parser resolves every reference against a definition")
+    }
+}
+
+/// What the document's own walk carries about footnotes.
+struct Notes<'a> {
+    /// What the walk of the definitions found.
+    found: &'a Definitions,
+    /// The definitions this walk has passed, so a second one for the same
+    /// label is refused at the line it sits on.
+    seen: HashSet<Label>,
+    /// The name each label was given, by first reference.
+    numbers: HashMap<Label, usize>,
+    /// Whether the walk is inside a definition's region.
+    skipping: bool,
+}
+
+impl Notes<'_> {
+    /// Settle what a definition's region owes, then skip it.
+    ///
+    /// Three shapes are errors, per the escape-and-reject rule. A second
+    /// definition for one label would lose a body, and choosing between two
+    /// bodies is a guess the dialect does not make. A definition no reference
+    /// cites would reach no page, and content that vanishes is what the rule
+    /// exists to prevent. Last, the definition's own translation may have
+    /// failed, and this is the position that error belongs to.
+    ///
+    /// They run in the order of the lines they name: the first two name this
+    /// definition's own line, and a kept error names a line inside the region.
+    fn enter(&mut self, label: Label, line: usize) -> Result<()> {
+        let refuse = |construct: &str| {
+            Err(Error::UnsupportedConstruct {
+                construct: construct.to_string(),
+                line,
+            })
+        };
+
+        if !self.seen.insert(label.clone()) {
+            return refuse("footnote definition for a label already defined");
+        }
+        if !self.found.cited.contains(&label) {
+            return refuse("footnote definition that no reference cites");
+        }
+        if let Err(error) = self.found.body(&label) {
+            return Err(error.clone());
+        }
+
+        self.skipping = true;
+        Ok(())
+    }
+}
+
+/// Which of the two walks is running.
+enum Mode<'a, 'b> {
+    /// The walk of the definitions, inside one definition's region.
+    Definition,
+    /// The walk of the document, with what the first walk found.
+    Document(&'a mut Notes<'b>),
+}
+
+/// Translate every footnote definition, and record what the document cites.
+///
+/// This walk enters the definitions and nothing else. Outside a region two
+/// events matter: the one that opens a region, and a reference, which is what
+/// makes a definition cited.
+///
+/// It never raises. A region whose translation fails keeps that error, and the
+/// document's walk reports it where the region stands, so the first error in
+/// document order is still the one the user reads — a frontmatter error
+/// included, which is parsed in that second walk and nowhere here.
+fn collect_definitions(md: &str) -> Definitions {
+    let mut found = Definitions::default();
+    let mut walk = Walk::new();
+    let mut open: Option<Label> = None;
+    let mut failure: Option<Error> = None;
+
+    for (event, range) in Parser::new_ext(md, options()).into_offset_iter() {
+        if open.is_none() {
+            match &event {
+                Event::Start(Tag::FootnoteDefinition(label)) => {
+                    open = Some(label_of(label));
+                    walk = Walk::new();
+                    failure = None;
+                }
+                Event::FootnoteReference(label) => {
+                    found.cited.insert(label_of(label));
+                }
+                _ => {}
+            }
+            continue;
+        }
+
+        if matches!(event, Event::End(TagEnd::FootnoteDefinition)) {
+            let label = open.take().expect("a region is open");
+            let body = match failure.take() {
+                Some(error) => Err(error),
+                None => {
+                    let (content, images) = std::mem::replace(&mut walk, Walk::new()).finish();
+                    Ok((content.trim_matches('\n').to_string(), images))
+                }
+            };
+            // The first definition of a label is the one held. A second one is
+            // an error the document's walk raises where that second one sits.
+            found.bodies.entry(label).or_insert(body);
+            continue;
+        }
+
+        // Once a region has failed, the rest of it is skipped: the error it
+        // already holds is the first one in that region, and that is the one
+        // to report.
+        if failure.is_none()
+            && let Err(error) = step(&mut walk, md, event, range, Mode::Definition)
+        {
+            failure = Some(error);
+        }
+    }
+
+    found
 }
 
 /// Translate one markdown document into Typst markup.
 ///
-/// The second half of the result is every image the document names, in document
-/// order. One walk produces both, so the source and the shopping list cannot
-/// disagree about which paths the dialect accepts.
+/// The second half of the result is every image the document names, in the
+/// order a reader meets them — which puts an image inside a footnote definition
+/// at the first reference to that footnote, where its content is set. One walk
+/// writes both, so the source and the shopping list cannot disagree about which
+/// paths the dialect accepts.
 pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>)> {
+    let found = collect_definitions(md);
+    let mut notes = Notes {
+        found: &found,
+        seen: HashSet::new(),
+        numbers: HashMap::new(),
+        skipping: false,
+    };
+
     let mut walk = Walk::new();
     for (event, range) in Parser::new_ext(md, options()).into_offset_iter() {
-        step(&mut walk, md, event, range)?;
+        step(&mut walk, md, event, range, Mode::Document(&mut notes))?;
     }
 
     let mut out = header(&walk.front);
@@ -201,7 +376,13 @@ pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>)> {
 }
 
 /// Translate one event into the walk's own state.
-fn step(walk: &mut Walk, md: &str, event: Event, range: Range<usize>) -> Result<()> {
+fn step(
+    walk: &mut Walk,
+    md: &str,
+    event: Event,
+    range: Range<usize>,
+    mut mode: Mode,
+) -> Result<()> {
     let Walk {
         bufs,
         containers,
@@ -217,6 +398,19 @@ fn step(walk: &mut Walk, md: &str, event: Event, range: Range<usize>) -> Result<
         pending,
         para,
     } = walk;
+
+    // A definition's region is not part of the document's flow: its content
+    // travelled to the reference that cites it. This sits above the capture
+    // below because a definition is a block, so no capture is ever open across
+    // one.
+    if let Mode::Document(notes) = &mut mode
+        && notes.skipping
+    {
+        if matches!(event, Event::End(TagEnd::FootnoteDefinition)) {
+            notes.skipping = false;
+        }
+        return Ok(());
+    }
 
     // An open capture takes every event, because alt text is collected and
     // never emitted. A construct outside the dialect still errors here.
@@ -515,6 +709,68 @@ fn step(walk: &mut Walk, md: &str, event: Event, range: Range<usize>) -> Result<
                 text: String::new(),
                 depth: 0,
             });
+        }
+
+        // A definition's content belongs to the reference that cites it, so
+        // the region itself is never emitted. What it owes is settled at the
+        // line it sits on, and the walk then skips it.
+        Event::Start(Tag::FootnoteDefinition(label)) => {
+            let line = line_of(md, range.start);
+            match &mut mode {
+                Mode::Document(notes) => notes.enter(label_of(&label), line)?,
+                // The parser hoists a definition written inside another one to
+                // a sibling at the top level, so this does not arrive.
+                // Refusing it keeps the walk of the definitions free of a
+                // nesting it has no answer for.
+                Mode::Definition => {
+                    return Err(Error::UnsupportedConstruct {
+                        construct: "footnote definition inside a footnote definition".to_string(),
+                        line,
+                    });
+                }
+            }
+        }
+
+        // Typst takes a footnote's content at the reference site, so the first
+        // reference to a label carries the content and every later one points
+        // at the name that first one wrote. The user's own label text never
+        // reaches the output: a markdown label may hold any character and a
+        // Typst label may not, and generating the name removes the escaping
+        // question rather than answering it. Typst numbers footnotes in
+        // placement order, which is the order GFM numbers them in, so the
+        // emitter writes no number itself.
+        Event::FootnoteReference(label) => {
+            let Mode::Document(notes) = &mut mode else {
+                // Resolving a footnote inside a footnote would mean a recursive
+                // substitution with a cycle check, for a construct real
+                // articles do not carry.
+                return Err(Error::UnsupportedConstruct {
+                    construct: "footnote reference inside a footnote definition".to_string(),
+                    line: line_of(md, range.start),
+                });
+            };
+
+            let label = label_of(&label);
+            match notes.numbers.get(&label) {
+                Some(number) => top(bufs).push_str(&format!("#footnote(<fn-{number}>)")),
+                None => {
+                    let number = notes.numbers.len() + 1;
+                    notes.numbers.insert(label.clone(), number);
+
+                    let out = top(bufs);
+                    out.push_str("#footnote[");
+                    // A definition whose translation failed writes an empty
+                    // footnote here and does not raise. Its own region raises,
+                    // at the position that error belongs to, which is what lets
+                    // an error between this reference and that region be
+                    // reported first.
+                    if let Ok((content, inside)) = notes.found.body(&label) {
+                        out.push_str(content);
+                        images.extend(inside.iter().cloned());
+                    }
+                    top(bufs).push_str(&format!("]<fn-{number}>"));
+                }
+            }
         }
 
         // Typst's line break is a `\` before a newline. The same `\`
@@ -826,13 +1082,11 @@ fn describe(event: &Event) -> &'static str {
     match event {
         Event::Start(tag) => match tag {
             Tag::Strikethrough => "strikethrough",
-            Tag::FootnoteDefinition(_) => "footnote definition",
             Tag::HtmlBlock => "raw HTML block",
             _ => "markdown construct",
         },
         Event::End(tag) => match tag {
             TagEnd::Strikethrough => "strikethrough",
-            TagEnd::FootnoteDefinition => "footnote definition",
             TagEnd::HtmlBlock => "raw HTML block",
             _ => "markdown construct",
         },

@@ -1,4 +1,4 @@
-//! The exit gates for `mpdf-001`'s six phases and `mpdf-002`'s first, at the
+//! The exit gates for `mpdf-001`'s seven phases and `mpdf-002`'s first, at the
 //! library level.
 //!
 //! Fixtures and golden files live at the workspace root because the CLI tests
@@ -30,6 +30,8 @@ const TABLE_MD: &str = include_str!("../../tests/fixtures/table.md");
 const TABLE_TYP: &str = include_str!("../../tests/golden/table.typ");
 const IMAGES_MD: &str = include_str!("../../tests/fixtures/images.md");
 const IMAGES_TYP: &str = include_str!("../../tests/golden/images.typ");
+const FOOTNOTES_MD: &str = include_str!("../../tests/fixtures/footnotes.md");
+const FOOTNOTES_TYP: &str = include_str!("../../tests/golden/footnotes.typ");
 const TEMPLATE_TYP: &str = include_str!("../assets/template.typ");
 
 /// The two image files the `images.md` fixture names, and one more name for the
@@ -896,4 +898,185 @@ fn each_format_check_reads_the_magic_its_extension_names() {
         let rejected = matches!(result, Err(Error::ImageFormat { .. }));
         assert_eq!(!rejected, ok, "for {path} with {} bytes", bytes.len());
     }
+}
+
+// -- Phase 7: footnotes -----------------------------------------------------
+
+#[test]
+fn the_footnotes_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(FOOTNOTES_MD).unwrap(), FOOTNOTES_TYP);
+}
+
+/// The compile is the phase's observable, at the library level: markdown whose
+/// footnotes reach the foot of the column that holds their references.
+#[test]
+fn the_footnotes_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(FOOTNOTES_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each part of a footnote reaches Typst as the form the spec chose.
+///
+/// The equality test above pins the whole output, but it cannot say *why* the
+/// output is right. This one names the rule, so an edit that drops the content
+/// from the first reference, numbers by definition order, or lets a user's own
+/// label text through fails with a message that points at what it dropped.
+#[test]
+fn the_footnotes_golden_carries_each_form() {
+    for (form, what) in [
+        // The first reference carries the content, because Typst takes a
+        // footnote's body at the reference site.
+        (
+            r#"#footnote[A note with #emph[emphasis], #raw("inline code"), and more below."#,
+            "the first reference, carrying its definition",
+        ),
+        // Block content inside a definition arrives through the arms that serve
+        // it everywhere else.
+        (
+            "A second paragraph inside the same definition.\n\n- a list item\n- a second list item]<fn-1>",
+            "the second paragraph and the list inside the definition",
+        ),
+        // The repeat points at the name the first reference wrote. Its label is
+        // spelled `[^AFTER]` in the fixture, so this pins the case fold too.
+        ("#footnote(<fn-1>)", "the repeated reference"),
+        // Numbered by first use, not by the order the definitions are written:
+        // this one is defined first and referenced second.
+        (
+            "#footnote[A definition written above the reference that cites it.]<fn-2>",
+            "the definition that precedes its reference",
+        ),
+    ] {
+        assert!(
+            FOOTNOTES_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+
+    // A markdown label may hold any character and a Typst label may not, so the
+    // emitter generates the name and the user's own text never reaches Typst.
+    for label in ["[^", "after", "AFTER", "before"] {
+        assert!(
+            !FOOTNOTES_TYP.contains(label),
+            "the user's own label text `{label}` reached the output"
+        );
+    }
+
+    // The definition's region is not emitted where it is written. Its content
+    // appears once, at the reference that cites it.
+    assert_eq!(
+        FOOTNOTES_TYP.matches("A definition written above").count(),
+        1,
+        "a definition was left in the body as well"
+    );
+}
+
+/// Each footnote shape the dialect refuses names its construct and its line.
+///
+/// The first would lose a body, and choosing between two is a guess. The second
+/// would reach no page, and content that vanishes is what the escape-and-reject
+/// rule exists to prevent. The third would need a recursive substitution with a
+/// cycle check, for a construct real articles do not carry.
+#[test]
+fn each_footnote_error_shape_names_its_construct_and_its_line() {
+    for (md, construct, line, what) in [
+        (
+            "# H\n\nA paragraph that cites nothing.\n\n[^a]: An orphan note.\n",
+            "footnote definition that no reference cites",
+            5,
+            "the uncited definition",
+        ),
+        // The two spellings differ in case, which pins the fold on the error
+        // path: the parser resolves both to one body, so the second is refused.
+        (
+            "# H\n\nA cited note[^a] here.\n\n[^a]: One body.\n\n[^A]: Another body.\n",
+            "footnote definition for a label already defined",
+            7,
+            "the second definition for one label",
+        ),
+        (
+            "# H\n\nA cited note[^a] here.\n\n[^a]: A note that cites[^b] another.\n\n[^b]: The other.\n",
+            "footnote reference inside a footnote definition",
+            5,
+            "the reference inside a definition",
+        ),
+    ] {
+        match md_to_typst(md) {
+            Err(Error::UnsupportedConstruct {
+                construct: found,
+                line: found_line,
+            }) => {
+                assert_eq!(found, construct, "for {what}");
+                assert_eq!(found_line, line, "for {what}");
+            }
+            other => panic!("expected `{construct}` for {what}, got {other:?}"),
+        }
+    }
+}
+
+/// A frontmatter error still wins over a definition error later in the file.
+///
+/// A definition is translated in a walk of its own, before the document's, and
+/// this is what pins that the error it produced is reported where the region
+/// sits rather than where that first walk met it.
+#[test]
+fn a_frontmatter_error_wins_over_a_later_footnote_error() {
+    for (md, what) in [
+        (
+            "---\nsubtitle: Bad\n---\n\nA cited note[^a] here.\n\n[^a]: A note holding <b>raw HTML</b>.\n",
+            "a definition whose own translation failed",
+        ),
+        (
+            "---\nsubtitle: Bad\n---\n\nA paragraph.\n\n[^a]: An orphan note.\n",
+            "an uncited definition",
+        ),
+    ] {
+        match md_to_typst(md) {
+            Err(Error::Frontmatter { problem, .. }) => {
+                assert!(problem.contains("subtitle"), "problem was: {problem}");
+            }
+            other => panic!("expected a Frontmatter error over {what}, got {other:?}"),
+        }
+    }
+}
+
+/// A definition's images join the shopping list at its first reference.
+///
+/// The list runs in the order a reader meets the images, which is where the
+/// content is set rather than where the definition is written. Each entry keeps
+/// the line the markdown named it on, because that is what an error must say.
+#[test]
+fn image_paths_lists_a_definitions_images_at_its_first_reference() {
+    let md = "![one](a.png)\n\nText[^n] and more[^n].\n\n![two](b.png)\n\n[^n]: A note ![in](c.png) here.\n";
+    assert_eq!(
+        image_paths(md).unwrap(),
+        vec![
+            ImageRef {
+                path: "a.png".to_string(),
+                line: 1
+            },
+            ImageRef {
+                path: "c.png".to_string(),
+                line: 7
+            },
+            ImageRef {
+                path: "b.png".to_string(),
+                line: 5
+            },
+        ]
+    );
+}
+
+/// A reference with no definition produces no event and stays literal text.
+///
+/// That is the parser's own behaviour, and it is why a dangling reference needs
+/// no error shape of its own: every reference the walk sees has a definition
+/// somewhere in the document.
+#[test]
+fn a_footnote_reference_with_no_definition_stays_text() {
+    let typst = md_to_typst("# H\n\nA dangling reference[^gone] here.\n").unwrap();
+    assert!(
+        typst.contains(r"reference\[^gone\] here."),
+        "the dangling reference did not stay escaped text: {typst}"
+    );
 }

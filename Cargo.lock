@@ -1251,6 +1251,7 @@ dependencies = [
  "thiserror",
  "typst",
  "typst-pdf",
+ "unicase",
 ]
 
 [[package]]

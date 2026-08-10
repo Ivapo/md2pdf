@@ -22,7 +22,11 @@ use typst::utils::LazyHash;
 use typst_pdf::PdfOptions;
 
 /// The errors this crate can return.
-#[derive(Debug, thiserror::Error)]
+///
+/// These clone, because a footnote definition's translation is kept until the
+/// walk reaches the region it belongs to, and the error it produced is what
+/// that region reports.
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
     /// A markdown construct outside the supported dialect.
     #[error("unsupported markdown construct '{construct}' at line {line}")]
@@ -87,11 +91,16 @@ pub fn md_to_typst(md: &str) -> Result<String> {
     Ok(emit::emit(md)?.0)
 }
 
-/// List every image file the document names, in document order.
+/// List every image file the document names, in reader order.
 ///
 /// This is the caller's shopping list: read these files, then hand them back to
 /// [`md_to_pdf`] as assets. The same walk produces it that produces the Typst
 /// source, so the two agree on which paths the dialect accepts.
+///
+/// Reader order is document order, except for an image inside a footnote
+/// definition: that one joins the list at the first reference to its footnote,
+/// which is where the content is set. Its line stays the line the markdown
+/// named it on.
 ///
 /// The list may name one path more than once. The caller deduplicates it.
 pub fn image_paths(md: &str) -> Result<Vec<ImageRef>> {

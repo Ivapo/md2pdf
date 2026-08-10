@@ -56,6 +56,7 @@ fn emit_typst_prints_the_golden_file() {
         // Emission reads paths and no bytes. This fixture names `fig#2.png`,
         // which no directory holds, and it still prints its golden file.
         ("images.md", "images.typ"),
+        ("footnotes.md", "footnotes.typ"),
     ] {
         let out = run(&[fixture(fixture_name).as_ref(), "--emit-typst".as_ref()]);
         assert!(out.status.success(), "{fixture_name} did not exit 0");
