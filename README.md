@@ -44,12 +44,12 @@ inspection rather than a standalone `typst compile`.
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
-constructs, links, tables, images, and footnotes**:
+constructs, links, tables, images, footnotes, and strikethrough**:
 
 ````markdown
 # Introduction
 
-Body text with *emphasis*, **strong emphasis**, and `inline code`.
+Body text with *emphasis*, **strong emphasis**, ~~struck text~~, and `inline code`.
 
 A hard line break ends this line,\
 and this line follows it in the same paragraph.
@@ -100,7 +100,10 @@ link shapes do not: a link with an empty destination, `[text]()`, and a link tha
 a title, `[text](url "a title")`. Neither Typst nor the PDF can hold a title, and an empty
 destination has nothing to resolve to.
 
-**Almost every other construct is an error.** A block of raw HTML makes `md2pdf` exit
+Strikethrough takes one tilde on each side as well as two, so `~struck~` strikes exactly
+as `~~struck~~` does. A single tilde with a space beside it is still a tilde.
+
+**Every other construct is an error.** A block of raw HTML makes `md2pdf` exit
 with code 1 and print the construct and its line:
 
 ```console
@@ -112,13 +115,17 @@ That is deliberate. Dropping or flattening content would ship a PDF that lies ab
 source, so the tool names what it cannot yet handle. Support arrives construct by
 construct.
 
-Two constructs escape that rule today, and this is the honest statement of the gap.
-`~~strikethrough~~` and `$math$` are not read as constructs at all, so they reach the
-page as the characters you typed rather than as an error. Footnotes behaved the same way
-until this release. Closing the remaining gap is a piece of work of its own.
+Math is an error in both its forms, `$x$` and `$$x$$`, and a task list item, `- [ ] a`,
+is one too. If you meant a dollar sign rather than a formula, write `\$`: the backslash
+stops the span, and the dollar reaches the page as itself.
+
+```console
+$ md2pdf paper.md
+error: unsupported markdown construct 'math' at line 12
+```
 
 Body text reaches the PDF verbatim. Characters that Typst would otherwise interpret are
-escaped for you, so `$5` stays five dollars and never opens math mode:
+escaped for you, so a `$5` that markdown does not read as a formula stays five dollars:
 
 ``` 
 \  #  $  *  _  `  @  <  >  [  ]  ~  -  +  =  /

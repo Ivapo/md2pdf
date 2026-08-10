@@ -11,8 +11,8 @@ covers: >
   escape rule, the rejection rule, the two walks footnotes need, the image asset
   channel, the template's title block and column toggle, the Typst world and its
   bundled fonts, and the CLI contract
-max_lines: 245
-generated: 2026-08-09
+max_lines: 255
+generated: 2026-08-10
 ---
 
 # Pipeline
@@ -30,18 +30,21 @@ terminal output, the image files included.
 
 ## The dialect
 
-Seventeen things are supported: headings at levels 1–6, paragraph text, soft breaks,
-emphasis, strong emphasis, inline code, hard line breaks, thematic breaks, links,
-images, bullet lists, ordered lists, code blocks, block quotes, pipe tables, footnotes,
-and a leading YAML frontmatter block. Heading levels map to Typst headings of the same
-level.
+Eighteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
+emphasis, strong emphasis, strikethrough, inline code, hard line breaks, thematic breaks,
+links, images, bullet lists, ordered lists, code blocks, block quotes, pipe tables,
+footnotes, and a leading YAML frontmatter block. Heading levels map to Typst headings of
+the same level.
 
 The inline constructs reach Typst as function calls, not as its own markup.
 `#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
 while CommonMark permits intraword emphasis, so `foo*bar*baz` would either keep literal
-underscores or fail to compile. Inline code is `#raw("…")`, its content a string literal
-through `core/src/emit.rs:typst_string`. A hard break is a `\` before a newline; the same
-`\` before text is an escape sequence instead. A thematic break calls
+underscores or fail to compile. `#strike[…]` because Typst has no markup form for a strike
+at all; `Options::ENABLE_STRIKETHROUGH` parses one, and a delimiter run of one tilde counts
+as well as one of two, so `~struck~` strikes as `~~struck~~` does. Inline code is
+`#raw("…")`, its content a string literal through `core/src/emit.rs:typst_string`. A hard
+break is a `\` before a newline; the same `\` before text is an escape sequence instead. A
+thematic break calls
 `core/assets/template.typ:divider`, whose look the emitter decides nothing about.
 
 A link is `#link("…")[…]`. The inline, reference and autolink forms all arrive as one
@@ -108,14 +111,17 @@ never raises. A definition whose translation failed keeps that error, and the se
 reports it at the region, so the first error in document order is still the one reported
 and the frontmatter still wins over a construct error below it.
 
-**Raw HTML is an error.** `core/src/emit.rs:describe` names the construct, and
-`Error::UnsupportedConstruct` carries that name with the 1-based line. The CLI prints it
-to stderr and exits 1.
+**Everything else is an error** — raw HTML, a task list marker, and math in both its
+forms. `core/src/emit.rs:describe` names the construct, `Error::UnsupportedConstruct`
+carries that name with the 1-based line, and the CLI prints it to stderr and exits 1.
+Nothing is dropped or flattened silently.
 
-Two constructs are neither supported nor refused, and that is a gap rather than a
-decision. Strikethrough and math each need a parser option, neither is set, so `~~x~~`
-and `$x$` arrive as text and the escape rule prints them on the page. `describe` names
-both on arms nothing reaches. Footnotes flattened the same way until they were mapped.
+Every arm of `describe` is reachable, which is a property rather than an accident: a name
+refuses nothing until a parser option produces the event it names, and
+`Options::ENABLE_TASKLISTS` and `Options::ENABLE_MATH` are what make the last two arrive.
+Typst has no checkbox element, and a drawn marker would be a look decision the template
+owns; math is parked for a later spec. `\$` is the exit math leaves prose: the backslash
+suppresses the span and the dollar reaches the page as itself.
 
 Two link shapes are errors too, and the link arm names them itself rather than through
 `describe`. An empty destination, legal CommonMark, would reach Typst as `#link("")`,
@@ -137,8 +143,9 @@ space and keeps its aspect ratio.
 
 Alt text is flattened, not emitted, because Typst's `alt` is a plain string.
 `core/src/emit.rs:AltCapture` takes every event between the image's two: text and code
-contribute their text, a soft or hard break contributes one space, emphasis, strong and
-link wrappers contribute nothing, and an out-of-dialect construct still errors. A nested
+contribute their text, a soft or hard break contributes one space, emphasis, strong,
+strikethrough and link wrappers contribute nothing, and an out-of-dialect construct still
+errors. A nested
 image flattens the same way under a depth count, contributing only its inner text; its
 destination and title are not content under that reading, so they are neither checked nor
 listed.

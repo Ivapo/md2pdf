@@ -45,7 +45,7 @@ phases:
     by: null
   - name: "Phase 8 — the constructs the reject arm names but never sees"
     reviewed: 2026-08-10
-    shipped: null
+    shipped: 2026-08-10
     cut: null
     by: null
 

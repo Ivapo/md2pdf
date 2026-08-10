@@ -2,6 +2,36 @@
 
 Append-only. One heading per round, newest first.
 
+### Implementation note — Phase 8 — 2026-08-10 — the census held, and the rule's cap did not
+
+Not a review round. Phase 8 shipped as reviewed, with two things worth
+recording.
+
+The corpus census the round-14 reviewer ran held against the build. The three
+options went on and **no shipped golden file changed**: the whole suite passes,
+79 tests over four targets, and the only new file under `tests/golden/` is the
+phase's own. `tests/fixtures/hostile.md`'s lone tilde and lone dollar still
+reach the page as themselves, through the escape loop that already pinned them.
+
+The corpus check passed with no gap: the repository's own README and
+`samples/article.md` both convert, and the sample now carries a struck phrase
+in each spelling. Its own "a ~ tilde" line survives unchanged, as the close-out
+said it would — whitespace on both sides means that tilde can neither open nor
+close a run — and the by-eye read confirms the struck phrases struck on the
+page.
+
+`rules/pipeline.md` grew past its own 245-line cap, which is raised to 255 in
+the same commit as the prose that needed it — the second time this rule has
+taken that treatment, after Phase 7 raised it from 205. The growth is a
+construct in the dialect list and its inline form, plus the reachability
+property this phase establishes over `describe`; the four-line gap paragraph
+Phase 7 was obliged to write came out in the same edit.
+
+One fold-in beyond the close-out's letter, named rather than silent: the
+sample's constructs list still read "links, tables, and images" and omitted
+footnotes, which shipped in Phase 7. It sits three paragraphs above the gap
+paragraph this phase deletes, so it was corrected in the same pass.
+
 ### Round 15 — Phase 8 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking findings, one new non-blocking. The

@@ -33,8 +33,8 @@ lying about its source.
 # What the body may contain
 
 Headings, paragraph text, the inline constructs, the block constructs, links,
-tables, and images. Heading levels 1 to 6 map to Typst headings of the same
-level, so the two below are real headings, not bold paragraphs.
+tables, images, and footnotes. Heading levels 1 to 6 map to Typst headings of
+the same level, so the two below are real headings, not bold paragraphs.
 
 ## A second level heading
 
@@ -45,11 +45,9 @@ it.
 
 ### A third level heading
 
-Text under a third level heading. Almost every construct outside the list
-above is an error rather than a silent omission, and support arrives
-construct by construct. Strikethrough and math are the exception today: they
-are not read as constructs at all, so they reach the page as the characters
-you typed, and the README names that gap.
+Text under a third level heading. A construct outside the list above is an
+error rather than a silent omission, and support arrives construct by
+construct.
 
 # The inline constructs
 
@@ -58,6 +56,10 @@ bold, and ***both markers at once*** give you bold italic. Each one is written
 as a Typst function call rather than as Typst's own markup, because Typst
 reads its markers only at a word boundary while markdown does not: that is
 what lets emphasis land mid*word*here.
+
+A phrase between two tildes comes out ~~struck through~~, and one tilde on
+each side does the same to ~this phrase~. Typst has no markup for a strike at
+all, so the function call is the only form here.
 
 Text in `backticks` becomes inline code, and it reaches the page exactly as
 you typed it. Nothing inside a pair of backticks is escaped and nothing needs
