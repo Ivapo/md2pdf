@@ -38,11 +38,16 @@ phases:
     shipped: 2026-08-09
     cut: null
     by: null
+  - name: "Phase 7 — footnotes"
+    reviewed: 2026-08-09
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
 superseded_by: null
-related: []
+related: [mpdf-002]
 reference: >
   Pandoc's md → pdf pipeline is the inspiration. Embedding Pandoc is out of scope:
   it is heavy to embed, it has no lightweight WASM build, and its GPL license
@@ -256,6 +261,21 @@ failure, and support arrives construct by construct in later phases or specs.
   distinction the source draws. Because golden files pin emitter output
   only, gate case (2) pins the rule in `template.typ` itself. Landed in
   Phase 6's scope.
+- **OQ-7** — ~~where does Typst place a footnote whose reference sits inside a
+  table cell, and where does it place one in the two-column layout — the
+  bottom of the column that holds the reference, or the bottom of the page?
+  The two-column answer decides whether `template.typ` needs a rule of its
+  own, which OQ-5 and OQ-6 are the two precedents for. Answerable from code
+  (`typst-layout` 0.15.1's flush and footnote-placement path) during review.
+  Blocks Phase 7's gate case (1) in its look claim only; a misplaced footnote
+  would still compile.~~ **RESOLVED (2026-08-09), in review round 1:** the
+  bottom of the column that holds the reference. `typst-layout` 0.15.1's
+  composer keeps its footnote insertions per column, an entry too tall for
+  its column spills into the next, and a reference inside a table cell is
+  found by the composer's recursive frame search and placed by the same
+  rule. That is the standard two-column article convention, so the phase's
+  no-template-rule claim stands on OQ-5's precedent, and gate case (1)'s
+  by-eye read confirms the answer rather than supplying it.
 
 ## 4. Implementation phases
 
@@ -505,6 +525,145 @@ set to the supported set is the same widening Phases 3–5 performed.
   neither corpus file holds a pipe table today. The corpus check repeats:
   the repository's own README and the sample both convert without error,
   or the gap is named in the review record. One push.
+
+### Phase 7 — footnotes
+*Produces the observable: yes — a PDF whose footnotes sit at the foot of the
+page, from documents that today print their bracket syntax as prose.*
+
+Appended 2026-08-09, after Phase 6 shipped and after `mpdf-002` shipped, per
+the methodology's §6.1: the dialect is this spec's subject, and a construct
+migrating from the reject set to the supported set is the same widening
+Phases 3–6 performed. Footnotes are not citations; §1.1 parks citations and
+a bibliography for a later spec, and this phase does not touch them.
+
+The motivation is sharper than the earlier widenings, because a footnote is
+not rejected today — it is flattened. `Options::ENABLE_FOOTNOTES` is not set,
+so `[^1]` never reaches the reject arm and `core/src/emit.rs:describe`'s
+footnote arms are unreachable. The parser reads the reference and the
+definition as ordinary text, the escape rule escapes the brackets, and the
+PDF prints `[^1]` and `[^1]: The source.` as prose. That is the §2
+faithfulness failure the escape-and-reject decision exists to prevent, and it
+is a shipped bug against a shipped decision rather than a missing feature.
+Strikethrough and math flatten the same way and stay out of scope here; the
+close-out names that gap.
+
+- **Scope:** In `core/src/emit.rs`: set `Options::ENABLE_FOOTNOTES`, and map
+  the two events it produces. The parser resolves a reference against its
+  definition across the whole document before the walk begins — verified
+  against pulldown-cmark 0.13.4 at drafting — with three consequences the
+  design leans on: a definition may sit before or after the references to it;
+  a reference with no definition produces no event at all and stays literal
+  text, exactly as an unresolved reference link does; and the match runs
+  under Unicode case folding — the parser keys its label map by `UniCase` —
+  while the events carry each label's original spelling, so `[^A]` cites a
+  definition written `[^a]:`. Every `Event::FootnoteReference` that arrives
+  therefore has a definition somewhere in the document, no error shape is
+  needed for a dangling reference, and everything below that touches a label
+  — the map, citedness, the generated names — runs over the parser's own
+  folded equivalence, through the `unicase` crate the parser itself uses,
+  already in the tree as its dependency. Keying by the raw spelling would
+  miss on valid input and misreport a cased pair as uncited.
+
+  A definition that arrives after its reference is what the mechanism must
+  answer, because Typst's `footnote` takes its content at the reference site.
+  The emitter therefore walks the event stream **twice**. Pass 1 enters only
+  the `Tag::FootnoteDefinition` regions, translates each one through the arms
+  that already exist, and collects the set of folded labels the document
+  references; it stores results and never raises — each region lands in the
+  map as its content string or as the first error its translation produced.
+  Pass 2 emits the document: the frontmatter parses where it always has, a
+  body construct errors where it stands, and when the walk reaches a
+  definition's region it surfaces that definition's stored error — or the
+  uncited-definition error below — before skipping it. So every error, in
+  either pass's territory, surfaces at its document position, the first one
+  in document order is the one reported, and the shipped precedence — a
+  frontmatter error wins over a later construct error — holds unchanged. A
+  definition's content opens a buffer on the existing stack, as a list item
+  and a table cell already do, so block content inside a definition — a
+  second paragraph, a list, a code block — arrives through the arms that
+  serve it everywhere else.
+
+  The first reference to a label emits `#footnote[…]<fn-N>` and every later
+  reference to that same label emits `#footnote(<fn-N>)`, which is Typst's
+  own documented form for pointing at a footnote that already exists; `N`
+  counts folded labels by first use. The user's own label text never reaches
+  the output: a markdown label may hold any characters and a Typst label may
+  not, and generating the name removes the escaping question rather than
+  answering it. No collision is possible, because the dialect has no syntax
+  for a Typst label and the markup escape covers `<` and `>` in body text.
+  The emitter writes no numbers at all — Typst numbers footnotes in
+  placement order, which is the order GFM numbers them in.
+
+  Three shapes are errors that name the construct and the line, per §2's
+  escape-and-reject decision. A **definition that no reference cites** would
+  reach no page, and content that vanishes is the failure that decision
+  exists to prevent; GFM drops it, and this dialect does not drop. The error
+  names the definition's own line. A **second definition for a label already
+  defined** — under the fold, so `[^A]:` repeats `[^a]:` — is refused the
+  way the frontmatter refuses a repeated key: the parser resolves every
+  reference to one body, the map would keep one and lose the rest, and a
+  choice between bodies is a guess the dialect does not make. The error
+  names the second definition's line. A **footnote reference inside a
+  footnote definition** is refused for now: the probe confirms an inner
+  definition arrives as a sibling at the top level rather than nested, so
+  resolving one would mean a recursive substitution with a cycle check, for
+  a construct real articles do not carry. Rejecting it keeps pass 1 free of
+  recursion and makes a cycle unreachable.
+
+  `describe` changes shape the way Phase 6 changed it: the two
+  footnote-definition arms drop, because pass 1 and pass 2 handle the
+  construct. The `FootnoteReference` arm stays, because one place still
+  rejects it — an image's alt text, whose capture flattens to a plain
+  string, and a footnote cannot render inside one.
+
+  `image_paths`' list gains a definition's images at the point of that
+  definition's first reference, not at the position the definition is
+  written, so the list still runs in the order a reader meets the images.
+  Every definition is cited, because an uncited one is an error, so no asset
+  is ever demanded for content that will not render.
+
+  `template.typ` gains no rule, on OQ-5's precedent rather than OQ-6's: the
+  Typst default already sets a footnote apart, with a superscript marker, a
+  separator, and the note at the foot. OQ-7's resolution confirms the claim
+  for the two-column layout — the note lands at the foot of the column that
+  holds its reference.
+
+- **Exit gate:** Golden-file tests, three cases, plus the full existing
+  suite, which the option change touches; no shipped golden file changes,
+  because `footnote` is a standard-library name, the import line is
+  untouched, and no checked-in fixture holds a `[^` run — verified at
+  drafting. (1) A fixture carrying a definition that follows its reference, a
+  definition that precedes one, a single label referenced twice — the second
+  reference spelled in a different case, which pins the fold — and a
+  definition holding emphasis, inline code, a second paragraph and a list
+  matches its golden file — the first use `#footnote[…]<fn-1>`, the repeat
+  `#footnote(<fn-1>)`, no user label text anywhere in the output, and no
+  definition left in the body — and compiles to a PDF with the `%PDF` magic
+  bytes. The PDF is read by eye once, confirming OQ-7's code-resolved answer
+  on the page. (2) Each error shape names its construct and its line: a
+  definition no reference cites, a second definition for a label already
+  defined — its two spellings differing in case, pinning the fold on the
+  error path too — and a footnote reference inside a definition. A
+  frontmatter error still wins over a definition error later in the
+  document, pinning the pass-2 error order. (3) A raw HTML block still exits
+  non-zero naming the construct and its line at both levels — rejection
+  survives the widening.
+- **Close-out:** Update `rules/pipeline.md`'s dialect section, the README and
+  `samples/article.md` against the code; the sample gains a real footnote,
+  which is what keeps the corpus check from passing vacuously — no corpus
+  file carries one today. Two claims are corrected rather than extended, in
+  the rule and in the README both: "everything else is an error" is not true
+  of strikethrough and math, which flatten to escaped text the way footnotes
+  do today, and the rule's own list names them as errors. Naming that gap is
+  this phase's obligation; closing it is not, and it wants a phase of its own
+  or a plain bug fix, since the decision it implements is already shipped.
+  Two ordering statements move with the `image_paths` change: the doc
+  comment on `core/src/lib.rs:image_paths` says document order and becomes
+  reader order — a definition's images at its first reference — and the
+  rule's shopping-list line, which claims no order today, gains the same
+  statement. The corpus check repeats: the
+  repository's own README and the sample both convert without error, or the
+  gap is named in the review record. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

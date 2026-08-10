@@ -2,6 +2,80 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 13 — Phase 7 only — 2026-08-09 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking findings, two new non-blocking. The
+reviewer verified every fix against the file, not the changelog.
+
+Blocker 1 is resolved with the fold stated as a design requirement: the
+map, citedness and the generated `fn-N` names all run over the parser's
+own folded equivalence through the `unicase` crate, which the reviewer
+re-confirmed sits in `Cargo.lock` as pulldown-cmark's own dependency.
+Blocker 2 is resolved as the third error shape, under the fold, naming
+the second definition's line. Blocker 3 is resolved by the
+store-then-surface rule: pass 1 never raises, pass 2 surfaces every
+error at its document position, and the reviewer walked the adversarial
+case — a stored definition error with an earlier body error between
+reference and region — and found the rule decides it without a guess.
+All three fixes are pinned in the gate: the cased repeat in case (1),
+the cased duplicate and the frontmatter-over-later-definition-error
+order in case (2). The four non-blocking folds were spot-checked in the
+file.
+
+The two new findings, accepted and folded after the verdict: the rule's
+shopping-list line carries no ordering claim today, so the close-out now
+says it gains the reader-order statement rather than replacing one; and
+the scope's OQ-7 sentence, stale beside the resolution, now points at
+the resolved answer.
+
+On this convergence: `reviewed: 2026-08-09` on Phase 7. `status` was
+already `accepted`.
+
+### Round 12 — Phase 7 only — 2026-08-09 — fresh clean-room reviewer with repo access — **NOT READY**
+
+Round 0 (once for this episode, the appended Phase 7): the phase
+produces the observable — a PDF whose footnotes sit at the foot of the
+page, from input that today prints `[^1]` as prose — and it is the
+right one: the flattening is a shipped faithfulness bug against §2's
+escape-and-reject decision, not a missing ornament. The episode
+proceeded.
+
+The reviewer's grounding pass ran the empirical probes itself: the
+event-stream claims against pulldown-cmark 0.13.4 (definition before
+and after, top-level regions, a dangling reference staying literal, an
+inner definition hoisted to a sibling), the label and reference forms
+against typst-library 0.15.1's `footnote.rs` (the `cast!` to
+`FootnoteBody::Reference`, the counter stepping only for non-reference
+footnotes), and the repo census (no `[^` run in any fixture, sample or
+README; the raw-HTML rejection tests at both levels; the buffer-stack
+premise in `emit`). It also answered OQ-7 from `typst-layout` 0.15.1's
+composer: footnote insertions are column-scoped, an oversized entry
+spills to the next column, and a reference inside a table cell is found
+by the recursive frame search — so the no-template-rule claim stands.
+
+Verdict: `NOT READY` — three blocking findings, four non-blocking. The
+author accepted all seven, rejected none, deferred none.
+
+Blocker 1: **the parser matches labels under Unicode case folding while
+the design keyed by raw spelling** — probed: `[^A]` resolves against
+`[^a]:`, so the map would miss on valid input and the uncited-definition
+error would fire on a cased pair. Blocker 2: **duplicate definitions for
+one label silently vanish content** — both regions arrive, a map keyed
+by label keeps one body and drops the rest, and the two-shape error list
+implied that was legal. Blocker 3: **error ordering across the two
+passes was unadjudicated** — pass 1 raising on a definition's content
+would report a later error before an earlier frontmatter or body error,
+contradicting §2's first-error guarantee and the shipped precedence
+test.
+
+Non-blocking, all accepted: OQ-7 was still open while the phase leaned
+on it; the `describe` arms had no stated disposition, and the reference
+arm stays reachable through the alt capture; the close-out did not name
+the two `image_paths` ordering statements; "two footnote arms"
+miscounted the match arms.
+
+Rejections: none.
+
 ### Round 11 — Phase 6 only — 2026-08-09 — same reviewer, resumed for the one fold-in — **READY**
 
 Verdict: `READY`, zero blocking findings, nothing newly broken. Round 10
