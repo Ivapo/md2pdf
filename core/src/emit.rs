@@ -12,6 +12,8 @@
 //! code block, which reaches Typst as one line holding a string literal, cannot
 //! be corrupted by the indentation around it.
 
+use std::ops::Range;
+
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, LinkType, Options, Parser, Tag, TagEnd};
 use typst::syntax::VirtualPath;
 
@@ -90,12 +92,84 @@ struct AltCapture {
     depth: usize,
 }
 
-/// Translate one markdown document into Typst markup.
+/// Everything one walk of the event stream carries from event to event.
 ///
-/// The second half of the result is every image the document names, in document
-/// order. One walk produces both, so the source and the shopping list cannot
-/// disagree about which paths the dialect accepts.
-pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>)> {
+/// These were locals in one loop body. Grouping them is what lets that body be
+/// a function of its own, which a walk that must catch an error, keep it, and
+/// carry on to the next event needs: a `?` inside a loop body cannot do it.
+struct Walk {
+    /// The buffer stack. The base buffer is the document body; a list item, a
+    /// block quote and a table cell each push one of their own and pop it as
+    /// they close.
+    bufs: Vec<String>,
+    /// What the walk is directly inside.
+    containers: Vec<Container>,
+    /// Every list the walk is inside, outermost first.
+    lists: Vec<ListFrame>,
+    /// The code block the walk is inside: its language tag and its content.
+    code: Option<(Option<String>, String)>,
+    /// The table the walk is inside.
+    table: Option<TableFrame>,
+    /// Whether the walk is inside the frontmatter block.
+    in_metadata: bool,
+    /// That block's text, as its events deliver it.
+    meta: String,
+    /// Where that text starts, so its errors name the user's own lines.
+    meta_offset: Option<usize>,
+    /// The frontmatter this document carries.
+    front: Frontmatter,
+    /// Every image the walk has met, in the order it met them.
+    images: Vec<ImageRef>,
+    /// The alt text being flattened out of one image's content.
+    alt: Option<AltCapture>,
+    /// An image call waiting for the next event to settle its form.
+    pending: Option<(String, bool)>,
+    /// Where the open paragraph began in the buffer that holds it.
+    para: Option<usize>,
+}
+
+impl Walk {
+    fn new() -> Self {
+        Self {
+            bufs: vec![String::new()],
+            containers: Vec::new(),
+            lists: Vec::new(),
+            code: None,
+            table: None,
+            in_metadata: false,
+            meta: String::new(),
+            meta_offset: None,
+            front: Frontmatter::default(),
+            images: Vec::new(),
+            alt: None,
+            pending: None,
+            para: None,
+        }
+    }
+
+    /// The markup this walk wrote, and every image it met.
+    ///
+    /// Every image sits inside a block whose end event follows it, so the
+    /// stream never runs out with a call still waiting. This writes one anyway,
+    /// in the inline form, rather than let a future change drop an image
+    /// silently.
+    fn finish(mut self) -> (String, Vec<ImageRef>) {
+        if let Some((call, _)) = self.pending.take() {
+            write_image(&mut self.bufs, &call, false);
+        }
+        let body = self
+            .bufs
+            .pop()
+            .expect("the document body outlives the walk");
+        (body, self.images)
+    }
+}
+
+/// The parser options every walk reads.
+///
+/// One builder for all of them: two walks of the same stream that disagreed
+/// about the options would disagree about what the document says.
+fn options() -> Options {
     let mut options = Options::empty();
     // The parser is what recognises the frontmatter block, so nothing strips it
     // from the input and every reported line number stays true to the user's
@@ -105,355 +179,360 @@ pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>)> {
     // reads one only with this option on. Without it the pipes would reach the
     // PDF as prose, which is the silent flattening the dialect refuses.
     options.insert(Options::ENABLE_TABLES);
+    options
+}
 
-    // The base buffer is the document body; a list item and a block quote push
-    // one of their own and pop it as they close.
-    let mut bufs = vec![String::new()];
-    let mut containers: Vec<Container> = Vec::new();
-    let mut lists: Vec<ListFrame> = Vec::new();
-    let mut code: Option<(Option<String>, String)> = None;
-    let mut table: Option<TableFrame> = None;
+/// Translate one markdown document into Typst markup.
+///
+/// The second half of the result is every image the document names, in document
+/// order. One walk produces both, so the source and the shopping list cannot
+/// disagree about which paths the dialect accepts.
+pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>)> {
+    let mut walk = Walk::new();
+    for (event, range) in Parser::new_ext(md, options()).into_offset_iter() {
+        step(&mut walk, md, event, range)?;
+    }
 
-    let mut in_metadata = false;
-    let mut meta = String::new();
-    let mut meta_offset = None;
-    let mut front = Frontmatter::default();
+    let mut out = header(&walk.front);
+    let (body, images) = walk.finish();
+    out.push_str(body.trim_end_matches('\n'));
+    out.push('\n');
+    Ok((out, images))
+}
 
-    let mut images: Vec<ImageRef> = Vec::new();
-    let mut alt: Option<AltCapture> = None;
-    let mut pending: Option<(String, bool)> = None;
-    let mut para: Option<usize> = None;
+/// Translate one event into the walk's own state.
+fn step(walk: &mut Walk, md: &str, event: Event, range: Range<usize>) -> Result<()> {
+    let Walk {
+        bufs,
+        containers,
+        lists,
+        code,
+        table,
+        in_metadata,
+        meta,
+        meta_offset,
+        front,
+        images,
+        alt,
+        pending,
+        para,
+    } = walk;
 
-    for (event, range) in Parser::new_ext(md, options).into_offset_iter() {
-        // An open capture takes every event, because alt text is collected and
-        // never emitted. A construct outside the dialect still errors here.
-        if let Some(capture) = alt.as_mut() {
-            match &event {
-                Event::Text(text) => capture.text.push_str(text),
-                Event::Code(code) => capture.text.push_str(code),
-                // A break is whitespace under the alt reading, and one space is
-                // what pulldown-cmark's own flattening writes for it.
-                Event::SoftBreak | Event::HardBreak => capture.text.push(' '),
-                // A wrapper contributes nothing of its own; its content still
-                // arrives as text events inside it.
-                Event::Start(Tag::Emphasis | Tag::Strong | Tag::Link { .. })
-                | Event::End(TagEnd::Emphasis | TagEnd::Strong | TagEnd::Link) => {}
-                // A nested image's destination and title are not content under
-                // the alt reading, so they are neither checked nor listed.
-                Event::Start(Tag::Image { .. }) => capture.depth += 1,
-                Event::End(TagEnd::Image) => {
-                    if capture.depth > 0 {
-                        capture.depth -= 1;
-                    } else {
-                        let capture = alt.take().expect("the capture is open");
-                        pending = Some((image_call(&capture.path, &capture.text), capture.opened));
-                    }
-                }
-                other => {
-                    return Err(Error::UnsupportedConstruct {
-                        construct: describe(other).to_string(),
-                        line: line_of(md, range.start),
-                    });
-                }
-            }
-            continue;
-        }
-
-        // Which form an image takes is known one event late, so the finished
-        // call waits here until the next event settles it.
-        if let Some((call, opened)) = pending.take() {
-            let standalone = opened && matches!(&event, Event::End(TagEnd::Paragraph));
-            write_image(&mut bufs, &call, standalone);
-        }
-
-        match event {
-            Event::Start(Tag::MetadataBlock(_)) => in_metadata = true,
-
-            // The block is parsed here rather than after the walk, so a bad
-            // frontmatter key is reported before any later construct error.
-            Event::End(TagEnd::MetadataBlock(_)) => {
-                in_metadata = false;
-                let first_line = line_of(md, meta_offset.unwrap_or(range.start));
-                front = frontmatter::parse(&meta, first_line)?;
-            }
-
-            Event::Start(Tag::Paragraph) => {
-                // pulldown-cmark wraps a loose list's item content in paragraphs
-                // and a tight list's in bare inlines. That is the whole
-                // tightness signal, and Typst draws the same distinction from
-                // the blank lines between items, so the emitter passes it
-                // through structurally and owns nothing about the spacing.
-                if matches!(containers.last(), Some(Container::Item))
-                    && let Some(frame) = lists.last_mut()
-                {
-                    frame.loose = true;
-                }
-                // The length here is what an image compares itself against, to
-                // learn whether it opened the paragraph.
-                let out = top(&mut bufs);
-                out.push('\n');
-                para = Some(out.len());
-            }
-            Event::End(TagEnd::Paragraph) => {
-                para = None;
-                top(&mut bufs).push('\n');
-            }
-
-            Event::Start(Tag::Heading { level, .. }) => {
-                let out = top(&mut bufs);
-                out.push('\n');
-                for _ in 0..level as usize {
-                    out.push('=');
-                }
-                out.push(' ');
-            }
-            Event::End(TagEnd::Heading(_)) => top(&mut bufs).push('\n'),
-
-            Event::Start(Tag::List(start)) => lists.push(ListFrame {
-                next: start,
-                loose: false,
-                items: Vec::new(),
-            }),
-            Event::End(TagEnd::List(_)) => {
-                let frame = lists.pop().expect("a list end follows its start");
-                let separator = if frame.loose { "\n\n" } else { "\n" };
-                let rendered = frame.items.join(separator);
-                let out = top(&mut bufs);
-                out.push('\n');
-                out.push_str(&rendered);
-                out.push('\n');
-            }
-
-            Event::Start(Tag::Item) => {
-                containers.push(Container::Item);
-                bufs.push(String::new());
-            }
-            Event::End(TagEnd::Item) => {
-                containers.pop();
-                let content = bufs.pop().expect("an item end follows its start");
-                let frame = lists.last_mut().expect("an item sits inside a list");
-                let marker = match frame.next.as_mut() {
-                    Some(number) => {
-                        let marker = format!("{number}. ");
-                        *number += 1;
-                        marker
-                    }
-                    None => String::from("- "),
-                };
-                let item = prefixed(&marker, content.trim_matches('\n'));
-                frame.items.push(item);
-            }
-
-            Event::Start(Tag::BlockQuote(_)) => {
-                containers.push(Container::Quote);
-                bufs.push(String::new());
-            }
-            // The default look stands. Any styling later is a rule in
-            // `template.typ`, as with everything else the emitter names.
-            Event::End(TagEnd::BlockQuote(_)) => {
-                containers.pop();
-                let content = bufs.pop().expect("a quote end follows its start");
-                let out = top(&mut bufs);
-                out.push_str("\n#quote(block: true)[\n");
-                out.push_str(&prefixed("  ", content.trim_matches('\n')));
-                out.push_str("\n]\n");
-            }
-
-            // Each cell opens a buffer on the same stack a list item uses, so
-            // the emphasis, code and link arms serve cell content unchanged,
-            // and the markup escape is what keeps a `]` in a cell from closing
-            // its block. A GFM cell holds inline content only, so nothing
-            // inside one needs the indentation a nested block would.
-            Event::Start(Tag::Table(align)) => {
-                table = Some(TableFrame {
-                    align,
-                    cells: Vec::new(),
-                    header: Vec::new(),
-                    rows: Vec::new(),
-                });
-            }
-            Event::End(TagEnd::Table) => {
-                let frame = table.take().expect("a table end follows its start");
-                let out = top(&mut bufs);
-                out.push('\n');
-                out.push_str(&table_call(&frame));
-                out.push('\n');
-            }
-
-            // The head holds its cells directly; no row event wraps them.
-            Event::Start(Tag::TableHead | Tag::TableRow) => {}
-            Event::End(TagEnd::TableHead) => {
-                let frame = table.as_mut().expect("a head sits inside a table");
-                frame.header = std::mem::take(&mut frame.cells);
-            }
-            Event::End(TagEnd::TableRow) => {
-                let frame = table.as_mut().expect("a row sits inside a table");
-                let row = std::mem::take(&mut frame.cells);
-                frame.rows.push(row);
-            }
-
-            Event::Start(Tag::TableCell) => bufs.push(String::new()),
-            Event::End(TagEnd::TableCell) => {
-                let content = bufs.pop().expect("a cell end follows its start");
-                let frame = table.as_mut().expect("a cell sits inside a table");
-                frame.cells.push(content.trim_matches('\n').to_string());
-            }
-
-            // The language tag is the first word of the info string. An
-            // indented block, or an empty info string, gets no `lang` argument.
-            Event::Start(Tag::CodeBlock(kind)) => {
-                let lang = match &kind {
-                    CodeBlockKind::Fenced(info) => {
-                        info.split_whitespace().next().map(str::to_string)
-                    }
-                    CodeBlockKind::Indented => None,
-                };
-                code = Some((lang, String::new()));
-            }
-            Event::End(TagEnd::CodeBlock) => {
-                let (lang, mut content) = code.take().expect("a block end follows its start");
-                // pulldown-cmark reports the final line's terminator as part of
-                // the content, and a string literal that kept it would typeset a
-                // phantom empty line after every code block.
-                if content.ends_with('\n') {
-                    content.pop();
-                }
-                let out = top(&mut bufs);
-                out.push_str("\n#raw(block: true, ");
-                if let Some(lang) = lang {
-                    out.push_str("lang: ");
-                    out.push_str(&typst_string(&lang));
-                    out.push_str(", ");
-                }
-                out.push_str(&typst_string(&content));
-                out.push_str(")\n");
-            }
-
-            Event::Text(text) => {
-                if let Some((_, content)) = code.as_mut() {
-                    // Code is not markup, so it is not escaped here. It reaches
-                    // Typst as a string literal, like inline code before it.
-                    content.push_str(&text);
-                } else if in_metadata {
-                    meta_offset.get_or_insert(range.start);
-                    meta.push_str(&text);
+    // An open capture takes every event, because alt text is collected and
+    // never emitted. A construct outside the dialect still errors here.
+    if let Some(capture) = alt.as_mut() {
+        match &event {
+            Event::Text(text) => capture.text.push_str(text),
+            Event::Code(code) => capture.text.push_str(code),
+            // A break is whitespace under the alt reading, and one space is
+            // what pulldown-cmark's own flattening writes for it.
+            Event::SoftBreak | Event::HardBreak => capture.text.push(' '),
+            // A wrapper contributes nothing of its own; its content still
+            // arrives as text events inside it.
+            Event::Start(Tag::Emphasis | Tag::Strong | Tag::Link { .. })
+            | Event::End(TagEnd::Emphasis | TagEnd::Strong | TagEnd::Link) => {}
+            // A nested image's destination and title are not content under
+            // the alt reading, so they are neither checked nor listed.
+            Event::Start(Tag::Image { .. }) => capture.depth += 1,
+            Event::End(TagEnd::Image) => {
+                if capture.depth > 0 {
+                    capture.depth -= 1;
                 } else {
-                    escape_into(top(&mut bufs), &text);
+                    let capture = alt.take().expect("the capture is open");
+                    *pending = Some((image_call(&capture.path, &capture.text), capture.opened));
                 }
             }
-            Event::SoftBreak => top(&mut bufs).push('\n'),
-
-            // The function forms, not Typst's own `_…_` and `*…*`. Those
-            // delimiters are word-boundary sensitive and CommonMark permits
-            // intraword emphasis, so `foo*bar*baz` would reach the PDF with
-            // literal underscores through one and would not compile at all
-            // through the other.
-            Event::Start(Tag::Emphasis) => top(&mut bufs).push_str("#emph["),
-            Event::End(TagEnd::Emphasis) => top(&mut bufs).push(']'),
-            Event::Start(Tag::Strong) => top(&mut bufs).push_str("#strong["),
-            Event::End(TagEnd::Strong) => top(&mut bufs).push(']'),
-
-            // The content is a string literal, never the markup escape, so it
-            // reaches the PDF verbatim whatever it holds.
-            Event::Code(inline) => {
-                let out = top(&mut bufs);
-                out.push_str("#raw(");
-                out.push_str(&typst_string(&inline));
-                out.push(')');
-            }
-
-            // A URL reaches Typst as a string literal, never as markup, so
-            // `typst_string` carries it whatever it holds. The link text is
-            // ordinary inline content, so the markup escape still applies to
-            // it — which is what stops Typst reading an autolink's own text as
-            // a second link, or an email address as a reference.
-            Event::Start(Tag::Link {
-                link_type,
-                dest_url,
-                title,
-                ..
-            }) => {
-                // Neither shape can be emitted honestly. `#link("")` fails the
-                // compile naming neither construct nor line, and a title is
-                // something neither `link` nor the PDF can carry, so passing it
-                // on would mean dropping it.
-                if dest_url.is_empty() {
-                    return Err(Error::UnsupportedConstruct {
-                        construct: "link with an empty destination".to_string(),
-                        line: line_of(md, range.start),
-                    });
-                }
-                if !title.is_empty() {
-                    return Err(Error::UnsupportedConstruct {
-                        construct: "link with a title".to_string(),
-                        line: line_of(md, range.start),
-                    });
-                }
-
-                // Every other form arrives with its destination resolved, so
-                // the email autolink is the one case with work left: its
-                // destination is the bare address, and the scheme is ours.
-                let url = match link_type {
-                    LinkType::Email => format!("mailto:{dest_url}"),
-                    _ => dest_url.into_string(),
-                };
-
-                let out = top(&mut bufs);
-                out.push_str("#link(");
-                out.push_str(&typst_string(&url));
-                out.push_str(")[");
-            }
-            Event::End(TagEnd::Link) => top(&mut bufs).push(']'),
-
-            // An image is the one construct that needs a file, so this arm is
-            // where the pipeline decides which files it will ever ask for.
-            // `check_image` refuses every shape it cannot carry; what survives
-            // opens the alt capture and joins the shopping list.
-            Event::Start(Tag::Image {
-                dest_url, title, ..
-            }) => {
-                let line = line_of(md, range.start);
-                check_image(&dest_url, &title, line)?;
-                images.push(ImageRef {
-                    path: dest_url.to_string(),
-                    line,
-                });
-                alt = Some(AltCapture {
-                    opened: para == Some(top(&mut bufs).len()),
-                    path: dest_url.into_string(),
-                    text: String::new(),
-                    depth: 0,
-                });
-            }
-
-            // Typst's line break is a `\` before a newline. The same `\`
-            // directly before text is an escape sequence instead.
-            Event::HardBreak => top(&mut bufs).push_str("\\\n"),
-
-            // The emitter names the rule and owns nothing about its look.
-            Event::Rule => top(&mut bufs).push_str("\n#divider()\n"),
-
             other => {
                 return Err(Error::UnsupportedConstruct {
-                    construct: describe(&other).to_string(),
+                    construct: describe(other).to_string(),
                     line: line_of(md, range.start),
                 });
             }
         }
+        return Ok(());
     }
 
-    // Every image sits inside a block whose end event follows it, so the stream
-    // never runs out with a call still waiting. This writes one anyway, in the
-    // inline form, rather than let a future change drop an image silently.
-    if let Some((call, _)) = pending.take() {
-        write_image(&mut bufs, &call, false);
+    // Which form an image takes is known one event late, so the finished
+    // call waits here until the next event settles it.
+    if let Some((call, opened)) = pending.take() {
+        let standalone = opened && matches!(&event, Event::End(TagEnd::Paragraph));
+        write_image(bufs, &call, standalone);
     }
 
-    let body = bufs.pop().expect("the document body outlives the walk");
-    let mut out = header(&front);
-    out.push_str(body.trim_end_matches('\n'));
-    out.push('\n');
-    Ok((out, images))
+    match event {
+        Event::Start(Tag::MetadataBlock(_)) => *in_metadata = true,
+
+        // The block is parsed here rather than after the walk, so a bad
+        // frontmatter key is reported before any later construct error.
+        Event::End(TagEnd::MetadataBlock(_)) => {
+            *in_metadata = false;
+            let first_line = line_of(md, meta_offset.unwrap_or(range.start));
+            *front = frontmatter::parse(meta, first_line)?;
+        }
+
+        Event::Start(Tag::Paragraph) => {
+            // pulldown-cmark wraps a loose list's item content in paragraphs
+            // and a tight list's in bare inlines. That is the whole
+            // tightness signal, and Typst draws the same distinction from
+            // the blank lines between items, so the emitter passes it
+            // through structurally and owns nothing about the spacing.
+            if matches!(containers.last(), Some(Container::Item))
+                && let Some(frame) = lists.last_mut()
+            {
+                frame.loose = true;
+            }
+            // The length here is what an image compares itself against, to
+            // learn whether it opened the paragraph.
+            let out = top(bufs);
+            out.push('\n');
+            *para = Some(out.len());
+        }
+        Event::End(TagEnd::Paragraph) => {
+            *para = None;
+            top(bufs).push('\n');
+        }
+
+        Event::Start(Tag::Heading { level, .. }) => {
+            let out = top(bufs);
+            out.push('\n');
+            for _ in 0..level as usize {
+                out.push('=');
+            }
+            out.push(' ');
+        }
+        Event::End(TagEnd::Heading(_)) => top(bufs).push('\n'),
+
+        Event::Start(Tag::List(start)) => lists.push(ListFrame {
+            next: start,
+            loose: false,
+            items: Vec::new(),
+        }),
+        Event::End(TagEnd::List(_)) => {
+            let frame = lists.pop().expect("a list end follows its start");
+            let separator = if frame.loose { "\n\n" } else { "\n" };
+            let rendered = frame.items.join(separator);
+            let out = top(bufs);
+            out.push('\n');
+            out.push_str(&rendered);
+            out.push('\n');
+        }
+
+        Event::Start(Tag::Item) => {
+            containers.push(Container::Item);
+            bufs.push(String::new());
+        }
+        Event::End(TagEnd::Item) => {
+            containers.pop();
+            let content = bufs.pop().expect("an item end follows its start");
+            let frame = lists.last_mut().expect("an item sits inside a list");
+            let marker = match frame.next.as_mut() {
+                Some(number) => {
+                    let marker = format!("{number}. ");
+                    *number += 1;
+                    marker
+                }
+                None => String::from("- "),
+            };
+            let item = prefixed(&marker, content.trim_matches('\n'));
+            frame.items.push(item);
+        }
+
+        Event::Start(Tag::BlockQuote(_)) => {
+            containers.push(Container::Quote);
+            bufs.push(String::new());
+        }
+        // The default look stands. Any styling later is a rule in
+        // `template.typ`, as with everything else the emitter names.
+        Event::End(TagEnd::BlockQuote(_)) => {
+            containers.pop();
+            let content = bufs.pop().expect("a quote end follows its start");
+            let out = top(bufs);
+            out.push_str("\n#quote(block: true)[\n");
+            out.push_str(&prefixed("  ", content.trim_matches('\n')));
+            out.push_str("\n]\n");
+        }
+
+        // Each cell opens a buffer on the same stack a list item uses, so
+        // the emphasis, code and link arms serve cell content unchanged,
+        // and the markup escape is what keeps a `]` in a cell from closing
+        // its block. A GFM cell holds inline content only, so nothing
+        // inside one needs the indentation a nested block would.
+        Event::Start(Tag::Table(align)) => {
+            *table = Some(TableFrame {
+                align,
+                cells: Vec::new(),
+                header: Vec::new(),
+                rows: Vec::new(),
+            });
+        }
+        Event::End(TagEnd::Table) => {
+            let frame = table.take().expect("a table end follows its start");
+            let out = top(bufs);
+            out.push('\n');
+            out.push_str(&table_call(&frame));
+            out.push('\n');
+        }
+
+        // The head holds its cells directly; no row event wraps them.
+        Event::Start(Tag::TableHead | Tag::TableRow) => {}
+        Event::End(TagEnd::TableHead) => {
+            let frame = table.as_mut().expect("a head sits inside a table");
+            frame.header = std::mem::take(&mut frame.cells);
+        }
+        Event::End(TagEnd::TableRow) => {
+            let frame = table.as_mut().expect("a row sits inside a table");
+            let row = std::mem::take(&mut frame.cells);
+            frame.rows.push(row);
+        }
+
+        Event::Start(Tag::TableCell) => bufs.push(String::new()),
+        Event::End(TagEnd::TableCell) => {
+            let content = bufs.pop().expect("a cell end follows its start");
+            let frame = table.as_mut().expect("a cell sits inside a table");
+            frame.cells.push(content.trim_matches('\n').to_string());
+        }
+
+        // The language tag is the first word of the info string. An
+        // indented block, or an empty info string, gets no `lang` argument.
+        Event::Start(Tag::CodeBlock(kind)) => {
+            let lang = match &kind {
+                CodeBlockKind::Fenced(info) => info.split_whitespace().next().map(str::to_string),
+                CodeBlockKind::Indented => None,
+            };
+            *code = Some((lang, String::new()));
+        }
+        Event::End(TagEnd::CodeBlock) => {
+            let (lang, mut content) = code.take().expect("a block end follows its start");
+            // pulldown-cmark reports the final line's terminator as part of
+            // the content, and a string literal that kept it would typeset a
+            // phantom empty line after every code block.
+            if content.ends_with('\n') {
+                content.pop();
+            }
+            let out = top(bufs);
+            out.push_str("\n#raw(block: true, ");
+            if let Some(lang) = lang {
+                out.push_str("lang: ");
+                out.push_str(&typst_string(&lang));
+                out.push_str(", ");
+            }
+            out.push_str(&typst_string(&content));
+            out.push_str(")\n");
+        }
+
+        Event::Text(text) => {
+            if let Some((_, content)) = code.as_mut() {
+                // Code is not markup, so it is not escaped here. It reaches
+                // Typst as a string literal, like inline code before it.
+                content.push_str(&text);
+            } else if *in_metadata {
+                meta_offset.get_or_insert(range.start);
+                meta.push_str(&text);
+            } else {
+                escape_into(top(bufs), &text);
+            }
+        }
+        Event::SoftBreak => top(bufs).push('\n'),
+
+        // The function forms, not Typst's own `_…_` and `*…*`. Those
+        // delimiters are word-boundary sensitive and CommonMark permits
+        // intraword emphasis, so `foo*bar*baz` would reach the PDF with
+        // literal underscores through one and would not compile at all
+        // through the other.
+        Event::Start(Tag::Emphasis) => top(bufs).push_str("#emph["),
+        Event::End(TagEnd::Emphasis) => top(bufs).push(']'),
+        Event::Start(Tag::Strong) => top(bufs).push_str("#strong["),
+        Event::End(TagEnd::Strong) => top(bufs).push(']'),
+
+        // The content is a string literal, never the markup escape, so it
+        // reaches the PDF verbatim whatever it holds.
+        Event::Code(inline) => {
+            let out = top(bufs);
+            out.push_str("#raw(");
+            out.push_str(&typst_string(&inline));
+            out.push(')');
+        }
+
+        // A URL reaches Typst as a string literal, never as markup, so
+        // `typst_string` carries it whatever it holds. The link text is
+        // ordinary inline content, so the markup escape still applies to
+        // it — which is what stops Typst reading an autolink's own text as
+        // a second link, or an email address as a reference.
+        Event::Start(Tag::Link {
+            link_type,
+            dest_url,
+            title,
+            ..
+        }) => {
+            // Neither shape can be emitted honestly. `#link("")` fails the
+            // compile naming neither construct nor line, and a title is
+            // something neither `link` nor the PDF can carry, so passing it
+            // on would mean dropping it.
+            if dest_url.is_empty() {
+                return Err(Error::UnsupportedConstruct {
+                    construct: "link with an empty destination".to_string(),
+                    line: line_of(md, range.start),
+                });
+            }
+            if !title.is_empty() {
+                return Err(Error::UnsupportedConstruct {
+                    construct: "link with a title".to_string(),
+                    line: line_of(md, range.start),
+                });
+            }
+
+            // Every other form arrives with its destination resolved, so
+            // the email autolink is the one case with work left: its
+            // destination is the bare address, and the scheme is ours.
+            let url = match link_type {
+                LinkType::Email => format!("mailto:{dest_url}"),
+                _ => dest_url.into_string(),
+            };
+
+            let out = top(bufs);
+            out.push_str("#link(");
+            out.push_str(&typst_string(&url));
+            out.push_str(")[");
+        }
+        Event::End(TagEnd::Link) => top(bufs).push(']'),
+
+        // An image is the one construct that needs a file, so this arm is
+        // where the pipeline decides which files it will ever ask for.
+        // `check_image` refuses every shape it cannot carry; what survives
+        // opens the alt capture and joins the shopping list.
+        Event::Start(Tag::Image {
+            dest_url, title, ..
+        }) => {
+            let line = line_of(md, range.start);
+            check_image(&dest_url, &title, line)?;
+            images.push(ImageRef {
+                path: dest_url.to_string(),
+                line,
+            });
+            *alt = Some(AltCapture {
+                opened: *para == Some(top(bufs).len()),
+                path: dest_url.into_string(),
+                text: String::new(),
+                depth: 0,
+            });
+        }
+
+        // Typst's line break is a `\` before a newline. The same `\`
+        // directly before text is an escape sequence instead.
+        Event::HardBreak => top(bufs).push_str("\\\n"),
+
+        // The emitter names the rule and owns nothing about its look.
+        Event::Rule => top(bufs).push_str("\n#divider()\n"),
+
+        other => {
+            return Err(Error::UnsupportedConstruct {
+                construct: describe(&other).to_string(),
+                line: line_of(md, range.start),
+            });
+        }
+    }
+
+    Ok(())
 }
 
 /// The buffer the walk is currently writing into.
