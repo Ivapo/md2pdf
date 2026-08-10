@@ -1,4 +1,4 @@
-//! The exit gates for `mpdf-001`'s eight phases and `mpdf-002`'s first, at the
+//! The exit gates for `mpdf-001`'s nine phases and `mpdf-002`'s first, at the
 //! library level.
 //!
 //! Fixtures and golden files live at the workspace root because the CLI tests
@@ -37,7 +37,21 @@ const STRIKETHROUGH_TYP: &str = include_str!("../../tests/golden/strikethrough.t
 const INLINE_MATH_MD: &str = include_str!("../../tests/fixtures/unsupported_math.md");
 const DISPLAY_MATH_MD: &str = include_str!("../../tests/fixtures/unsupported_display_math.md");
 const TASK_LIST_MD: &str = include_str!("../../tests/fixtures/unsupported_task_list.md");
+const DATED_MD: &str = include_str!("../../tests/fixtures/dated.md");
+const DATED_TYP: &str = include_str!("../../tests/golden/dated.typ");
+const PRESS_RELEASE_MD: &str = include_str!("../../tests/fixtures/press_release.md");
+const PRESS_RELEASE_TYP: &str = include_str!("../../tests/golden/press_release.typ");
+const UNKNOWN_TEMPLATE_MD: &str = include_str!("../../tests/fixtures/unknown_template.md");
+
+/// Every bundled look, by the name the `template` key selects it with. Four
+/// tests read these: the header-row rule, and the three Phase 9 cases that no
+/// golden file can pin, because a golden pins emitter output alone.
 const TEMPLATE_TYP: &str = include_str!("../assets/template.typ");
+const PRESS_RELEASE_TEMPLATE_TYP: &str = include_str!("../assets/press-release.typ");
+const BUNDLED_TEMPLATES: [(&str, &str); 2] = [
+    ("template.typ", TEMPLATE_TYP),
+    ("press-release.typ", PRESS_RELEASE_TEMPLATE_TYP),
+];
 
 /// The two image files the `images.md` fixture names, and one more name for the
 /// same PNG, because a path carrying a `#` is one of the shapes that fixture
@@ -1168,6 +1182,125 @@ fn each_refused_construct_names_itself_and_its_line() {
                 assert_eq!(line, 3, "for {what}");
             }
             other => panic!("expected `{construct}` for {what}, got {other:?}"),
+        }
+    }
+}
+
+// -- Phase 9: the look the frontmatter chooses -------------------------------
+
+#[test]
+fn the_dated_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(DATED_MD).unwrap(), DATED_TYP);
+}
+
+/// The compile is half of the phase's observable: the article look, dated.
+#[test]
+fn the_dated_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(DATED_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+#[test]
+fn the_press_release_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(PRESS_RELEASE_MD).unwrap(), PRESS_RELEASE_TYP);
+}
+
+/// The other half: the same dialect in a second look.
+#[test]
+fn the_press_release_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(PRESS_RELEASE_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// A document with no `template` key takes the article look, unchanged.
+///
+/// The equality tests above pin the whole output, but they cannot say *why* it
+/// is right. This one names the rule, so an edit that renames the default look's
+/// file, or that drops the date, fails with a message naming what it dropped.
+#[test]
+fn the_default_look_keeps_the_import_line_every_document_carried() {
+    let typst_source = md_to_typst(DATED_MD).unwrap();
+    assert!(
+        typst_source.starts_with("#import \"template.typ\": template, divider\n"),
+        "the import line moved: {typst_source}"
+    );
+    assert!(
+        typst_source.contains("date: \"10 August 2026\""),
+        "the date is not a string literal on the call: {typst_source}"
+    );
+}
+
+/// The selected look reaches the import line, and its convention the call.
+///
+/// A fixed import name would make two documents in two looks emit identical
+/// source, and `--emit-typst` exists to show what a document compiles to. The
+/// column count comes from the look, because this fixture names none.
+#[test]
+fn a_press_release_names_its_own_file_and_takes_one_column() {
+    let typst_source = md_to_typst(PRESS_RELEASE_MD).unwrap();
+    assert!(
+        typst_source.starts_with("#import \"press-release.typ\": template, divider\n"),
+        "the import does not name the selected look: {typst_source}"
+    );
+    assert!(
+        typst_source.contains("columns: 1,"),
+        "the look's column count did not reach the call: {typst_source}"
+    );
+}
+
+/// An explicit `columns` wins over the look's convention.
+///
+/// The convention applies where the document left the key out, and nowhere
+/// else. Both orderings are tested, because the resolution runs after the whole
+/// block is read rather than at the line the key sits on.
+#[test]
+fn an_explicit_column_count_wins_over_the_looks_convention() {
+    for md in [
+        "---\ntemplate: press-release\ncolumns: 2\n---\n\n# Heading\n",
+        "---\ncolumns: 2\ntemplate: press-release\n---\n\n# Heading\n",
+    ] {
+        let typst_source = md_to_typst(md).unwrap();
+        assert!(
+            typst_source.contains("columns: 2,"),
+            "the explicit count lost: {typst_source}"
+        );
+    }
+}
+
+/// A look outside the set names the key and lists what it accepts.
+#[test]
+fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
+    match md_to_typst(UNKNOWN_TEMPLATE_MD) {
+        Err(Error::Frontmatter { line, problem }) => {
+            assert_eq!(line, 3);
+            for needle in ["template", "article", "press-release"] {
+                assert!(problem.contains(needle), "problem was: {problem}");
+            }
+        }
+        other => panic!("expected a Frontmatter error, got {other:?}"),
+    }
+}
+
+/// Every bundled look meets the call contract the emitter writes.
+///
+/// `header` names all four arguments on every call and imports both names, so a
+/// look missing one would fail the compile with an error naming neither the
+/// document nor the key. Golden files pin emitter output only, so the
+/// templates' side of the contract needs an artifact of its own.
+#[test]
+fn every_bundled_template_meets_the_call_contract() {
+    for (file, source) in BUNDLED_TEMPLATES {
+        for needle in [
+            "#let template(",
+            "#let divider(",
+            "title:",
+            "author:",
+            "columns:",
+            "date:",
+        ] {
+            assert!(source.contains(needle), "{file} does not carry `{needle}`");
         }
     }
 }

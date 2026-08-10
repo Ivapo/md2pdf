@@ -59,6 +59,10 @@ fn emit_typst_prints_the_golden_file() {
         ("footnotes.md", "footnotes.typ"),
         // This one names `dot.png`, which emission reads no bytes from either.
         ("strikethrough.md", "strikethrough.typ"),
+        ("dated.md", "dated.typ"),
+        // The only fixture whose import line names a look other than the
+        // default one.
+        ("press_release.md", "press_release.typ"),
     ] {
         let out = run(&[fixture(fixture_name).as_ref(), "--emit-typst".as_ref()]);
         assert!(out.status.success(), "{fixture_name} did not exit 0");
@@ -186,6 +190,39 @@ fn an_unknown_frontmatter_key_exits_non_zero_and_names_it() {
     let stderr = String::from_utf8(out.stderr).unwrap();
     assert!(stderr.contains("subtitle"), "stderr: {stderr}");
     assert!(stderr.contains("line 3"), "stderr: {stderr}");
+}
+
+/// A look outside the set exits non-zero, names the key, and lists the names.
+///
+/// The author who guessed a name needs both halves at the terminal: which key
+/// was wrong, and which names would have worked.
+#[test]
+fn a_template_name_outside_the_set_exits_non_zero_and_lists_the_names() {
+    let out = run(&[fixture("unknown_template.md").as_ref()]);
+    assert!(!out.status.success(), "the run should have failed");
+
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    for needle in ["template", "article", "press-release", "line 3"] {
+        assert!(stderr.contains(needle), "stderr: {stderr}");
+    }
+}
+
+/// A press release writes a PDF, not just Typst source.
+///
+/// This is the phase's observable at the binary level: one changed frontmatter
+/// line, a second look on the page.
+#[test]
+fn a_press_release_writes_a_pdf() {
+    let output = scratch("press-release.pdf");
+    let out = run(&[
+        fixture("press_release.md").as_ref(),
+        "-o".as_ref(),
+        output.as_ref(),
+    ]);
+    assert!(out.status.success(), "the run failed: {:?}", out);
+
+    let bytes = std::fs::read(&output).unwrap();
+    assert!(bytes.starts_with(b"%PDF"), "the output is not a PDF");
 }
 
 /// A frontmatter document writes a PDF, not just Typst source.
