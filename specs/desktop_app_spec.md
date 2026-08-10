@@ -4,12 +4,12 @@ title: desktop-app
 note: >
   A macOS desktop app that shows the PDF while you write: a Tauri window wraps
   the same core crate, watches the document and its images, and re-renders.
-status: draft
+status: accepted
 last_updated: 2026-08-10
 
 phases:
   - name: "Phase 1 — the window, and one compile on screen"
-    reviewed: null
+    reviewed: 2026-08-10
     shipped: null
     cut: null
     by: null
@@ -55,18 +55,17 @@ being a file you open and becomes a page you watch.** The consumer is the same
 author, who today runs a command, switches to a viewer, reads a page, switches
 back, and repeats that loop on every edit.
 
-The end state for the early phases:
+What Phase 1 alone produces:
 
 ```console
 $ cargo tauri dev            # a window opens
 ```
 
-Open `samples/article.md` in the window. Keep editing it in your own editor.
-Every save redraws the page:
+Open `samples/article.md` from the window's Open dialog, and its page is drawn:
 
 ```
 ┌────────────────────────────────────────┐
-│ samples/article.md            ⟳ 41 ms  │
+│ samples/article.md                     │
 ├────────────────────────────────────────┤
 │          A Sample Article              │
 │               Iva Po                   │
@@ -76,11 +75,14 @@ Every save redraws the page:
 └────────────────────────────────────────┘
 ```
 
-Phase 4 adds a text pane on the left, and the app becomes the editor too. That
-phase is last because it is the only one the project can do without.
+Phase 2 makes that page redraw on every save, which is what turns it from a
+viewer into a loop. Phase 3 adds the status the loop needs to show — stale,
+failed, and how long the compile took — and an export. Phase 4 adds a text pane
+on the left, and the app becomes the editor too; that phase is last because it
+is the only one the project can do without.
 
 The engine does not change. `md2pdf-core` already takes a markdown string and
-returns PDF bytes, and `mpdf-001` §2 recorded the claim this spec is the test
+returns PDF bytes, and `mpdf-001` §1 recorded the claim this spec is the test
 of: "A Tauri desktop app later becomes a second thin wrapper around the same
 core crate. It is not a rewrite."
 
@@ -112,8 +114,10 @@ A third crate joins the workspace beside `core` and `cli`:
 
 `core` gains nothing and changes nothing. That is the falsifiable claim: if
 building this app requires an edit to `core/src/lib.rs` beyond what a bug fix
-would need, `mpdf-001` §2's "not a rewrite" was wrong, and the review round
-should say so rather than let the edit through quietly.
+would need, `mpdf-001` §1's "not a rewrite" was wrong, and the review round
+should say so rather than let the edit through quietly. Round 1 confirmed the
+claim holds for Phase 1: `md_to_pdf`, `image_paths`, `Asset`, `ImageRef` and
+`Error` are already public at the crate root, and Phase 1 needs nothing else.
 
 ### Why a third crate, not a mode of the CLI (decision, recorded)
 
@@ -146,11 +150,40 @@ the last: `typst-pdf` is a separate crate from the layout engine, so a pane
 drawn from frames would show that the *layout* is right, which is not the claim
 this project makes. The observable is the PDF.
 
-The constraint that rides with it: **no bundled JavaScript PDF viewer if it can
-be avoided.** This project has no dependency of that kind and should not gain
-one for a preview pane. On macOS a Tauri window is a WKWebView, the same engine
-that draws a PDF when one is opened in Safari, so the native route may cost
-nothing at all. OQ-1 carries the mechanism and the fallback.
+The constraint that rides with it: **no bundled JavaScript PDF viewer.** This
+project has no dependency of that kind and does not gain one for a preview
+pane. OQ-1's probe settled that it does not have to: WebKit draws the PDF
+itself, and the mechanism is recorded below.
+
+### Why the pane is a `blob:` URL in an iframe (decision, recorded)
+
+The app hands the compiled bytes to the page, the page wraps them in a `Blob`
+with type `application/pdf`, and an iframe's `src` is the object URL. WebKit
+then instantiates its own PDF document view inside that frame. OQ-1's probe
+confirmed each step on this machine, and two properties of this route decided
+it over the alternatives.
+
+The first is that it is same-origin. A blob URL inherits the page's origin —
+the probe read `blob:tauri://localhost/…` — so the parent page can reach into
+the frame, which a custom URI scheme does not allow: the probe found that same
+frame served over a `pdf://` scheme loads but exposes a `null`
+`contentDocument`, because the scheme is a separate origin. Everything the
+later phases need from the frame — the scroll offset OQ-3 is about above all —
+is reachable only on the same-origin route.
+
+The second is that the bytes never touch the disk. A temporary file would put
+the artifact somewhere the user did not ask for, and would need cleaning up on
+a crash.
+
+**The escape hatch, if WebKit ever stops doing this.** The probe was run on one
+macOS version, and §1.1 keeps this spec to macOS, so the risk is bounded — but
+it is not zero, and a later WebKit or a later platform could take the native
+PDF view away. The fallback is then Typst's SVG export, one page per frame,
+which is already reachable: `typst-svg` 0.15.1 sits in `Cargo.lock` today as a
+transitive dependency of `typst`. Taking it would mean amending this decision
+and saying so, because the pane would stop showing the artifact and start
+showing a picture of it. It would not mean bundling a JavaScript viewer, which
+stays refused either way.
 
 ### Why the watch set is the document plus every image it names (decision, recorded)
 
@@ -164,12 +197,16 @@ is what makes the watch set computable from a document that will not compile.
 ### Why a change is a whole re-compile (decision, recorded)
 
 No incremental machinery, no caching, no partial re-layout. Measured on this
-machine on 2026-08-10, the release binary converts `samples/press-release.md`
-in 0.010 s and `samples/article.md` in 0.042 s, both including process startup,
-which the app does not pay. A re-render per save is affordable by two orders of
-magnitude, and an incremental path would be a large amount of state to hold
-wrong. If a document is ever slow enough to need one, that is a measurement and
-a later phase, not a guess made now.
+machine on 2026-08-10, twenty runs of the release binary each, medians:
+`samples/press-release.md` 8.5 ms and `samples/article.md` 28.7 ms, both
+including the process spawn that the app does not pay. A re-render per save is
+affordable by two orders of magnitude, and an incremental path would be a large
+amount of state to hold wrong. If a document is ever slow enough to need one,
+that is a measurement and a later phase, not a guess made now.
+
+The numbers are stated with their method because a first pass took one run each
+and reported 42 ms for the article, which round 1 could not reproduce; a single
+cold run is not a measurement.
 
 ### Why the last good page survives an error (decision, recorded)
 
@@ -187,11 +224,17 @@ Everything that can be decided without a window — the watch set, the debounce,
 the asset read, the error string, the stale flag — lives in ordinary Rust
 functions with ordinary tests. Only the parts that genuinely need a window go
 through Tauri's command layer. A GUI whose logic is reachable only by clicking
-has no exit gate but a screenshot, and this project's gates are tests.
+has no exit gate but a screenshot.
+
+This rule is about where logic lives, and it does not claim that every gate in
+this spec is a test. One thing genuinely cannot be one: whether the right
+pixels reached the glass. That claim is read by a person, exactly as
+`mpdf-001`'s Phases 7 and 9 read a PDF by eye. The rule's job is to keep that
+list to one item.
 
 ## 3. Open questions
 
-- **OQ-1** — how does the pane draw a compiled PDF, and can it be done with no
+- **OQ-1** — ~~how does the pane draw a compiled PDF, and can it be done with no
   bundled viewer? On macOS the window is a WKWebView, which renders PDFs
   natively, but the mechanics are unverified: whether bytes can be handed over
   through a custom protocol, a `blob:` URL or a temporary file; whether an
@@ -200,18 +243,62 @@ has no exit gate but a screenshot, and this project's gates are tests.
   position. If no route holds, the fallback is Typst's SVG export per page,
   and §2's decision is amended to record why the artifact could not be shown
   directly. Answerable from code and a probe during review. Blocks Phase 1's
-  gate case (1), and OQ-3 depends on the answer.
-- **OQ-2** — which Tauri version, and what does the minimal app look like in
+  gate case (1), and OQ-3 depends on the answer.~~ **RESOLVED (2026-08-10), in
+  review round 1: a `blob:` URL in an iframe, and no bundled viewer.** A
+  throwaway Tauri 2.11.5 app was built and run on macOS 26.5.2, and it
+  reported, from inside the webview: `navigator.pdfViewerEnabled` is `true`,
+  `navigator.mimeTypes['application/pdf']` is present, and the frame fed a blob
+  of the compiled bytes exposes a `contentDocument` whose `contentType` is
+  `application/pdf`, whose location is `blob:tauri://localhost/…`, and which
+  holds one `<embed>` — WebKit's own PDF document view, built without anything
+  the app shipped. Custom-scheme serving also works — a `pdf://` scheme
+  returned 200 with the right content type — but that frame's
+  `contentDocument` is `null`, because the scheme is a separate origin, which
+  is what ruled it out. Landed in §2 as its own decision.
+
+  The residual, recorded rather than hidden: the probe proves WebKit
+  *instantiated* its PDF view, not that the pixels are right. Nothing readable
+  from JavaScript can prove that, and this machine denies the terminal
+  Screen Recording permission, so no screenshot could be taken during the
+  round. Phase 1's gate case (1) therefore has to be run where a human can see
+  the window, and it says so.
+- **OQ-2** — ~~which Tauri version, and what does the minimal app look like in
   code — the crate layout, the configuration file, the command boundary, and
   what the workspace must carry for `cargo tauri dev` to open a window?
   `mpdf-001`'s OQ-1 is the precedent: the same question about the Typst crates
   was answered by reading them during review. Answerable from code during
-  review. Blocks Phase 1.
+  review. Blocks Phase 1.~~ **RESOLVED (2026-08-10), in review round 1**, by
+  building the throwaway app rather than by reading about it. Tauri 2 —
+  `tauri` 2.11.5 and `tauri-build` 2.6.3 resolve today, and `tauri-cli` 2.10.1
+  is what runs `cargo tauri dev`; the versions pin at implementation, as
+  `mpdf-001` §2 pinned the Typst crates. The crate is seven files: `Cargo.toml`
+  naming `tauri` and `tauri-plugin-dialog` with `tauri-build` under
+  `[build-dependencies]`; `build.rs` calling `tauri_build::build()`;
+  `tauri.conf.json` with `identifier`, `build.frontendDist` and an
+  `app.windows` entry; `src/main.rs`; `dist/index.html`; `icons/icon.png`; and
+  `capabilities/default.json`.
+
+  Four facts cost a build each and are recorded so the next reader does not pay
+  again. `icons/icon.png` is **required** — without it `generate_context!`
+  panics at compile time with "failed to open icon", which is a confusing
+  failure for a window that has no icon yet. `app.withGlobalTauri: true` puts
+  the API on `window.__TAURI__`, so **the frontend needs no bundler and no npm
+  toolchain at all** — `frontendDist` is a directory of static files, which
+  keeps the whole app one Cargo build. The command boundary is
+  `#[tauri::command]` plus `generate_handler!`, and a custom URI scheme is
+  `register_uri_scheme_protocol`. And the Open dialog is
+  `tauri-plugin-dialog`, which needs `dialog:allow-open` in
+  `capabilities/default.json` beside `core:default`; the probe called it and
+  the native dialog opened rather than rejecting, which is what confirms the
+  permission entry is right.
 - **OQ-3** — what holds the scroll position across a re-render? A watch loop
   that returns the reader to page 1 on every save is unusable for a document
   longer than a page, and it is the difference between this app and a shell
-  loop that reopens a viewer. The mechanism depends on OQ-1's answer, and the
-  honest floor may be that the pane restores an offset rather than a semantic
+  loop that reopens a viewer. OQ-1's resolution is what leaves the question
+  answerable at all — the blob frame is same-origin, so the parent can read and
+  write inside it, where the custom-scheme frame it ruled out could not be
+  touched. What remains open is what WebKit's own PDF view exposes to be saved
+  and restored, and the honest floor may be an offset rather than a semantic
   position. Design call, with the mechanism answerable from code. Blocks
   Phase 2's gate case (2).
 - **OQ-4** — can the watcher follow a path that does not exist yet? A document
@@ -237,25 +324,50 @@ the one phase this spec could lose without invalidating the rest.
 *Produces the observable: yes — the typeset PDF, on screen, from a document
 the user picked.*
 
-- **Scope:** Add the `app` crate to the workspace. A Tauri window per OQ-2,
-  with an Open command that takes one `.md` file. On open: read the file, read
+- **Scope:** Add the `app` crate to the workspace — package `md2pdf-app`,
+  binary `md2pdf-app`, the seven files OQ-2 lists, `members` in the root
+  `Cargo.toml` gaining `"app"`. An Open dialog through `tauri-plugin-dialog`,
+  filtered to `md`, with the capability entry OQ-2 names; the app opens one
+  file at a time. On open, in plain functions per §2: read the document, read
   its assets the way `cli/src/main.rs:read_assets` does, call
-  `md2pdf_core::md_to_pdf`, and draw the result per OQ-1's resolution. A failed
-  compile draws the error string — `Error`'s own `Display`, the same text the
-  CLI prints after its `error: ` prefix — and nothing else, because there is no
-  previous page to keep yet. The window titles the open document. No watching,
-  no editing, no export.
+  `md2pdf_core::md_to_pdf`, and hand the bytes to the page, which draws them
+  per §2's blob decision. The bytes cross the boundary as `tauri::ipc::Response`
+  rather than as a returned `Vec<u8>`, which would serialize as a JSON array of
+  numbers — a performance choice rather than a correctness one, named here so
+  it is not rediscovered. The window titles the open document. No watching, no
+  editing, no export, no status chrome — Phases 2 and 3 own those.
+
+  Two failure classes reach the pane, and they are not the same type. A
+  compile failure is a `md2pdf_core::Error`, and the pane draws its `Display`
+  — the same text the CLI prints after its `error: ` prefix. A file that will
+  not read is not an `Error` at all: `cli/src/main.rs:read_assets` builds a
+  plain `String` for it, and this app builds the same sentence for the same
+  case, so a missing figure names the path and the line here exactly as it does
+  at the terminal. Either way the pane shows the message and the app stays
+  open. Neither keeps a previous page, because Phase 1 has none to keep.
 - **Exit gate:** (1) Opening `samples/article.md` draws its first page, and
-  opening `samples/press-release.md` draws its first page in the second look; a
-  screenshot of each is read by eye once, which is what `mpdf-001`'s Phases 6,
-  7 and 9 did for a claim no test can hold. (2) Opening
+  opening `samples/press-release.md` draws its first page in the second look.
+  **This case is read by eye by a person at the window** — the precedent is
+  `mpdf-001`'s Phases 7 and 9, which read a PDF by eye for a claim no test
+  could hold; Phase 6 of that spec faced the same problem and chose a textual
+  assertion instead, which is available there and is not here. OQ-1's residual
+  is why: nothing readable from JavaScript proves the pixels, and the machine
+  this spec was drafted on denies the screenshot. (2) Opening
   `tests/fixtures/unsupported_html.md` draws the message naming the construct
   and line 5, and the app stays open — the same rejection the CLI makes, at a
-  third level. (3) Unit tests over the plain functions: the asset reader
-  returns one `Asset` per distinct path for `tests/fixtures/figure.md`, and
-  reports the missing second file by path and line. (4) `cargo test
-  --workspace` still passes and `core` and `cli` are untouched, which is §2's
-  falsifiable claim checked as a diff.
+  third level. (3) Unit tests over the plain functions, three cases, each with
+  the directory it needs, because one fixture cannot carry all three: with
+  `dot.png` and `figures/mark.svg` both present beside a copy of
+  `tests/fixtures/figure.md`, the reader returns two `Asset` values; with
+  `figures/` absent — which is how `tests/fixtures/` actually stands — it
+  reports `figures/mark.svg` by path and by line 5; and over an inline document
+  naming `dot.png` twice, in a directory holding that one file, it returns one
+  `Asset` and reads the file once. The last case takes an inline document
+  rather than a fixture: `images.md` repeats `dot.png` on lines 3 and 10, but
+  names `fig#2.png` on line 7, which no directory holds, so a reader fails
+  there before it ever reaches the repeat. (4) `cargo test --workspace`
+  still passes and `core` and `cli` are untouched, which is §2's falsifiable
+  claim checked as a diff.
 - **Close-out:** Seed `rules/desktop.md` with all five frontmatter keys the
   methodology's §8.1 requires, `sources` naming the new crate's files. The
   README gains a section for the app. One push.
