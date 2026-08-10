@@ -44,7 +44,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 8 — the constructs the reject arm names but never sees"
-    reviewed: null
+    reviewed: 2026-08-10
     shipped: null
     cut: null
     by: null
@@ -282,7 +282,7 @@ failure, and support arrives construct by construct in later phases or specs.
   no-template-rule claim stands on OQ-5's precedent, and gate case (1)'s
   by-eye read confirms the answer rather than supplying it.
 
-- **OQ-8** — does the dialect refuse both math forms, and what does refusing
+- **OQ-8** — ~~does the dialect refuse both math forms, and what does refusing
   them cost prose that converts correctly today? `Options::ENABLE_MATH` is what
   makes math reach the walk at all, and §1.1 parks LaTeX math via `mitex` for a
   later spec, so this phase's answer is a named error rather than support. The
@@ -296,7 +296,21 @@ failure, and support arrives construct by construct in later phases or specs.
   accident, and leave the inline form flattened with the gap still named; or
   leave the option off, which keeps `describe` claiming a rejection it cannot
   perform. Answerable from code for the mechanism, a design call for the cost.
-  Blocks Phase 8's math half and its gate case (2).
+  Blocks Phase 8's math half and its gate case (2).~~ **RESOLVED
+  (2026-08-10), in review round 1: refuse both forms.** Each alternative
+  preserves a flattening lie — the display-only answer keeps `$x$` printing
+  literally while `describe` claims math is refused, and leaving the option
+  off keeps all three unreachable arms and forfeits the property the phase
+  exists to establish. §2's escape-and-reject decision names the error as
+  the honest failure, and support is parked for `mitex` by §1.1, so the
+  named error is the whole answer. The cost is accepted because it is
+  bounded and has a one-character exit, both probe-verified against
+  pulldown-cmark 0.13.4: `\$` suppresses the span and the dollar reaches
+  the page as itself, the flanking rule already keeps `it costs $5 or $10`
+  as text, and the corpus census finds no file that trips the rule. A
+  document refused here gets an error naming math and its line, and the
+  README's close-out documents the `\$` escape beside it. Landed in Phase
+  8's scope.
 
 ## 4. Implementation phases
 
@@ -713,8 +727,17 @@ later reader can check in one sitting.
   Strikethrough joins the dialect. `Tag::Strikethrough` wraps its translated
   content in `#strike[…]`, and Phase 3's delimiter argument does not arise
   here: Typst has no markup form for a strike, so the function form is the only
-  form there is. `describe` drops its two strikethrough arms, the way Phase 6
-  dropped its table arms.
+  form there is. The parser accepts a delimiter run of one tilde as well as
+  two — verified against pulldown-cmark 0.13.4's `firstpass.rs`, whose
+  `is_valid_seq` admits both — so `~struck~` is strikethrough under this
+  dialect, not prose, and the close-out's documentation says so. Inside an
+  image's alt text, strikethrough joins `AltCapture`'s wrapper arm beside
+  emphasis, strong and link: the wrapper contributes nothing and its inner
+  text arrives, which is CommonMark's plain-text reading of alt. That
+  disposition is what lets `describe` drop its two strikethrough arms
+  honestly — unlike Phase 6's table arms, a strikethrough can occur inside
+  alt content, so dropping the arms without the capture change would turn an
+  in-dialect construct into a generic "markdown construct" error there.
 
   A task list marker becomes an error that names the construct and its line.
   Typst has no checkbox element, and a marker drawn as a character would be a
@@ -724,35 +747,48 @@ later reader can check in one sitting.
   `Event::TaskListMarker` keeps its `describe` arm, which the option makes
   reachable.
 
-  Math becomes an error too, per §1.1, which parks LaTeX math via `mitex` for a
-  later spec — in the shape OQ-8 lands. `InlineMath` and `DisplayMath` keep
-  their `describe` arm. OQ-8 is the one question in this phase whose wrong
-  answer ships a regression rather than a delay: a document that converts
-  correctly today would stop converting.
+  Math becomes an error, both forms, per OQ-8's resolution: `InlineMath` and
+  `DisplayMath` fall to the reject arm that already exists, which names the
+  construct through their `describe` arm and the line through the event's
+  range. No new mechanism is needed. The accepted cost and its `\$` exit are
+  recorded in OQ-8; the README documents the escape at close-out.
 
 - **Exit gate:** Golden-file tests, three cases, plus the full existing suite,
-  which the option change touches — `tests/fixtures/hostile.md` carries a lone
-  `~` and `samples/article.md` carries "a ~ tilde", so their goldens are what
-  pin that a single tilde still reaches the page as itself. (1) A fixture with
-  strikethrough alone, strikethrough nested inside emphasis, and strikethrough
-  around a link matches its golden file, shows the `#strike[…]` form, and
+  which the option change touches — no shipped golden file changes, because
+  the corpus census finds no `~~` pair, no pairable `$` and no task-list
+  bracket outside code contexts in any fixture. `tests/fixtures/hostile.md`
+  carries a lone unpaired `~`, and its golden plus the escape-loop test in
+  `core/tests/golden_test.rs` are what pin that an unpaired tilde still
+  reaches the page as itself; `samples/article.md`'s "a ~ tilde" line has no
+  golden and rides the corpus check, which proves it converts, not how.
+  (1) A fixture with strikethrough alone, strikethrough spelled with one
+  tilde, strikethrough nested inside emphasis, strikethrough around a link,
+  and a strikethrough inside an image's alt text matches its golden file,
+  shows the `#strike[…]` form and the alt flattened to its inner text, and
   compiles to a PDF with the `%PDF` magic bytes. The same fixture pins what
-  stays text beside it: a lone `~`, and a `~~` inside inline code, which the
-  string escape carries verbatim rather than reading as a construct. (2) Math
-  and a task list marker each make the CLI exit non-zero naming the construct
-  and its line, in the shape OQ-8 lands. (3) A raw HTML block still exits
-  non-zero naming the construct and its line at both levels — rejection
-  survives the widening.
+  stays text beside it: a `~~` inside inline code, which the string escape
+  carries verbatim, and a `\$…\$` pair, whose backslash escapes keep it
+  prose under `ENABLE_MATH`. (2) Inline math, display math and a task list
+  marker each make the CLI exit non-zero naming the construct and its line —
+  math through the existing reject arm per OQ-8's resolution, the marker
+  through its own `describe` arm. (3) A raw HTML block still exits non-zero
+  naming the construct and its line at both levels — rejection survives the
+  widening.
 - **Close-out:** Update `rules/pipeline.md`'s dialect section, the README and
   `samples/article.md` against the code. This phase deletes prose where the
   others added it: the gap paragraph Phase 7 was obliged to write — in the
   rule, in the README and in the sample, three artifacts saying the same thing
   — goes away, because nothing flattens any more, and the README's "Almost
   every other construct is an error" returns to the sentence it corrected. The
-  sample gains a struck phrase, which is what keeps the corpus check from
-  passing vacuously; no corpus file carries one today. The corpus check
-  repeats: the repository's own README and the sample both convert without
-  error, or the gap is named in the review record. One push.
+  README's documentation of strikethrough names the one-tilde form, and its
+  math error gains the `\$` escape beside it, so the author refused a math
+  span is told the one-character way out. The sample gains a struck phrase,
+  which is what keeps the corpus check from passing vacuously; no corpus file
+  carries one today. The sample's own "a ~ tilde" line survives unchanged —
+  flanked by whitespace on both sides, that tilde can neither open nor close
+  a run — which the corpus check now exercises under the new options. The corpus check repeats: the repository's
+  own README and the sample both convert without error, or the gap is named
+  in the review record. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

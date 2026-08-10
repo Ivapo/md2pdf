@@ -2,6 +2,72 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 15 — Phase 8 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking findings, one new non-blocking. The
+reviewer verified every fix against the file and re-ran the probes
+itself rather than trusting the author's.
+
+Blocker 1 is resolved by OQ-8's inline resolution — refuse both math
+forms — with the scope's math paragraph now unconditional over the
+existing reject arm. The reviewer independently re-probed the `\$`
+escape, including the motivating case: `the range \$5–$10` stays text,
+one backslash on the opener sufficing. Blocker 2 is resolved by the
+stated alt-capture disposition, with the false Phase 6 parallel named
+in the scope and a gate case pinning the flattening. The three
+non-blocking folds were spot-checked in the file, and the reviewer
+additionally probed a run of three tildes, which stays text, consistent
+with the cited `is_valid_seq` predicate.
+
+The one new finding, accepted and folded after the verdict: the
+close-out called the sample's lone tilde "not a delimiter run", but a
+run of one is valid — the tilde survives because whitespace flanking
+means it can neither open nor close. The sentence now says so.
+
+On this convergence: `reviewed: 2026-08-10` on Phase 8. `status` was
+already `accepted`.
+
+### Round 14 — Phase 8 only — 2026-08-10 — fresh clean-room reviewer with repo access — **NOT READY**
+
+Round 0 (once for this episode, the appended Phase 8): the phase
+produces the observable — a PDF whose struck text is struck, from input
+that today prints its tildes as prose — and it is the right one: it
+closes the faithfulness gap Phase 7's close-out named in three
+artifacts, rather than opening a subject of its own. The episode
+proceeded.
+
+The reviewer's grounding pass verified the version pins, re-derived the
+"six named, three unreachable" arithmetic over `describe` and `options`,
+confirmed the `$` flanking rule and the `is_valid_seq` tilde predicate
+against pulldown-cmark 0.13.4's `firstpass.rs` with its own cargo
+probes, confirmed `StrikeElem` and the absence of a strike markup form
+and of any checkbox element against typst-library and typst-syntax
+0.15.1, and ran the corpus census: one unpaired `~` in
+`tests/fixtures/hostile.md`, one whitespace-flanked `~` in the sample,
+no `~~` pair, no pairable `$` and no task-list bracket outside code
+contexts anywhere — so the option flip changes no shipped golden.
+
+Verdict: `NOT READY` — two blocking findings, three non-blocking. The
+author accepted all five, rejected none, deferred none.
+
+Blocker 1: **the math scope pre-committed to an answer OQ-8 explicitly
+left open** — the scope said "set `ENABLE_MATH`" while OQ-8 held three
+answers open, two of which contradict that instruction, so scope and
+gate could not both be followed and gate case (2) was unverifiable.
+Blocker 2: **strikethrough inside image alt text was unspecified** —
+probed: the events arrive between the image's two, where the capture's
+reject arm sits, and three observably different implementations all
+passed the written gate; the "way Phase 6 dropped its table arms"
+parallel was false because a table cannot occur inside alt content and
+a strikethrough can.
+
+Non-blocking, all accepted: "their goldens" claimed a golden for the
+sample, which has none; the one-tilde form `~struck~` joins the dialect
+under `is_valid_seq` unacknowledged; gate case (2) attached "in the
+shape OQ-8 lands" to the task-list half, which does not depend on it.
+
+Rejections: none.
+
 ### Implementation note — Phase 7 — 2026-08-09 — one arm the scope did not name
 
 Not a review round. Phase 7 shipped as reviewed, with one addition worth
