@@ -2,5 +2,7 @@
 
 # Rules
 
+- **[desktop](desktop.md)** — generated 2026-08-10 · 6 sources · 80/80 lines
+  the desktop app: the crate and its files, the window and its menu, the command boundary and why the PDF bytes cross it raw, the blob frame that draws the artifact, the file I/O the app owns, the errors it puts on the page, and the configuration facts a build enforces
 - **[pipeline](pipeline.md)** — generated 2026-08-10 · 6 sources · 279/280 lines
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the escape rule, the rejection rule, the two walks footnotes need, the image asset channel, the bundled looks and the call contract they meet, the Typst world and its bundled fonts, and the CLI contract

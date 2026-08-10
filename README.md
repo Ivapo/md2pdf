@@ -49,6 +49,25 @@ Without `-o`, the PDF lands at the input path with a `.pdf` extension.
 look the frontmatter chose, which exists only inside the compiler's virtual filesystem, so
 it serves inspection rather than a standalone `typst compile`.
 
+## The desktop app
+
+There is a second front end: a macOS window that shows the PDF instead of writing it to
+a file. It wraps the same core crate, so it converts exactly what the command converts
+and refuses exactly what the command refuses, in the same words.
+
+```console
+$ cargo tauri dev
+```
+
+That opens a window. Press `⌘O`, or the Open button, and pick a markdown file: the
+window compiles it and draws the page. `cargo tauri dev` needs the Tauri CLI
+(`cargo install tauri-cli`); without it, `cargo run --release -p md2pdf-app` opens the
+same window and skips the rebuild-on-change.
+
+This is the first slice of the app. It opens one file at a time and compiles it once —
+it does not yet watch the file, export a PDF, or let you edit the text. The window is
+still built from source; an installable `.app` comes later.
+
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
