@@ -190,6 +190,14 @@ fn options() -> Options {
     // without this option `[^1]` and `[^1]: The source.` are ordinary text, and
     // the escape rule prints the brackets on the page.
     options.insert(Options::ENABLE_FOOTNOTES);
+    // The last three carry the same argument, and each closes one arm of
+    // `describe` that nothing could reach. Strikethrough joins the dialect;
+    // a task list marker and math become errors that name themselves. Without
+    // these options `~~x~~`, `- [ ] a` and `$x$` arrive as text and the escape
+    // rule prints their markers, while `describe` claims all three are refused.
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TASKLISTS);
+    options.insert(Options::ENABLE_MATH);
     options
 }
 
@@ -422,9 +430,13 @@ fn step(
             // what pulldown-cmark's own flattening writes for it.
             Event::SoftBreak | Event::HardBreak => capture.text.push(' '),
             // A wrapper contributes nothing of its own; its content still
-            // arrives as text events inside it.
-            Event::Start(Tag::Emphasis | Tag::Strong | Tag::Link { .. })
-            | Event::End(TagEnd::Emphasis | TagEnd::Strong | TagEnd::Link) => {}
+            // arrives as text events inside it. Strikethrough belongs here
+            // rather than below: it can occur inside alt content, so leaving
+            // it to the reject arm would refuse an in-dialect construct.
+            Event::Start(Tag::Emphasis | Tag::Strong | Tag::Strikethrough | Tag::Link { .. })
+            | Event::End(
+                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Link,
+            ) => {}
             // A nested image's destination and title are not content under
             // the alt reading, so they are neither checked nor listed.
             Event::Start(Tag::Image { .. }) => capture.depth += 1,
@@ -637,6 +649,13 @@ fn step(
         Event::End(TagEnd::Emphasis) => top(bufs).push(']'),
         Event::Start(Tag::Strong) => top(bufs).push_str("#strong["),
         Event::End(TagEnd::Strong) => top(bufs).push(']'),
+
+        // The function form here is the only form there is: Typst has no
+        // markup for a strike, so the delimiter argument above does not
+        // arise. The parser admits a run of one tilde as well as two, so
+        // `~struck~` reaches this arm too.
+        Event::Start(Tag::Strikethrough) => top(bufs).push_str("#strike["),
+        Event::End(TagEnd::Strikethrough) => top(bufs).push(']'),
 
         // The content is a string literal, never the markup escape, so it
         // reaches the PDF verbatim whatever it holds.
@@ -1078,15 +1097,18 @@ fn line_of(md: &str, offset: usize) -> usize {
 /// Only what the walk can still reject is named here. A construct the walk
 /// handles is not listed, so this function keeps telling the truth about what
 /// the dialect leaves out.
+///
+/// Every arm below is reachable, which is what makes that claim checkable. A
+/// name needs a parser option before the parser produces the event it names, so
+/// an arm whose option `options` leaves off is an arm that refuses nothing while
+/// the construct it names prints on the page.
 fn describe(event: &Event) -> &'static str {
     match event {
         Event::Start(tag) => match tag {
-            Tag::Strikethrough => "strikethrough",
             Tag::HtmlBlock => "raw HTML block",
             _ => "markdown construct",
         },
         Event::End(tag) => match tag {
-            TagEnd::Strikethrough => "strikethrough",
             TagEnd::HtmlBlock => "raw HTML block",
             _ => "markdown construct",
         },

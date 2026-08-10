@@ -1,4 +1,4 @@
-//! The exit gates for `mpdf-001`'s seven phases and `mpdf-002`'s first, at the
+//! The exit gates for `mpdf-001`'s eight phases and `mpdf-002`'s first, at the
 //! library level.
 //!
 //! Fixtures and golden files live at the workspace root because the CLI tests
@@ -32,6 +32,11 @@ const IMAGES_MD: &str = include_str!("../../tests/fixtures/images.md");
 const IMAGES_TYP: &str = include_str!("../../tests/golden/images.typ");
 const FOOTNOTES_MD: &str = include_str!("../../tests/fixtures/footnotes.md");
 const FOOTNOTES_TYP: &str = include_str!("../../tests/golden/footnotes.typ");
+const STRIKETHROUGH_MD: &str = include_str!("../../tests/fixtures/strikethrough.md");
+const STRIKETHROUGH_TYP: &str = include_str!("../../tests/golden/strikethrough.typ");
+const INLINE_MATH_MD: &str = include_str!("../../tests/fixtures/unsupported_math.md");
+const DISPLAY_MATH_MD: &str = include_str!("../../tests/fixtures/unsupported_display_math.md");
+const TASK_LIST_MD: &str = include_str!("../../tests/fixtures/unsupported_task_list.md");
 const TEMPLATE_TYP: &str = include_str!("../assets/template.typ");
 
 /// The two image files the `images.md` fixture names, and one more name for the
@@ -1079,4 +1084,90 @@ fn a_footnote_reference_with_no_definition_stays_text() {
         typst.contains(r"reference\[^gone\] here."),
         "the dangling reference did not stay escaped text: {typst}"
     );
+}
+
+// -- Phase 8: strikethrough, and the two constructs beside it ----------------
+
+#[test]
+fn the_strikethrough_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(STRIKETHROUGH_MD).unwrap(), STRIKETHROUGH_TYP);
+}
+
+/// The compile is the phase's observable, at the library level: markdown whose
+/// struck text reaches the page struck.
+#[test]
+fn the_strikethrough_fixture_compiles_to_a_pdf() {
+    let assets = vec![asset("dot.png", DOT_PNG)];
+    let pdf = md_to_pdf(STRIKETHROUGH_MD, &assets).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each part of the fixture reaches Typst as the form the spec chose.
+///
+/// The equality test above pins the whole output, but it cannot say *why* the
+/// output is right. This one names the rule, so an edit that drops the one-tilde
+/// form, refuses a strike inside alt text, or sends a `~~` in code through the
+/// markup escape fails with a message that points at what it dropped.
+#[test]
+fn the_strikethrough_golden_carries_each_form() {
+    for (form, what) in [
+        // Typst has no markup for a strike, so the function form is the only
+        // form there is.
+        ("#strike[struck text]", "the strike, alone"),
+        // The parser reads a delimiter run of one as well as one of two, so
+        // this spelling is strikethrough under the dialect rather than prose.
+        ("#strike[one tilde]", "the one-tilde form"),
+        (
+            "#emph[emphasis around #strike[a struck phrase]]",
+            "the strike nested inside emphasis",
+        ),
+        (
+            r#"#strike[#link("https://typst.app")[Typst]]"#,
+            "the strike around a link",
+        ),
+        // A strike can occur inside alt content, so the capture treats it as a
+        // wrapper: its inner text arrives and the wrapper contributes nothing.
+        (
+            r#"alt: "a struck caption""#,
+            "the strike inside alt text, flattened",
+        ),
+        // Code content is a string literal, never markup, so a pair of tildes
+        // inside it is not a delimiter run and reaches the page as itself.
+        (r#"#raw("a ~~ pair")"#, "the tilde pair inside inline code"),
+        // A backslash suppresses the math span, and the escape rule then puts
+        // the dollar on the page as itself.
+        (r"a \$5 to \$10 range", "the escaped dollar pair, as prose"),
+    ] {
+        assert!(
+            STRIKETHROUGH_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+}
+
+/// The two constructs beside strikethrough name themselves and their line.
+///
+/// Both arms of `describe` were unreachable until this phase set their parser
+/// options, so both printed their markers on the page while the code claimed to
+/// refuse them. Math is refused in both its forms; support is a later spec's
+/// subject, and `\$` is the one-character way to keep a dollar as prose.
+#[test]
+fn each_refused_construct_names_itself_and_its_line() {
+    for (md, construct, what) in [
+        (INLINE_MATH_MD, "math", "the inline math span"),
+        (DISPLAY_MATH_MD, "math", "the display math span"),
+        (TASK_LIST_MD, "task list marker", "the task list marker"),
+    ] {
+        match md_to_typst(md) {
+            Err(Error::UnsupportedConstruct {
+                construct: found,
+                line,
+            }) => {
+                assert_eq!(found, construct, "for {what}");
+                assert_eq!(line, 3, "for {what}");
+            }
+            other => panic!("expected `{construct}` for {what}, got {other:?}"),
+        }
+    }
 }

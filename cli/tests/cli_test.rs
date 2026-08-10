@@ -1,4 +1,4 @@
-//! The exit gates for Phases 1 to 5, at the binary level.
+//! The exit gates that reach the binary, at the binary level.
 //!
 //! These run the real `md2pdf` binary, so they cover the argument contract and
 //! the exit codes that the library tests cannot reach.
@@ -57,6 +57,8 @@ fn emit_typst_prints_the_golden_file() {
         // which no directory holds, and it still prints its golden file.
         ("images.md", "images.typ"),
         ("footnotes.md", "footnotes.typ"),
+        // This one names `dot.png`, which emission reads no bytes from either.
+        ("strikethrough.md", "strikethrough.typ"),
     ] {
         let out = run(&[fixture(fixture_name).as_ref(), "--emit-typst".as_ref()]);
         assert!(out.status.success(), "{fixture_name} did not exit 0");
@@ -100,6 +102,30 @@ fn a_raw_html_block_exits_non_zero_and_names_it() {
     let stderr = String::from_utf8(out.stderr).unwrap();
     assert!(stderr.contains("raw HTML block"), "stderr: {stderr}");
     assert!(stderr.contains("line 5"), "stderr: {stderr}");
+}
+
+/// Math and a task list marker exit non-zero and name themselves.
+///
+/// Each was an unreachable arm until this phase set its parser option, so each
+/// printed its markers on the page while the code claimed to refuse it. Math is
+/// refused in both its forms.
+#[test]
+fn math_and_a_task_list_marker_exit_non_zero_and_name_themselves() {
+    for (fixture_name, construct) in [
+        ("unsupported_math.md", "math"),
+        ("unsupported_display_math.md", "math"),
+        ("unsupported_task_list.md", "task list marker"),
+    ] {
+        let out = run(&[fixture(fixture_name).as_ref()]);
+        assert!(!out.status.success(), "{fixture_name} should have failed");
+
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(
+            stderr.contains(construct),
+            "{fixture_name} stderr: {stderr}"
+        );
+        assert!(stderr.contains("line 3"), "{fixture_name} stderr: {stderr}");
+    }
 }
 
 /// A document and the files it names convert together.
