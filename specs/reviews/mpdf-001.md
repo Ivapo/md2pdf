@@ -2,6 +2,41 @@
 
 Append-only. One heading per round, newest first.
 
+### Implementation note — Phase 9 — 2026-08-10 — the sweep held, and one stale claim was left standing
+
+Not a review round. Phase 9 shipped as reviewed, with three things worth
+recording.
+
+The round-16 census held exactly. All thirteen shipped goldens changed on
+their second line and on no other: `git diff` reports thirteen files,
+thirteen insertions, thirteen deletions, and every hunk header reads
+`@@ -2 +2 @@`. No import line moved and no `columns` value moved. The
+whole suite passes, 95 tests over five targets.
+
+One stale claim was left standing deliberately. `tests/fixtures/frontmatter.md`
+says in its body that "the emitter only passes the three frontmatter keys
+through to it", which is now five. Correcting it would change that
+fixture's golden on a body line, and the gate's claim — every shipped
+golden changes on exactly its second line — is a claim about this phase's
+diff. The fixture's prose is filler that no reader is directed to, and
+the close-out's documentation targets are the rule, the README and the
+samples, all three corrected. A later phase that touches the fixture may
+fix it in the same pass.
+
+Two facts the plan had wrong, corrected during the build. The sample PDFs
+are **not** checked in — `.gitignore` carries `/samples/*.pdf` with a
+comment saying converting a sample writes its PDF beside it — so the
+close-out committed no PDF. And the phase needed three new fixtures
+rather than four: gate case (1)'s no-`template`-key half is already
+served by the shipped `frontmatter.md`.
+
+`rules/pipeline.md`'s cap rose from 255 to 280 in the same commit as the
+prose that needed it — the third time this rule has taken that treatment,
+after Phase 7 raised it from 205 and Phase 8 from 245. The growth is the
+two new keys and their convention, the templates section becoming plural,
+and the world binding every look rather than one. The file lands at
+279/280.
+
 ### Round 17 — Phase 9 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking findings, two new non-blocking. The

@@ -50,7 +50,7 @@ phases:
     by: null
   - name: "Phase 9 — the look the frontmatter chooses"
     reviewed: 2026-08-10
-    shipped: null
+    shipped: 2026-08-10
     cut: null
     by: null
 
