@@ -169,7 +169,7 @@ fn absent_frontmatter_gets_every_default() {
     assert!(
         md_to_typst(BASIC_MD)
             .unwrap()
-            .contains("template.with(title: none, author: none, columns: 2)"),
+            .contains("template.with(title: none, author: none, columns: 2, date: none)"),
         "the defaults did not reach the template call"
     );
 }

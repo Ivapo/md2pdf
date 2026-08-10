@@ -1002,17 +1002,26 @@ fn align_name(align: &Alignment) -> &'static str {
 
 /// The two lines the emitter puts above every document.
 ///
-/// `template.typ` reaches the compiler as bytes in the world's virtual
-/// filesystem, so this import resolves there and nowhere else. Every argument
-/// is named on every call, including the ones the frontmatter left out, so the
-/// `--emit-typst` output shows the layout the document actually gets.
+/// The import names the look the frontmatter selected, and every bundled look
+/// reaches the compiler as bytes in the world's virtual filesystem, so this
+/// import resolves there and nowhere else. A fixed name would make two
+/// documents in two looks emit identical source, and the `--emit-typst` output
+/// exists to show what a document compiles to.
+///
+/// Every argument is named on every call, including the ones the frontmatter
+/// left out, so that same output shows the layout the document actually gets.
+/// A bundled look therefore accepts all four, and one missing an argument
+/// would fail the compile with an error naming neither the document nor the
+/// key.
 fn header(front: &Frontmatter) -> String {
     format!(
-        "#import \"template.typ\": template, divider\n\
-         #show: template.with(title: {}, author: {}, columns: {})\n",
+        "#import \"{}\": template, divider\n\
+         #show: template.with(title: {}, author: {}, columns: {}, date: {})\n",
+        front.template.file(),
         typst_string_or_none(front.title.as_deref()),
         typst_string_or_none(front.author.as_deref()),
         front.columns,
+        typst_string_or_none(front.date.as_deref()),
     )
 }
 

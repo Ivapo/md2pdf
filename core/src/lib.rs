@@ -12,6 +12,8 @@ mod frontmatter;
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
+use crate::frontmatter::Template;
+
 use typst::LibraryExt;
 use typst::World;
 use typst::diag::{FileError, FileResult, SourceDiagnostic, Warned};
@@ -84,9 +86,10 @@ pub struct ImageRef {
 
 /// Translate markdown into Typst markup.
 ///
-/// The output names `template.typ`, which exists only inside this crate's
-/// virtual filesystem. It serves inspection, not a standalone `typst compile`.
-/// Emission reads no image bytes, so this function needs no assets.
+/// The output imports the look the frontmatter selected, and every bundled
+/// look exists only inside this crate's virtual filesystem. It serves
+/// inspection, not a standalone `typst compile`. Emission reads no image
+/// bytes, so this function needs no assets.
 pub fn md_to_typst(md: &str) -> Result<String> {
     Ok(emit::emit(md)?.0)
 }
@@ -256,43 +259,60 @@ static LIBRARY: LazyLock<LazyHash<typst::Library>> =
 // -- world ------------------------------------------------------------------
 
 const MAIN_NAME: &str = "main.typ";
-const TEMPLATE_NAME: &str = "template.typ";
 
-const TEMPLATE_SOURCE: &str = include_str!("../assets/template.typ");
+/// The bytes of one bundled look, embedded at compile time.
+///
+/// `frontmatter::Template` owns the filename and this function owns the
+/// content, so the same enum drives both and no look can be selectable under a
+/// name that binds no file.
+fn template_source(template: Template) -> &'static str {
+    match template {
+        Template::Article => include_str!("../assets/template.typ"),
+        Template::PressRelease => include_str!("../assets/press-release.typ"),
+    }
+}
 
 /// The minimal compilation environment.
 ///
-/// It holds two source files, the images the document names, and the bundled
-/// fonts. There is no package resolution here at all, so nothing in this crate
-/// can reach the network on any target.
+/// It holds the generated source, every bundled template, the images the
+/// document names, and the bundled fonts. There is no package resolution here
+/// at all, so nothing in this crate can reach the network on any target.
 ///
-/// The assets ride the same virtual filesystem that already serves
-/// `template.typ`, which is why images need no second channel. `main.typ` sits
-/// at the virtual root, so a relative path in the generated source resolves to
+/// Every template is bound, not only the selected one, so the walk never has
+/// to plumb its choice out here. The templates are compile-time constants
+/// either way, the dialect has no syntax for a raw Typst import, and only the
+/// emitter ever writes one.
+///
+/// The assets ride the same virtual filesystem that already serves the
+/// templates, which is why images need no second channel. `main.typ` sits at
+/// the virtual root, so a relative path in the generated source resolves to
 /// the file id built from that same path.
 struct TypstWorld {
     main: Source,
-    template: Source,
+    templates: Vec<Source>,
     assets: HashMap<FileId, Bytes>,
 }
 
 impl TypstWorld {
     fn new(typst_source: String, assets: HashMap<FileId, Bytes>) -> Result<Self> {
+        let mut templates = Vec::with_capacity(Template::ALL.len());
+        for template in Template::ALL {
+            let id = file_id(template.file())?;
+            templates.push(Source::new(id, template_source(template).to_string()));
+        }
+
         Ok(Self {
             main: Source::new(file_id(MAIN_NAME)?, typst_source),
-            template: Source::new(file_id(TEMPLATE_NAME)?, TEMPLATE_SOURCE.to_string()),
+            templates,
             assets,
         })
     }
 
     fn lookup(&self, id: FileId) -> Option<&Source> {
         if id == self.main.id() {
-            Some(&self.main)
-        } else if id == self.template.id() {
-            Some(&self.template)
-        } else {
-            None
+            return Some(&self.main);
         }
+        self.templates.iter().find(|source| source.id() == id)
     }
 }
 
@@ -321,7 +341,7 @@ impl World for TypstWorld {
             .ok_or_else(|| FileError::NotFound(id.vpath().get_without_slash().into()))
     }
 
-    /// An image asks for its bytes here, and so does `template.typ`.
+    /// An image asks for its bytes here, and so does a template.
     ///
     /// `source` is untouched by the assets, because an image is never Typst
     /// source. That is what keeps the import story, and the network story with
@@ -342,9 +362,14 @@ impl World for TypstWorld {
     /// No date is supplied.
     ///
     /// Reading an OS clock would give this crate the OS access it exists to
-    /// avoid, and it would make the compiled PDF differ between machines. No
-    /// template in this phase uses a date, so `None` costs nothing and keeps
-    /// the output reproducible.
+    /// avoid, and it would make the compiled PDF differ between machines. The
+    /// break would also ship silently: this call touches the compile alone and
+    /// never the emitted source, so the golden files would stay byte-stable
+    /// over a PDF that differed by machine.
+    ///
+    /// Every bundled template does typeset a date, and takes it from the
+    /// frontmatter's `date` key. The author writes the dateline, so `None`
+    /// costs nothing and keeps the output reproducible.
     fn today(&self, _offset: Option<Duration>) -> Option<Datetime> {
         None
     }
