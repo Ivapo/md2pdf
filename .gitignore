@@ -2,3 +2,6 @@
 
 # Converting a sample writes its PDF beside it.
 /samples/*.pdf
+
+# tauri-build writes the capability schemas beside tauri.conf.json.
+/app/gen/

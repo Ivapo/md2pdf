@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>md2pdf</title>
+    <style>
+      /*
+        The whole front end is this one file. `withGlobalTauri` puts the API
+        on `window.__TAURI__`, so there is no bundler and no npm toolchain
+        here: `frontendDist` is a directory of static files, and the app is
+        one Cargo build.
+      */
+      :root {
+        color-scheme: light dark;
+        --ground: #f4f4f2;
+        --chrome: #e8e8e4;
+        --edge: #d5d5cf;
+        --ink: #2b3140;
+        --quiet: #6b7280;
+        --alarm: #a03323;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ground: #1c1f27;
+          --chrome: #262a34;
+          --edge: #363b47;
+          --ink: #e6e6e2;
+          --quiet: #9aa1ae;
+          --alarm: #e08573;
+        }
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--ground);
+        color: var(--ink);
+        font:
+          13px/1.5 -apple-system,
+          system-ui,
+          sans-serif;
+      }
+
+      header {
+        flex: none;
+        padding: 8px 12px;
+        background: var(--chrome);
+        border-bottom: 1px solid var(--edge);
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        padding: 4px 14px;
+        border: 1px solid var(--edge);
+        border-radius: 6px;
+        background: var(--ground);
+      }
+      button:active {
+        background: var(--edge);
+      }
+
+      main {
+        flex: 1;
+        position: relative;
+        min-height: 0;
+      }
+      #pane {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        display: block;
+      }
+      #pane[hidden] {
+        display: none;
+      }
+
+      /* The empty state, and the error, sit in the same place a page would. */
+      #message {
+        margin: 0;
+        padding: 24px;
+        white-space: pre-wrap;
+        color: var(--quiet);
+      }
+      #message.error {
+        color: var(--alarm);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <header><button id="open" type="button">Open…</button></header>
+    <main>
+      <p id="message">Open a markdown file to see its PDF. ⌘O</p>
+      <iframe id="pane" title="The compiled PDF" hidden></iframe>
+    </main>
+
+    <script>
+      const { open } = window.__TAURI__.dialog
+      const { invoke } = window.__TAURI__.core
+      const { listen } = window.__TAURI__.event
+
+      const pane = document.getElementById('pane')
+      const message = document.getElementById('message')
+
+      // The object URL the pane is showing, so the previous one can be
+      // released once the frame has left it.
+      let drawn = null
+
+      async function openDocument() {
+        const path = await open({
+          multiple: false,
+          directory: false,
+          filters: [{ name: 'Markdown', extensions: ['md'] }]
+        })
+        if (path === null) return // the user cancelled
+
+        try {
+          draw(await invoke('open_document', { path }))
+        } catch (error) {
+          fail(error)
+        }
+      }
+
+      /*
+        The pane draws the artifact itself, not a picture of it. WebKit builds
+        its own PDF document view inside a frame fed a blob of the bytes, so a
+        link stays a live annotation, the text stays selectable, and the
+        accessibility tagging survives. The blob is same-origin, and the bytes
+        never touch the disk.
+      */
+      function draw(bytes) {
+        const url = URL.createObjectURL(
+          new Blob([bytes], { type: 'application/pdf' })
+        )
+        pane.src = url
+        pane.hidden = false
+        message.hidden = true
+
+        if (drawn) URL.revokeObjectURL(drawn)
+        drawn = url
+      }
+
+      // The message reaches the page in the words the terminal uses. Nothing
+      // keeps a previous page here, because this phase has none to keep:
+      // watching, and the stale flag that goes with it, are the next phase.
+      function fail(error) {
+        message.textContent = String(error)
+        message.className = 'error'
+        message.hidden = false
+
+        pane.hidden = true
+        pane.removeAttribute('src')
+        if (drawn) {
+          URL.revokeObjectURL(drawn)
+          drawn = null
+        }
+      }
+
+      document.getElementById('open').addEventListener('click', openDocument)
+      listen('open', openDocument)
+    </script>
+  </body>
+</html>

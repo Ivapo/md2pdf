@@ -1,0 +1,22 @@
+[package]
+name = "md2pdf-app"
+description = "Desktop front end for md2pdf-core: it shows the PDF while you write."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "md2pdf-app"
+path = "src/main.rs"
+
+# Every version is pinned, as core pins the Typst crates: a window is the part
+# of this project whose behaviour a minor release can change under it. The empty
+# feature lists are the Tauri CLI's own normalisation, and it rewrites them on
+# every `cargo tauri dev`, so they are kept rather than fought.
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+md2pdf-core = { path = "../core" }
+tauri = { version = "2.11.5", features = [] }
+tauri-plugin-dialog = "2.7.2"
