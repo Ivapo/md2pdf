@@ -48,6 +48,11 @@ phases:
     shipped: 2026-08-10
     cut: null
     by: null
+  - name: "Phase 9 — the look the frontmatter chooses"
+    reviewed: 2026-08-10
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -311,6 +316,64 @@ failure, and support arrives construct by construct in later phases or specs.
   document refused here gets an error naming math and its line, and the
   README's close-out documents the `\$` escape beside it. Landed in Phase
   8's scope.
+
+- **OQ-9** — ~~does the press-release look carry a dateline, and where does that
+  date come from? `core/src/lib.rs:TypstWorld::today` returns `None`
+  deliberately: reading an OS clock would give `core` the OS access it exists
+  to avoid, and it would make one document compile to two different PDFs on
+  two machines, which is what the golden-file gate rests on. Its own comment
+  records that no template needed a date. A press release conventionally
+  carries one. Three answers are open: a fifth frontmatter key, `date`, an
+  optional string the author writes, which leaves the reproducibility decision
+  whole and costs one more key; the look omits the dateline, which ships a
+  press-release template that a press release cannot use; or `today` starts
+  answering, which contradicts a recorded decision and makes every golden
+  compile-dependent on the day it ran. Design call, with the mechanism
+  answerable from code. Blocks Phase 9's second template and its gate case
+  (2).~~ **RESOLVED (2026-08-10), in review round 1: a fifth key, `date` —
+  an optional free string, typeset verbatim.** The author writes the
+  dateline; no clock is read anywhere, `today` stays `None`, and the
+  reproducibility decision stands whole. The round added the fact that
+  sharpens the clock option's rejection: `today` touches only the compile,
+  never the emitted source, so its break would ship silently — byte-stable
+  goldens over a PDF that differs by machine. Omitting the dateline ships a
+  press-release look a press release cannot use. The key rides the existing
+  `Frontmatter` → `header` → template-argument path; every bundled template
+  accepts `date` and renders it when present — the article look beneath its
+  author line, the press-release look as its dateline — because a key the
+  author wrote that reaches no page is the vanishing §2 refuses. `header`
+  names it on every call like the other three, which changes the second line
+  of every shipped golden; Phase 3's import-line sweep is the precedent, and
+  gate case (1) pins this one. Landed in Phase 9's scope.
+
+- **OQ-10** — ~~may a template carry its own default for `columns`, and what
+  would that cost? A press release is single-column by convention, and under
+  Phase 9 as scoped its author must write `columns: 1` or get two columns,
+  because `core/src/emit.rs:header` names every argument on every call and the
+  template's own default therefore never applies. Letting the template decide
+  means omitting the argument when the frontmatter left it out, which changes
+  the second line of all twelve checked-in golden files and drops the property
+  that `--emit-typst` shows the layout a document actually gets. Design call,
+  and the blast radius is already counted. Blocks Phase 9's gate case (1),
+  whose "no shipped golden file changes" claim is false under one answer.~~
+  **RESOLVED (2026-08-10), in review round 1: no — a template carries no
+  default that ever applies; the schema's `columns` default becomes
+  per-template instead.** The schema is the shipped default's home, per
+  `core/src/frontmatter.rs:Frontmatter::default`'s own comment, and the
+  schema it stays — never the template, though within the file the
+  convention's site is the parse-time resolution rather than the struct:
+  an absent `columns` resolves at parse time to the selected look's
+  convention — `2` for `article`, `1` for `press-release` — so `header`
+  still names the argument on every call and `--emit-typst` keeps showing
+  the layout a document actually gets. The Typst-side alternative — omit the
+  argument and let the template's own default apply — would change the call
+  line of the shipped goldens *and* drop that property, buying nothing the
+  parse-time answer does not give. The round corrected the census: thirteen
+  shipped goldens, not twelve, `strikethrough.typ` having landed the same
+  day this phase was appended; `single_column.md` alone names `columns`
+  explicitly. A press-release author therefore writes nothing and gets a
+  single column, which is the point of choosing a look. Landed in Phase 9's
+  scope.
 
 ## 4. Implementation phases
 
@@ -789,6 +852,105 @@ later reader can check in one sitting.
   a run — which the corpus check now exercises under the new options. The corpus check repeats: the repository's
   own README and the sample both convert without error, or the gap is named
   in the review record. One push.
+
+### Phase 9 — the look the frontmatter chooses
+*Produces the observable: yes — a PDF in a second look, from markdown that
+changes one frontmatter line and nothing else.*
+
+Appended 2026-08-10, after Phase 8 shipped, per the methodology's §6.1: the
+subject is the frontmatter schema and the styling decision, and this spec owns
+both. §2's styling decision already reserved the mechanism — "a new look later
+— an IEEE-style template, for example — is a new `.typ` file and a frontmatter
+selector, with no change to the parser or the emitter" — so this phase builds
+what that sentence promised rather than deciding anything new about where
+styling lives.
+
+Every phase from 3 to 8 widened the dialect. This one widens nothing in the
+dialect: the same markdown converts, and the frontmatter says what it looks
+like.
+
+- **Scope:** In `core/src/frontmatter.rs`: two new keys. `template` takes a
+  name from a fixed set of two — `article`, the default, which is the shipped
+  look and keeps the filename `template.typ`, and `press-release`, which names
+  `press-release.typ` — so every document written before this phase converts
+  unchanged and the key stays optional like the rest. A name outside the set
+  is an error that names the key and lists the accepted names, the way
+  `columns` refuses a value outside `1` and `2`. `date`, per OQ-9's
+  resolution, is an optional free string, typeset verbatim — no parsing, no
+  formatting, no clock; `core/src/lib.rs:TypstWorld::today` stays `None` —
+  its no-clock argument stands, and its "no template uses a date" sentence is
+  retouched in the same pass, since every template now typesets an
+  author-written one. Per OQ-10's resolution, an absent `columns` now
+  resolves at parse time to the selected look's convention — `2` for
+  `article`, `1` for `press-release` — so the schema, never the template,
+  stays the home of every default, and `Frontmatter::default`'s own comment
+  moves with the convention; an explicit `columns` wins over it either way.
+
+  In `core/assets/`: `template.typ` keeps its filename and becomes the
+  `article` look — renaming it would rewrite the import line in all thirteen
+  checked-in golden files for no gain — and gains a date line beneath the
+  author when `date` is present. `press-release.typ` joins it: single-column
+  by convention, a dateline where press releases carry one, and the same
+  `divider`. Every template exports `template` and `divider`, and its
+  `template` accepts `title`, `author`, `columns` and `date`, because
+  `core/src/emit.rs:header` names all four arguments on every call; a
+  template missing one would fail the compile with an error naming neither
+  the document nor the key. That contract is what a third look has to meet,
+  and it is stated here rather than discovered later.
+
+  In `core/src/emit.rs:header`: the import line names the selected file rather
+  than a fixed one, so `#import "press-release.typ": template, divider` is what
+  a press release gets. A fixed name would make two documents in two looks emit
+  byte-identical source, and `--emit-typst` exists to show what a document
+  compiles to; source that cannot say which look it takes is the flattening §2
+  refuses. The call gains `date`, named on every call like the other three
+  arguments, so all thirteen shipped golden files change on exactly their
+  second line, gaining `date: none` — the deliberate one-line sweep Phase 3
+  performed on the import line, and the gate pins it the same way. The import
+  line of every shipped golden is untouched, because the default look keeps
+  its filename.
+
+  In `core/src/lib.rs`: `TypstWorld` binds **every** bundled template, not only
+  the selected one, so `core/src/emit.rs:emit` keeps its return type and
+  `md_to_pdf` keeps its signature. The alternative — plumbing the selected name
+  out of the walk so the world binds one file — buys a smaller virtual
+  filesystem and nothing else: the templates are compile-time constants either
+  way, the dialect has no syntax for a raw Typst import, and only the emitter
+  ever writes one. `TypstWorld::lookup` gains a table where it has two branches
+  today, and the struct's doc comment stops saying two source files.
+
+- **Exit gate:** Golden-file tests, four cases, plus the full existing suite,
+  which the `header` and `Frontmatter` changes touch. Every shipped golden
+  changes on exactly its second line, gaining `date: none` and nothing else —
+  the equality tests over all thirteen regenerated goldens are what pin the
+  sweep, as they pinned Phase 3's. (1) A fixture whose frontmatter carries no
+  `template` key matches its golden — the `article` default, the import line
+  unchanged, `date: none` named — and compiles to a PDF with the `%PDF` magic
+  bytes; a second fixture with a `date` and no `template` key shows the date
+  in a string literal on the call and its compiled PDF is read by eye once,
+  confirming the article look renders the line. (2) A fixture with
+  `template: press-release`, a `date`, and no `columns` key matches its own
+  golden — the import line naming `press-release.typ`, `columns: 1` from the
+  per-template convention, the date in a string literal — and compiles to a
+  PDF with the `%PDF` magic bytes. That PDF is read by eye once, confirming
+  the second look differs from the first on the page and carries its dateline
+  — a golden pins emitter output and cannot pin a look, so the observable
+  needs an artifact of its own, as OQ-6's header rule did in Phase 6. (3) A
+  fixture whose `template` value sits outside the set makes the CLI exit
+  non-zero with a message that names the key and lists the accepted names.
+  (4) A test reads each bundled template's source and asserts it exports both
+  `template` and `divider` and names all four arguments — the textual
+  assertion Phase 6's template test already models, because no golden pins
+  the file's side of the contract.
+- **Close-out:** Update `rules/pipeline.md`'s frontmatter section, its template
+  section and its world section against the code — the world stops holding two
+  source files, and the frontmatter grows to five keys. The README's
+  frontmatter documentation gains both new keys, the list of looks, and the
+  per-template `columns` convention. `samples/`
+  gains a second document in the press-release look rather than converting the
+  existing one, which would lose the coverage the article sample carries. The
+  corpus check repeats over both samples and the README: all three convert
+  without error, or the gap is named in the review record. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

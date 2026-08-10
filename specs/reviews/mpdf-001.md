@@ -2,6 +2,82 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 17 — Phase 9 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking findings, two new non-blocking. The
+reviewer verified every fix against the working tree rather than the
+changelog, and re-derived the sweep the gate is now keyed to: all
+thirteen fixtures lack a `template` key, so every import line stays
+`template.typ`; all thirteen lack a `date` key, so every second line
+gains `date: none`; no `columns` value moves, because the one fixture
+naming one wins over the convention and every other resolves to the
+article's `2`. "Exactly its second line" holds, and Phase 3's cited
+precedent checks out.
+
+Blocker 1 is resolved by OQ-9's inline resolution — the `date` key,
+free string, verbatim, no clock — with the contract retroaction
+answered rather than dodged: all four arguments on every template,
+named on every call, pinned textually by gate case (4). Blocker 2 is
+resolved by OQ-10's inline resolution — no template-carried default;
+per-template parse-time resolution, explicit value wins — and the old
+gate claim is replaced by its honest successor, the thirteen-golden
+second-line sweep.
+
+The two new findings, accepted and folded after the verdict: "the
+default's one home" was half-true once the convention's site is the
+parse-time resolution — the spec now says the schema, never the
+template, stays the home; and "its comment stays true" over-claimed
+for `TypstWorld::today`, whose "no template uses a date" sentence is
+retouched in the same pass while its no-clock substance stands.
+
+On this convergence: `reviewed: 2026-08-10` on Phase 9. `status` was
+already `accepted`.
+
+### Round 16 — Phase 9 only — 2026-08-10 — fresh clean-room reviewer with repo access — **NOT READY**
+
+Round 0 (once for this episode, the appended Phase 9): the phase
+produces the observable — a PDF in a second look, from markdown that
+changes one frontmatter line — and it is the right one: §2's styling
+decision reserved exactly this mechanism, and the project's own notes
+name the press-release format as the wanted feature. The episode
+proceeded.
+
+The reviewer's grounding pass opened every citation and confirmed all
+but one against the code: the frontmatter's three keys and its error
+shapes, `header`'s fixed import line and its names-every-argument
+comment, `TypstWorld::lookup`'s two branches and the struct comment
+they carry, `emit`'s return type, the template contract as
+`template.typ` implements it, `today`'s deliberate `None`, and every
+close-out target. The one miss: "all twelve checked-in golden files"
+— thirteen exist, `strikethrough.typ` having landed the same day the
+phase was appended.
+
+Verdict: `NOT READY` — two blocking findings, three non-blocking. The
+author accepted all five, rejected none, deferred none.
+
+Blocker 1: **the phase's central deliverable was unwritable while OQ-9
+stood** — the scope said the press-release file's content "OQ-9
+blocks", gate case (2) required that file, and the resolution retroacts
+on the phase's own template contract, so an implementer could not plan
+from the spec alone. Resolved in the round: OQ-9 landed on the `date`
+key. Blocker 2: **gate case (1)'s no-golden-change claim was one the
+document itself declared undecided while OQ-10 stood** — the scope
+stated the all-arguments contract as settled while OQ-10 held it open.
+Resolved in the round: OQ-10 landed on no-template-carried-defaults
+with the per-template parse-time convention.
+
+The round also supplied two facts the resolutions lean on: `today`
+touches only the compile and never the emitted source, so the clock
+option's reproducibility break would ship silently; and the
+omit-the-argument alternative changes twelve of the thirteen shipped
+call lines while dropping the `--emit-typst` property.
+
+Non-blocking, all accepted: the golden census said twelve where
+thirteen exist; the fixed set of template names was never enumerated
+in one place; gate case (4) did not name its assertion mechanism.
+
+Rejections: none.
+
 ### Implementation note — Phase 8 — 2026-08-10 — the census held, and the rule's cap did not
 
 Not a review round. Phase 8 shipped as reviewed, with two things worth
