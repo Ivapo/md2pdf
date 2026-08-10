@@ -8,30 +8,33 @@ sources:
   - cli/src/main.rs
 covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
-  escape rule, the rejection rule, the image asset channel, the template's title
-  block and column toggle, the Typst world and its bundled fonts, and the CLI
-  contract
-max_lines: 205
+  escape rule, the rejection rule, the two walks footnotes need, the image asset
+  channel, the template's title block and column toggle, the Typst world and its
+  bundled fonts, and the CLI contract
+max_lines: 245
 generated: 2026-08-09
 ---
 
 # Pipeline
 
-Markdown in, PDF out, in three steps. `pulldown-cmark` parses; `core/src/emit.rs:emit`
-walks the event stream and writes Typst markup; the embedded Typst compiler produces the
-PDF. `core/src/lib.rs:md_to_typst` returns the source. `core/src/lib.rs:md_to_pdf` takes
-the markdown and a slice of `core/src/lib.rs:Asset` — one image file each, named by the
-path the markdown wrote — and returns the bytes; `core/src/lib.rs:image_paths` is the
-shopping list that names those files. None of the three touches the filesystem, the
-clock, or the network; `cli/src/main.rs` does all file I/O and all terminal output, the
-image files included.
+Markdown in, PDF out, in three steps. `pulldown-cmark` parses;
+`core/src/emit.rs:collect_definitions` and `core/src/emit.rs:emit` walk the event stream
+and write Typst markup; the embedded Typst compiler produces the PDF.
+`core/src/lib.rs:md_to_typst` returns the source. `core/src/lib.rs:md_to_pdf` takes the
+markdown and a slice of `core/src/lib.rs:Asset` — one image file each, named by the path
+the markdown wrote — and returns the bytes; `core/src/lib.rs:image_paths` is the shopping
+list that names those files, in the order a reader meets them, which puts an image inside
+a footnote definition at the first reference to that footnote. None of the three touches
+the filesystem, the clock, or the network; `cli/src/main.rs` does all file I/O and all
+terminal output, the image files included.
 
 ## The dialect
 
-Sixteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
+Seventeen things are supported: headings at levels 1–6, paragraph text, soft breaks,
 emphasis, strong emphasis, inline code, hard line breaks, thematic breaks, links,
-images, bullet lists, ordered lists, code blocks, block quotes, pipe tables, and a
-leading YAML frontmatter block. Heading levels map to Typst headings of the same level.
+images, bullet lists, ordered lists, code blocks, block quotes, pipe tables, footnotes,
+and a leading YAML frontmatter block. Heading levels map to Typst headings of the same
+level.
 
 The inline constructs reach Typst as function calls, not as its own markup.
 `#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
@@ -79,10 +82,40 @@ on the same stack, so the inline arms serve cell content unchanged. The emitter 
 cells: pulldown-cmark pads a short row and drops the excess, following GFM, so the padding
 arrives as the empty content block `[]`.
 
-**Everything else is an error** — raw HTML, a footnote, strikethrough, and math.
-`core/src/emit.rs:describe` names the construct, and `Error::UnsupportedConstruct` carries
-that name with the 1-based line. The CLI prints it to stderr and exits 1. Nothing is ever
-dropped or flattened silently.
+A footnote reference is `#footnote[…]<fn-N>` at its first use and `#footnote(<fn-N>)` at
+every later one, Typst's own form for pointing at a footnote that already exists. `N`
+counts labels by first use, and the emitter writes no numbers: Typst numbers footnotes in
+placement order, which is the order GFM numbers them in. The user's label text never
+reaches the output, because a markdown label may hold any character and a Typst label may
+not. `Options::ENABLE_FOOTNOTES` is what parses one at all.
+
+Typst takes a footnote's content at the reference site while a markdown definition may
+sit after the reference, so one document takes two walks.
+`core/src/emit.rs:collect_definitions` enters the definition regions and nothing else,
+each through the arms that already exist and a buffer on the same stack a list item uses;
+`core/src/emit.rs:emit` then writes the document and skips those regions, with
+`core/src/emit.rs:Notes` holding what the first walk found. Labels are matched under
+Unicode case folding, through `core/src/emit.rs:Label`, because the parser keys its own
+label map that way: `[^A]` cites `[^a]:`, and matching the raw spelling would miss on
+valid input. A reference the parser cannot resolve produces no event at all and stays
+literal text, so a dangling reference needs no error shape.
+
+Three footnote shapes are errors, and `core/src/emit.rs:Notes::enter` names them where
+the definition sits: one no reference cites, which would reach no page; a second
+definition for a label already defined, which would lose a body; and a reference inside a
+definition, which would need a recursive substitution with a cycle check. The first walk
+never raises. A definition whose translation failed keeps that error, and the second walk
+reports it at the region, so the first error in document order is still the one reported
+and the frontmatter still wins over a construct error below it.
+
+**Raw HTML is an error.** `core/src/emit.rs:describe` names the construct, and
+`Error::UnsupportedConstruct` carries that name with the 1-based line. The CLI prints it
+to stderr and exits 1.
+
+Two constructs are neither supported nor refused, and that is a gap rather than a
+decision. Strikethrough and math each need a parser option, neither is set, so `~~x~~`
+and `$x$` arrive as text and the escape rule prints them on the page. `describe` names
+both on arms nothing reaches. Footnotes flattened the same way until they were mapped.
 
 Two link shapes are errors too, and the link arm names them itself rather than through
 `describe`. An empty destination, legal CommonMark, would reach Typst as `#link("")`,
@@ -180,6 +213,11 @@ document with neither `title` nor `author` gets no title block at all.
 has exactly one header row and it is always the first, so row zero is the header by
 construction. Typst's own default sets it in body type, which would flatten a distinction
 the markdown source draws.
+
+A footnote gets no rule, for the reason lists and quotes get none: the Typst default
+already sets one apart, with a superscript marker, a separator, and the note at the foot
+of the column that holds the reference — the column, not the page, because the composer
+keeps its footnote insertions per column.
 
 ## The world
 

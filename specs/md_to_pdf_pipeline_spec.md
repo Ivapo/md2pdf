@@ -40,7 +40,7 @@ phases:
     by: null
   - name: "Phase 7 — footnotes"
     reviewed: 2026-08-09
-    shipped: null
+    shipped: 2026-08-09
     cut: null
     by: null
 

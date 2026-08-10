@@ -2,6 +2,29 @@
 
 Append-only. One heading per round, newest first.
 
+### Implementation note — Phase 7 — 2026-08-09 — one arm the scope did not name
+
+Not a review round. Phase 7 shipped as reviewed, with one addition worth
+recording and one check worth reporting.
+
+The scope names three footnote error shapes and the code carries four. The
+walk of the definitions meets a `Tag::FootnoteDefinition` inside a region it
+has already entered — a definition written inside another one — and the
+match has to be total there. The probe says the parser hoists such a
+definition to a sibling at the top level, so the arm is unreachable; it
+returns `footnote definition inside a footnote definition` rather than
+panicking, because an unreachable arm that guesses is worse than one that
+names what it saw. No test pins it, because no input reaches it.
+
+The corpus check passed with no gap: the repository's own README and
+`samples/article.md` both convert, and the sample now carries a real
+footnote. The by-eye read confirmed OQ-7 twice — in the fixture's PDF and in
+the sample's, where the reference sits in the right column and its note lands
+at the foot of that column rather than of the page.
+
+`rules/pipeline.md` grew past its own 205-line cap, which is raised to 245 in
+the same commit as the prose that needed it.
+
 ### Round 13 — Phase 7 only — 2026-08-09 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking findings, two new non-blocking. The

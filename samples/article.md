@@ -166,6 +166,29 @@ Eight formats work: png, jpg, jpeg, gif, webp, svg, svgz, and pdf. The
 extension decides which one a file holds, so bytes that disagree with the name
 are an error that names both.
 
+# Footnotes
+
+A reference in the text puts its note at the foot of the column that holds
+it[^note], and Typst numbers the notes in the order they appear on the page.
+Cite the same note a second time and both markers carry the same number[^note].
+
+[^note]: The note itself. It may hold *emphasis*, `inline code` and more than
+    one paragraph, and it may sit anywhere in the file, above or below the
+    reference that cites it.
+
+    This second paragraph belongs to the same note, because it is indented
+    under the definition that opened it.
+
+Three shapes are errors rather than notes, for the reason every other error
+here exists. A definition that no reference cites would reach no page, and
+content that vanishes is what this tool refuses to ship. A second definition
+for one label would lose a body, and choosing between two bodies is a guess. A
+reference inside a definition would put a footnote inside a footnote, which
+this dialect does not carry.
+
+A reference whose definition is missing altogether is not an error. It stays
+on the page as the text you typed, the way an unresolved link reference does.
+
 # Characters you do not have to think about
 
 Typst reads several characters as markup, and the emitter escapes all of them

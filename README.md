@@ -44,7 +44,7 @@ inspection rather than a standalone `typst compile`.
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
-constructs, links, tables, and images**:
+constructs, links, tables, images, and footnotes**:
 
 ````markdown
 # Introduction
@@ -76,6 +76,10 @@ fn main() {}
 
 ![A diagram of the three steps](figures/pipeline.svg)
 
+A claim that needs a source[^1].
+
+[^1]: The source, at the foot of the column.
+
 ---
 
 ## Background
@@ -96,8 +100,8 @@ link shapes do not: a link with an empty destination, `[text]()`, and a link tha
 a title, `[text](url "a title")`. Neither Typst nor the PDF can hold a title, and an empty
 destination has nothing to resolve to.
 
-**Every other construct is an error.** A block of raw HTML makes `md2pdf` exit with code
-1 and print the construct and its line:
+**Almost every other construct is an error.** A block of raw HTML makes `md2pdf` exit
+with code 1 and print the construct and its line:
 
 ```console
 $ md2pdf notes.md
@@ -107,6 +111,11 @@ error: unsupported markdown construct 'raw HTML block' at line 5
 That is deliberate. Dropping or flattening content would ship a PDF that lies about its
 source, so the tool names what it cannot yet handle. Support arrives construct by
 construct.
+
+Two constructs escape that rule today, and this is the honest statement of the gap.
+`~~strikethrough~~` and `$math$` are not read as constructs at all, so they reach the
+page as the characters you typed rather than as an error. Footnotes behaved the same way
+until this release. Closing the remaining gap is a piece of work of its own.
 
 Body text reaches the PDF verbatim. Characters that Typst would otherwise interpret are
 escaped for you, so `$5` stays five dollars and never opens math mode:
@@ -157,6 +166,28 @@ Bytes that disagree with their extension are an error too. So are four destinati
 a URL and a `data:` URI, because nothing is fetched over the network; an absolute path,
 which converts on one machine only; and a path with a `..` segment, which escapes the
 document's own folder.
+
+## Footnotes
+
+A reference in the text puts its note at the foot of the column that holds it:
+
+```markdown
+A claim that needs a source[^src], and the same source again[^SRC].
+
+[^src]: The note itself, which may hold *emphasis*, `code` and a second
+    paragraph.
+```
+
+The definition may sit anywhere in the file, above or below the reference. A label is
+matched without regard to case, so `[^SRC]` and `[^src]` are one note, and the numbers
+are Typst's: they run in the order the notes appear on the page, and a note cited twice
+carries one number.
+
+Three shapes are errors. A definition that no reference cites would reach no page. A
+second definition for one label would lose a body. A reference inside a definition would
+put a footnote inside a footnote. A reference whose definition is missing altogether is
+not an error: it stays on the page as the text you typed, the way an unresolved link
+reference does.
 
 ## Frontmatter
 
