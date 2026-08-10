@@ -45,9 +45,11 @@ it.
 
 ### A third level heading
 
-Text under a third level heading. A construct outside the list above is an
-error rather than a silent omission, and support arrives construct by
-construct.
+Text under a third level heading. Almost every construct outside the list
+above is an error rather than a silent omission, and support arrives
+construct by construct. Strikethrough and math are the exception today: they
+are not read as constructs at all, so they reach the page as the characters
+you typed, and the README names that gap.
 
 # The inline constructs
 
