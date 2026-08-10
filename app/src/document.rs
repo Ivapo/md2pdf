@@ -92,3 +92,99 @@ fn read_assets_with(
     }
     Ok(assets)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn fixture(name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tests/fixtures")
+            .join(name)
+    }
+
+    /// A scratch directory that this test process owns, so runs do not
+    /// collide and the repository stays clean.
+    fn scratch_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir()
+            .join(format!("md2pdf-app-test-{}", std::process::id()))
+            .join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// A document and both the files it names, each read from beside it.
+    ///
+    /// `figures/mark.svg` pins that a path in a subdirectory resolves against
+    /// the document's directory and not against the current one, and that the
+    /// asset keeps the path the markdown wrote rather than the resolved one.
+    #[test]
+    fn a_document_and_its_images_read_as_two_assets() {
+        let dir = scratch_dir("figure-doc");
+        std::fs::copy(fixture("dot.png"), dir.join("dot.png")).unwrap();
+        std::fs::create_dir_all(dir.join("figures")).unwrap();
+        std::fs::copy(fixture("mark.svg"), dir.join("figures/mark.svg")).unwrap();
+
+        let markdown = std::fs::read_to_string(fixture("figure.md")).unwrap();
+        let assets = read_assets(&markdown, &dir).unwrap();
+
+        let paths: Vec<&str> = assets.iter().map(|a| a.path.as_str()).collect();
+        assert_eq!(paths, ["dot.png", "figures/mark.svg"]);
+        assert!(assets.iter().all(|a| !a.bytes.is_empty()));
+    }
+
+    /// The same document beside no `figures/` directory, which is how
+    /// `tests/fixtures/` actually stands: `dot.png` sits there and
+    /// `figures/mark.svg` does not, so the second reference fails.
+    #[test]
+    fn a_missing_image_names_the_path_the_line_and_the_reason() {
+        let markdown = std::fs::read_to_string(fixture("figure.md")).unwrap();
+        let error = read_assets(&markdown, &fixture("")).unwrap_err();
+
+        assert!(error.contains("figures/mark.svg"), "{error}");
+        assert!(error.contains("line 5"), "{error}");
+        assert!(error.contains("os error"), "{error}");
+    }
+
+    /// One path named twice is one asset and one read.
+    ///
+    /// The document is written here rather than taken from
+    /// `tests/fixtures/images.md`, which repeats `dot.png` on lines 3 and 10
+    /// but names `fig#2.png` on line 7: a reader fails there before it ever
+    /// reaches the repeat.
+    #[test]
+    fn a_path_named_twice_is_read_once() {
+        let dir = scratch_dir("repeated-image");
+        std::fs::copy(fixture("dot.png"), dir.join("dot.png")).unwrap();
+
+        let markdown = "![the first](dot.png)\n\nText between them.\n\n![the second](dot.png)\n";
+
+        let mut reads = Vec::new();
+        let assets = read_assets_with(markdown, &dir, |file| {
+            reads.push(file.to_path_buf());
+            std::fs::read(file)
+        })
+        .unwrap();
+
+        assert_eq!(assets.len(), 1);
+        assert_eq!(assets[0].path, "dot.png");
+        assert_eq!(reads, [dir.join("dot.png")]);
+    }
+
+    /// A construct outside the dialect names itself and its line, in the words
+    /// the terminal uses. The window shows this sentence; that half is read by
+    /// eye, and this is the half a test can hold.
+    #[test]
+    fn a_construct_outside_the_dialect_names_itself_and_its_line() {
+        let error = render(&fixture("unsupported_html.md")).unwrap_err();
+
+        assert!(error.contains("raw HTML block"), "{error}");
+        assert!(error.contains("line 5"), "{error}");
+    }
+
+    #[test]
+    fn the_title_is_the_documents_file_name() {
+        assert_eq!(title(Path::new("/tmp/notes/paper.md")), "paper.md");
+    }
+}
