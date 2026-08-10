@@ -10,7 +10,7 @@ last_updated: 2026-08-10
 phases:
   - name: "Phase 1 — the window, and one compile on screen"
     reviewed: 2026-08-10
-    shipped: null
+    shipped: 2026-08-10
     cut: null
     by: null
   - name: "Phase 2 — the watch loop"
