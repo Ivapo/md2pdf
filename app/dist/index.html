@@ -66,29 +66,54 @@
 
       main {
         flex: 1;
-        position: relative;
+        display: flex;
+        flex-direction: column;
         min-height: 0;
       }
       #pane {
+        flex: 1;
         width: 100%;
-        height: 100%;
+        min-height: 0;
         border: 0;
         display: block;
       }
       #pane[hidden] {
         display: none;
       }
+      /*
+        The mark a stale page wears. A page that belongs to older text than the
+        file on disk may not pass for the current one, and the error above it
+        says why. No word spells "stale" here: that chrome is Phase 3's.
+      */
+      #pane.stale {
+        opacity: 0.5;
+      }
 
-      /* The empty state, and the error, sit in the same place a page would. */
+      /* The empty state sits in the same place a page would. */
       #message {
+        flex: 1;
         margin: 0;
         padding: 24px;
         white-space: pre-wrap;
         color: var(--quiet);
       }
-      #message.error {
+      /* The error sits above the page it does not belong to. */
+      #error {
+        flex: none;
+        margin: 0;
+        padding: 8px 12px;
+        white-space: pre-wrap;
         color: var(--alarm);
+        background: var(--chrome);
+        border-bottom: 1px solid var(--edge);
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      /* With no page under it, it takes the whole pane instead. */
+      #error.alone {
+        flex: 1;
+        padding: 24px;
+        background: none;
+        border-bottom: 0;
       }
     </style>
   </head>
@@ -96,6 +121,7 @@
     <header><button id="open" type="button">Open…</button></header>
     <main>
       <p id="message">Open a markdown file to see its PDF. ⌘O</p>
+      <p id="error" hidden></p>
       <iframe id="pane" title="The compiled PDF" hidden></iframe>
     </main>
 
@@ -106,6 +132,7 @@
 
       const pane = document.getElementById('pane')
       const message = document.getElementById('message')
+      const error = document.getElementById('error')
 
       // The object URL the pane is showing, so the previous one can be
       // released once the frame has left it.
@@ -119,10 +146,29 @@
         })
         if (path === null) return // the user cancelled
 
+        // The page on screen belongs to the document being replaced, so it
+        // goes before the new one is asked for. Rust clears its own bytes for
+        // the same reason.
+        clear()
+
         try {
-          draw(await invoke('open_document', { path }))
-        } catch (error) {
-          fail(error)
+          await invoke('open_document', { path })
+        } catch (problem) {
+          fail(problem)
+        }
+      }
+
+      /*
+        Every compile — the one an open asks for, and the ones the watch loop
+        makes with nobody asking — ends in this. The signal carries no payload
+        and the bytes come back through a command, because an event carrying
+        them would serialize them as a JSON array of numbers, one per byte.
+      */
+      async function refresh() {
+        try {
+          draw(await invoke('current_pdf'))
+        } catch (problem) {
+          fail(problem)
         }
       }
 
@@ -132,6 +178,10 @@
         link stays a live annotation, the text stays selectable, and the
         accessibility tagging survives. The blob is same-origin, and the bytes
         never touch the disk.
+
+        A re-render returns the reader to the first page. WebKit's PDF view
+        leaks nothing about where the reader was, so there is nothing to
+        restore; the spec's §2 records the measurement and OQ-6 carries it.
       */
       function draw(bytes) {
         const url = URL.createObjectURL(
@@ -139,21 +189,39 @@
         )
         pane.src = url
         pane.hidden = false
+        pane.classList.remove('stale')
         message.hidden = true
+        error.hidden = true
 
         if (drawn) URL.revokeObjectURL(drawn)
         drawn = url
       }
 
-      // The message reaches the page in the words the terminal uses. Nothing
-      // keeps a previous page here, because this phase has none to keep:
-      // watching, and the stale flag that goes with it, are the next phase.
-      function fail(error) {
-        message.textContent = String(error)
-        message.className = 'error'
-        message.hidden = false
+      /*
+        The message reaches the page in the words the terminal uses.
 
+        The last good page survives it. An author mid-edit passes through
+        broken states constantly — a half-typed table, a fence not yet closed —
+        and blanking the pane on each one would lose their place. The page is
+        marked instead, because a page that silently belonged to older text
+        would be worse than a blank one.
+      */
+      function fail(problem) {
+        error.textContent = String(problem)
+        error.hidden = false
+
+        const drawing = !pane.hidden
+        error.classList.toggle('alone', !drawing)
+        message.hidden = true
+        if (drawing) pane.classList.add('stale')
+      }
+
+      // Back to the empty state, holding no document's page.
+      function clear() {
+        message.hidden = false
+        error.hidden = true
         pane.hidden = true
+        pane.classList.remove('stale')
         pane.removeAttribute('src')
         if (drawn) {
           URL.revokeObjectURL(drawn)
@@ -163,6 +231,7 @@
 
       document.getElementById('open').addEventListener('click', openDocument)
       listen('open', openDocument)
+      listen('rendered', refresh)
     </script>
   </body>
 </html>

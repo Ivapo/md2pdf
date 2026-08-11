@@ -10,22 +10,64 @@ use std::path::Path;
 
 use md2pdf_core::Asset;
 
+/// What one compile produced, and what the document named while producing it.
+pub struct Render {
+    /// The image paths the document names, in reader order.
+    ///
+    /// `None` when the document did not parse, and the caller then keeps the
+    /// list it already had. Otherwise it arrives even when the compile failed,
+    /// because emission reads the text and not the disk: a document whose
+    /// figures are all missing still names them. That is what keeps the watch
+    /// filter working while the compile does not.
+    pub images: Option<Vec<String>>,
+
+    /// The bytes, or the sentence the terminal would print.
+    pub pdf: Result<Vec<u8>, String>,
+}
+
 /// Read one document and the image files it names, then compile it to a PDF.
 ///
 /// Every failure arrives as the sentence the CLI prints after its `error: `
 /// prefix, and the two classes are not the same type. A construct outside the
 /// dialect is a `md2pdf_core::Error` and reaches the page through its
 /// `Display`; a file that will not read is no `Error` at all, and
-/// [`read_assets`] builds the plain sentence for it. So a document this app
-/// refuses is refused in the same words at the window and at the terminal.
-pub fn render(document: &Path) -> Result<Vec<u8>, String> {
-    let markdown = std::fs::read_to_string(document)
-        .map_err(|e| format!("cannot read {}: {e}", document.display()))?;
+/// [`read_assets_with`] builds the plain sentence for it. So a document this
+/// app refuses is refused in the same words at the window and at the terminal.
+///
+/// The document is read once, and that one string serves both the image list
+/// and the compile.
+pub fn render(document: &Path) -> Render {
+    // The closure is not noise: `std::fs::read` names one lifetime where the
+    // parameter below asks for any, so passing it directly does not compile.
+    render_with(document, |file| std::fs::read(file))
+}
+
+/// [`render`], with the file read supplied by the caller.
+///
+/// The seam is Phase 1's [`read_assets_with`], one level up, and it exists for
+/// the same reason: a caller that counts its own reads can check a claim about
+/// them rather than argue it from the loop.
+pub fn render_with(document: &Path, read: impl FnMut(&Path) -> std::io::Result<Vec<u8>>) -> Render {
+    let markdown = match std::fs::read_to_string(document) {
+        Ok(markdown) => markdown,
+        Err(e) => {
+            return Render {
+                images: None,
+                pdf: Err(format!("cannot read {}: {e}", document.display())),
+            };
+        }
+    };
 
     let directory = document.parent().unwrap_or(Path::new(""));
-    let assets = read_assets(&markdown, directory)?;
 
-    md2pdf_core::md_to_pdf(&markdown, &assets).map_err(|e| e.to_string())
+    let images = md2pdf_core::image_paths(&markdown)
+        .ok()
+        .map(|images| images.into_iter().map(|image| image.path).collect());
+
+    let pdf = read_assets_with(&markdown, directory, read)
+        .and_then(|assets| md2pdf_core::md_to_pdf(&markdown, &assets).map_err(|e| e.to_string()));
+
+    Render { images, pdf }
 }
 
 /// The window's title for an open document: the file's own name.
@@ -51,17 +93,10 @@ pub fn title(document: &Path) -> String {
 ///
 /// The list arrives in document order and may name one path twice, so this
 /// reads each file once.
-pub fn read_assets(markdown: &str, directory: &Path) -> Result<Vec<Asset>, String> {
-    // The closure is not noise: `std::fs::read` names one lifetime where the
-    // parameter below asks for any, so passing it directly does not compile.
-    read_assets_with(markdown, directory, |file| std::fs::read(file))
-}
-
-/// [`read_assets`], with the file read supplied by the caller.
 ///
-/// The seam exists for one gate. Phase 1 asks that a path the document names
-/// twice is read *once*, and a caller that counts its own reads is the only
-/// way to check that rather than argue it from the loop below.
+/// The read is a parameter for one gate. Phase 1 asks that a path the document
+/// names twice is read *once*, and a caller that counts its own reads is the
+/// only way to check that rather than argue it from the loop below.
 fn read_assets_with(
     markdown: &str,
     directory: &Path,
@@ -127,7 +162,7 @@ mod tests {
         std::fs::copy(fixture("mark.svg"), dir.join("figures/mark.svg")).unwrap();
 
         let markdown = std::fs::read_to_string(fixture("figure.md")).unwrap();
-        let assets = read_assets(&markdown, &dir).unwrap();
+        let assets = read_assets_with(&markdown, &dir, |file| std::fs::read(file)).unwrap();
 
         let paths: Vec<&str> = assets.iter().map(|a| a.path.as_str()).collect();
         assert_eq!(paths, ["dot.png", "figures/mark.svg"]);
@@ -140,7 +175,8 @@ mod tests {
     #[test]
     fn a_missing_image_names_the_path_the_line_and_the_reason() {
         let markdown = std::fs::read_to_string(fixture("figure.md")).unwrap();
-        let error = read_assets(&markdown, &fixture("")).unwrap_err();
+        let error =
+            read_assets_with(&markdown, &fixture(""), |file| std::fs::read(file)).unwrap_err();
 
         assert!(error.contains("figures/mark.svg"), "{error}");
         assert!(error.contains("line 5"), "{error}");
@@ -177,7 +213,7 @@ mod tests {
     /// eye, and this is the half a test can hold.
     #[test]
     fn a_construct_outside_the_dialect_names_itself_and_its_line() {
-        let error = render(&fixture("unsupported_html.md")).unwrap_err();
+        let error = render(&fixture("unsupported_html.md")).pdf.unwrap_err();
 
         assert!(error.contains("raw HTML block"), "{error}");
         assert!(error.contains("line 5"), "{error}");

@@ -18,5 +18,6 @@ tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
 md2pdf-core = { path = "../core" }
+notify = "8.2.0"
 tauri = { version = "2.11.5", features = [] }
 tauri-plugin-dialog = "2.7.2"

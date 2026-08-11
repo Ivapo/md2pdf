@@ -9,11 +9,16 @@
 // out rather than carried untested.
 
 mod document;
+mod preview;
+mod watch;
 
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
+
+use preview::Session;
 
 /// The label of the one window, which `tauri.conf.json` names too.
 const MAIN: &str = "main";
@@ -23,6 +28,13 @@ const MAIN: &str = "main";
 /// The menu does not open the dialog itself. It asks the page to, so the
 /// menu item and the button in the page run one code path and not two.
 const OPEN: &str = "open";
+
+/// The signal the loop sends the page after every compile.
+///
+/// It carries no payload. The page then invokes [`current_pdf`], because an
+/// event carrying the bytes would serialize them as a JSON array of numbers,
+/// one per byte — the cost the `tauri::ipc::Response` boundary already refused.
+const RENDERED: &str = "rendered";
 
 fn main() {
     tauri::Builder::default()
@@ -36,18 +48,29 @@ fn main() {
                     let _ = window.emit(OPEN, ());
                 }
             });
+
+            // The watch loop compiles with nobody asking, so the session is
+            // built with the one thing it cannot decide for itself: how to
+            // tell the page that a compile happened.
+            let handle = app.handle().clone();
+            app.manage(Mutex::new(Session::new(move || {
+                let _ = handle.emit(RENDERED, ());
+            })));
+
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![open_document])
+        .invoke_handler(tauri::generate_handler![open_document, current_pdf])
         .run(tauri::generate_context!())
         .expect("the app failed to start");
 }
 
-/// Compile the document the user picked, and hand the page its bytes.
+/// Open the document the user picked: compile it, and watch it from now on.
 ///
-/// The bytes cross as a `tauri::ipc::Response`, which reaches the page as an
-/// `ArrayBuffer`. A returned `Vec<u8>` would serialize as a JSON array of
-/// numbers instead, one number per byte.
+/// It returns no bytes. Phase 1's one call both compiled and returned, and the
+/// watch loop splits those, because the loop compiles without being asked and
+/// the page has to be able to fetch what it compiled. A compile that fails is
+/// not an error here — it is a state the page draws, and it arrives through
+/// [`current_pdf`] like any other.
 ///
 /// The title is set before the compile, so the window names the document the
 /// user opened whether or not it compiled.
@@ -57,15 +80,46 @@ fn main() {
 #[tauri::command]
 async fn open_document(
     window: tauri::Window,
+    session: tauri::State<'_, Mutex<Session>>,
     path: String,
-) -> Result<tauri::ipc::Response, String> {
+) -> Result<(), String> {
     let document = PathBuf::from(path);
 
     window
         .set_title(&document::title(&document))
         .map_err(|e| e.to_string())?;
 
-    document::render(&document).map(tauri::ipc::Response::new)
+    session
+        .lock()
+        .expect("the session lock was poisoned")
+        .open(document)
+}
+
+/// What the pane should be showing now.
+///
+/// The bytes cross as a `tauri::ipc::Response`, which reaches the page as an
+/// `ArrayBuffer`. A returned `Vec<u8>` would serialize as a JSON array of
+/// numbers instead, one number per byte.
+///
+/// `Err` is the failed compile, and it is not an accident: the page keeps the
+/// page it has, draws this sentence above it, and marks the pane stale.
+#[tauri::command]
+fn current_pdf(session: tauri::State<'_, Mutex<Session>>) -> Result<tauri::ipc::Response, String> {
+    let session = session.lock().expect("the session lock was poisoned");
+    let preview = session.preview();
+
+    // A stale pane keeps its bytes and gets the message instead, and the page
+    // draws the one over the other. Phase 3's export reads the same flag, so
+    // the file it writes and the page on screen cannot disagree.
+    if preview.is_stale() {
+        let error = preview.error().unwrap_or("the page is out of date");
+        return Err(error.to_string());
+    }
+
+    preview
+        .pdf()
+        .map(|pdf| tauri::ipc::Response::new(pdf.to_vec()))
+        .ok_or_else(|| "no document is open".to_string())
 }
 
 /// The window's menu.
