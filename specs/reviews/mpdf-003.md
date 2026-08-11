@@ -2,6 +2,149 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 4 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, four non-blocking residuals, all four folded
+after the verdict. This was the loop's cap, and it converged on it rather than
+past it, as Phase 3's episode did.
+
+The reviewer verified the round-2 blocker's fix by reading OQ-5, §2 and Phase 4
+against **each other** rather than against the changelog, and confirmed all
+three now say one thing. It took the three questions the changelog asked it to
+attack and answered each from the rule rather than from the prose. **The three
+outcomes are exhaustive**: the partition is `file == buffer` first and
+`buffer == last-saved` second, so `F==B` takes the first outcome whatever `S` is
+and `F!=B` splits cleanly on `B==S`, with no combination falling through and no
+dirty flag needed. **The clean-buffer branch preserves Phase 2 as shipped**: an
+author who is not typing has `B==S`, so an external save redraws with no action
+in the window, which is exactly what Phase 2's by-eye case read. **Gate (2)
+still holds**: a save sets `S = B`, the event arrives with `F == B`, the first
+outcome fires, nothing compiles — and it cannot flake, because the test owns the
+buffer.
+
+**The reviewer also withdrew its own non-blocking finding, having found why it
+was wrong**: it had read the vendored `tauri-plugin-dialog` 2.6.0, which does
+ship `ask.toml` and `confirm.toml`. The pin is 2.7.2, which does not. That is
+the second time this episode that reading a version other than the pinned one
+produced a finding, and §2 now records the mechanism so the next reader does not
+repeat it.
+
+The four residuals, all folded: an author typing between a save and that save's
+event lands in the third outcome, so the app can name a divergence that was
+really its own write — it loses nothing and the next save clears it; an external
+writer that writes exactly the author's unsaved text takes the first outcome and
+leaves the last-saved text unrefreshed; the Rust-to-page direction for the
+replacement text and the divergence report was unnamed, and now follows Phase
+3's precedent explicitly; and a divergence is **not** `stale`, because nothing
+failed to compile, with its placement left as an implementation choice the gate
+does not turn on.
+
+On this convergence: `reviewed: 2026-08-10` on Phase 4. `status` was already
+`accepted`. Phase 5 keeps `reviewed: null`.
+
+### Round 2 — Phase 4 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **NOT READY**
+
+Verdict: `NOT READY` — one new blocking finding, four non-blocking. Five of the
+six were accepted; **one was rejected**, the first rejection of this document's
+seven rounds. All five round-1 blockers were confirmed resolved against the
+files.
+
+**The blocker was an error in the author's own round-1 fix, and it was the fold
+half-landing.** Round 1's fix had already been corrected once before it was sent
+— the first draft said the document's path "leaves the watch filter", which
+contradicts the divergence check that a dropped path could never reach — but the
+correction reached §2 and **not** OQ-5's resolution. The reviewer's argument for
+why that blocks is the finding's real value: "the watch filter" has a fixed
+referent in this document, §3 is *the record* of a resolved question under §4 of
+the methodology, and an implementer reading it first builds a filter that drops
+the document, passes gate (2)'s first half, and leaves gate (3)'s divergence
+report unreachable. OQ-5 now says the path **stays** in the filter, and says so
+alongside a sentence recording that an earlier draft said the opposite.
+
+**The best non-blocking finding changed the answer rather than the wording.**
+The reviewer observed that Phase 4, as fixed in round 1, removed a shipped
+behaviour and said so only obliquely: an unconditional refusal falsifies the
+README's "Save the file and the page redraws", Phase 2's by-eye gate case, and
+`rules/desktop.md`'s "recompiles on every save". Folding that as documentation
+was available and was the wrong fix. §6.1 holds that contradicting shipped work
+is never what a phase does, so **OQ-5's answer gained a condition instead**:
+refuse when the buffer holds unsaved edits, take the disk copy when it does not.
+That costs one comparison, needs no dirty flag, and leaves Phase 2's loop
+untouched. Gate (3) went from two cases to three, one per outcome, with the
+failure mode named.
+
+**The rejection.** The reviewer held that `dialog:allow-message` was the wrong
+permission for the two-choice prompt §2 rejects, and cited `ask.toml` and
+`confirm.toml` "in the same directory". Those files do not exist at the pinned
+version: `tauri-plugin-dialog` 2.7.2 ships only `message.toml`, `open.toml` and
+`save.toml`, its `generate_handler!` registers exactly `open`, `save` and
+`message`, and both `ask` and `confirm` in `guest-js/index.ts` call
+`messageCommand`, which invokes `plugin:dialog|message`. The original text was
+right. The finding was folded in the direction it was useful anyway — §2 now
+states that mechanism, so the next reader does not re-derive it. Round 3 found
+the cause and withdrew the finding.
+
+The other two non-blocking, both accepted: where the buffer lives was derivable
+but unstated, and is now named along with its consequence — keystrokes cross the
+IPC boundary and the debounce is Rust's, which is what makes gate (1) a test at
+all; and OQ-7 sat between OQ-5 and OQ-6, so §3 read 1, 2, 3, 4, 5, 7, 6.
+
+### Round 1 — Phase 4 only — 2026-08-10 — fresh clean-room reviewer with repo access — **NOT READY**
+
+Round 0 was **not re-asked**, on the same grounds Phase 3's round 1 recorded:
+§7.0 asks it once per episode and forbids re-litigating it, and this document's
+round 1 for Phase 1 answered it for this episode, the drafted document.
+
+Verdict: `NOT READY` — five blocking, seven non-blocking. All twelve accepted,
+none rejected, none deferred.
+
+**The reviewer's opening move was the round's most useful one: Phase 4 cited no
+`file:symbol` at all**, so there was nothing to verify, and it verified the
+phase's implicit assumptions instead. Exactly one held — `app/src/main.rs:menu`
+had deliberately reserved `Cmd+S` for this phase and said so — and the rest
+failed or were unstated. It also noted that the phase keyed to no number, in a
+document whose Phases 2 and 3 both key to measured constants.
+
+**The five blockers were four omissions and one knot.** (1) **OQ-5 was still
+open**, and both the scope and gate case (3) deferred to a resolution that did
+not exist — verbatim the shape that blocked Phase 1 on OQ-2, Phase 2 on OQ-4,
+and Phase 2's gate case (2) on OQ-3. (2) **Gate case (2) contradicted the
+shipped watch loop**: `is_relevant` admits the document's own path and
+`Preview::compile` re-reads unconditionally, so a save from the text pane would
+compile a second time, and nothing in the scope built a mechanism to stop it —
+with the obvious workaround racy on the project's own measurement, since a
+save's first event reaches the process 12 ms after the write. (3) **The phase
+named no file and no function**, against §3's requirement, and the path it needs
+does not exist: every compile in the tree reaches `std::fs::read_to_string`
+through `document::render_with`. (4) **The gate never said which cases were
+tests**, and there is no JavaScript test harness in the repository, because
+OQ-2's `withGlobalTauri` decision removed the npm toolchain — so gate (1) was
+either a silent second by-eye item against §2's one-item cap or a test with
+nowhere to live. (5) **OQ-6's resolution, written hours earlier, handed Phase 4
+a named design question**, and Phase 4 was silent on it.
+
+All five were resolved together, because OQ-5's answer supplies blocker 2's
+mechanism. OQ-5 resolved to "refuse the reload" and landed in §2 as its own
+decision; §2 states that the document's path stops triggering a recompile
+directly, which removes the race rather than racing it; the scope names the
+compile chain and the split that makes a string compile, and records that `core`
+needs nothing because `md_to_pdf` already takes a `&str`; the gate became five
+cases, all tests, each keyed to a seam that exists, with the unexercised user
+path recorded as a cost; and OQ-7 took cursor-following out of Phase 4, with the
+reason read off `core/src/lib.rs`'s actual exports.
+
+The seven non-blocking, all accepted: the typing debounce had no constant and no
+method, and now has both, measured against the compile it gates rather than
+against FSEvents; the `cargo test --workspace` and untouched check was missing
+again, as it had been in Phases 2 and 3, and is restored as gate (5); gate (4)
+did not say what round-trips against what, and now names the buffer at save as
+the baseline and the CRLF hazard it aims at; §1 said Phase 4 "is last", which
+Phase 5 falsifies; **the close-out named none of the claims this phase makes
+false**, which was the best of the seven and grew in round 2; and the save's
+menu item and accelerator were unnamed.
+
+Rejections: none.
+
 ### Round 3 — Phase 3 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, two cosmetic notes, both folded after the

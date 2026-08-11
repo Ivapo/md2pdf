@@ -24,7 +24,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 4 — the text pane"
-    reviewed: null
+    reviewed: 2026-08-10
     shipped: null
     cut: null
     by: null
@@ -78,8 +78,9 @@ Open `samples/article.md` from the window's Open dialog, and its page is drawn:
 Phase 2 makes that page redraw on every save, which is what turns it from a
 viewer into a loop. Phase 3 adds the status the loop needs to show — stale,
 failed, and how long the compile took — and an export. Phase 4 adds a text pane
-on the left, and the app becomes the editor too; that phase is last because it
-is the only one the project can do without.
+on the left, and the app becomes the editor too; it comes last of the four that
+change what the app does, because it is the only one the project can do
+without. Phase 5 then packages what those four produce.
 
 The engine does not change. `md2pdf-core` already takes a markdown string and
 returns PDF bytes, and `mpdf-001` §1 recorded the claim this spec is the test
@@ -313,6 +314,86 @@ prints: the construct and its line, or the frontmatter key and its line. The
 pane also marks itself stale, because a page that silently belongs to older
 text would be the flattening `mpdf-001` §2 refuses, one layer up.
 
+### Why an external change waits for a clean buffer (decision, recorded)
+
+OQ-5's three answers were refuse the reload, take the disk copy, or ask. **The
+answer is refuse when the buffer holds unsaved edits, and take the disk copy
+when it does not.** The condition is what makes this one rule rather than a
+compromise between two.
+
+**Refusing unconditionally would remove a behaviour this project has shipped.**
+Phase 2's loop is "save the file in your editor and the page redraws", the
+README documents it in those words, and Phase 2's own by-eye gate case read it
+at the window. A rule that refused every external change would falsify all
+three, for the commonest workflow the app has. §6.1 of the methodology is
+explicit that contradicting shipped work is never what a phase does, and here a
+design that keeps the behaviour costs one comparison.
+
+Taking the disk copy unconditionally is the answer that loses. It destroys work
+the app was asked to hold, which is the flattening `mpdf-001` §2 refuses, one
+layer up and with the author's own words rather than a construct. Asking needs a
+modal dialog — a UI class this app does not have, and a permission its
+capability file does not carry — for a case the two-part rule already decides
+without losing anything. That permission is `dialog:allow-message`, which is
+where a two-choice prompt lives too: `tauri-plugin-dialog` 2.7.2 registers
+exactly `open`, `save` and `message`, and its `ask` and `confirm` both route
+through the last of those.
+
+**The app does not merge**, and that is recorded rather than deferred. A
+three-way merge is an editor project, and §1.1 keeps this spec from being one.
+When the buffer is dirty and the disk has moved, the author resolves it by
+saving, which overwrites the disk, or by reopening, which takes it. The app
+names which choice each one is and makes neither for them.
+
+**The rule is three strings and two comparisons, and it needs no dirty flag.**
+The app holds the buffer and the text as it stood at the last open or save. On
+an event naming the document, read the file:
+
+- the file equals the buffer — the app's own save arriving back, or a change
+  that changed nothing. Nothing happens;
+- the file differs, and the buffer equals the last-saved text — the buffer is
+  clean, so nothing can be lost. Take the disk copy and recompile. **This is
+  Phase 2's loop, unchanged**;
+- the file differs, and so does the buffer — the author has unsaved work. Keep
+  it, and report the divergence.
+
+Each of those is a plain function over strings, which is what keeps the rule out
+of the window and inside the gate.
+
+**Two limits it accepts, recorded rather than fixed.** An author who keeps
+typing between a save and that save's event — the 12 ms delivery plus the
+debounce — is in the third outcome by the time it arrives, so the app names a
+divergence that was really its own write. It loses nothing, because that
+outcome keeps the buffer, and the next save clears it. And an external writer
+that happens to write exactly the author's unsaved text takes the first
+outcome, which leaves the last-saved text unrefreshed and the buffer reading
+dirty for longer than it is. Both err toward refusing, which is the direction
+that keeps work.
+
+The mechanism this needs is also what a save needs. **Once a document is open in
+the pane, its own path stops triggering a recompile directly and starts
+triggering the rule above.** The buffer is what compiles, so a document event no
+longer means "the text changed, redraw"; it means "the disk moved, decide", and
+a recompile is one of the three outcomes rather than the event's meaning. The
+figures keep triggering a recompile directly, because nothing else supplies
+them, and the directory watch itself is unchanged.
+
+**So the loop gains a second action, not a narrower filter**, and the difference
+matters: a document dropped from the filter would never reach the rule that
+depends on it. `app/src/watch.rs:start` takes one filter and one callback today,
+so the document's events and the figures' events reach the same code. Phase 4 is
+where they stop doing so. Whether that is two callbacks or one callback handed
+the path is an implementation choice; what this decision fixes is that a
+document event runs the rule rather than a bare recompile.
+
+That is why this phase suppresses no self-write. A suppression would have to win
+a race the loop's own measurement says is not winnable — `app/src/watch.rs`
+records that a save's first event reached the process 12 ms after the write, so
+dropping and restarting the watch around a write leaves a window open.
+**Routing the event into the rule removes the race instead of racing it**,
+because the first of the three outcomes is exactly the self-write case, and it
+is decided by comparing content rather than by winning on timing.
+
 ### Why the app's logic lives in plain functions (decision, recorded)
 
 Everything that can be decided without a window — the watch set, the debounce,
@@ -435,11 +516,28 @@ list to one item.
   also dissolves a question this entry did not ask, which is what to watch for
   a document the dialect refuses. Landed in §2 as its own decision. What the
   loop filters is `image_paths`' list, one layer in.
-- **OQ-5** — what does the editor phase do when the file changes on disk while
+- **OQ-5** — ~~what does the editor phase do when the file changes on disk while
   the text pane holds unsaved edits? Every editor answers this and none of the
   answers is free: refuse the reload, take the disk copy, or ask. It does not
   block anything until Phase 4, and stating it here is what stops Phase 4 being
-  designed as if the question were not there. Design call. Blocks Phase 4.
+  designed as if the question were not there. Design call. Blocks Phase 4.~~
+  **RESOLVED (2026-08-10), across Phase 4's review rounds 1 and 2: refuse the
+  reload when the buffer holds unsaved edits, and take the disk copy when it
+  does not.** Round 1 answered "refuse", flat; round 2 found that refusing
+  unconditionally would falsify Phase 2's shipped loop, its README wording and
+  its by-eye gate case, so the answer gained the condition that keeps them true.
+  A dirty buffer is kept and the divergence is named, and the author resolves it
+  by saving or by reopening; the app makes neither choice for them. Landed in §2
+  as its own decision, with the three-outcome rule and the mechanism it needs.
+
+  **That mechanism is a second action, not a narrower filter**, and this
+  sentence says so because an earlier draft of it said the opposite. The path
+  **stays** in the watch filter while the pane owns it — dropped from the filter
+  it would never reach the rule at all — and what changes is that the event runs
+  the rule instead of a bare recompile. That is what makes a save produce no
+  second compile without a self-write suppression the loop's own 12 ms
+  measurement says would be racy.
+
 - **OQ-6** — ~~should the pane keep drawing the artifact, given what OQ-3 cost?
   The reader returns to the first page on every save, and §2 records why: the
   view that draws a real PDF is the view that tells the app nothing. The two
@@ -479,6 +577,21 @@ list to one item.
   tells the app nothing. **Phase 4 carries that**, as a design question for its
   own round rather than an answer made here. What is settled is the pane: it
   draws the artifact, and Phase 4 is designed against a PDF view.
+
+- **OQ-7** — should the preview follow the author's cursor, mapping the line
+  being edited to a page and setting `#page=N` on each fresh blob URL? OQ-6
+  handed the question to Phase 4's round, and **that round put it outside Phase
+  4**, for a reason worth stating rather than a matter of size. Nothing in
+  `core` maps a source line to a page: `core/src/lib.rs` exports `md_to_typst`,
+  `image_paths`, `md_to_pdf`, `Asset`, `ImageRef` and `Error`, and no more. So
+  building it needs `core` to gain an output it does not have, which is the one
+  thing §2 stakes this spec's falsifiable claim on not needing — a change that
+  size is a phase with its own round rather than a rider on the phase that adds
+  an editor. What makes it worth keeping open is that the objection which killed
+  OQ-6's third shape does not reach it: that number went stale because the
+  reader scrolled, and a cursor lives in the app's own text pane. Design call,
+  with the mechanism answerable from Typst's own crates. Blocks nothing; it is a
+  phase to append if the answer is yes.
 
 ## 4. Implementation phases
 
@@ -741,20 +854,129 @@ which is the artifact the CLI writes.*
 *Produces the observable: yes — the same PDF, redrawn as the author types
 rather than as they save.*
 
-- **Scope:** A text pane beside the preview. It holds the document's text,
-  writes it to disk on save, and re-renders on a debounce as it changes. The
-  external-change rule follows OQ-5's resolution. The pane is a plain text
-  editor, not a rich one: no syntax highlighting, no autocomplete, no
-  formatting commands. Those are a later phase or a later spec, and naming
-  them here is what stops this one growing into an editor project.
-- **Exit gate:** (1) Typing in the pane redraws the preview without a save; the
-  debounce holds it to one compile per pause. (2) Save writes the file, and the
-  watch loop does not then compile the same text a second time. (3) The
-  external-change rule behaves as OQ-5 resolved, tested at the plain-function
-  level. (4) A document opened, edited, saved and reopened round-trips byte for
-  byte.
-- **Close-out:** Update `rules/desktop.md` and the README against the code.
-  One push.
+- **Scope:** A text pane beside the preview in `app/dist/index.html`, holding
+  the open document's text. It is a plain text editor, not a rich one: no
+  syntax highlighting, no autocomplete, no formatting commands. Those are a
+  later phase or a later spec, and naming them here is what stops this one
+  growing into an editor project.
+
+  **The pane's text becomes what compiles, and that is the change this phase
+  really makes.** Every compile path in the tree reads the disk today:
+  `app/src/preview.rs:Preview::compile` calls `app/src/document.rs:render`,
+  which calls `app/src/document.rs:render_with`, which opens with
+  `std::fs::read_to_string`. This phase splits that — the markdown string
+  becomes a parameter and the disk read moves out to the caller — and `Preview`
+  gains the text it last compiled. **`core` needs nothing**:
+  `core/src/lib.rs:md_to_pdf` already takes a `&str`, which is the same claim
+  Phase 1 checked and the reason this phase is not a rewrite either. The image
+  list `app/src/preview.rs:Session::filter` feeds to
+  `app/src/watch.rs:is_relevant` follows the buffer, for the same reason
+  everything else does: the buffer is the document now.
+
+  Save writes the buffer to the open document's path, from a `File` menu item
+  at `CmdOrCtrl+S` and a button beside the two the header carries.
+  `app/src/main.rs:menu` reserved that accelerator in Phase 3 and says so, so
+  this phase spends it rather than choosing it.
+
+  **The buffer lives in Rust, beside the state the loop already writes.** The
+  pane sends its text on each change through a command of its own — one more
+  beside Phase 3's four — and `Preview` holds it, along with the text as it
+  stood at the last open or save, which OQ-5's rule needs. Keystrokes therefore
+  cross the IPC boundary and the debounce is Rust's, which is what lets gate (1)
+  test it at all; a debounce in the page would be logic reachable only by
+  clicking, which §2 refuses.
+
+  The traffic the other way follows Phase 3's precedent rather than inventing
+  one: the replacement text an external change is taken as, and the divergence
+  report a refused one produces, both reach the page the way the status does —
+  through a command answering a payload-less signal, with every word chosen in
+  Rust. **A divergence is not `stale`**, because nothing failed to compile, and
+  whether it joins `app/src/preview.rs:Status` or sits beside it is an
+  implementation choice the gate does not turn on: gate (3) asserts the rule's
+  own return.
+
+  **While the pane owns the document, its own path stops triggering a recompile
+  directly and starts triggering OQ-5's rule**, per §2's decision, and that is
+  what makes a save produce no second compile. **The path stays in the filter**
+  — dropped from it, an event would never reach the rule — and the figures keep
+  triggering a recompile directly. The directory watch is unchanged.
+  `app/src/watch.rs:start` carries one filter and one callback today, so this
+  phase is where the document's events and the figures' events learn to reach
+  different code. Nothing suppresses a self-write, because §2 records that the
+  rule's first outcome is the self-write case and that suppressing one by timing
+  would be racy.
+
+  The external-change rule is OQ-5's resolution, recorded in §2 as three
+  outcomes over three strings: the file equal to the buffer does nothing, the
+  file differing under a clean buffer is taken and recompiled, and the file
+  differing under a dirty one is refused and reported.
+
+  **The typing debounce is its own constant, not `app/src/watch.rs:DEBOUNCE`.**
+  That one is 100 ms measured against FSEvents' batching, which is not what this
+  gates. **This one is measured too**, by the method §2 used for the compile
+  timings and Phase 2 used for its own interval: time twenty compiles of
+  `samples/article.md` and twenty of `samples/press-release.md` through the
+  pane's own path — in process, with no spawn, unlike §2's published figures —
+  and state the medians beside the constant, as `DEBOUNCE`'s doc comment states
+  its own.
+
+  Following the author's cursor is **not in this phase**. OQ-7 carries it and
+  records why it is a phase of its own rather than a rider on this one.
+- **Exit gate:** **Every case is a test, and none is read by eye.** §2 caps the
+  by-eye list at one item and Phases 1 and 2 spent it; there is also no
+  JavaScript test harness in this repository, and OQ-2's `withGlobalTauri`
+  decision — no bundler, no npm toolchain, no `package.json` — is what keeps it
+  that way. So the logic goes in plain Rust functions and the page renders,
+  exactly as Phase 3 did. The cost, recorded rather than hidden: typing in the
+  pane itself is exercised by nothing, as Phase 1's Open path and Phase 3's
+  export path are.
+
+  (1) A compile of text that is not on disk: the pane's string compiles, and the
+  file beside it need never have held that text. Two touches inside the debounce
+  window produce one compile and two outside produce two, over the shape
+  `app/src/watch.rs:Debounce` already provides — time as a parameter, so the
+  case needs no clock and no filesystem and cannot flake.
+
+  (2) Save writes the buffer to the document's path, and the watch loop then
+  compiles **no** second time, counted through the seam
+  `app/src/preview.rs:counted` already provides, in a scratch directory under
+  `std::env::temp_dir()` for the reason Phase 2 gives. **A figure changed in
+  that same directory still compiles**, and that half is what proves the filter
+  narrowed rather than stopped — an implementer who drops the watch entirely
+  passes the first half and fails this one.
+
+  (3) The external-change rule, at the plain-function level, **one case per
+  outcome, so three**: a document rewritten with text equal to the buffer does
+  nothing at all, because that is the app's own save arriving back; a document
+  rewritten under a **clean** buffer is taken and recompiled, which is Phase 2's
+  shipped loop and the case an unconditional refusal would have broken; and a
+  document rewritten under a **dirty** buffer leaves the buffer, the compile and
+  the preview untouched and reports the divergence. An implementer who tests
+  only the third ships a pane that stops redrawing on an external save.
+
+  (4) A document opened, edited, saved and reopened round-trips **byte for byte
+  against the buffer at save**, not against the original, which an edit has
+  already made unequal. Both halves are asserted: the file the save wrote equals
+  the string the pane held, and reopening yields that same string. The hazard it
+  is aimed at is a text pane normalising CRLF to LF, or dropping a trailing
+  newline.
+
+  (5) `cargo test --workspace` still passes and `core/src` and `cli/src` are
+  untouched — §2's falsifiable claim, at the phase with the strongest pull in
+  the spec toward a `core` edit, which is what OQ-7 exists to hold back.
+- **Close-out:** Update `rules/desktop.md` against the code, **raising its
+  `max_lines` again in the same pass** — its body sits at 206 against a cap of
+  210. **Three of its claims stop being true as written and are corrected rather
+  than appended to**: that the compile reads the document from disk; that the
+  export writes "the file `md2pdf` writes, byte for byte, for the same
+  document", which now holds only while the buffer and the file agree; and that
+  the app "recompiles on every save", which now holds for an external save only
+  while the buffer is clean. Phase 3's recorded limit on "stale" widens with
+  them — that window was the debounce plus the compile, and an unsaved buffer
+  has no bound at all. The README's app section gains the text pane and the
+  save, says that the PDF follows the pane rather than the file, and qualifies
+  its "**Save the file and the page redraws**" with the one case where it no
+  longer does. One push.
 
 ### Phase 5 — an app you can install
 *Produces the observable: yes — the same PDF, from an app launched from the
