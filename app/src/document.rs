@@ -6,7 +6,7 @@
 //! only by clicking has no exit gate but a screenshot.
 
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use md2pdf_core::Asset;
 
@@ -79,6 +79,17 @@ pub fn title(document: &Path) -> String {
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| document.display().to_string())
+}
+
+/// Where an export lands unless the user says otherwise: the document's path
+/// with a `.pdf` extension.
+///
+/// This is `cli/src/main.rs:default_output`'s rule, and the duplication is
+/// deliberate for the reason [`read_assets_with`] duplicates its own
+/// counterpart. Sharing it would mean making one crate's binary reachable from
+/// the other, and the two front ends are two binaries over one library.
+pub fn default_output(document: &Path) -> PathBuf {
+    document.with_extension("pdf")
 }
 
 /// Read every image file the document names, from beside the document.

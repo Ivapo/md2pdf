@@ -2716,6 +2716,7 @@ version = "0.1.0"
 dependencies = [
  "md2pdf-core",
  "notify",
+ "serde",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

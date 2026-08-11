@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 
-use preview::Session;
+use preview::{Session, Status};
 
 /// The label of the one window, which `tauri.conf.json` names too.
 const MAIN: &str = "main";
@@ -28,6 +28,11 @@ const MAIN: &str = "main";
 /// The menu does not open the dialog itself. It asks the page to, so the
 /// menu item and the button in the page run one code path and not two.
 const OPEN: &str = "open";
+
+/// The id of the Save-a-copy menu item, and the event it sends the page.
+///
+/// It follows [`OPEN`] exactly: the item emits, and the page owns the dialog.
+const SAVE: &str = "save";
 
 /// The signal the loop sends the page after every compile.
 ///
@@ -42,10 +47,11 @@ fn main() {
         .setup(|app| {
             app.set_menu(menu(app.handle())?)?;
             app.on_menu_event(|app, event| {
-                if event.id() == OPEN
+                let id = event.id();
+                if (id == OPEN || id == SAVE)
                     && let Some(window) = app.get_webview_window(MAIN)
                 {
-                    let _ = window.emit(OPEN, ());
+                    let _ = window.emit(id.as_ref(), ());
                 }
             });
 
@@ -59,7 +65,13 @@ fn main() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![open_document, current_pdf])
+        .invoke_handler(tauri::generate_handler![
+            open_document,
+            current_pdf,
+            status,
+            export_path,
+            export
+        ])
         .run(tauri::generate_context!())
         .expect("the app failed to start");
 }
@@ -122,13 +134,61 @@ fn current_pdf(session: tauri::State<'_, Mutex<Session>>) -> Result<tauri::ipc::
         .ok_or_else(|| "no document is open".to_string())
 }
 
+/// What the window should say about the last compile.
+///
+/// This is a second command beside [`current_pdf`] rather than a wider return
+/// from it, and both answer the same payload-less `rendered` signal: the bytes
+/// cross as a raw `tauri::ipc::Response` and a status does not.
+#[tauri::command]
+fn status(session: tauri::State<'_, Mutex<Session>>) -> Status {
+    session
+        .lock()
+        .expect("the session lock was poisoned")
+        .preview()
+        .status()
+}
+
+/// Where the Save-a-copy dialog should open, or why it should not open.
+///
+/// The page asks this before it asks the user, so an export the pane cannot
+/// serve is refused without a dialog the answer would throw away.
+#[tauri::command]
+fn export_path(session: tauri::State<'_, Mutex<Session>>) -> Result<String, String> {
+    session
+        .lock()
+        .expect("the session lock was poisoned")
+        .preview()
+        .export_path()
+        .map(|path| path.to_string_lossy().into_owned())
+}
+
+/// Write the page's own bytes to the path the user picked.
+///
+/// It compiles nothing. The file is the bytes the pane is showing, which is
+/// what keeps the two from disagreeing.
+#[tauri::command]
+fn export(session: tauri::State<'_, Mutex<Session>>, path: String) -> Result<(), String> {
+    session
+        .lock()
+        .expect("the session lock was poisoned")
+        .preview()
+        .export(&PathBuf::from(path))
+}
+
 /// The window's menu.
 ///
 /// macOS draws no menu of its own, so every item the keyboard needs is named
-/// here — `Cmd-O` above all, which is the accelerator this phase adds.
+/// here — `Cmd-O` and `Shift-Cmd-S`, which are the two accelerators the app has.
+///
+/// The export takes `Shift-Cmd-S` and not `Cmd-S` deliberately. Phase 4 puts a
+/// text pane beside the preview, where `Cmd-S` means save the document, and an
+/// accelerator taken now would have to be given back then.
 fn menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     let open = MenuItemBuilder::with_id(OPEN, "Open…")
         .accelerator("CmdOrCtrl+O")
+        .build(app)?;
+    let save = MenuItemBuilder::with_id(SAVE, "Save a Copy…")
+        .accelerator("Shift+CmdOrCtrl+S")
         .build(app)?;
 
     MenuBuilder::new(app)
@@ -146,6 +206,7 @@ fn menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> 
                 .build()?,
             &SubmenuBuilder::new(app, "File")
                 .item(&open)
+                .item(&save)
                 .separator()
                 .close_window()
                 .build()?,

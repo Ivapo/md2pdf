@@ -48,6 +48,9 @@
 
       header {
         flex: none;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
         padding: 8px 12px;
         background: var(--chrome);
         border-bottom: 1px solid var(--edge);
@@ -62,6 +65,21 @@
       }
       button:active {
         background: var(--edge);
+      }
+
+      /*
+        The status line. Every word in it is chosen in Rust and this only
+        places it, so the four states are checked by tests rather than by eye.
+        The class is the state's own name, so the colour follows the word.
+      */
+      #status {
+        margin-left: auto;
+        color: var(--quiet);
+        font-variant-numeric: tabular-nums;
+      }
+      #status.stale,
+      #status.failed {
+        color: var(--alarm);
       }
 
       main {
@@ -118,7 +136,11 @@
     </style>
   </head>
   <body>
-    <header><button id="open" type="button">Open…</button></header>
+    <header>
+      <button id="open" type="button">Open…</button>
+      <button id="export" type="button">Save a Copy…</button>
+      <span id="status"></span>
+    </header>
     <main>
       <p id="message">Open a markdown file to see its PDF. ⌘O</p>
       <p id="error" hidden></p>
@@ -126,13 +148,14 @@
     </main>
 
     <script>
-      const { open } = window.__TAURI__.dialog
+      const { open, save } = window.__TAURI__.dialog
       const { invoke } = window.__TAURI__.core
       const { listen } = window.__TAURI__.event
 
       const pane = document.getElementById('pane')
       const message = document.getElementById('message')
       const error = document.getElementById('error')
+      const status = document.getElementById('status')
 
       // The object URL the pane is showing, so the previous one can be
       // released once the frame has left it.
@@ -159,17 +182,82 @@
       }
 
       /*
+        Save the page itself, where the user asks.
+
+        Rust is asked for the default path first, and it refuses there when the
+        pane is not current — so a pane with nothing to write never opens a
+        dialog whose answer it would throw away. Nothing recompiles: the file
+        is the bytes on screen.
+      */
+      async function exportDocument() {
+        let defaultPath
+        try {
+          defaultPath = await invoke('export_path')
+        } catch (problem) {
+          fail(problem)
+          return
+        }
+
+        const path = await save({
+          defaultPath,
+          filters: [{ name: 'PDF', extensions: ['pdf'] }]
+        })
+        if (path === null) return // the user cancelled
+
+        try {
+          await invoke('export', { path })
+        } catch (problem) {
+          fail(problem)
+        }
+      }
+
+      /*
         Every compile — the one an open asks for, and the ones the watch loop
         makes with nobody asking — ends in this. The signal carries no payload
         and the bytes come back through a command, because an event carrying
         them would serialize them as a JSON array of numbers, one per byte.
+
+        The status comes back through a second command rather than with the
+        bytes, because the bytes cross raw and a status does not. It arrives
+        first, so the page knows whether there are new bytes to ask for at all.
       */
       async function refresh() {
+        let state
+        try {
+          state = await invoke('status')
+        } catch (problem) {
+          fail(problem)
+          return
+        }
+
+        report(state)
+        if (state.state !== 'current') return
+
         try {
           draw(await invoke('current_pdf'))
         } catch (problem) {
           fail(problem)
         }
+      }
+
+      /*
+        Put the status where the window shows it: the line in the header, the
+        error bar, and the mark a stale page wears. Every word here was chosen
+        in Rust — the state's own name and the compile time — so this places
+        text and never composes it.
+      */
+      function report(state) {
+        status.className = state.state
+        status.textContent = state.time
+          ? `${state.state} · ${state.time}`
+          : state.state
+
+        error.textContent = state.error ?? ''
+        error.hidden = state.error === null
+        error.classList.toggle('alone', !state.page)
+
+        message.hidden = state.state !== 'empty'
+        pane.classList.toggle('stale', state.error !== null && state.page)
       }
 
       /*
@@ -189,22 +277,21 @@
         )
         pane.src = url
         pane.hidden = false
-        pane.classList.remove('stale')
-        message.hidden = true
-        error.hidden = true
 
         if (drawn) URL.revokeObjectURL(drawn)
         drawn = url
       }
 
       /*
-        The message reaches the page in the words the terminal uses.
+        A refusal that is not a compile status: an open that would not read, or
+        an export the pane cannot serve. It reaches the page in Rust's own
+        words, in the bar the compile error uses, and the next compile's status
+        replaces it.
 
-        The last good page survives it. An author mid-edit passes through
-        broken states constantly — a half-typed table, a fence not yet closed —
-        and blanking the pane on each one would lose their place. The page is
-        marked instead, because a page that silently belonged to older text
-        would be worse than a blank one.
+        The last good page survives it, here as everywhere. An author mid-edit
+        passes through broken states constantly — a half-typed table, a fence
+        not yet closed — and blanking the pane on each one would lose their
+        place.
       */
       function fail(problem) {
         error.textContent = String(problem)
@@ -220,6 +307,8 @@
       function clear() {
         message.hidden = false
         error.hidden = true
+        status.textContent = ''
+        status.className = ''
         pane.hidden = true
         pane.classList.remove('stale')
         pane.removeAttribute('src')
@@ -230,8 +319,13 @@
       }
 
       document.getElementById('open').addEventListener('click', openDocument)
+      document.getElementById('export').addEventListener('click', exportDocument)
       listen('open', openDocument)
+      listen('save', exportDocument)
       listen('rendered', refresh)
+
+      // The launch state is a state like the others, and Rust names it too.
+      refresh()
     </script>
   </body>
 </html>

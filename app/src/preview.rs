@@ -1,27 +1,69 @@
 //! What the pane is showing, and what keeps it current.
 //!
-//! [`Preview`] is the state the loop writes: the last good PDF bytes, the
-//! image list the filter needs, whether the page still belongs to the text on
-//! disk, and the error when there is one. [`Session`] is that state plus the
-//! watch that keeps it up to date. Neither needs a window, so both are tested
-//! by ordinary tests rather than by a screenshot.
+//! [`Preview`] is the state the loop writes: the last good PDF bytes, how long
+//! they took, the image list the filter needs, whether the page still belongs
+//! to the text on disk, and the error when there is one. [`Session`] is that
+//! state plus the watch that keeps it up to date. Neither needs a window, so
+//! both are tested by ordinary tests rather than by a screenshot.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use serde::Serialize;
 
 use crate::document;
 use crate::watch::{self, Watch};
 
+/// What the window says about the last compile.
+///
+/// Four states, and the app held one bit until this became four. What separates
+/// *stale* from *failed* is whether there are bytes to keep, because
+/// [`Preview::compile`] sets the stale mark on **every** failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum State {
+    /// No document has been opened. The app launches into this and holds it
+    /// until the first Open.
+    Empty,
+    /// The last compile succeeded, and the page belongs to it.
+    Current,
+    /// The last compile failed, and an older page is still drawn.
+    Stale,
+    /// The last compile failed with no page to keep — the open that never
+    /// compiled.
+    Failed,
+}
+
+/// The status line, as a value rather than as chrome.
+///
+/// Every word in it is chosen here and the page only places it. A window that
+/// worded its own status would be checkable by eye alone, and the spec keeps
+/// that list to the one claim no test can hold.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Status {
+    /// Which of the four states the pane is in.
+    pub state: State,
+    /// How long the compile that produced the drawn page took, worded for the
+    /// window: `"28 ms"`. `None` when no page is drawn.
+    pub time: Option<String>,
+    /// The message from the last compile, if it failed.
+    pub error: Option<String>,
+    /// Is a page drawn under the message?
+    pub page: bool,
+}
+
 /// The pane's state, as Rust holds it.
 ///
 /// The bytes live here rather than only in the page, because the loop is what
-/// compiled them and Phase 3's export has to write the same bytes the pane is
+/// compiled them and the export has to write the same bytes the pane is
 /// showing — a file and a page that disagree would be worse than neither.
 #[derive(Default)]
 pub struct Preview {
     document: Option<PathBuf>,
     images: Vec<String>,
     pdf: Option<Vec<u8>>,
+    elapsed: Option<Duration>,
     stale: bool,
     error: Option<String>,
 }
@@ -30,6 +72,11 @@ impl Preview {
     /// The last good bytes, whether or not they are still current.
     pub fn pdf(&self) -> Option<&[u8]> {
         self.pdf.as_deref()
+    }
+
+    /// The document the pane is showing, if one is open.
+    pub fn document(&self) -> Option<&Path> {
+        self.document.as_deref()
     }
 
     /// Does the page belong to older text than the file on disk?
@@ -42,6 +89,71 @@ impl Preview {
         self.error.as_deref()
     }
 
+    /// Which of the four states the pane is in.
+    ///
+    /// *Empty* is exactly "no document has been opened", and that is the right
+    /// boundary rather than one more condition: [`Preview::compile`] returns
+    /// early with no document, and [`Session::open`] sets the document and
+    /// compiles inside one lock scope, so no observable state sits between
+    /// [`Preview::default`] and the first outcome.
+    ///
+    /// The last arm also absorbs the pair that enumeration leaves — a document
+    /// set with no bytes and no failure — and calling it *failed* is the safe
+    /// direction, because a *failed* pane refuses an export.
+    pub fn state(&self) -> State {
+        match (self.document.is_some(), self.stale, self.pdf.is_some()) {
+            (false, _, _) => State::Empty,
+            (true, false, true) => State::Current,
+            (true, true, true) => State::Stale,
+            (true, _, false) => State::Failed,
+        }
+    }
+
+    /// Everything the window says about the last compile, in one value.
+    pub fn status(&self) -> Status {
+        Status {
+            state: self.state(),
+            time: self.elapsed.map(|took| format!("{} ms", took.as_millis())),
+            error: self.error.clone(),
+            page: self.pdf.is_some(),
+        }
+    }
+
+    /// The bytes an export may write, or why it may not.
+    ///
+    /// Only a *current* pane has them. **The two refusals are two sentences
+    /// because they are two problems**: an *empty* pane holds no bytes at all,
+    /// where a *stale* or *failed* one holds bytes that are known to belong to
+    /// older text. A caller that reported one for the other would send the
+    /// reader looking for the wrong thing.
+    fn exportable(&self) -> Result<&[u8], String> {
+        match (self.state(), self.pdf.as_deref()) {
+            (State::Current, Some(pdf)) => Ok(pdf),
+            (State::Empty, _) => Err("no document is open".to_string()),
+            _ => Err("the last compile failed, so the page is out of date".to_string()),
+        }
+    }
+
+    /// Where a Save-a-copy dialog opens, or why it does not open at all.
+    ///
+    /// It refuses before the dialog rather than after it, so a pane that cannot
+    /// be exported never asks the user for a path it will not use.
+    pub fn export_path(&self) -> Result<PathBuf, String> {
+        self.exportable()?;
+        self.document()
+            .map(document::default_output)
+            .ok_or_else(|| "no document is open".to_string())
+    }
+
+    /// Write the page's own bytes where the user asked.
+    ///
+    /// **Nothing here compiles.** The export writes what the pane is already
+    /// showing, so the file and the page cannot disagree.
+    pub fn export(&self, path: &Path) -> Result<(), String> {
+        let pdf = self.exportable()?;
+        std::fs::write(path, pdf).map_err(|e| format!("cannot write {}: {e}", path.display()))
+    }
+
     /// Compile the open document and take in what came back.
     ///
     /// A success replaces the bytes and clears both the error and the stale
@@ -50,12 +162,18 @@ impl Preview {
     /// blanking the pane on each one would lose their place and make the loop
     /// worse than the command it replaces. The mark is what stops the kept
     /// page from silently claiming to be the current text.
+    ///
+    /// **The duration travels with the bytes**, replaced on a success and kept
+    /// on a failure exactly as they are, so the time the window shows always
+    /// describes the page on screen rather than the last attempt at one.
     pub fn compile(&mut self) {
         let Some(document) = self.document.clone() else {
             return;
         };
 
+        let started = Instant::now();
         let render = document::render(&document);
+        let took = started.elapsed();
 
         if let Some(images) = render.images {
             self.images = images;
@@ -64,6 +182,7 @@ impl Preview {
         match render.pdf {
             Ok(pdf) => {
                 self.pdf = Some(pdf);
+                self.elapsed = Some(took);
                 self.stale = false;
                 self.error = None;
             }
