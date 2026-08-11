@@ -266,6 +266,40 @@
       }
 
       /*
+        Take the document Finder handed the app, if one is waiting.
+
+        A file association only launches the app; the path arrives in Rust as a
+        run event, which can land before this script has run at all. So Rust
+        parks it and this takes it — at startup, and again on every `opened`
+        signal. The take empties the slot, so whichever of the two runs second
+        gets nothing and does nothing, and the document opens once.
+
+        It goes through `clear()` and `open_document` exactly as the dialog
+        does. That is not tidiness: `clear()` is where this page resets the two
+        counters it compares Rust's against, and Rust restarts both at 0 for
+        every document, so an open that skipped it would leave both panes
+        showing the old document under a new title.
+      */
+      async function takePendingOpen() {
+        let path
+        try {
+          path = await invoke('pending_open')
+        } catch (problem) {
+          fail(problem)
+          return
+        }
+        if (path === null) return // nothing was waiting
+
+        clear()
+
+        try {
+          await invoke('open_document', { path })
+        } catch (problem) {
+          fail(problem)
+        }
+      }
+
+      /*
         Write the pane's text to the document's own path.
 
         The text goes over first, so the file is the pane and not the pane a
@@ -482,9 +516,26 @@
       listen('save', saveDocument)
       listen('export', exportDocument)
       listen('rendered', refresh)
+      listen('opened', takePendingOpen)
+
+      /*
+        These two run last, and the ordering above them is load-bearing though
+        it does not look it: the listens are registered first, so the take below
+        sits after the listener rather than before it.
+
+        The limit that accepts, recorded rather than fixed: `listen` completes
+        over IPC, so a document landing between this take and the listener's
+        actual registration would sit in Rust's slot until the next signal. The
+        source ordering makes that window practically unreachable, and the cost
+        if it is ever reached is a document that opens late rather than one that
+        opens wrong.
+      */
 
       // The launch state is a state like the others, and Rust names it too.
       refresh()
+
+      // And a document Finder handed over before this script existed.
+      takePendingOpen()
     </script>
   </body>
 </html>

@@ -49,9 +49,35 @@ const SAVE: &str = "save";
 /// one per byte — the cost the `tauri::ipc::Response` boundary already refused.
 const RENDERED: &str = "rendered";
 
+/// The signal a document handed over by Finder sends the page.
+///
+/// It carries no payload either, and for a different reason than [`RENDERED`]:
+/// the path is in [`Pending`], and the page takes it through [`pending_open`].
+/// The take is what makes a cold launch and a warm one one code path — whichever
+/// of the startup take and this signal's take runs second finds the slot empty
+/// and does nothing, so the document cannot open twice.
+const OPENED: &str = "opened";
+
+/// The document Finder handed over, until the page comes and takes it.
+///
+/// The association only *launches* the app; it hands the process nothing, and a
+/// bundled app is handed its document by `tauri::RunEvent::Opened` rather than
+/// in `argv`. That event can arrive before the page exists, so the path waits
+/// here rather than going straight into a window that may not be listening.
+///
+/// **The open goes through the page rather than around it**, and the page's own
+/// `clear()` is why. [`Session::open`] rebuilds from `Preview::default()`, so
+/// `revision` and `reloaded` restart at 0 for every document, while the page
+/// resets the counters it compares them against only inside `clear()`. A path
+/// straight into Rust would never reach that, and a second document opened from
+/// Finder would leave both panes showing the first one under a new title.
+#[derive(Default)]
+struct Pending(Mutex<Option<PathBuf>>);
+
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(Pending::default())
         .setup(|app| {
             app.set_menu(menu(app.handle())?)?;
             app.on_menu_event(|app, event| {
@@ -81,10 +107,39 @@ fn main() {
             current_pdf,
             status,
             export_path,
-            export
+            export,
+            pending_open
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("the app failed to start");
+
+    // Phase 1 ended this `.run(generate_context!())`, which surfaces no run
+    // events at all — and a run event is the only way a document opened from
+    // Finder reaches the process.
+    app.run(|handle, event| {
+        if let tauri::RunEvent::Opened { urls } = event {
+            // Finder delivers a multiple selection as one event. The app takes
+            // the first and ignores the rest, which is Phase 1's "one file at a
+            // time" rather than a new decision.
+            //
+            // The path comes from `to_file_path` and not from `Url::path`,
+            // which leaves a space percent-encoded: a document named
+            // `my doc.md` would arrive as `my%20doc.md` and open as nothing.
+            let Some(document) = urls.first().and_then(|url| url.to_file_path().ok()) else {
+                return;
+            };
+
+            *handle
+                .state::<Pending>()
+                .0
+                .lock()
+                .expect("the pending lock was poisoned") = Some(document);
+
+            if let Some(window) = handle.get_webview_window(MAIN) {
+                let _ = window.emit(OPENED, ());
+            }
+        }
+    });
 }
 
 /// Open the document the user picked: compile it, and watch it from now on.
@@ -116,6 +171,27 @@ async fn open_document(
         .lock()
         .expect("the session lock was poisoned")
         .open(document)
+}
+
+/// The document Finder handed over, if one is waiting.
+///
+/// **It takes rather than reads**, and that is the whole mechanism. The page
+/// calls this at startup and again on every [`OPENED`] signal, so a document
+/// that arrived before the page's listener existed is collected by the first
+/// and one that arrives after by the second. Whichever runs second finds the
+/// slot empty, so the document opens once.
+///
+/// The page then invokes [`open_document`] with the path exactly as the dialog
+/// does, after the same `clear()`. One open path in the page keeps its counters
+/// honest.
+#[tauri::command]
+fn pending_open(pending: tauri::State<'_, Pending>) -> Option<String> {
+    pending
+        .0
+        .lock()
+        .expect("the pending lock was poisoned")
+        .take()
+        .map(|path| path.to_string_lossy().into_owned())
 }
 
 /// The text the pane should be holding.

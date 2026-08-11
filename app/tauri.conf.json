@@ -17,7 +17,17 @@
     ]
   },
   "bundle": {
-    "active": false,
-    "icon": ["icons/icon.png"]
+    "active": true,
+    "targets": ["app", "dmg"],
+    "icon": ["icons/icon.png"],
+    "fileAssociations": [
+      {
+        "ext": ["md"],
+        "name": "Markdown",
+        "role": "Editor",
+        "rank": "Default",
+        "contentTypes": ["net.daringfireball.markdown"]
+      }
+    ]
   }
 }
