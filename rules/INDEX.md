@@ -2,7 +2,7 @@
 
 # Rules
 
-- **[desktop](desktop.md)** — generated 2026-08-10 · 8 sources · 151/155 lines
-  the desktop app: the crate and its files, the window and its menu, the two commands and the signal between them, the blob frame that draws the artifact, the file I/O the app owns, the watch loop and the filter and debounce it runs on, the state the loop writes, the errors it puts on the page, and the configuration facts a build enforces
+- **[desktop](desktop.md)** — generated 2026-08-10 · 8 sources · 206/210 lines
+  the desktop app: the crate and its files, the window and its menu, the commands and the signal between them, the blob frame that draws the artifact, the file I/O the app owns, the watch loop and the filter and debounce it runs on, the state the loop writes and the four states it reports, the export and its two refusals, the errors it puts on the page, and the configuration facts a build enforces
 - **[pipeline](pipeline.md)** — generated 2026-08-10 · 6 sources · 279/280 lines
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the escape rule, the rejection rule, the two walks footnotes need, the image asset channel, the bundled looks and the call contract they meet, the Typst world and its bundled fonts, and the CLI contract

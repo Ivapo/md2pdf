@@ -20,7 +20,7 @@ phases:
     by: null
   - name: "Phase 3 — export, and the state the loop needs to show"
     reviewed: 2026-08-10
-    shipped: null
+    shipped: 2026-08-10
     cut: null
     by: null
   - name: "Phase 4 — the text pane"
