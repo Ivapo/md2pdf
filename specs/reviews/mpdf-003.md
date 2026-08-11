@@ -2,6 +2,208 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 4 — Phase 5 only — 2026-08-11 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, zero non-blocking residuals. **This round is past
+§7.6's cap, and a person decided to run it**, which is what that rule reserves to a
+person. The escalation in round 3 named two ways to close the blocker and recommended
+the narrow one; the decision was the narrow fix plus one more round, and the reason
+given for the round rather than a straight acceptance was the episode's own pattern —
+the author's fixes had introduced a blocker twice, in rounds 2 and 3, which is exactly
+what a further reviewer pass catches.
+
+**The reviewer checked the two claims it was asked to check rather than argue, and
+both hold.** The icon paragraph's numbers are now attributed to the two different
+producers, which is the confusion that made the previous draft contradict itself: the
+bundler synthesises one `ic09` at 19,582 bytes from a lone PNG, and `cargo tauri icon`
+writes 52 files and a 12-entry icns at 74,735 bytes that `bundle.icon` never reads. No
+sentence anywhere in the phase still claims the command is run.
+
+**Gate (1)'s "and nothing else" was verified by building it**, with the configuration
+the phase now specifies, and the bundle is three files: `Contents/Info.plist`,
+`Contents/MacOS/md2pdf-app`, `Contents/Resources/md2pdf.icns`. Two qualifications came
+with it, neither a finding, and both worth keeping. The probe used `cargo tauri bundle`
+over a pre-built binary rather than `cargo tauri build`, which is the same bundler code
+path. And **the assertion survives the signing branch**: a signed bundle gains
+`Contents/_CodeSignature/`, not a `Resources/` entry, so the case does not silently
+become false if the credentials OQ-8 waits on ever appear.
+
+The run-event sentences were judged sufficient to build from. The one thing left
+unstated is `Url::to_file_path`'s `Err` arm, which the reviewer recorded as not a
+guess: it is unreachable for a `file://` URL from LaunchServices, and handling it is a
+no-op. The close-out was verified line by line, including both command-count strings —
+line 59, wrapping to 60, and line 96 — and the 303-against-307 line count re-derived.
+
+On this convergence: `reviewed: 2026-08-11` on Phase 5. `status` was already
+`accepted`. Every phase in this spec now carries a `reviewed` date, and Phase 5 is the
+only one with `shipped: null`.
+
+### Round 3 — Phase 5 only — 2026-08-11 — same reviewer, resumed with the author's changelog — **NOT READY (escalated at the cap)**
+
+Verdict: `NOT READY`, one blocking finding, four non-blocking. This is §7.6's cap,
+so the episode **escalates to the human rather than running a fourth round**, and
+Phase 5 keeps `reviewed: null` — the date records convergence, and this did not
+converge. What is outstanding is one paragraph and one configuration key, and the
+reviewer named both ways to close it, which is why the escalation is a decision to
+make rather than a problem to solve.
+
+Both round-2 blockers were confirmed resolved **against the files**. The reviewer
+traced the new open path through `app/dist/index.html` as it stands and found the
+hook real rather than invented: the script registers its four `listen` calls and
+*then* calls `refresh()` as its last statement, so the startup take sits where the
+scope says it does. It also recorded why that ordering is load-bearing — the listens
+are issued before the take on the same channel, so an `Opened` landing before the
+page's script ran is collected by the take, one landing after by the listener, and
+the take clearing the slot is what stops the second collector opening the document
+twice.
+
+**The blocker is the icon paragraph, and it was introduced by the fix for round 1's
+icon finding** — the pattern §7.3 warns about, a fix that introduces a blocker,
+landing on this episode for the second time. The paragraph claims `cargo tauri icon`
+yields "a valid `.icns` with one entry". Measured: the command writes **52 files**
+across eight subdirectories including iOS, Android and Windows assets, and its
+`icon.icns` carries **12 entries** at 74,735 bytes. The one-entry icns is what the
+*bundler* synthesises from a lone PNG when the command is **not** run — 19,582 bytes,
+a single `ic09`, which is how the icns in the round-1 probe bundle was produced. So
+the sentence's two halves cannot both be true, and `bundle.icon` stays
+`["icons/icon.png"]` either way, which means running the command changes nothing
+about the `.app` at all. Gate (1) asserts only that `Contents/Resources/` "holds the
+icon", which passes under every branch and catches none of it.
+
+The four non-blocking findings, recorded for whoever closes this: `Url::to_file_path`
+is not named, and a path with a space arrives percent-encoded as
+`file:///…/my%20doc.md`, which `url.path()` does not decode — `tauri` re-exports
+`Url`, so this needs no dependency, which is worth a clause in a crate that pins
+every one it has. `RunEvent::Opened` carries a `Vec` and the slot is singular, so
+several `.md` files selected at once is a choice the phase does not make. The
+store-emit-take leaves one residual race — `listen()` completes over IPC, so an event
+landing between the startup take and the listener's registration would sit in the
+slot until the next signal — practically unreachable by the source ordering, and this
+spec's habit is to write such limits down beside the mechanism. And the close-out
+names two stale claims in `rules/desktop.md` where there are three: it also says
+"registers eight commands" and "Each of the eight commands is a wrapper over a plain
+function", which the ninth command and the `opened` signal both falsify.
+
+### Round 2 — Phase 5 only — 2026-08-11 — same reviewer, resumed with the author's changelog — **NOT READY**
+
+Verdict: `NOT READY`, two blocking findings, both found by measurement rather than by
+reading, and four non-blocking. All three of round 1's blockers were confirmed
+resolved against a real bundle the reviewer built and inspected.
+
+**The first blocker was in the author's own fix, and it was exact rather than racy.**
+The scope had claimed the page needed no change at all, citing two facts that are
+each true — `app/src/preview.rs:Session::open` does call `on_render`, and
+`Preview::take` does bump `reloaded`. They do not compose. `Session::open` rebuilds
+from `Preview::default()`, so `revision` and `reloaded` restart at 0 for every
+document, while the page's `drawnRevision` and `takenReload` reset only inside
+`app/dist/index.html:clear()`, which the dialog path calls before it invokes and a
+path straight into Rust never reaches. A second document opened from Finder returns
+Rust to `revision 1`, `reloaded 1`, which the page already holds from the first: both
+panes keep the old document under a new title. The cold launch happens to work only
+because the page's counters start at `-1`.
+
+The fix routes the open back through the page, and the author took it one step
+further than the reviewer proposed, because the emit alone carries a launch race of
+its own: on a cold open the run event can fire before the page has registered its
+listener. The scope now specifies the payload-less signal **plus a take** — `RENDERED`
+→ `current_pdf`'s existing shape one command over — with the path in a managed slot,
+a ninth command that returns it and clears the slot, a take at startup and a take on
+every signal. `app/src/main.rs:open_document` keeps its signature and its `async`,
+which also dissolved a non-blocking finding about the compile moving to the main
+thread and preserved Phase 1's recorded reason for that `async`.
+
+**The second blocker was a sentence written to save a build that cost one.** The
+scope said the UTI key is "spelled `content-types` in the file by its own serde
+alias". `tauri-utils` does declare `content_types` with that alias, but the CLI never
+reaches serde: it validates against the generated JSON Schema first, where an alias
+does not appear and `deny_unknown_fields` becomes `additionalProperties: false`, so
+`cargo tauri` 2.10.1 stops with "Additional properties are not allowed
+('content-types' was unexpected)". The working spelling is `contentTypes`, and the
+schema-before-serde reason is now recorded with it.
+
+**The second by-eye item was judged and not blocked on.** The reviewer accepted the
+argument — §2 caps the list for the claim "the right pixels reached the glass", and
+this phase's claim is that a `.app` runs away from `cargo` and that LaunchServices
+routes a document into it, which no `cargo test` can double-click. It then found two
+of the three observations unreproducible as written, both folded: the emitted entry
+ranks `LSHandlerRank` as `Default`, so any machine with an editor already registered
+for `.md` keeps that editor and the observation must name Get Info → Open With →
+Change All (and say that `rank: "Owner"` is the wrong fix); and the `~/Documents`
+case was a single positive against a consent that is sticky, so it now names its
+precondition and the negative it watches for. Two smaller ones folded too: the
+`otool` path is `Contents/MacOS/md2pdf-app`, because `productName` renames the `.app`
+and not what is inside it, and the cold-launch mechanism was misattributed —
+`AppState::open_urls` calls `handle_nonuser_event`, which **drops** an event when no
+callback is set rather than queueing it, and what saves the cold case is that tao
+installs the callback before `NSApp.run()`.
+
+### Round 1 — Phase 5 only — 2026-08-11 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0, for this episode:** yes. Phase 5 produces the observable — the same
+typeset PDF — for a consumer who holds no Rust toolchain, which is the one gap the
+four shipped phases leave: §1's author still reaches the window only through `cargo`.
+It is also the right one, because its gate case (1) was drafted as the first check of
+`mpdf-001`'s standing claim that the fonts ship inside the binary. The round then
+falsified that half of the reason, which is recorded below and does not change the
+answer.
+
+Verdict: `NOT READY`, three blocking findings, nine non-blocking. The reviewer built
+a real bundle in a scratch copy of the tracked tree and inspected it rather than
+reading about it, which is what produced every measurement in this episode.
+
+**Blocker 1 — gate case (2) required code the scope never mentioned.**
+`bundle.fileAssociations` makes LaunchServices *launch* the app and hands the process
+nothing; the path arrives as `tauri::RunEvent::Opened { urls }`, which
+`app/src/main.rs:main` cannot see, because it ends `.run(tauri::generate_context!())`
+and surfaces no run events at all. An implementer doing exactly what the scope said
+would get a blank window. Folded: the scope now names the `.build(…)?.run(|handle,
+event| …)` change, the event, the `file://` payload, that a bundled app is handed its
+document by that event and not in `argv`, and the semantics of a second open.
+
+**Blocker 2 — the phase named no file, no symbol and no configuration key**, against
+§3's requirement that a phase name what it touches; Phase 4 names eight-plus and
+Phase 5 named none. The key it turns on is `bundle.active`, `false` in
+`app/tauri.conf.json` today, and the two obvious commands disagree under that value:
+`cargo tauri build` skips bundling while the standalone `cargo tauri bundle` bundles
+anyway. Folded, with the measurement, in OQ-2's idiom.
+
+**Blocker 3 — gate case (1) was not reproducible, and its premise was false.** It
+asked for a launch on "a machine that has no Rust toolchain and no fonts installed";
+macOS cannot be in the second state, and the first is checked better by `otool -L`
+than by finding a second machine. Worse, whether the case passed turned on how the
+bundle travelled rather than on what the build produced: unsigned, it carries only
+the linker's ad-hoc signature — `codesign -dv` reports
+`flags=0x20002(adhoc,linker-signed)` with `Sealed Resources=none` — and `spctl -a
+-vvv -t exec` rejects it, so a copy over USB runs while a downloaded `.dmg` is
+blocked by Gatekeeper until a person overrides it by hand. **The case was replaced
+rather than weakened**, on the precedent OQ-3 set for Phase 2: gate (1) is now four
+shell checks over the built `.app`, with `codesign` and `spctl` recorded rather than
+asserted, because the unsigned branch fails `spctl` by design. The distribution
+question left the gate entirely and became **OQ-8**.
+
+**The fonts clause was falsified in passing and is worth its own line.** Gate (1)
+called the launch "the last check that the bundled fonts really are bundled".
+`core/src/lib.rs` embeds all five faces with `include_bytes!` and the Typst world
+exposes those alone, so that is a compile-time fact no launch tests and no packaging
+can break. What packaging *can* do is grow a font under `Contents/Resources/` that
+somebody added on the theory it was needed, so the gate now asserts the absence, and
+the scope says the phase adds nothing to `bundle.resources`.
+
+The other non-blocking findings, all folded: gate (3) was self-certifying and now
+names the command, the README section and the two output paths; the icon was
+ambiguous and the phase now declines new artwork explicitly, correcting
+`rules/desktop.md` rather than meeting it; `LSItemContentTypes` is not emitted by
+default and the fallback key is named; `tauri-cli` was the one unpinned thing in a
+repo that pins everything, and pins at 2.10.1 with the `tauri-utils` 2.8.3-against-
+2.9.3 `deny_unknown_fields` hazard recorded; a bundle gets its own privacy identity,
+so the recursive watch under `~/Documents` needs a consent the terminal-launched
+build inherited, now in scope and in the gate; and the close-out's `max_lines` was
+four lines from its cap.
+
+**One finding was rejected as a factual error**, and the reviewer confirmed the
+rejection in round 2: it reported that the README has no install section. `README.md`
+line 10 is `## Install`.
+
 ### Round 3 — Phase 4 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, four non-blocking residuals, all four folded

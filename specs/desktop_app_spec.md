@@ -5,7 +5,7 @@ note: >
   A macOS desktop app that shows the PDF while you write: a Tauri window wraps
   the same core crate, watches the document and its images, and re-renders.
 status: accepted
-last_updated: 2026-08-10
+last_updated: 2026-08-11
 
 phases:
   - name: "Phase 1 — the window, and one compile on screen"
@@ -29,7 +29,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 5 — an app you can install"
-    reviewed: null
+    reviewed: 2026-08-11
     shipped: null
     cut: null
     by: null
@@ -593,6 +593,28 @@ list to one item.
   with the mechanism answerable from Typst's own crates. Blocks nothing; it is a
   phase to append if the answer is yes.
 
+- **OQ-8** — what does it take to put this app on a machine that is not this
+  one? Phase 5's round raised the question by falsifying the gate case that
+  assumed the answer. That case asked for a launch on "a machine that has no
+  Rust toolchain and no fonts installed", and neither half survives: macOS
+  cannot be in the second state, because the system font set is not removable,
+  and the first state is checked better and reproducibly by `otool -L` than by
+  finding a second machine. What is left is the real question underneath, which
+  is **distribution, and it is gated on signing rather than on packaging.**
+  Measured during that round: an unsigned bundle carries only the linker's
+  ad-hoc signature — `codesign -dv` reports `flags=0x20002(adhoc,linker-signed)`
+  with `Sealed Resources=none` — and `spctl -a -vvv -t exec` rejects it with
+  "code has no resources but signature indicates they must be present". So
+  whether it launches elsewhere turns on how it travelled: a copy over USB or
+  `scp` sets no `com.apple.quarantine` attribute and runs, while a `.dmg`
+  downloaded or sent through AirDrop sets one and Gatekeeper refuses it until a
+  person overrides by hand. **A gate keyed to that would be measuring the
+  transfer, not the build**, which is why Phase 5 does not carry one. Answering
+  this needs an Apple Developer account, a Developer ID Application
+  certificate and notarisation credentials — external input, none of it on this
+  machine on 2026-08-11. Blocks nothing; it is a phase to append when the
+  credentials exist.
+
 ## 4. Implementation phases
 
 Strictly sequential; each is one plan-mode pass. Phases 1 to 3 build a
@@ -985,18 +1007,235 @@ rather than as they save.*
 *Produces the observable: yes — the same PDF, from an app launched from the
 Applications folder rather than from a build command.*
 
-- **Scope:** A macOS bundle: an `.app` with its icon, its identifier and its
-  document association for `.md`, and a `.dmg` to carry it. Signing and
-  notarisation if the phase can be run with credentials to hand; if it cannot,
-  the phase ships the unsigned bundle and names the gap rather than pretending
-  to close it.
-- **Exit gate:** (1) The built `.app` launches on a machine that has no Rust
-  toolchain and no fonts installed, opens `samples/article.md`, and draws the
-  page — which is also the last check that the bundled fonts really are
-  bundled. (2) Opening a `.md` file from Finder launches the app on that
-  document. (3) The build is one documented command.
-- **Close-out:** Update `rules/desktop.md` and the README's install section
-  against the code. One push.
+- **Scope:** A macOS bundle — an `.app` and a `.dmg` to carry it — and the one
+  piece of Rust that a bundle makes reachable and a build command does not: the
+  document association for `.md`, and the code that answers it.
+
+  **The configuration is `app/tauri.conf.json`, and its `bundle.active` is
+  `false` today**, which is the key the whole phase turns on. It becomes `true`,
+  `bundle.targets` names `app` and `dmg`, and `cargo tauri build` is the one
+  documented command. The two obvious commands disagree under the current value
+  and that costs a build to discover, so it is recorded here in OQ-2's idiom:
+  with `active` false, `cargo tauri build` skips bundling while the standalone
+  `cargo tauri bundle` bundles anyway. `identifier` is already
+  `dev.md2pdf.desktop` and does not change.
+
+  **`bundle.fileAssociations` is the association**, and it emits
+  `CFBundleDocumentTypes` into `Info.plist`: `ext` maps to
+  `CFBundleTypeExtensions`, `name` to `CFBundleTypeName`, `role` to
+  `CFBundleTypeRole`, `rank` to `LSHandlerRank`. It emits no
+  `LSItemContentTypes` unless asked, and modern LaunchServices prefers a UTI, so
+  if the extension alone does not take, the key is `contentTypes` with
+  `net.daringfireball.markdown`.
+
+  **Spell it `contentTypes` and not `content-types`**, which cost a build to
+  learn and is recorded so it costs no more. `tauri-utils` declares the field as
+  `content_types` with `#[serde(alias = "content-types")]`, so the hyphenated
+  spelling reads correctly — but the CLI never gets that far. It validates the
+  file against the **generated JSON Schema** first, a serde alias does not appear
+  in a schema, and `deny_unknown_fields` becomes `additionalProperties: false`
+  there, so `cargo tauri` 2.10.1 stops with `Additional properties are not
+  allowed ('content-types' was unexpected)`. The camel-case spelling passes and
+  emits `LSItemContentTypes`. That key exists in the generation the installed
+  CLI parses with, which is not a given: **`tauri-cli` pins at 2.10.1 here**, as
+  OQ-2's idiom says to pin, and it parses this file with `tauri-utils` 2.8.3
+  while `generate_context!` uses 2.9.3. `FileAssociation` is
+  `deny_unknown_fields` in both, so a key that exists only in the newer
+  generation is rejected by the CLI that is installed.
+
+  **The association only launches the app; it hands the process nothing.** That
+  is the work this phase adds to `app/src/main.rs:main`, which ends
+  `.run(tauri::generate_context!())` today and surfaces no run events at all.
+  It becomes `.build(tauri::generate_context!())?.run(|handle, event| …)`, and
+  the event is `tauri::RunEvent::Opened { urls }` — macOS-only, fed by tao's
+  `application:openURLs:`. **A bundled app is handed its document by that event
+  and not in `argv`**, so nothing here reads `std::env::args`.
+
+  Two details of that payload, in the idiom this section already uses for the
+  keys that cost a build. The URLs are `file://`, and the path comes from
+  `Url::to_file_path` and not from `url::Url::path`, which leaves a space
+  percent-encoded — a document named `my doc.md` arrives as `my%20doc.md` and
+  opens as nothing. `tauri` re-exports `Url`, so this adds no dependency to a
+  crate that pins every one it has. And `urls` is a `Vec`, because Finder
+  delivers a multiple selection as one event: **the app takes the first and
+  ignores the rest**, which is Phase 1's "one file at a time" rather than a new
+  decision.
+
+  A cold launch reaches the process for a reason worth stating, because the
+  obvious guess is wrong: tao's `AppState::open_urls` calls
+  `handle_nonuser_event`, which **drops** an event when no callback is set
+  rather than queueing it — the queue in that file is a different path, reached
+  by `queue_event`, which this does not use. What saves the cold case is
+  ordering. Tao installs the callback before `NSApp.run()`, so AppKit cannot
+  deliver `application:openURLs:` before there is somewhere for it to go.
+
+  **The open reaches the page rather than bypassing it, and the page's own
+  `clear()` is why.** The draft of this phase said the page needed no change at
+  all, and that was wrong in exactly the case gate (2) tests.
+  `app/src/preview.rs:Session::open` rebuilds the preview from
+  `Preview::default()`, so `revision` and `reloaded` restart at 0 for every
+  document, while the page's `drawnRevision` and `takenReload` are reset only in
+  `app/dist/index.html:clear()` — which the dialog path calls before it invokes
+  and a path straight into Rust never reaches. Open a second document that way
+  and Rust returns to `revision 1`, `reloaded 1`, which the page already holds
+  from the first document: both panes keep showing the old one under a new
+  title. The collision is exact rather than racy.
+
+  So the run event **emits to the window the way the menu items do** — the
+  idiom `app/src/main.rs` already uses for `OPEN`, `SAVE` and `EXPORT`, and the
+  page already listens with `core:default`'s own `core:event:allow-listen`, so
+  no capability is added. `app/src/main.rs:open_document` keeps its signature,
+  keeps being `async`, and is not refactored, which also keeps Phase 1's
+  recorded reason for that `async` — the compile stays on the runtime's pool
+  rather than on the thread that draws the window.
+
+  **The signal carries no payload and the page invokes for the path**, which is
+  `RENDERED`'s own shape one command over, and it is what removes the launch
+  race rather than betting on it. The run event stores the path in a managed
+  slot and emits an `opened` signal, named beside `OPEN`, `SAVE`, `EXPORT` and
+  `RENDERED`; the page takes that slot through a command of its own — a ninth,
+  `pending_open`, returning the path or nothing — at startup beside its existing
+  `refresh()`, and again on every signal; and the take clears the slot. A
+  cold open that arrived before the page's listener existed is then collected by
+  the startup take, a warm one by the listener, and whichever runs second gets
+  nothing and does nothing — so the document cannot open twice. `open_document`
+  is invoked with the path exactly as the dialog invokes it, after the same
+  `clear()`, which is what keeps one open path in the page and the counters
+  honest.
+
+  What makes that sound is an ordering in `app/dist/index.html` that is
+  load-bearing and does not look it: the script registers its `listen` calls and
+  *then* calls `refresh()` as its last statement, so the take at startup goes
+  after the listener rather than before it. **The limit it accepts, recorded
+  rather than fixed**: `listen` completes over IPC, so an event landing between
+  the startup take and the listener's actual registration would sit in the slot
+  until the next signal. The source ordering makes that window practically
+  unreachable, and the cost if it is ever reached is a document that opens late
+  rather than one that opens wrong.
+
+  **Opening a second document from Finder does what opening one from the dialog
+  does today**: it replaces the buffer, and unsaved edits in the pane are lost.
+  That is not a new decision and this phase does not make one — §2's
+  external-change rule offers "open the file again to take it" as the way out of
+  a divergence, and that way out works only because reopening replaces. Saying
+  so here stops an implementer inventing a prompt for a permission this app's
+  capability file does not carry.
+
+  **The icon is the placeholder already in the tree, and this phase designs
+  none.** `bundle.icon` stays `["icons/icon.png"]`, and the bundler synthesises
+  `md2pdf.icns` from that lone 512×512 PNG — one `ic09` entry, 19,582 bytes,
+  measured on a probe bundle. The Dock upscales it, which is what a placeholder
+  should look like.
+
+  **`cargo tauri icon` is deliberately not run**, and an earlier draft of this
+  paragraph said it was. It writes 52 files across eight subdirectories,
+  including iOS, Android and Windows assets that §1.1 puts out of scope, and its
+  own `icons/icon.icns` — 12 entries, 74,735 bytes — is never read while
+  `bundle.icon` names a PNG, so the command would change nothing about the
+  `.app`. New artwork is a later job, and `rules/desktop.md`'s claim that "Phase
+  5 owns the real icon" is corrected rather than met.
+
+  **A bundle gets its own identity for privacy consent, and the watch loop
+  depends on one.** Under `cargo tauri dev` the process inherits the terminal's
+  grants; as `dev.md2pdf.desktop` it does not, and `app/src/watch.rs:start`
+  watches a whole directory recursively. A document under `~/Documents`,
+  `~/Desktop` or `~/Downloads` can therefore compile once through the open panel
+  and then stop redrawing, which is the silent-failure class §2 already records
+  for canonicalization, reached by a different route. The gate covers it.
+
+  **Signing and notarisation are `bundle.macOS.signingIdentity` and
+  `hardenedRuntime`, and neither can run here.** Measured on this machine on
+  2026-08-11: `security find-identity -v -p codesigning` reports `0 valid
+  identities found`, and `xcrun notarytool` holds no stored credentials. So the
+  unsigned branch is the one that runs, and **"names the gap" means three
+  concrete places** rather than a gesture: a sentence in the README's Install
+  section, a line in `rules/desktop.md`, and OQ-8, which carries what an
+  unsigned bundle cannot do.
+- **Exit gate:** (1) **The bundle is self-contained and correctly described**,
+  checked by shell over the built `.app` with no window involved.
+  `otool -L Contents/MacOS/md2pdf-app` names only `/usr/lib` and
+  `/System/Library` — no path under the build tree, under `~/.cargo`, or under a
+  package manager's prefix. **The binary keeps the crate's name**: `productName`
+  renames the `.app` and not what is inside it, so `CFBundleExecutable` is
+  `md2pdf-app` while the bundle is `md2pdf.app`.
+  `Contents/Info.plist` carries `CFBundleIdentifier`
+  `dev.md2pdf.desktop` and a `CFBundleDocumentTypes` entry whose
+  `CFBundleTypeExtensions` holds `md`. `Contents/Resources/` holds
+  `md2pdf.icns` and **nothing else** — which is one assertion doing two jobs,
+  since it is both the icon branch the scope chose and the absence of any font
+  file.
+
+  That last one is the fonts claim in the only form packaging can falsify, and
+  the draft of this phase had it wrong. `core/src/lib.rs` embeds all five faces
+  with `include_bytes!` and the Typst world exposes those alone, so "the fonts
+  ship inside the binary" is a compile-time fact that no launch tests and no
+  bundle can break. What a bundle *can* do is grow a `Resources/` font that
+  somebody added on the theory that it was needed — so the case asserts the
+  absence, and this phase adds nothing to `bundle.resources`.
+
+  `codesign -dv` and `spctl -a -t exec` are run and their output is **recorded
+  rather than asserted**: the unsigned branch fails `spctl` by design, and a
+  gate that asserted a pass would be keyed to credentials this phase has already
+  said it does not have.
+
+  (2) **Read by eye once, at the window**, in one session on this machine, with
+  the `.app` in `/Applications`, and three observations in it.
+
+  **First**, launched from Finder, it opens `samples/article.md` **through its
+  own Open dialog** and draws the page. That is the bundle running away from
+  `cargo`, and it deliberately does not go through the association, so a failure
+  here is the bundle and a failure below is LaunchServices.
+
+  **Second**, a `.md` double-clicked in Finder launches it on that document from
+  cold, and a second `.md` opened the same way while it is already running
+  switches to that document — the case the counters above break, so it is the
+  half that must not be skipped. **The observation names a step it cannot skip
+  either:** the emitted entry ranks `LSHandlerRank` as `Default`, so any machine
+  with an editor already registered for `.md` keeps that editor. Set this app as
+  the handler first, through Finder's Get Info → Open With → Change All. A
+  ranking that loses to an installed editor is not a broken association, and
+  `rank: "Owner"` is the wrong fix for it.
+
+  **Third**, a document under `~/Documents`, edited and saved in another editor,
+  redraws the page — the consent check the scope names. **Its precondition is
+  the first launch of this identity**, because consent is sticky and an operator
+  who already granted it, or who holds Full Disk Access, sees a redraw and
+  learns nothing. What the case is watching for is the negative: consent
+  refused, the open panel still handing over the file, the page compiling once,
+  and the watch then silently never firing again.
+
+  **This phase takes a second by-eye item, and that is a departure §2 has to be
+  argued past rather than waved past.** §2 keeps the list to one and Phases 1 and
+  2 spent it; Phases 3 and 4 took none, each paying for it by leaving a user path
+  exercised by nothing. The argument is that the artifact here exists only
+  outside the harness: no Rust test can launch a `.app`, and the claim is not
+  "the right pixels reached the glass" but "the bundle runs at all away from
+  `cargo`", which is the entire subject of the phase. The rule's spirit is kept
+  by pushing everything checkable into (1) and (3) and holding the by-eye part to
+  one session.
+
+  (3) **The build is one command** — `cargo tauri build`, documented in the
+  README's Install section — and it produces `target/release/bundle/macos/`
+  holding `md2pdf.app` and `target/release/bundle/dmg/` holding a `.dmg` named
+  for the version and the architecture. The gate names those two paths so a
+  second person has something to look for rather than a claim to believe.
+
+  (4) `cargo test --workspace` still passes, and `core/src` and `cli/src` are
+  untouched — §2's falsifiable claim, at the phase that rewrites the app's entry
+  point and is the first to change how the binary starts.
+- **Close-out:** Update `rules/desktop.md` against the code, **raising its
+  `max_lines` again in the same pass** — its body sits at 303 against a cap of
+  307, which is four lines and does not hold a bundle, an association, a Finder
+  open and a signing gap. **Four of its claims stop being true and are corrected
+  rather than appended to**: that "there is no installable bundle: that is Phase
+  5"; that "Phase 5 owns the real icon", which this phase declines; and both
+  places it counts the commands — it "registers eight" and "Each of the eight
+  commands is a wrapper over a plain function" — which the ninth command and the
+  `opened` signal falsify together. The
+  README's Install section gains the bundle command beside the `cargo build`
+  it documents today, and the app section's closing sentence — "the window is
+  still built from source; an installable `.app` comes later" — is corrected.
+  One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
