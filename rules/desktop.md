@@ -15,10 +15,11 @@ covers: >
   draws the artifact, the file I/O the app owns, the watch loop and the filter
   and the two debounces it runs on, the buffer that compiles and the rule an
   external change runs, the state the loop writes and the four states it
-  reports, the export and its two refusals, the errors it puts on the page, and
-  the configuration facts a build enforces
-max_lines: 307
-generated: 2026-08-10
+  reports, the export and its two refusals, the errors it puts on the page, the
+  bundle and the document association that launches it, and the configuration
+  facts a build enforces
+max_lines: 394
+generated: 2026-08-11
 ---
 
 # Desktop
@@ -28,8 +29,10 @@ wrapper around `md2pdf-core`, beside `md2pdf-cli`, and it calls no other code of
 this project's own; `core` gained nothing for it, at any phase. Today it opens one
 file at a time, holds that file's text in a pane beside the page, recompiles when
 the typing stops, says what state the page is in, saves the text back, and writes
-the page to a file the user names. There is no installable bundle: that is Phase 5
-of `specs/desktop_app_spec.md`.
+the page to a file the user names. It bundles into an `.app` and a `.dmg`, and a
+`.md` double-clicked in Finder launches it on that document. **The bundle is
+unsigned**, which is a credential this machine does not hold rather than a step
+skipped; `specs/desktop_app_spec.md`'s OQ-8 carries what that costs.
 
 **The pane's text is what compiles**, and several claims below turn on it. The
 file beside it need never have held that text.
@@ -49,15 +52,18 @@ so the whole app is one Cargo build. `capabilities/default.json` grants
 Two configuration facts cost a build each. **`icons/icon.png` is required** —
 without it `generate_context!` panics with "failed to open icon" — and **it must
 be RGBA**, or `tauri-codegen` panics "is not RGBA" instead. The file in the tree
-is a generated placeholder; Phase 5 owns the real icon and the bundle.
-`app.security.csp` is unset and defaults to `None`, so no policy blocks the
-`blob:` frame below. `app/gen/` is generated and is not committed.
+is a generated placeholder, and **no phase has designed artwork to replace it**;
+the bundler synthesises the `.icns` from it, so the Dock upscales one 512×512
+image. `app.security.csp` is unset and defaults to `None`, so no policy blocks
+the `blob:` frame below. `app/gen/` is generated and is not committed.
 
 ## The window
 
 `app/src/main.rs` holds only what needs a window. `main` registers the dialog
-plugin, builds the menu, manages one `Mutex<Session>`, and registers eight
-commands.
+plugin, builds the menu, manages one `Mutex<Session>` and one
+`app/src/main.rs:Pending`, registers nine commands, and — since the bundle —
+**builds the app rather than running it**, so that it can hand `App::run` a
+callback and see the run events a `.run(generate_context!())` never surfaces.
 
 The menu is built by hand, because macOS draws none of its own: an app submenu,
 a `File` submenu carrying `Open…` at `CmdOrCtrl+O`, `Save` at `CmdOrCtrl+S` and
@@ -93,8 +99,12 @@ buffer was replaced from disk. `app/src/main.rs:export_path` and
 `app/src/main.rs:save` writes it to the document's own path. **Keystrokes
 therefore cross the IPC boundary and the debounce is Rust's**, which is what puts
 the interval on the testable side of the window: a debounce in the page would be
-logic reachable only by typing at one. Each of the eight commands is a wrapper
-over a plain function.
+logic reachable only by typing at one.
+
+Eight of the nine commands are wrappers over a plain function.
+`app/src/main.rs:pending_open` is the ninth and is not: it reads no session and
+**takes** a slot the run event filled, which the section on the bundle below
+explains.
 
 ## The page
 
@@ -320,6 +330,84 @@ behind the page for as long as they like, and the pane reads *current* throughou
 because it is current — for the text in the pane.
 
 Nothing in `preview.rs`, `document.rs` or `watch.rs` needs a window: a GUI whose
-logic is reachable only by clicking has no exit gate but a screenshot. Exactly
-one claim is still read by a person, which is whether the right pixels reached
-the glass.
+logic is reachable only by clicking has no exit gate but a screenshot. Two claims
+are read by a person: whether the right pixels reached the glass, and whether the
+bundle below runs at all away from `cargo`.
+
+## The bundle
+
+`cargo tauri build` is the one command, and **`bundle.active` is what it turns
+on** — while that key is false the two obvious commands disagree, `cargo tauri
+build` skipping the bundle and the standalone `cargo tauri bundle` making one
+anyway. `bundle.targets` is `app` and `dmg`, leaving
+`target/release/bundle/macos/md2pdf.app` and a `.dmg` beside it named for the
+version and the architecture. **`productName` renames the `.app` and not what is
+inside it**: the bundle is `md2pdf.app` and `CFBundleExecutable` is
+`md2pdf-app`. `tauri-cli` pins at 2.10.1, as everything here pins.
+
+`Contents/Resources/` holds `md2pdf.icns` and nothing else, and **no font ships
+there**: `core/src/lib.rs` embeds all five faces with `include_bytes!` and the
+Typst world exposes those alone, so one added there would be dead weight.
+
+**The bundle is unsigned**, measured rather than assumed: `codesign -dv` reports
+`flags=0x20002(adhoc,linker-signed)` with `Sealed Resources=none`, and `spctl -a
+-t exec` rejects it. How it travels therefore decides whether it launches
+elsewhere — a copy over USB or `scp` sets no `com.apple.quarantine` attribute and
+runs, a download or an AirDrop sets one and Gatekeeper refuses until a person
+overrides by hand. `bundle.macOS.signingIdentity` and `hardenedRuntime` are where
+the fix goes, and both need an Apple Developer credential.
+
+**A bundle gets its own privacy identity, and the watch loop depends on one.**
+Under `cargo tauri dev` the process inherits the terminal's grants; as
+`dev.md2pdf.desktop` it does not, and `watch.rs:start` watches a whole directory
+recursively. A document under `~/Documents`, `~/Desktop` or `~/Downloads` can
+compile once through the open panel and then stop redrawing — the silent-failure
+class the canonicalization note above records, by another route.
+
+## The document association
+
+`bundle.fileAssociations` emits one `CFBundleDocumentTypes` entry: `ext` becomes
+`CFBundleTypeExtensions`, `name` `CFBundleTypeName`, `role` `CFBundleTypeRole`,
+`rank` `LSHandlerRank`, and `contentTypes` `LSItemContentTypes` — the last only
+when asked for, carrying `net.daringfireball.markdown` because modern
+LaunchServices prefers a UTI. **Spell it `contentTypes`, not `content-types`**:
+`tauri-utils` declares that alias, but the CLI validates against the generated
+JSON Schema before serde runs, an alias does not appear in a schema, and
+`deny_unknown_fields` becomes `additionalProperties: false` there. The rank is
+`Default`, so **a machine with an editor already registered for `.md` keeps that
+editor** — the ranking working, not a broken association.
+
+**The association only launches the app; it hands the process nothing**, and
+nothing here reads `std::env::args`. The path arrives as
+`tauri::RunEvent::Opened`, which is why `main` builds and then runs. Its URLs are
+`file://`, and the path comes from `Url::to_file_path` and **not** `Url::path`,
+which leaves a space percent-encoded — `my doc.md` would arrive as `my%20doc.md`
+and open as nothing; `tauri` re-exports `Url`, so this costs no dependency.
+`urls` is a `Vec`, because Finder delivers a multiple selection as one event, and
+the app takes the first. A cold launch survives by ordering rather than by
+queueing: tao's `AppState::open_urls` **drops** an event when no callback is set,
+and tao installs the callback before `NSApp.run()`.
+
+**The open goes through the page rather than around it**, and `clear()` is why.
+`Session::open` rebuilds from `Preview::default()`, so `revision` and `reloaded`
+restart at 0 per document, while the page resets `drawnRevision` and
+`takenReload` only inside `clear()` — which the dialog path calls and a path
+straight into Rust never would. A second document opened that way would return
+Rust to `revision 1, reloaded 1`, which the page already holds, and both panes
+would keep the old document under a new title.
+
+So the run event **stores and emits**, in the menu items' own idiom: the path
+goes into `Pending`, a managed slot, and a payload-less `opened` signal goes to
+the window. The page takes that slot through `pending_open` at startup and again
+on every signal, and **the take clears it**, so a cold open is collected by the
+first, a warm one by the second, and whichever runs second finds nothing. The
+page then calls `clear()` and invokes `open_document` as the dialog does.
+`core:event:allow-listen` already covers the signal, and `open_document` keeps
+its signature and its `async`.
+
+The limit that accepts: `listen` completes over IPC, so a document landing
+between the startup take and the listener's registration would sit in the slot
+until the next signal. `app/dist/index.html` registers its five `listen` calls
+before it calls `refresh()` and `takePendingOpen()`, which makes that window
+practically unreachable, and the cost if it is reached is a document that opens
+late rather than one that opens wrong.

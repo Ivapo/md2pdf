@@ -14,6 +14,22 @@ $ cargo build --release
 $ ./target/release/md2pdf --help
 ```
 
+The desktop app builds into a real macOS application:
+
+```console
+$ cargo tauri build
+```
+
+That writes `target/release/bundle/macos/md2pdf.app`, and a `.dmg` beside it under
+`target/release/bundle/dmg/`. Drag the `.app` into `/Applications` and launch it from
+there; double-clicking a `.md` file opens it too.
+
+**The bundle is not signed.** Copy it over — a USB stick, `scp`, a shared folder — and
+it runs. Download it or send it by AirDrop and macOS marks it quarantined, and
+Gatekeeper refuses it until you allow it by hand in System Settings → Privacy &
+Security. Signing and notarising it needs an Apple Developer account, which this build
+does not have.
+
 ## Try it
 
 `samples/article.md` is a ready-made document that exercises everything the tool
@@ -90,8 +106,15 @@ the file and the page cannot disagree, and it is byte for byte the file `md2pdf`
 for the same document — while the pane and the file say the same thing, which they do
 until you type. A page that is stale, or no page at all, is refused rather than written.
 
-The app opens one file at a time, and the window is still built from source; an
-installable `.app` comes later.
+**A `.md` file double-clicked in Finder opens in the app**, once it is the handler for
+that extension. macOS gives an installed editor the first claim on `.md`, so if
+double-clicking still opens your editor, pick a markdown file, press `⌘I`, and set
+*Open With* to md2pdf followed by *Change All*. Opening a second file this way switches
+the window to it, and **unsaved edits in the pane are lost** — the same as reopening
+from the Open dialog. Save first if you want to keep them.
+
+The app opens one file at a time. The Install section above has the build command and
+the one thing an unsigned bundle cannot do.
 
 ## What the markdown may contain
 
