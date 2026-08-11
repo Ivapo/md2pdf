@@ -60,16 +60,26 @@ $ cargo tauri dev
 ```
 
 That opens a window. Press `⌘O`, or the Open button, and pick a markdown file: the
-window compiles it and draws the page. `cargo tauri dev` needs the Tauri CLI
-(`cargo install tauri-cli`); without it, `cargo run --release -p md2pdf-app` opens the
-same window and skips the rebuild-on-change.
+window puts its text in the left pane and draws the page on the right. `cargo tauri dev`
+needs the Tauri CLI (`cargo install tauri-cli`); without it,
+`cargo run --release -p md2pdf-app` opens the same window and skips the
+rebuild-on-change.
 
-**Save the file and the page redraws.** The window watches the folder the document sits
-in, so editing a figure in another program redraws it too. A document that will not
-compile leaves the last good page on screen, dimmed, with the error above it — the same
-sentence the command prints — and the page comes back when you fix it. A redraw returns
-you to the first page: the pane is a real PDF view, and it tells the app nothing about
-where you were scrolled.
+**Type in the left pane and the page follows.** It redraws when you stop typing, and
+**the PDF is what the pane says, not what the file says** — so the page shows your
+unsaved work. `⌘S`, or the Save button, writes the pane back to the file. Drag the
+divider to give either side more room.
+
+**Save the file in another program and the page redraws too** — with one exception. The
+window watches the folder the document sits in, so editing a figure elsewhere redraws
+it as well. If the pane holds unsaved edits when the file changes underneath, the app
+keeps your text and says so rather than choosing for you: save to write the pane over
+the file, or open the file again to take it. It never merges the two.
+
+A document that will not compile leaves the last good page on screen, dimmed, with the
+error above it — the same sentence the command prints — and the page comes back when you
+fix it. A redraw returns you to the first page: the pane is a real PDF view, and it
+tells the app nothing about where you were scrolled.
 
 The header says where the page stands — `current` with the time the compile took, or
 `stale` when the last one failed and the page you are looking at is the older one.
@@ -77,11 +87,11 @@ The header says where the page stands — `current` with the time the compile to
 **`File → Save a Copy…`, or `⇧⌘S`, writes the PDF where you ask**, offering the document's
 own path with a `.pdf` extension. It writes the page on screen and compiles nothing, so
 the file and the page cannot disagree, and it is byte for byte the file `md2pdf` writes
-for the same document. A page that is stale, or no page at all, is refused rather than
-written.
+for the same document — while the pane and the file say the same thing, which they do
+until you type. A page that is stale, or no page at all, is refused rather than written.
 
-The app opens one file at a time. It does not yet let you edit the text, and the window
-is still built from source; an installable `.app` comes later.
+The app opens one file at a time, and the window is still built from source; an
+installable `.app` comes later.
 
 ## What the markdown may contain
 
