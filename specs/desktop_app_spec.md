@@ -440,7 +440,7 @@ list to one item.
   answers is free: refuse the reload, take the disk copy, or ask. It does not
   block anything until Phase 4, and stating it here is what stops Phase 4 being
   designed as if the question were not there. Design call. Blocks Phase 4.
-- **OQ-6** — should the pane keep drawing the artifact, given what OQ-3 cost?
+- **OQ-6** — ~~should the pane keep drawing the artifact, given what OQ-3 cost?
   The reader returns to the first page on every save, and §2 records why: the
   view that draws a real PDF is the view that tells the app nothing. The two
   candidate answers are already written down. Take §2's escape hatch —
@@ -451,12 +451,34 @@ list to one item.
   permanently, in which case this entry closes as a non-goal rather than an
   answer. A third shape, an app-owned page number restored through `#page=N`,
   was considered in the round and is weak: the number goes stale the moment the
-  reader scrolls with a trackpad rather than through the app's own controls.
+  reader scrolls with a trackpad rather than through the app's own controls.~~
 
-  **This one needs use, not analysis.** The honest input is a person running
+  ~~**This one needs use, not analysis.** The honest input is a person running
   Phases 2 and 3 on a document long enough to scroll, which is why it is not
   answered now and why it blocks neither. Design call. Blocks nothing; it is a
-  decision to make before Phase 4 puts a second pane beside this one.
+  decision to make before Phase 4 puts a second pane beside this one.~~
+  **RESOLVED (2026-08-10), in use rather than in a review round: the pane keeps
+  drawing the artifact.** This entry asked for a person running Phases 2 and 3
+  on a document long enough to scroll, and that is what answered it, the day
+  Phase 3 shipped: `samples/article.md` at three pages, opened in the window,
+  scrolled past the first page, then edited in a separate editor and saved. The
+  return to page 1 is real friction, and it was judged tolerable. §2's pane
+  decision stands, and the escape hatch stays on the record with its price
+  rather than being taken.
+
+  **It does not close as a non-goal, and the reason is a shape this entry could
+  not have considered.** The third option rejected above — an app-owned page
+  number through `#page=N` — was rejected because the number goes stale the
+  moment the reader scrolls by hand. That objection is about the *reader's*
+  position. Phase 4 puts a text pane in the app, which makes a different thing
+  available: follow the *author's cursor*, mapping the line being edited to a
+  page and setting `#page=N` on each fresh blob URL. Phase 2's round confirmed
+  the write direction on exactly that operation — a fragment on a *new* blob
+  URL, honoured at load — and the staleness objection does not reach it,
+  because the cursor lives in the app's own editor rather than in a view that
+  tells the app nothing. **Phase 4 carries that**, as a design question for its
+  own round rather than an answer made here. What is settled is the pane: it
+  draws the artifact, and Phase 4 is designed against a PDF view.
 
 ## 4. Implementation phases
 
