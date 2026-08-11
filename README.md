@@ -51,9 +51,9 @@ it serves inspection rather than a standalone `typst compile`.
 
 ## The desktop app
 
-There is a second front end: a macOS window that shows the PDF instead of writing it to
-a file. It wraps the same core crate, so it converts exactly what the command converts
-and refuses exactly what the command refuses, in the same words.
+There is a second front end: a macOS window that shows the PDF while you write it. It
+wraps the same core crate, so it converts exactly what the command converts and refuses
+exactly what the command refuses, in the same words.
 
 ```console
 $ cargo tauri dev
@@ -64,9 +64,15 @@ window compiles it and draws the page. `cargo tauri dev` needs the Tauri CLI
 (`cargo install tauri-cli`); without it, `cargo run --release -p md2pdf-app` opens the
 same window and skips the rebuild-on-change.
 
-This is the first slice of the app. It opens one file at a time and compiles it once —
-it does not yet watch the file, export a PDF, or let you edit the text. The window is
-still built from source; an installable `.app` comes later.
+**Save the file and the page redraws.** The window watches the folder the document sits
+in, so editing a figure in another program redraws it too. A document that will not
+compile leaves the last good page on screen, dimmed, with the error above it — the same
+sentence the command prints — and the page comes back when you fix it. A redraw returns
+you to the first page: the pane is a real PDF view, and it tells the app nothing about
+where you were scrolled.
+
+The app opens one file at a time. It does not yet export a PDF or let you edit the text,
+and the window is still built from source; an installable `.app` comes later.
 
 ## What the markdown may contain
 
