@@ -71,8 +71,17 @@ sentence the command prints — and the page comes back when you fix it. A redra
 you to the first page: the pane is a real PDF view, and it tells the app nothing about
 where you were scrolled.
 
-The app opens one file at a time. It does not yet export a PDF or let you edit the text,
-and the window is still built from source; an installable `.app` comes later.
+The header says where the page stands — `current` with the time the compile took, or
+`stale` when the last one failed and the page you are looking at is the older one.
+
+**`File → Save a Copy…`, or `⇧⌘S`, writes the PDF where you ask**, offering the document's
+own path with a `.pdf` extension. It writes the page on screen and compiles nothing, so
+the file and the page cannot disagree, and it is byte for byte the file `md2pdf` writes
+for the same document. A page that is stale, or no page at all, is refused rather than
+written.
+
+The app opens one file at a time. It does not yet let you edit the text, and the window
+is still built from source; an installable `.app` comes later.
 
 ## What the markdown may contain
 
