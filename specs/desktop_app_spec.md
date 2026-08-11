@@ -25,7 +25,7 @@ phases:
     by: null
   - name: "Phase 4 — the text pane"
     reviewed: 2026-08-10
-    shipped: null
+    shipped: 2026-08-10
     cut: null
     by: null
   - name: "Phase 5 — an app you can install"
@@ -869,9 +869,12 @@ rather than as they save.*
   gains the text it last compiled. **`core` needs nothing**:
   `core/src/lib.rs:md_to_pdf` already takes a `&str`, which is the same claim
   Phase 1 checked and the reason this phase is not a rewrite either. The image
-  list `app/src/preview.rs:Session::filter` feeds to
-  `app/src/watch.rs:is_relevant` follows the buffer, for the same reason
-  everything else does: the buffer is the document now.
+  list `app/src/preview.rs:Session::classifier` feeds to
+  `app/src/watch.rs:classify` follows the buffer, for the same reason
+  everything else does: the buffer is the document now. (Those two were
+  `Session::filter` and `is_relevant` when this phase was drafted and reviewed;
+  the pointers are corrected here because the implementation renamed them, which
+  §6.1 allows in the section the phase itself touches.)
 
   Save writes the buffer to the open document's path, from a `File` menu item
   at `CmdOrCtrl+S` and a button beside the two the header carries.
