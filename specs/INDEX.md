@@ -8,3 +8,5 @@
   Markdown images become PDF images: the emitter maps ![alt](path), callers supply the named files as bytes, and the CLI reads them from disk.
 - **[desktop-app](desktop_app_spec.md)** — `mpdf-003` · accepted · done
   A macOS desktop app that shows the PDF while you write: a Tauri window wraps the same core crate, watches the document and its images, and re-renders.
+- **[math](math_spec.md)** — `mpdf-004` · draft · pending
+  LaTeX math in markdown becomes typeset math in the PDF: mitex converts each span in process, a bundled prelude supplies the symbols it emits, and a formula that will not convert is a named error.
