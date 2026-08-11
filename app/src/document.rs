@@ -219,6 +219,22 @@ mod tests {
         assert!(error.contains("line 5"), "{error}");
     }
 
+    /// A document that does not parse hands back no list, and the caller keeps
+    /// the one it had. A document that parses but will not compile hands one
+    /// back anyway, which is what keeps the watch filter alive while a figure
+    /// is missing.
+    #[test]
+    fn the_image_list_survives_a_failed_compile_but_not_a_failed_parse() {
+        assert_eq!(render(&fixture("unsupported_html.md")).images, None);
+
+        let render = render(&fixture("figure.md"));
+        assert!(render.pdf.is_err());
+        assert_eq!(
+            render.images,
+            Some(vec!["dot.png".to_string(), "figures/mark.svg".to_string()])
+        );
+    }
+
     #[test]
     fn the_title_is_the_documents_file_name() {
         assert_eq!(title(Path::new("/tmp/notes/paper.md")), "paper.md");

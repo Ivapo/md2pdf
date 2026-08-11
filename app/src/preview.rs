@@ -168,3 +168,203 @@ impl Session {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
+
+    fn sample(name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../samples")
+            .join(name)
+    }
+
+    fn fixture(name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tests/fixtures")
+            .join(name)
+    }
+
+    /// A scratch directory this test owns.
+    ///
+    /// It sits under `std::env::temp_dir()` deliberately: on macOS that
+    /// resolves through a symlink, so a filter that forgets to canonicalize
+    /// fails these cases loudly rather than passing under some directory that
+    /// happens not to be symlinked.
+    fn scratch_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir()
+            .join(format!("md2pdf-preview-test-{}", std::process::id()))
+            .join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_ne!(
+            dir.canonicalize().unwrap(),
+            dir,
+            "the scratch directory is not symlinked, so these cases prove less than they claim"
+        );
+        dir
+    }
+
+    /// A session whose compiles can be counted, which is the seam every case
+    /// below is read through.
+    fn counted() -> (Session, Arc<AtomicUsize>) {
+        let compiles = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&compiles);
+        let session = Session::new(move || {
+            counter.fetch_add(1, Ordering::SeqCst);
+        });
+        (session, compiles)
+    }
+
+    /// Wait for the loop to reach a compile count, or give up.
+    ///
+    /// The bound is generous because FSEvents' own coalescing sits under the
+    /// debounce. It is a bound on wiring, not a measurement: the count itself
+    /// is pinned by `watch::tests`, which needs no filesystem.
+    fn wait_for(compiles: &AtomicUsize, target: usize) -> usize {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline {
+            let seen = compiles.load(Ordering::SeqCst);
+            if seen >= target {
+                return seen;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        compiles.load(Ordering::SeqCst)
+    }
+
+    /// Give a change that should *not* compile long enough to prove it.
+    fn settle() {
+        std::thread::sleep(watch::DEBOUNCE * 8);
+    }
+
+    /// A copy of `samples/article.md` and both the figures it names.
+    fn article_in(dir: &Path) -> PathBuf {
+        let document = dir.join("article.md");
+        std::fs::copy(sample("article.md"), &document).unwrap();
+        std::fs::copy(sample("pipeline.svg"), dir.join("pipeline.svg")).unwrap();
+        std::fs::copy(sample("check.svg"), dir.join("check.svg")).unwrap();
+        document
+    }
+
+    /// A compile error keeps the bytes and sets the mark. Fixing the document
+    /// clears both.
+    #[test]
+    fn a_failed_compile_keeps_the_last_good_page_and_marks_it_stale() {
+        let dir = scratch_dir("stale");
+        let document = article_in(&dir);
+
+        let mut preview = Preview {
+            document: Some(document.clone()),
+            ..Preview::default()
+        };
+        preview.compile();
+
+        let good = preview.pdf().unwrap().to_vec();
+        assert!(good.starts_with(b"%PDF"));
+        assert!(!preview.is_stale());
+        assert_eq!(preview.error(), None);
+
+        std::fs::write(&document, "# Broken\n\n<div>raw HTML</div>\n").unwrap();
+        preview.compile();
+
+        assert_eq!(preview.pdf(), Some(good.as_slice()));
+        assert!(preview.is_stale());
+        assert!(preview.error().unwrap().contains("raw HTML block"));
+
+        std::fs::write(&document, "# Fixed\n\nOrdinary text.\n").unwrap();
+        preview.compile();
+
+        assert!(!preview.is_stale());
+        assert_eq!(preview.error(), None);
+        assert_ne!(preview.pdf(), Some(good.as_slice()));
+    }
+
+    /// The document and a figure it names each redraw the page. This is the
+    /// real watcher, on a real directory, through the code the window runs.
+    #[test]
+    fn a_saved_document_and_a_replaced_figure_each_compile_again() {
+        let dir = scratch_dir("watch-article");
+        let document = article_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document.clone()).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1, "opening compiles once");
+
+        let markdown = std::fs::read_to_string(&document).unwrap();
+        std::fs::write(&document, markdown.replace("Introduction", "The start")).unwrap();
+        assert_eq!(wait_for(&compiles, 2), 2, "saving the document compiles");
+
+        std::fs::write(
+            dir.join("pipeline.svg"),
+            std::fs::read(sample("check.svg")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(wait_for(&compiles, 3), 3, "replacing a figure compiles");
+
+        assert!(session.preview().pdf().unwrap().starts_with(b"%PDF"));
+        assert!(!session.preview().is_stale());
+    }
+
+    /// A figure the document names minutes before anyone creates it.
+    ///
+    /// This is the case a watch set of files could not have held — `notify`'s
+    /// macOS backend refuses to register a path that does not exist — and the
+    /// one the directory answer exists for.
+    #[test]
+    fn a_figure_that_does_not_exist_yet_is_watched_and_then_compiles() {
+        let dir = scratch_dir("figure-to-come");
+        let document = dir.join("paper.md");
+        std::fs::write(&document, "# Paper\n\n![a mark to come](figures/new.svg)\n").unwrap();
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+        assert!(
+            session
+                .preview()
+                .error()
+                .unwrap()
+                .contains("figures/new.svg")
+        );
+        assert!(session.preview().pdf().is_none());
+
+        std::fs::create_dir_all(dir.join("figures")).unwrap();
+        std::fs::copy(fixture("mark.svg"), dir.join("figures/new.svg")).unwrap();
+
+        assert!(wait_for(&compiles, 2) >= 2, "creating the figure compiles");
+        assert!(session.preview().pdf().unwrap().starts_with(b"%PDF"));
+        assert!(!session.preview().is_stale());
+    }
+
+    /// Opening a second document moves the watch. An implementer who set the
+    /// watcher up once rather than per document passes every case above and
+    /// fails this one.
+    #[test]
+    fn opening_a_second_document_moves_the_watch() {
+        let first_dir = scratch_dir("first");
+        let second_dir = scratch_dir("second");
+        let first = article_in(&first_dir);
+        let second = article_in(&second_dir);
+
+        let (mut session, compiles) = counted();
+        session.open(first.clone()).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        session.open(second.clone()).unwrap();
+        assert_eq!(wait_for(&compiles, 2), 2);
+
+        std::fs::write(&first, "# The first, edited\n").unwrap();
+        settle();
+        assert_eq!(
+            compiles.load(Ordering::SeqCst),
+            2,
+            "the first document is no longer watched"
+        );
+
+        std::fs::write(&second, "# The second, edited\n").unwrap();
+        assert_eq!(wait_for(&compiles, 3), 3, "the second document is watched");
+    }
+}

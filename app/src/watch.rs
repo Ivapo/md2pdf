@@ -194,3 +194,101 @@ pub fn start(
 
     Ok(Watch { _watcher: watcher })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A scratch directory this test process owns. It sits under
+    /// `std::env::temp_dir()` deliberately: on macOS that resolves through a
+    /// symlink, so a canonicalization bug fails here rather than passing under
+    /// some directory that happens not to be symlinked.
+    fn scratch_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir()
+            .join(format!("md2pdf-watch-test-{}", std::process::id()))
+            .join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn the_watch_set_is_the_documents_own_directory() {
+        assert_eq!(
+            root(Path::new("/tmp/notes/paper.md")),
+            Path::new("/tmp/notes")
+        );
+        assert_eq!(root(Path::new("paper.md")), Path::new("."));
+    }
+
+    /// The document and both the figures it names redraw the page. A sibling
+    /// the document never names does not, though the watch covers it.
+    #[test]
+    fn the_filter_admits_the_document_and_its_figures_and_nothing_else() {
+        let dir = scratch_dir("filter");
+        let document = dir.join("figure.md");
+        let images = ["dot.png".to_string(), "figures/mark.svg".to_string()];
+
+        let real = dir.canonicalize().unwrap();
+
+        assert!(is_relevant(&real.join("figure.md"), &document, &images));
+        assert!(is_relevant(&real.join("dot.png"), &document, &images));
+        assert!(is_relevant(
+            &real.join("figures/mark.svg"),
+            &document,
+            &images
+        ));
+        assert!(!is_relevant(&real.join("notes.txt"), &document, &images));
+    }
+
+    /// The event and the document name the same file and differ only by
+    /// `/var` against `/private/var`, which is what every real event does.
+    #[test]
+    fn an_event_under_private_var_names_a_document_under_var() {
+        let dir = scratch_dir("canonical");
+        let document = dir.join("paper.md");
+        std::fs::write(&document, "# Paper\n").unwrap();
+
+        let event = document.canonicalize().unwrap();
+        assert_ne!(
+            event, document,
+            "the scratch directory is not symlinked, so this case proves nothing"
+        );
+
+        assert!(is_relevant(&event, &document, &[]));
+    }
+
+    /// Two events inside the window are one compile; two outside are two.
+    #[test]
+    fn the_debounce_folds_one_saves_events_into_one_compile() {
+        let interval = Duration::from_millis(100);
+        let mut debounce = Debounce::new(interval);
+        let start = Instant::now();
+
+        // One save, arriving as two events a quarter of the window apart.
+        debounce.touch(start);
+        assert!(!debounce.take(start + Duration::from_millis(25)));
+        debounce.touch(start + Duration::from_millis(25));
+        assert!(!debounce.take(start + Duration::from_millis(100)));
+        assert!(debounce.take(start + Duration::from_millis(130)));
+
+        // And having fired, it does not fire again on its own.
+        assert!(!debounce.take(start + Duration::from_millis(400)));
+
+        // Two saves, a window and a half apart: two compiles.
+        debounce.touch(start + Duration::from_millis(500));
+        assert!(debounce.take(start + Duration::from_millis(600)));
+        debounce.touch(start + Duration::from_millis(650));
+        assert!(debounce.take(start + Duration::from_millis(750)));
+    }
+
+    /// Nothing pending means the loop blocks rather than spins.
+    #[test]
+    fn an_idle_debounce_asks_for_no_timeout() {
+        let mut debounce = Debounce::new(Duration::from_millis(100));
+        let start = Instant::now();
+
+        assert_eq!(debounce.wait(start), None);
+        debounce.touch(start);
+        assert_eq!(debounce.wait(start), Some(Duration::from_millis(100)));
+    }
+}
