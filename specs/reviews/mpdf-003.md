@@ -2,6 +2,136 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 2 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, seven new non-blocking, all accepted and
+folded after the verdict. The reviewer verified against the file rather than
+the changelog, confirming the working tree held only the spec's own diff and
+that `app/` still sat at `fa75a13`.
+
+It strengthened one of the round's own claims rather than merely checking it.
+§2 argues that every legal image path resolves under the document's directory
+because `core/src/emit.rs:check_image` refuses a scheme, a leading `/`, a `..`
+segment and a backslash; the reviewer found that `check_image` is called
+**inside the walk `emit()` runs**, so `image_paths` enforces those refusals
+itself rather than only `md_to_pdf` — an illegal path never reaches the list,
+it fails the call. It also confirmed the two gate cases the author flagged for
+scepticism: `notify`'s stream carries `kFSEventStreamCreateFlagNoDefer`, so
+gate (2)'s bounded wait absorbs only the debounce and FSEvents' coalescing, and
+FSEvents watches a tree **by path** rather than by descriptor, which is exactly
+why the directory answer reaches a subdirectory that did not exist when the
+watch began — the case `append_path`'s `path.exists()` check denied the file
+answer. It noted gate (3) is self-defending: an implementer who recomputed the
+list after a successful *compile* rather than a successful *parse* would have
+no list at open and fail that case alone.
+
+**The best finding was NB-1, and it would have shipped a silently dead loop.**
+`notify` canonicalizes a path as it registers it, because FSEvents reports the
+resolved path, while the filter as drafted compared paths as the Open dialog
+produced them. Verified here independently: `std::env::temp_dir()` is
+`/var/folders/…` whose real path is `/private/var/folders/…`, and `/tmp` and
+`/var` are both symlinks into `/private`, so this is the default case. Every
+event would fail the filter, and the app would run, watch, and never redraw.
+§2 now records it in the idiom OQ-2 used for the icon facts, the filter
+canonicalizes both sides, and two gate cases were rewritten to catch it — one
+unit case over `/var` against `/private/var`, and a rule that gate (2)'s
+scratch directory sit under `std::env::temp_dir()` so the case cannot pass
+under a directory that happens not to be symlinked.
+
+The other six, all folded: the phase did not say **where the compile lives**,
+which read two ways, one of them two compiles per save with a race between
+them — it now says the compile happens once, in the loop, and that the page's
+invoke returns bytes already compiled; gate (2) needed an observable, and now
+names `app/src/document.rs:read_assets_with` as the seam Phase 1 built for the
+same job; "successful parse" was load-bearing and undefined, and now says
+emission; a figure that is a symlink out of the directory is not covered, and
+is recorded as a limit rather than fixed; no gate opened a **second** document,
+so an implementer who set the watcher up once would have passed everything —
+that is now gate case (4); and two §4 hygiene nits, the struck questions having
+dropped their classification sentences instead of striking them, and a bare
+`OQ-6` in §2 that meant `mpdf-001`'s, now written without the token.
+
+Timings were not re-measured this round. Round 1's 9.0 ms and 29.0 ms against
+§2's recorded 8.5 and 28.7 stand, and the whole-recompile argument reproduces.
+
+On this convergence: `reviewed: 2026-08-10` on Phase 2. `status` was already
+`accepted`. Phases 3 to 5 keep `reviewed: null`.
+
+### Round 1 — Phase 2 only — 2026-08-10 — fresh clean-room reviewer with repo access — **NOT READY**
+
+Round 0 was **not re-asked**. §7.0 asks it once per episode and forbids
+re-litigating it, and this document's round 1 for Phase 1 recorded it as
+answered for this episode — the drafted document. Its answer covers Phase 2,
+which §1 names as the phase that turns the app from a viewer into a loop, and
+which states that it produces the observable.
+
+Verdict: `NOT READY` — three blocking, ten non-blocking. The author accepted
+all thirteen, rejected none, deferred one to a new open question. Two blockers
+were the same shape round 1 on Phase 1 hit: **an unresolved open question
+deciding the phase's mechanism.**
+
+Blocker 1: **OQ-4 was unresolved and the scope deferred its central mechanism
+to it** — "with OQ-4's answer deciding whether the watcher takes the files or
+their directories" leaves two materially different builds. Blocker 2: **the
+phase named no file-watching crate and none was in the tree**, so OQ-4 had
+nothing to be read against; the two were one knot. Blocker 3: **gate case (2)
+was keyed to OQ-3's resolution, which did not exist.**
+
+Blockers 1 and 2 were resolved by reading the crate. `notify` 8.2.0's macOS
+backend refuses a path that does not exist — its own `append_path` opens
+`if !path.exists() { return Err(Error::path_not_found()…) }` — so a file-valued
+set cannot hold the `figures/new.svg` case the question poses. **The answer
+then came out smaller than the question assumed.** `check_image` refuses a URI
+scheme, a leading `/`, a `..` segment and a backslash, so every legal image
+path already resolves under the document's own directory: the set is one
+recursive watch on that directory, needing no recomputation when an edit adds
+or drops a figure, and computable from the document's path alone — which also
+dissolved a separate non-blocking finding about what to watch for a document
+the dialect refuses. `image_paths` keeps a second job one layer in, as the
+filter rather than the set.
+
+Blocker 3 was resolved by probing the running Phase 1 app three times, the app
+reverted afterwards. **Both halves of OQ-3's own guess were wrong.** It
+expected "the honest floor may be an offset rather than a semantic position";
+the floor is lower — after a human scrolled several pages by hand, the parent
+saw `scrollTop` 4 and `scrollY` 4, which is the four pixels of slack between
+the frame's document (`scrollHeight` 729) and its viewport (`clientHeight`
+725), the `<embed>`'s `scrollTop` 0, no enumerable properties on it, and no
+`hashchange`, so the view does not write its page into the fragment either.
+And the ceiling is higher — `#page=N` on a **fresh** blob URL, which is what
+every recompile produces, is honoured at load, confirmed on that operation
+rather than on a cheaper same-document one. Read impossible and write working
+is the combination the question did not consider.
+
+Gate case (2) was therefore **deleted rather than weakened**: a gate keyed to
+an impossibility is not a gate. Phase 2 ships without the property and §2
+records the cost as its own decision. The residual became **OQ-6** — take §2's
+`typst-svg` escape hatch, or accept the cost permanently — which blocks
+nothing. The human owner chose that over taking the hatch inside this round, on
+the grounds that felling a recorded §2 decision as a side effect of unblocking
+a phase is the wrong way to make it. The round also corrected a sentence no
+finding had named but the measurement falsified: §2's blob decision had claimed
+the same-origin route was what made the scroll offset reachable.
+
+The ten non-blocking, all accepted: the phase named no channel for pushing a
+redraw, and the obvious one reintroduces the JSON-array-of-numbers cost §2's
+IPC decision already refused; three of four gate cases were read by a person
+against §2's rule that the list stays at one item; gate (4) named no document
+and no image; the debounce constant asked for "its measurement beside it" with
+no method, where §2's own timings state one; Phase 1 shipped no "current page"
+state, which gate (3.3) located in Rust only by implication; the watch set was
+uncomputable for a document the dialect refuses; the stale mark overlapped
+Phase 3 with no boundary drawn; the close-out omitted the README, which this
+phase makes false, and `rules/desktop.md` sits at exactly its 80-line cap; and
+the gate dropped Phase 1's falsifiable "`core` gains nothing" check at the
+phase most likely to leak into `core`.
+
+The reviewer re-measured §2's compile timings over 20 subprocess runs each:
+`samples/press-release.md` 9.0 ms and `samples/article.md` 29.0 ms, medians,
+against the recorded 8.5 and 28.7. The argument reproduces.
+
+Rejections: none.
+
 ### Round 2 — Phase 1 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking findings, four new non-blocking. The reviewer

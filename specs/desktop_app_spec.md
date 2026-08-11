@@ -14,7 +14,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 2 — the watch loop"
-    reviewed: null
+    reviewed: 2026-08-10
     shipped: null
     cut: null
     by: null
@@ -145,7 +145,8 @@ export consume those same frames — so pagination, glyph positions and line
 breaking are identical whichever one draws the pane. What differs is everything
 the PDF format carries besides the picture: a link is a live annotation rather
 than dead ink, text can be selected and searched, and the accessibility tagging
-that `mpdf-001`'s OQ-6 put on `table.header` is present. The sharpest reason is
+that `mpdf-001` settled in an open question of its own, and put on
+`table.header`, is present. The sharpest reason is
 the last: `typst-pdf` is a separate crate from the layout engine, so a pane
 drawn from frames would show that the *layout* is right, which is not the claim
 this project makes. The observable is the PDF.
@@ -167,9 +168,14 @@ The first is that it is same-origin. A blob URL inherits the page's origin —
 the probe read `blob:tauri://localhost/…` — so the parent page can reach into
 the frame, which a custom URI scheme does not allow: the probe found that same
 frame served over a `pdf://` scheme loads but exposes a `null`
-`contentDocument`, because the scheme is a separate origin. Everything the
-later phases need from the frame — the scroll offset OQ-3 is about above all —
-is reachable only on the same-origin route.
+`contentDocument`, because the scheme is a separate origin. Whatever the later
+phases can get from the frame at all is reachable only on the same-origin
+route — and Phase 2's round then measured how much that is, which the section
+below records: a page can be set, and nothing can be read. This sentence
+originally named the scroll offset as the thing the route bought, which the
+measurement proved wrong; the route still earns its place, because setting a
+page needs it and because reading nothing is a fact the other route could not
+even have established.
 
 The second is that the bytes never touch the disk. A temporary file would put
 the artifact somewhere the user did not ask for, and would need cleaning up on
@@ -185,14 +191,70 @@ and saying so, because the pane would stop showing the artifact and start
 showing a picture of it. It would not mean bundling a JavaScript viewer, which
 stays refused either way.
 
-### Why the watch set is the document plus every image it names (decision, recorded)
+### What the pane cannot do: keep the reader's place (decision, recorded)
+
+The frame is same-origin, and a later phase can still reach into it — but not
+for this. Phase 2's review round probed the running Phase 1 app, and after a
+reader scrolled several pages by hand the parent page saw `scrollTop` 4, which
+is the four pixels of slack between the frame's own document and its viewport;
+`scrollY` 4; the `<embed>`'s `scrollTop` 0; no enumerable properties on that
+element; and no `hashchange`, so the view does not write its page into the
+fragment either. **WebKit's PDF view leaks nothing about where the reader is.**
+
+The write direction does work, and was confirmed on the operation Phase 2
+performs rather than on a cheaper one: a `#page=N` fragment on a *fresh* blob
+URL — new bytes, new object URL, as every recompile produces — is honoured at
+load. So the app can put the pane on any page. It cannot learn which page to
+ask for.
+
+A re-render therefore returns the reader to the first page. That is a cost this
+spec records rather than hides, and it is the price of §2's decision that the
+pane draws the artifact: the alternative that would fix it is the SVG fallback,
+which stops drawing the artifact. OQ-6 carries the question, and Phase 2 does
+not answer it.
+
+### Why the watch set is the document's own directory (decision, recorded)
 
 A document that changes is not the only thing that should redraw the page. A
 figure edited in another program should redraw it too, and `mpdf-002` already
 supplies the list: `md2pdf_core::image_paths` returns every path the document
 names, in reader order. Emission reads no image bytes, so that list is
-available even when the document names a file that does not exist yet, which
-is what makes the watch set computable from a document that will not compile.
+available even when the document names a file that does not exist yet.
+
+**The set is one directory rather than that list**, which Phase 2's review round
+settled and this section records. Two facts decide it. A watcher cannot register
+a path that does not exist — `notify` 8.2.0's macOS backend refuses one in its
+own `append_path`, which returns `path_not_found` before it reaches FSEvents at
+all — so the very case the list exists to serve, a figure named
+minutes before it is drawn, is the case a file-valued set cannot hold. And
+`core/src/emit.rs:check_image` refuses a URI scheme, a leading `/`, a `..`
+segment and a backslash, so **every path a document can legally name resolves
+under the document's own directory**. One recursive watch on that directory
+therefore covers the document, every figure it names, every figure it will name,
+and every directory not yet created — and it is computable from the document's
+path alone, so a document the dialect refuses is still watched and can be fixed
+into one that compiles.
+
+The list keeps a second job, one layer in: **it is the filter, not the set.** An
+event is relevant when its path is the document or one of the paths
+`image_paths` returns, and that filter is a plain function over a path and a
+list. Watching is what needs a directory; deciding what to redraw for is what
+needs the list.
+
+One fact about that filter costs a build, in the same idiom as the icon facts
+OQ-2 recorded: **both sides of the comparison must be canonicalized.** `notify`
+canonicalizes a path as it registers it, because FSEvents reports the resolved
+path, so an event arrives naming `/private/var/folders/…` where the Open dialog
+handed the app `/var/folders/…`. Comparing the two as they arrive matches
+nothing, and the failure is silent in the worst way — the watcher runs, every
+event is filtered out, and the page simply never redraws. On macOS `/tmp` and
+`/var` are both symlinks into `/private`, so this is the default case and not
+an exotic one.
+
+The limit this decision accepts: a figure that is a symlink pointing out of the
+directory is not watched. Its path is legal and resolves inside, and the bytes
+it names live somewhere a recursive watch on the tree never sees. A watch
+follows the tree, not the targets, and that is recorded here rather than fixed.
 
 ### Why a change is a whole re-compile (decision, recorded)
 
@@ -291,7 +353,7 @@ list to one item.
   `capabilities/default.json` beside `core:default`; the probe called it and
   the native dialog opened rather than rejecting, which is what confirms the
   permission entry is right.
-- **OQ-3** — what holds the scroll position across a re-render? A watch loop
+- **OQ-3** — ~~what holds the scroll position across a re-render? A watch loop
   that returns the reader to page 1 on every save is unusable for a document
   longer than a page, and it is the difference between this app and a shell
   loop that reopens a viewer. OQ-1's resolution is what leaves the question
@@ -300,19 +362,68 @@ list to one item.
   touched. What remains open is what WebKit's own PDF view exposes to be saved
   and restored, and the honest floor may be an offset rather than a semantic
   position. Design call, with the mechanism answerable from code. Blocks
-  Phase 2's gate case (2).
-- **OQ-4** — can the watcher follow a path that does not exist yet? A document
+  Phase 2's gate case (2).~~ **RESOLVED (2026-08-10), in Phase 2's review
+  round 1: nothing
+  holds it, and nothing can.** Both halves of the question's own guess were
+  wrong. The floor is lower than an offset — the view exposes *nothing*
+  readable, measured on the running Phase 1 app and recorded in §2. The ceiling
+  is higher than an offset — `#page=N` on a fresh blob URL is honoured at load,
+  so a position can be *set* at page granularity. Read is impossible and write
+  works, which is the one combination the question did not consider, and it
+  leaves the app able to restore a position it cannot observe.
+
+  Phase 2 therefore ships without the property, and §2 records the cost. Gate
+  case (2) of the drafted phase, which was keyed to this resolution, is gone
+  rather than weakened: a gate keyed to an impossibility is not a gate. **OQ-6
+  carries what is left**, because the choice it now poses — amend §2's pane
+  decision, or accept the cost permanently — is a different question from the
+  one this entry asked, and answering it inside a round that was unblocking
+  Phase 2 would have made a recorded decision fall as a side effect.
+- **OQ-4** — ~~can the watcher follow a path that does not exist yet? A document
   may name `figures/new.svg` minutes before that file is created, and the
   watch set includes it because `image_paths` reads the text rather than the
   disk. The usual answer is to watch the parent directory instead of the file,
   which changes what a change event means and how much the loop filters.
   Answerable from code (the file-watching crate the phase picks). Blocks
-  Phase 2's scope.
+  Phase 2's scope.~~
+  **RESOLVED (2026-08-10), in Phase 2's review round 1: it cannot, and the set
+  is one directory.** `notify` 8.2.0 is the crate, and its macOS backend refuses
+  a path that does not exist: its own `append_path` opens with
+  `if !path.exists() { return Err(Error::path_not_found()…) }`, in the crate's
+  `src/fsevent.rs` and so in no file of this repository. A file-valued set
+  therefore cannot hold the case the question poses.
+
+  The answer is smaller than "the parent directory of each file", and the round
+  found why: `core/src/emit.rs:check_image` refuses a URI scheme, a leading
+  `/`, a `..` segment and a backslash, so every legal image path already
+  resolves under the document's own directory. **One recursive watch on that
+  directory is the whole set**, it needs no recomputation when an edit adds or
+  drops a figure, and it is computable from the document's path alone — so it
+  also dissolves a question this entry did not ask, which is what to watch for
+  a document the dialect refuses. Landed in §2 as its own decision. What the
+  loop filters is `image_paths`' list, one layer in.
 - **OQ-5** — what does the editor phase do when the file changes on disk while
   the text pane holds unsaved edits? Every editor answers this and none of the
   answers is free: refuse the reload, take the disk copy, or ask. It does not
   block anything until Phase 4, and stating it here is what stops Phase 4 being
   designed as if the question were not there. Design call. Blocks Phase 4.
+- **OQ-6** — should the pane keep drawing the artifact, given what OQ-3 cost?
+  The reader returns to the first page on every save, and §2 records why: the
+  view that draws a real PDF is the view that tells the app nothing. The two
+  candidate answers are already written down. Take §2's escape hatch —
+  `typst-svg`, one page per frame, already in `Cargo.lock` — and the pane
+  becomes ordinary HTML whose scroll offset is read and restored exactly, at
+  the price of the live links, the selectable text and the accessibility
+  tagging §2 chose the PDF for; or keep the PDF and accept the cost
+  permanently, in which case this entry closes as a non-goal rather than an
+  answer. A third shape, an app-owned page number restored through `#page=N`,
+  was considered in the round and is weak: the number goes stale the moment the
+  reader scrolls with a trackpad rather than through the app's own controls.
+
+  **This one needs use, not analysis.** The honest input is a person running
+  Phases 2 and 3 on a document long enough to scroll, which is why it is not
+  answered now and why it blocks neither. Design call. Blocks nothing; it is a
+  decision to make before Phase 4 puts a second pane beside this one.
 
 ## 4. Implementation phases
 
@@ -376,23 +487,88 @@ the user picked.*
 *Produces the observable: yes — the same PDF, redrawn on every save, which is
 the whole point of the app.*
 
-- **Scope:** Watch the document and every path `md2pdf_core::image_paths`
-  returns, per §2, with OQ-4's answer deciding whether the watcher takes the
-  files or their directories. Recompute the watch set after every successful
-  parse, because an edit may add or drop an image. Debounce, because one save
-  arrives as several filesystem events; the interval is a constant with its
-  measurement beside it, not a guess. On each settled change: re-read,
-  re-compile, redraw. A failed compile keeps the last good page and shows the
-  error above it, and marks the pane stale, per §2.
-- **Exit gate:** (1) Editing `samples/article.md` and saving redraws the page
-  without any action in the window; verified by hand once and recorded. (2) The
-  scroll position survives a re-render, per OQ-3's resolution. (3) Unit tests
-  over the plain functions: the watch set for `tests/fixtures/figure.md` holds
-  the document and both image paths; two events inside the debounce window
-  produce one compile and two outside produce two; a compile error leaves the
-  previous page as the current one and sets the stale flag. (4) Replacing an
-  image file on disk, with the document untouched, redraws the page.
-- **Close-out:** Update `rules/desktop.md` against the code. One push.
+- **Scope:** Watch the open document's own directory, recursively, per §2's
+  decision — one watch, not a list of files. `notify = "8.2.0"` is the crate,
+  pinned as `app/Cargo.toml` pins the others, and it is the workspace's first
+  new dependency since Phase 1. The debounce is this app's own rather than
+  `notify-debouncer-full`'s, so that the constant below is one this project
+  measured and one its own test pins.
+
+  On each event, filter before anything else: the path is relevant when it is
+  the document, or one of the paths `md2pdf_core::image_paths` returns resolved
+  against the document's directory. **Both sides are canonicalized before the
+  comparison**, for the reason §2 records — the event arrives resolved and the
+  dialog's path does not. That list is recomputed after each successful
+  *parse*, meaning emission and not the compile: `image_paths` succeeds on a
+  document whose figures are all missing, which is exactly what keeps the list
+  available while the compile fails. Everything else under the directory is
+  dropped, which is what a directory-valued watch buys and pays for.
+
+  Then debounce, because one save arrives as several filesystem events. **The
+  interval is measured, not guessed**, by the method §2 used for the compile
+  timings: count the events one save produces in each of three editors that
+  write differently — an in-place write, a write-then-rename, and an atomic
+  replace — twenty saves each, and state the medians beside the constant.
+
+  On each settled change: re-read, re-compile, redraw. **The compile happens
+  once, in the loop, in Rust.** The page's invoke returns bytes already
+  compiled and never triggers a compile of its own, so one save is one compile
+  and no second read can race the first. Rust emits a signal carrying no
+  payload, and the page invokes for the current bytes; a `window.emit` carrying
+  them would serialize them as a JSON array of numbers, one per byte, which is
+  the cost §2's IPC decision already refused. Phase 1's `open_document` both
+  compiles and returns in one call, and this phase separates those, because the
+  loop now compiles with nobody asking.
+
+  A failed compile keeps the last good page, shows the error above it, and
+  marks the pane stale, per §2. **The app therefore gains state Phase 1 did not
+  give it**: the last good PDF bytes and a stale flag, held in Rust, written by
+  the loop because the loop is what compiled, and read by Phase 3's export so
+  that the file and the page cannot disagree. Phase 2 sets the flag and draws
+  the error; the chrome that spells "stale" as a word in the window is Phase
+  3's, and this phase adds none.
+
+  The reader's place is not kept. §2 records the measurement that decided it and
+  OQ-6 carries what is left; nothing in this phase attempts it.
+- **Exit gate:** (1) Unit tests over the plain functions: the watch set for a
+  document is that document's directory; the filter admits `figure.md`'s own
+  path and both `dot.png` and `figures/mark.svg`, rejects a sibling
+  `notes.txt`, and **admits an event path that differs from the document's only
+  by `/var` against `/private/var`**, which is the canonicalization §2 records;
+  two events inside the debounce window produce one compile and two outside
+  produce two; a compile error leaves the previous bytes as the current ones
+  and sets the stale flag. (2) A test that drives the real watcher, in a
+  scratch directory holding a copy of `samples/article.md` and its two figures:
+  rewriting the document produces a recompile within a bounded wait, and
+  replacing `pipeline.svg` with different bytes — the document untouched —
+  produces another. **That directory goes under `std::env::temp_dir()`**, whose
+  real path differs from itself on macOS, so this case fails loudly on a
+  canonicalization bug rather than passing under some directory that happens
+  not to be symlinked. Counting compiles needs a seam, and
+  `app/src/document.rs:read_assets_with` is the one Phase 1 built for the same
+  reason. This case proves the wiring, not the count — the count is (1)'s
+  debounce test, which needs no filesystem and cannot flake on one — and its
+  wait is bounded generously, because FSEvents' own coalescing sits under the
+  debounce. (3) A document naming `figures/new.svg`, which does not exist, is
+  watched anyway, and creating that file afterwards produces a recompile that
+  now succeeds. This is the case OQ-4 was about and the one a file-valued watch
+  set could not have held; no other case reaches it. (4) Opening a second
+  document, in a different directory, moves the watch: a change to the first no
+  longer redraws and a change to the second does. An implementer who sets the
+  watcher up once rather than per document passes every case above and fails
+  this one. (5) **Read by eye once, at the window:** editing
+  `samples/article.md` in an editor and saving redraws the page, with no action
+  taken in the window. This is the one claim no test holds — that the right
+  pixels reached the glass — and §2's rule is that the list stays at one item,
+  which is why the draft's other three window checks are tests above. (6)
+  `cargo test --workspace` still passes and `core` and `cli` are untouched:
+  §2's falsifiable claim, checked again at the phase that adds a dependency and
+  new state and is therefore the likeliest to leak.
+- **Close-out:** Update `rules/desktop.md` against the code, **raising its
+  `max_lines` in the same pass** — its body sits at exactly its cap of 80
+  today, so a watch loop cannot be documented without it. The README's app
+  section says the app "does not yet watch the file", which this phase makes
+  false, so it changes too. One push.
 
 ### Phase 3 — export, and the state the loop needs to show
 *Produces the observable: yes — the PDF written to a file the user names,
