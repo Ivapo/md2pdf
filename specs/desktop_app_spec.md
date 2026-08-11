@@ -19,7 +19,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 3 — export, and the state the loop needs to show"
-    reviewed: null
+    reviewed: 2026-08-10
     shipped: null
     cut: null
     by: null
@@ -269,6 +269,39 @@ that is a measurement and a later phase, not a guess made now.
 The numbers are stated with their method because a first pass took one run each
 and reported 42 ms for the article, which round 1 could not reproduce; a single
 cold run is not a measurement.
+
+### Why the exported file is byte-identical to the CLI's (decision, recorded)
+
+The PDF is a pure function of the markdown text and the asset bytes, and both
+wrappers compute the same assets, so the app's export and `md2pdf` on the same
+document produce the same file. Phase 3's review round measured it rather than
+argued it: `samples/article.md` compiled in five separate processes gave five
+identical files, and each matched a `samples/article.pdf` a different build had
+produced seven hours earlier; `samples/press-release.md` gave three identical
+files across three processes, likewise matching an older build's; a document
+naming a PNG gave three identical files, and **the same content under a
+different file name gave the same bytes**, so the output does not depend on the
+path. The round also read the two asset readers line for line —
+`app/src/document.rs:read_assets_with` and `cli/src/main.rs:read_assets` — and
+found the same `image_paths` call, the same dedup on the same key, the same
+join and the same order.
+
+The method is stated with the numbers for the reason `mpdf-001`'s round stated
+it with the timings: a claim of this kind is worth exactly the runs behind it.
+
+**What the claim rests on, so a later reader knows what could take it away:**
+`core/src/lib.rs:md_to_pdf` calls `typst_pdf::pdf` with `PdfOptions::default()`,
+and nothing in `core`, `cli` or `app` reads a clock or a path into the document.
+A Typst release that put a timestamp or a build identifier in that default would
+falsify this silently, which is why Phase 3's gate checks it rather than trusts
+it.
+
+**Where the check has to live is not where the claim reads.** `md2pdf` is a
+binary of the `cli` package, and `CARGO_BIN_EXE_md2pdf` is set only for
+integration tests of the package that defines it; `md2pdf-app` declares a
+`[[bin]]` and no `[lib]`, so nothing in `app/src/` is importable either. No
+single test can hold both ends. Phase 3's gate therefore splits the claim in
+two and composes them, and says so.
 
 ### Why the last good page survives an error (decision, recorded)
 
@@ -576,18 +609,111 @@ which is the artifact the CLI writes.*
 
 - **Scope:** A Save-a-copy command that writes the current PDF bytes where the
   user asks, defaulting to the document's path with a `.pdf` extension, which
-  is `cli/src/main.rs:default_output`'s rule. The window shows what the loop
-  knows: the open document, whether the page is current or stale, the compile
-  time, and the error when there is one. Nothing here re-compiles — export
-  writes the bytes the pane is already showing, so the file and the page cannot
-  disagree.
-- **Exit gate:** (1) Export writes a file starting with the `%PDF` magic bytes,
-  byte-identical to what `md2pdf <the same document>` writes — the two wrappers
-  agree, which is the claim that keeps the app honest. (2) Export is refused,
-  with a message, while the pane is stale. (3) Unit tests over the default
-  output path and the state machine that decides current, stale and failed.
-- **Close-out:** Update `rules/desktop.md` and the README against the code.
-  One push.
+  is `cli/src/main.rs:default_output`'s rule. It follows Phase 1's dialog
+  pattern — a `File` menu item emits to the page, the page opens
+  `tauri-plugin-dialog`'s save dialog and invokes with the path — so **the
+  capability file gains `dialog:allow-save` beside `dialog:allow-open`**, which
+  the plugin ships and which OQ-2's idiom says to name here rather than
+  rediscover at a build. Nothing here re-compiles: export writes the bytes the
+  pane is already showing, so the file and the page cannot disagree.
+
+  The window then shows what the loop knows: the state, the compile time and
+  the error. **The open document is not a fourth thing to draw** — it is already
+  the window's title, from Phase 1, and this phase does not draw it twice.
+
+  **The state machine has four states and the app holds one bit today.**
+  `app/src/preview.rs:Preview` sets `stale` and `error` together and clears them
+  together, so those two fields carry one bit between them. The four are:
+  *empty* — no document has been opened, which is the state the app launches
+  into and holds until the first Open; *current* — the last compile succeeded;
+  *stale* — it failed and an older page is still drawn; *failed* — it failed
+  with no page to keep, which is the open that never compiled.
+
+  **What separates *stale* from *failed* is `Preview::pdf().is_some()`, not
+  anything `app/src/main.rs:current_pdf` does.** That command reads
+  `if preview.is_stale()`, and a failed compile always sets `stale`, so *stale*
+  and *failed* both take its first branch; its second `Err` is reachable only
+  when the flag is clear and there are no bytes, which is `Preview::default()`
+  and so is *empty* alone. Phase 2's round 2 caught the same class of mistake
+  one layer down, and this sentence is written out because the first draft of
+  this phase attributed the split to the wrong branch.
+
+  **Two things the state needs do not exist yet and this phase adds them**: the
+  compile duration, which nothing in `Preview` or `app/src/document.rs:Render`
+  carries, measured around the compile in `Preview::compile`; and an accessor
+  for the open document, which is private today and which the export's default
+  path needs. The status crosses to the page as its own command beside
+  `current_pdf`, invoked on the same payload-less `rendered` signal — a second
+  command rather than a widened return, because the bytes cross as raw
+  `tauri::ipc::Response` and a status does not.
+
+  **The status line is a value a plain function computes**, per §2, and the page
+  renders it. That is what keeps this phase's gate to tests: a window that
+  formats its own status would be checkable only by eye, and §2's rule is that
+  the list of by-eye claims stays at one item, which Phases 1 and 2 have spent.
+
+  The limit this phase accepts, recorded rather than fixed: **"stale" answers
+  "did the last compile fail", not "does the page match the file on disk".**
+  For the debounce interval plus the compile — 100 ms by
+  `app/src/watch.rs:DEBOUNCE`, plus the 8.5 ms to 28.7 ms §2 records, and those
+  medians include a process spawn the app does not pay, so the real window is
+  smaller than the sum — a saved document leaves the pane reading *current*
+  while its bytes belong to the older text, and an export in that window writes
+  those older bytes. The promise export makes is that the file and the *page*
+  agree, which it keeps; the file and the *disk* is a different claim and this
+  phase does not make it.
+- **Exit gate:** (1) The byte-identity claim, split in two because §2 records
+  that no single test can hold both ends, and composed. **Both halves take
+  `samples/article.md` and the two figures it names**, copied into a scratch
+  directory; `tests/fixtures/figure.md` is the trap to avoid, because its
+  `figures/mark.svg` is absent, so both sides would fail rather than agree.
+
+  **(1a), in `app`:** the export writes the bytes `Preview::pdf()` holds, byte
+  for byte, triggers no second compile, and defaults its path to
+  `input.with_extension("pdf")`, which is `cli/src/main.rs:default_output`'s
+  rule. It also asserts those bytes against an in-test `md2pdf_core::md_to_pdf`
+  call over assets the test reads itself. **That last assertion is the middle
+  leg of the composition and it is not optional**: without it the two halves
+  meet only through §2's line-for-line reading of
+  `app/src/document.rs:read_assets_with` against `cli/src/main.rs:read_assets`,
+  and a later divergence in either reader would pass both halves while the
+  wrappers silently disagreed.
+
+  **(1b), in `cli/tests/cli_test.rs`:** the `md2pdf` binary's output for that
+  same document is byte-identical to `md2pdf_core::md_to_pdf` called in process
+  with the assets read the same way. `cli/Cargo.toml` already carries both what
+  this needs — the `[[bin]]` that sets `CARGO_BIN_EXE_md2pdf`, which
+  `cli/tests/cli_test.rs:BIN` uses today, and `md2pdf-core` as a dependency.
+  It writes into a scratch directory rather than beside the sample, because
+  export's default path and `md2pdf`'s default path are the same path and one
+  would overwrite the other.
+
+  **Both halves are tests; no case in this phase is read by eye.** The cost of
+  that choice, recorded rather than hidden: the export's user path — menu item,
+  page, save dialog, invoke — is then exercised by nothing, exactly as Phase 1's
+  Open path is. It is the trade §2's one-item rule buys, and it is named here so
+  it is a decision rather than an oversight.
+
+  (2) **Export is refused, with a message, unless the pane is current** — which
+  is two refusals to test, not one: while the pane is stale, where the bytes
+  exist but are known to belong to older text, and while no document is open,
+  where there are no bytes at all. The second is not the first —
+  `Preview::default()` has `stale` clear and no bytes — and an implementer who
+  tests only the stale refusal leaves the launch state to panic or to write
+  nothing silently. (3) Unit tests over the status a plain function
+  computes, **one per state, so four**: empty names no document and no time,
+  current names the compile time, stale names the error and keeps the page, and
+  failed names the error and has no page. (4) `cargo test --workspace` still
+  passes, and `core/src` and `cli/src` are untouched — §2's falsifiable claim,
+  at the phase whose gate is the first to reach into `cli` at all. `cli/tests/`
+  gains (1b) and nothing else; a shared `default_output`, or any edit that makes
+  one crate's binary reachable from the other, is what this case is watching
+  for.
+- **Close-out:** Update `rules/desktop.md` against the code, **raising its
+  `max_lines` again in the same pass** — its body sits at 151 against a cap of
+  155, which does not hold an export command, a dialog and a capability, a
+  status value and a new timing field. The README's app section gains the
+  export. One push.
 
 ### Phase 4 — the text pane
 *Produces the observable: yes — the same PDF, redrawn as the author types

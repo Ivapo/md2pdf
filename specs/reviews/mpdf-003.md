@@ -2,6 +2,141 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 3 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, two cosmetic notes, both folded after the
+verdict. This was the loop's cap, and it converged on it rather than past it.
+
+The reviewer verified the round-2 fix against the code rather than the
+changelog, and made the correction sharper than the finding had been: `empty` is
+not merely one more state but exactly the right boundary, because
+`Preview::compile` early-returns when `document` is `None` and `Session::open`
+sets the document and compiles inside one lock scope, so no observable state
+sits between `Preview::default()` and the first outcome. It re-resolved every
+citation in the new text and re-confirmed the three facts its earlier rounds had
+established from outside the tree — `dialog:allow-save` in the plugin,
+`CARGO_BIN_EXE_*` reaching an integration test of a `[[bin]]`-only package
+alongside that package's `[dependencies]`, and `samples/article.md` naming its
+two figures once each, so the in-test asset read has no dedup subtlety.
+
+The two notes: gate (2) said export is refused "in both states that have no file
+to write", which is loose for *stale*, where the bytes exist and the reason is
+that they are known out of date — it now says **refused unless the pane is
+current**, which is two refusals to test and one rule. And "three of those four
+facts" sat two paragraphs from "four states", two different fours; the sentence
+is rewritten so only one four is in play.
+
+On this convergence: `reviewed: 2026-08-10` on Phase 3. `status` was already
+`accepted`. Phases 4 and 5 keep `reviewed: null`.
+
+### Round 2 — Phase 3 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **NOT READY**
+
+Verdict: `NOT READY` — one new blocking finding, four non-blocking. All five
+accepted, none rejected. The three round-1 blockers were confirmed resolved, and
+the reviewer checked B1's fix by **building a throwaway workspace of the same
+shape** rather than reasoning about Cargo: a `[[bin]]`-only package with no
+`[lib]`, a path dependency, and an integration test that compiles with both
+`CARGO_BIN_EXE_<bin>` and a `use` of the package's dependencies. That is what
+established that gate (1b) can live in `cli/tests/cli_test.rs` at all.
+
+**The blocker was an error in the author's own round-1 fix**, and the best
+finding of the episode. The fix claimed `app/src/main.rs:current_pdf` "already
+distinguishes the last two by its two `Err` branches". It does not.
+`Preview::compile` sets `stale` on **every** failure, so *stale* and *failed*
+both take the first branch; the second is reachable only when the flag is clear
+and there are no bytes, which is `Preview::default()` — the state the app
+launches into and holds until the first Open, and the one the three-state
+enumeration had omitted. Confirmed in the code before the fix was folded.
+
+The consequence was not cosmetic. Gate (3) asked for one test per state over an
+enumeration missing a state, and gate (2) refused export "while the pane is
+stale", which is `false` at launch, when there is also no file to write. The
+enumeration is now four states, the real distinguisher is named
+(`Preview::pdf().is_some()`), the misattribution is **written out rather than
+silently repaired**, gate (3) is four cases, and gate (2) covers both refusals
+with a sentence on why the second is not the first.
+
+Of the four non-blocking, one closed a hole in the round-1 fix itself: the split
+gate tied the app's bytes to `Preview::pdf()` and the CLI's file to `md_to_pdf`,
+but **the middle leg — that those are the same bytes — was argued and not
+gated**, resting only on §2's line-for-line reading of the two asset readers, so
+a later divergence in either would have passed both halves while the wrappers
+disagreed. Case (1a) now asserts against an in-test `md_to_pdf` call, and the
+spec says that assertion is not optional. The other three: neither half named
+its document, and both now take `samples/article.md`, with
+`tests/fixtures/figure.md` named as the trap because its `figures/mark.svg` is
+absent and both sides would fail rather than agree; the export's user path is
+exercised by nothing, which is the cost of an all-tests gate and is on the
+record beside it; and one line overran the wrap. The reviewer also noted that
+§2's timings include a process spawn the app does not pay, so the recorded
+stale window is conservative rather than wrong — folded.
+
+Rejections: none.
+
+### Round 1 — Phase 3 only — 2026-08-10 — fresh clean-room reviewer with repo access — **NOT READY**
+
+Round 0 was **not re-asked**. §7.0 asks it once per episode and forbids
+re-litigating it, and this document's round 1 for Phase 1 recorded it as
+answered for this episode — the drafted document. Phase 3 was drafted with it
+and states that it produces the observable.
+
+Verdict: `NOT READY` — three blocking, ten non-blocking. All thirteen accepted,
+none rejected, none deferred.
+
+**The three blockers were one knot: gate case (1) could not be run.** Blocker 1:
+it asserts the export is byte-identical to what `md2pdf <the same document>`
+writes, and **no crate boundary in the workspace permits that comparison** —
+`CARGO_BIN_EXE_md2pdf` is set only for integration tests of the package defining
+that binary, which is `cli`, and `app/Cargo.toml` declares a `[[bin]]` with no
+`[lib]`, so nothing in `app/src/` is importable either. Four materially
+different builds were available to an implementer and the phase named none.
+Blocker 2: **either reading of the gate's form broke something** — as a test it
+had nowhere to live, and as a by-eye check it silently added a second item to a
+list §2 says stays at one, where Phases 1 and 2 both label their by-eye case
+explicitly. Blocker 3: **half the phase's scope carried no gate at all** — an
+implementer could build the Rust state, ship `app/dist/index.html` unchanged
+from Phase 2, and pass everything, which fails the methodology's §3 rule that a
+gate is sized to its blast radius.
+
+All three were resolved together. Gate (1) is **split and composed**: (1a) in
+`app`, the export writes the bytes `Preview::pdf()` holds; (1b) in
+`cli/tests/cli_test.rs`, where the binary already is, the CLI's file equals
+`md_to_pdf` called in process. §2 gains a decision recording the Cargo fact so
+the next reader does not rediscover it. Both halves being tests dissolves
+blocker 2, and the gate now says so in as many words. Blocker 3 is closed by
+making the status **a value a plain function computes**, which the gate tests
+per state and the page merely renders — §2's own rule about where logic lives,
+applied to keep the by-eye list at one item.
+
+**The reviewer measured the faithfulness claim rather than arguing it**, which
+is what makes the split defensible: `samples/article.md` compiled in five
+separate processes gave five identical files, each matching a
+`samples/article.pdf` a different build had produced seven hours earlier;
+`samples/press-release.md` gave 3/3 across processes, also matching an older
+build; a PNG-bearing document gave 3/3, and the same content under a different
+file name gave the same bytes, so output does not depend on the path. It also
+read `app/src/document.rs:read_assets_with` against `cli/src/main.rs:read_assets`
+line for line and found no divergence — the risk the round was asked to look for
+does not exist in the tree. All of it is now in §2 with its method, together
+with what the claim rests on and the note that a Typst release could falsify it
+silently, which is why the gate checks it.
+
+The other nine non-blocking, all accepted: the state machine's "three states"
+were two in the code and unnamed; the compile duration and an accessor for the
+open document do not exist and are now stated as things the phase adds; the
+status had no channel, which is the omission Phase 2's round had already treated
+as a finding; the Save dialog and `dialog:allow-save` were unnamed where Phase 1
+named both because the fact cost a build; both sides of gate (1) wrote to the
+same path; the stale flag answers "did the last compile fail" and not "does the
+page match the disk", now recorded as a limit the phase accepts; the gate had
+dropped the `cargo test --workspace` and untouched check that Phases 1 and 2
+both carry, restored and narrowed to `core/src` and `cli/src` because (1b)
+deliberately adds one case to `cli/tests/`; the close-out did not raise
+`rules/desktop.md`'s cap, at 151 lines against 155; and "the window shows the
+open document" was already shipped as the window title.
+
+Rejections: none.
+
 ### Round 2 — Phase 2 only — 2026-08-10 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, seven new non-blocking, all accepted and
