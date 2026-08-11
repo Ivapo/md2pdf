@@ -14,6 +14,12 @@ fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
+fn sample(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../samples")
+        .join(name)
+}
+
 fn golden(name: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../tests/golden")
@@ -223,6 +229,45 @@ fn a_press_release_writes_a_pdf() {
 
     let bytes = std::fs::read(&output).unwrap();
     assert!(bytes.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// The file the binary writes is the bytes the library makes, exactly.
+///
+/// This is one half of `mpdf-003`'s Phase 3 gate, and it lives here because
+/// `CARGO_BIN_EXE_md2pdf` is set only for integration tests of the package that
+/// defines that binary. The other half is in `app/src/preview.rs`, where the
+/// desktop export writes what its pane holds; the two meet at an in-test
+/// `md2pdf_core::md_to_pdf` call, which each of them makes over assets it read
+/// itself. The claim they compose is that both front ends produce one file.
+///
+/// It runs in a scratch directory because the binary's default output path and
+/// the desktop export's default output path are the same path.
+#[test]
+fn the_binarys_file_is_byte_identical_to_the_librarys_bytes() {
+    let dir = scratch_dir("byte-identity");
+    let input = dir.join("article.md");
+    std::fs::copy(sample("article.md"), &input).unwrap();
+    std::fs::copy(sample("pipeline.svg"), dir.join("pipeline.svg")).unwrap();
+    std::fs::copy(sample("check.svg"), dir.join("check.svg")).unwrap();
+
+    let out = run(&[input.as_ref()]);
+    assert!(out.status.success(), "the run failed: {:?}", out);
+    let written = std::fs::read(input.with_extension("pdf")).unwrap();
+
+    // The assets are read here rather than by `read_assets`, which is the
+    // reader under test: a comparison fed by it would only prove it agrees
+    // with itself. `samples/article.md` names each figure once, so there is no
+    // dedup subtlety to mirror.
+    let markdown = std::fs::read_to_string(&input).unwrap();
+    let assets: Vec<md2pdf_core::Asset> = ["pipeline.svg", "check.svg"]
+        .into_iter()
+        .map(|name| md2pdf_core::Asset {
+            path: name.to_string(),
+            bytes: std::fs::read(dir.join(name)).unwrap(),
+        })
+        .collect();
+
+    assert_eq!(written, md2pdf_core::md_to_pdf(&markdown, &assets).unwrap());
 }
 
 /// A frontmatter document writes a PDF, not just Typst source.

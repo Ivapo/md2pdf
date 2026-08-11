@@ -368,6 +368,33 @@ mod tests {
         document
     }
 
+    /// A preview holding one compiled document, built without a session.
+    fn compiled(document: &Path) -> Preview {
+        let mut preview = Preview {
+            document: Some(document.to_path_buf()),
+            ..Preview::default()
+        };
+        preview.compile();
+        preview
+    }
+
+    /// The two figures `samples/article.md` names, read by this test rather
+    /// than by the reader under test.
+    ///
+    /// It names each of them once, so there is no dedup subtlety to mirror.
+    /// Reading them here is what makes the assertion independent: an
+    /// `md_to_pdf` fed by `app`'s own reader would only prove that reader
+    /// agrees with itself.
+    fn article_assets(dir: &Path) -> Vec<md2pdf_core::Asset> {
+        ["pipeline.svg", "check.svg"]
+            .into_iter()
+            .map(|name| md2pdf_core::Asset {
+                path: name.to_string(),
+                bytes: std::fs::read(dir.join(name)).unwrap(),
+            })
+            .collect()
+    }
+
     /// A compile error keeps the bytes and sets the mark. Fixing the document
     /// clears both.
     #[test]
@@ -485,5 +512,145 @@ mod tests {
 
         std::fs::write(&second, "# The second, edited\n").unwrap();
         assert_eq!(wait_for(&compiles, 3), 3, "the second document is watched");
+    }
+
+    /// The export writes the page itself, and the page is what the core crate
+    /// makes of this document.
+    ///
+    /// This is one half of the byte-identity claim; the other half lives in
+    /// `cli/tests/cli_test.rs`, because `CARGO_BIN_EXE_md2pdf` reaches only
+    /// integration tests of the package that defines that binary, and nothing
+    /// in `app/src/` is importable from there. The middle leg — the in-test
+    /// `md_to_pdf` call — is what composes them.
+    #[test]
+    fn the_export_writes_the_bytes_the_pane_is_showing() {
+        let dir = scratch_dir("export");
+        let document = article_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document.clone()).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        // The default path is `cli/src/main.rs:default_output`'s rule.
+        let output = document.with_extension("pdf");
+        assert_eq!(session.preview().export_path().unwrap(), output);
+
+        session.preview().export(&output).unwrap();
+        let written = std::fs::read(&output).unwrap();
+        assert_eq!(written, session.preview().pdf().unwrap());
+
+        // Without this assertion the two halves of the gate would meet only
+        // through a reading of the two asset readers, and a later divergence
+        // in either would pass both while the wrappers disagreed.
+        let markdown = std::fs::read_to_string(&document).unwrap();
+        let expected = md2pdf_core::md_to_pdf(&markdown, &article_assets(&dir)).unwrap();
+        assert_eq!(written, expected);
+
+        // Nothing recompiled: not for the export, and not for the PDF it left
+        // in the very directory the loop watches.
+        settle();
+        assert_eq!(compiles.load(Ordering::SeqCst), 1);
+    }
+
+    /// The first of two refusals: the bytes exist and are known to be old.
+    #[test]
+    fn export_is_refused_while_the_pane_is_stale() {
+        let dir = scratch_dir("export-stale");
+        let document = article_in(&dir);
+
+        let mut preview = compiled(&document);
+        assert_eq!(preview.state(), State::Current);
+
+        std::fs::write(&document, "# Broken\n\n<div>raw HTML</div>\n").unwrap();
+        preview.compile();
+        assert_eq!(preview.state(), State::Stale);
+
+        let output = dir.join("refused.pdf");
+        let refusal = preview.export(&output).unwrap_err();
+        assert!(refusal.contains("out of date"), "{refusal}");
+        assert!(preview.export_path().is_err(), "the dialog would open");
+        assert!(!output.exists(), "a refused export wrote a file");
+    }
+
+    /// The second refusal is not the first. `Preview::default()` has the stale
+    /// mark clear and no bytes at all, and an implementer who tests only the
+    /// case above leaves the launch state to panic or to write nothing.
+    #[test]
+    fn export_is_refused_while_no_document_is_open() {
+        let dir = scratch_dir("export-empty");
+        let preview = Preview::default();
+        assert_eq!(preview.state(), State::Empty);
+
+        let output = dir.join("refused.pdf");
+        let refusal = preview.export(&output).unwrap_err();
+        assert!(refusal.contains("no document is open"), "{refusal}");
+        assert!(preview.export_path().is_err(), "the dialog would open");
+        assert!(!output.exists(), "a refused export wrote a file");
+    }
+
+    /// The state the app launches into and holds until the first Open.
+    #[test]
+    fn the_empty_status_names_no_document_and_no_time() {
+        let status = Preview::default().status();
+
+        assert_eq!(status.state, State::Empty);
+        assert_eq!(status.time, None);
+        assert_eq!(status.error, None);
+        assert!(!status.page);
+    }
+
+    #[test]
+    fn the_current_status_names_the_compile_time() {
+        let dir = scratch_dir("status-current");
+        let status = compiled(&article_in(&dir)).status();
+
+        assert_eq!(status.state, State::Current);
+        assert_eq!(status.error, None);
+        assert!(status.page);
+        assert!(
+            status.time.as_deref().unwrap().ends_with(" ms"),
+            "{:?}",
+            status.time
+        );
+    }
+
+    #[test]
+    fn the_stale_status_names_the_error_and_keeps_the_page() {
+        let dir = scratch_dir("status-stale");
+        let document = article_in(&dir);
+        let mut preview = compiled(&document);
+
+        std::fs::write(&document, "# Broken\n\n<div>raw HTML</div>\n").unwrap();
+        preview.compile();
+        let status = preview.status();
+
+        assert_eq!(status.state, State::Stale);
+        assert!(status.page);
+        assert!(
+            status.error.as_deref().unwrap().contains("raw HTML block"),
+            "{:?}",
+            status.error
+        );
+        // The time belongs to the page still drawn, not to the attempt that
+        // failed, because the duration travels with the bytes.
+        assert!(status.time.is_some());
+    }
+
+    #[test]
+    fn the_failed_status_names_the_error_and_has_no_page() {
+        let dir = scratch_dir("status-failed");
+        let document = dir.join("paper.md");
+        std::fs::write(&document, "# Paper\n\n![a mark to come](figures/new.svg)\n").unwrap();
+
+        let status = compiled(&document).status();
+
+        assert_eq!(status.state, State::Failed);
+        assert!(!status.page);
+        assert_eq!(status.time, None);
+        assert!(
+            status.error.as_deref().unwrap().contains("figures/new.svg"),
+            "{:?}",
+            status.error
+        );
     }
 }
