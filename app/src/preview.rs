@@ -783,6 +783,193 @@ mod tests {
         assert_eq!(wait_for(&compiles, 3), 3, "the second document is watched");
     }
 
+    /// **The pane's text is what compiles, and the file beside it need never
+    /// have held that text.**
+    ///
+    /// This is the whole of what Phase 4 changed one layer down, and the file
+    /// is asserted to be untouched so that a compile which quietly went back
+    /// to reading the disk could not pass.
+    #[test]
+    fn the_pane_compiles_text_that_is_not_on_disk() {
+        let dir = scratch_dir("buffer-compiles");
+        let document = article_in(&dir);
+
+        let mut preview = compiled(&document);
+        let from_disk = preview.pdf().unwrap().to_vec();
+
+        let typed = "# Typed, never saved\n\nThis text is in the pane and nowhere else.\n";
+        preview.edit(typed.to_string());
+        preview.compile();
+
+        assert_eq!(
+            std::fs::read_to_string(&document).unwrap(),
+            std::fs::read_to_string(sample("article.md")).unwrap(),
+            "the file moved, so this proves nothing about the buffer"
+        );
+        assert_ne!(preview.pdf().unwrap(), from_disk.as_slice());
+        assert_eq!(
+            preview.pdf().unwrap(),
+            md2pdf_core::md_to_pdf(typed, &[]).unwrap()
+        );
+    }
+
+    /// A save writes the buffer, and **the save's own event compiles nothing**
+    /// — the rule's first outcome, reached by comparing content rather than by
+    /// winning a race against a 12 ms event.
+    ///
+    /// The figure at the end is the half that proves the filter narrowed
+    /// rather than stopped: an implementer who dropped the watch while the
+    /// pane owns the document passes everything above it and fails here.
+    #[test]
+    fn a_save_writes_the_buffer_and_the_loop_compiles_no_second_time() {
+        let dir = scratch_dir("save");
+        let document = article_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document.clone()).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1, "opening compiles once");
+
+        let typed = format!(
+            "{}\nA paragraph the file has never held.\n",
+            std::fs::read_to_string(&document).unwrap()
+        );
+        session.edit(typed.clone());
+        assert_eq!(wait_for(&compiles, 2), 2, "a pause in the typing compiles");
+
+        session.save().unwrap();
+        assert_eq!(std::fs::read_to_string(&document).unwrap(), typed);
+
+        settle();
+        assert_eq!(
+            compiles.load(Ordering::SeqCst),
+            2,
+            "the save's own event compiled a second time"
+        );
+
+        std::fs::write(
+            dir.join("pipeline.svg"),
+            std::fs::read(sample("check.svg")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            wait_for(&compiles, 3),
+            3,
+            "a figure no longer redraws the page"
+        );
+    }
+
+    /// The first outcome: the file already says what the pane says.
+    ///
+    /// This is the app's own save arriving back, and **nothing at all
+    /// happens** — which the whole status is compared to prove, because a
+    /// compile here would redraw a page the reader has scrolled.
+    #[test]
+    fn an_external_change_matching_the_buffer_does_nothing() {
+        let dir = scratch_dir("external-unchanged");
+        let document = article_in(&dir);
+
+        let mut preview = compiled(&document);
+        let before = preview.status();
+
+        std::fs::write(&document, preview.text()).unwrap();
+        assert_eq!(preview.reload(), External::Unchanged);
+
+        assert_eq!(preview.status(), before);
+    }
+
+    /// The second outcome: the buffer is clean, so nothing can be lost.
+    ///
+    /// **This is Phase 2's shipped loop**, and it is the case an unconditional
+    /// refusal would have broken — an author who is not typing saves in
+    /// another editor and the page redraws, with no action at the window.
+    #[test]
+    fn an_external_change_over_a_clean_buffer_is_taken_and_recompiled() {
+        let dir = scratch_dir("external-taken");
+        let document = article_in(&dir);
+
+        let mut preview = compiled(&document);
+        let first = preview.pdf().unwrap().to_vec();
+        let before = preview.status();
+
+        let theirs = "# Edited elsewhere\n\nBy another program, while nobody typed.\n";
+        std::fs::write(&document, theirs).unwrap();
+        assert_eq!(preview.reload(), External::Taken);
+
+        assert_eq!(preview.text(), theirs);
+        assert_ne!(preview.pdf().unwrap(), first.as_slice());
+
+        let status = preview.status();
+        assert_eq!(status.state, State::Current);
+        assert_eq!(status.divergence, None);
+        assert!(status.revision > before.revision, "it did not recompile");
+        assert!(
+            status.reloaded > before.reloaded,
+            "it did not take the text"
+        );
+    }
+
+    /// The third outcome: the buffer holds unsaved edits, so the disk copy is
+    /// refused and the divergence is named.
+    ///
+    /// An implementer who tests only this one ships a pane that stops redrawing
+    /// on an external save. It is here as one of three for that reason.
+    #[test]
+    fn an_external_change_over_a_dirty_buffer_is_refused_and_reported() {
+        let dir = scratch_dir("external-diverged");
+        let document = article_in(&dir);
+
+        let mut preview = compiled(&document);
+        preview.edit("# Mine, unsaved\n\nStill being written.\n".to_string());
+        preview.compile();
+
+        let mine = preview.pdf().unwrap().to_vec();
+        let before = preview.status();
+
+        std::fs::write(&document, "# Theirs\n\nWritten by another program.\n").unwrap();
+        assert_eq!(preview.reload(), External::Diverged);
+
+        assert_eq!(preview.text(), "# Mine, unsaved\n\nStill being written.\n");
+        assert_eq!(preview.pdf().unwrap(), mine.as_slice());
+
+        let status = preview.status();
+        assert_eq!(status.revision, before.revision, "it compiled anyway");
+        assert_eq!(status.reloaded, before.reloaded, "it took the disk copy");
+        // A divergence is not staleness: nothing failed to compile, and the
+        // page belongs to the text in the pane.
+        assert_eq!(status.state, State::Current);
+        assert!(!preview.is_stale());
+        assert!(
+            status.divergence.as_deref().unwrap().contains("unsaved"),
+            "{:?}",
+            status.divergence
+        );
+    }
+
+    /// A document opened, edited, saved and reopened round-trips byte for byte
+    /// **against the buffer at save**, which an edit has already made unequal
+    /// to the original.
+    ///
+    /// The text carries a CRLF and no trailing newline, which are the two a
+    /// text pane is likeliest to normalise away.
+    #[test]
+    fn an_edited_document_round_trips_byte_for_byte_through_a_save() {
+        let dir = scratch_dir("round-trip");
+        let document = article_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document.clone()).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        let typed = "# Edited\r\n\r\nA line under a CRLF, and no newline at the end.";
+        session.edit(typed.to_string());
+        session.save().unwrap();
+
+        assert_eq!(std::fs::read(&document).unwrap(), typed.as_bytes());
+
+        session.open(document).unwrap();
+        assert_eq!(session.preview().text(), typed);
+    }
+
     /// The export writes the page itself, and the page is what the core crate
     /// makes of this document.
     ///

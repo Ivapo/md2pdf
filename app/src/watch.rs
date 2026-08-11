@@ -411,6 +411,33 @@ mod tests {
         assert!(debounce.take(start + Duration::from_millis(750)));
     }
 
+    /// The keyboard's interval folds a burst of typing into one compile, and
+    /// lets a pause through.
+    ///
+    /// It is the same shape the filesystem's interval uses and the same reason
+    /// it takes the time as a parameter: this case needs no clock and no
+    /// keyboard, so it cannot flake.
+    #[test]
+    fn the_typing_debounce_folds_a_burst_into_one_compile() {
+        let mut debounce = Debounce::new(TYPING_DEBOUNCE);
+        let start = Instant::now();
+
+        // Four keystrokes, each well inside the window: one compile.
+        for gap in [0, 80, 160, 240] {
+            debounce.touch(start + Duration::from_millis(gap));
+            assert!(!debounce.take(start + Duration::from_millis(gap)));
+        }
+        assert!(!debounce.take(start + Duration::from_millis(500)));
+        assert!(debounce.take(start + Duration::from_millis(560)));
+
+        // Two keystrokes with a pause between them: two compiles.
+        let later = start + Duration::from_secs(1);
+        debounce.touch(later);
+        assert!(debounce.take(later + TYPING_DEBOUNCE));
+        debounce.touch(later + Duration::from_millis(500));
+        assert!(debounce.take(later + Duration::from_millis(500) + TYPING_DEBOUNCE));
+    }
+
     /// Nothing pending means the loop blocks rather than spins.
     #[test]
     fn an_idle_debounce_asks_for_no_timeout() {

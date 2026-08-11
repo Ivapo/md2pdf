@@ -254,6 +254,16 @@ mod tests {
         assert!(error.contains("line 5"), "{error}");
     }
 
+    /// A document that will not read names itself, in the sentence the
+    /// terminal prints for the same file.
+    #[test]
+    fn a_document_that_will_not_read_names_the_path_and_the_reason() {
+        let error = read_document(&fixture("no-such-document.md")).unwrap_err();
+
+        assert!(error.contains("no-such-document.md"), "{error}");
+        assert!(error.contains("os error"), "{error}");
+    }
+
     /// A document that does not parse hands back no list, and the caller keeps
     /// the one it had. A document that parses but will not compile hands one
     /// back anyway, which is what keeps the watch filter alive while a figure
