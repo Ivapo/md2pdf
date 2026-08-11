@@ -30,7 +30,7 @@ phases:
     by: null
   - name: "Phase 5 — an app you can install"
     reviewed: 2026-08-11
-    shipped: null
+    shipped: 2026-08-11
     cut: null
     by: null
 
