@@ -1,9 +1,10 @@
-//! The loop that notices a save.
+//! The loop that notices a save, and the one that notices a pause in typing.
 //!
 //! One recursive watch on the open document's own directory, a filter that
-//! admits the document and the figures it names, and a debounce, because one
-//! save arrives as several filesystem events. Everything here except the
-//! watcher itself is a plain function over plain values.
+//! sorts an event into the document or one of the figures it names, and a
+//! debounce, because one save arrives as several filesystem events. The
+//! debounce serves the keyboard too, on an interval of its own. Everything
+//! here except the watcher itself is a plain function over plain values.
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -34,6 +35,36 @@ use notify::{RecursiveMode, Watcher};
 /// 28.7 ms, so the redraw stays immediate.
 pub const DEBOUNCE: Duration = Duration::from_millis(100);
 
+/// How long the pane waits for the typing to stop before it compiles.
+///
+/// **This is not [`DEBOUNCE`]**, and the difference is what each one is
+/// measured against. That one is margin over the filesystem's own batching;
+/// this one is measured against the compile it gates and against the hand that
+/// is typing.
+///
+/// Twenty compiles of each document through the pane's own path — a
+/// [`crate::document::render`] call in process, release build, no spawn — on
+/// this machine on 2026-08-10:
+///
+/// | document                     | first compile of the process | median of the twenty |
+/// |------------------------------|------------------------------|----------------------|
+/// | `samples/press-release.md`   | 12.5 ms                      | 0.6 ms               |
+/// | `samples/article.md`         | 24.6 ms                      | 1.5 ms               |
+///
+/// **The compile a keystroke gates is the warm one.** The first compile in a
+/// process carries the font parsing and the rest of the one-time setup, and
+/// the app pays it at the open, before anyone can type. The spec's §2 puts the
+/// same two documents at 8.5 ms and 28.7 ms through the release binary; those
+/// include a process spawn each, which is the whole of the difference.
+///
+/// Three hundred milliseconds is therefore two orders of magnitude above the
+/// compile itself, and the compile is not what it is protecting. It is set to
+/// the pause between phrases rather than the gap between keystrokes, for a
+/// reason particular to this app: **every redraw returns the reader to the
+/// first page**, which the spec's §2 records and OQ-7 carries, so a page
+/// redrawn mid-word costs more here than the compile behind it does.
+pub const TYPING_DEBOUNCE: Duration = Duration::from_millis(300);
+
 /// The one directory a document's watch covers.
 ///
 /// Every path the dialect lets a document name resolves under here —
@@ -55,12 +86,44 @@ pub fn root(document: &Path) -> PathBuf {
         .to_path_buf()
 }
 
-/// Should a change to this path redraw the page?
+/// What a path under the watch is, to the document the pane holds.
 ///
-/// It should when the path is the document, or one of the paths
+/// The two are not the same event any more. A figure that moves is still "the
+/// page is out of date, compile", because nothing but the disk supplies a
+/// figure. The document that moves is "the disk moved, decide", because the
+/// pane's own buffer is what compiles now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Change {
+    /// The open document itself.
+    Document,
+    /// One of the figures the document names.
+    Figure,
+}
+
+/// What one settled window of events was about.
+///
+/// The debounce folds several events into one call, and a save that also
+/// rewrites a figure is one window with both marks set, so the callback is
+/// handed the pair rather than a single path.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Changed {
+    /// The open document moved on disk.
+    pub document: bool,
+    /// At least one figure the document names moved.
+    pub figures: bool,
+}
+
+/// Which of the two a change to this path is, or neither.
+///
+/// It is one of them when the path is the document, or one of the paths
 /// `md2pdf_core::image_paths` returned for it. Everything else under the
 /// directory is dropped, which is what a directory-valued watch buys and pays
 /// for.
+///
+/// **The document stays in here**, though its events no longer mean "compile".
+/// A path dropped from the filter would never reach the rule that decides what
+/// its events do mean, and the rule is the whole of how the pane survives an
+/// external change.
 ///
 /// **Both sides are canonicalized**, and the whole loop depends on it.
 /// `notify` canonicalizes a path as it registers it, because FSEvents reports
@@ -75,14 +138,18 @@ pub fn root(document: &Path) -> PathBuf {
 /// figure the document names before anyone creates it has no real path to
 /// resolve yet. Joining a relative path onto a resolved directory gives a
 /// resolved path either way.
-pub fn is_relevant(event: &Path, document: &Path, images: &[String]) -> bool {
-    let Some(name) = document.file_name() else {
-        return false;
-    };
+pub fn classify(event: &Path, document: &Path, images: &[String]) -> Option<Change> {
+    let name = document.file_name()?;
     let root = resolve(&root(document));
     let event = resolve(event);
 
-    event == root.join(name) || images.iter().any(|image| event == root.join(image))
+    if event == root.join(name) {
+        Some(Change::Document)
+    } else if images.iter().any(|image| event == root.join(image)) {
+        Some(Change::Figure)
+    } else {
+        None
+    }
 }
 
 /// A path as the filesystem really spells it, or as given when it names
@@ -142,14 +209,16 @@ pub struct Watch {
 
 /// Watch a directory, and call `on_change` once per settled change.
 ///
-/// `relevant` is the filter and runs on every event, before the debounce.
+/// `classify` is the filter and runs on every event, before the debounce.
 /// `on_change` runs on this watch's own thread, so a compile there does not
-/// touch the thread that draws the window.
+/// touch the thread that draws the window. It is handed what the window was
+/// about rather than nothing, because the document and a figure now mean two
+/// different things.
 pub fn start(
     root: &Path,
     interval: Duration,
-    relevant: impl Fn(&Path) -> bool + Send + 'static,
-    mut on_change: impl FnMut() + Send + 'static,
+    classify: impl Fn(&Path) -> Option<Change> + Send + 'static,
+    on_change: impl FnMut(Changed) + Send + 'static,
 ) -> Result<Watch, String> {
     let (events, received) = mpsc::channel();
 
@@ -162,37 +231,100 @@ pub fn start(
         .watch(root, RecursiveMode::Recursive)
         .map_err(|e| format!("cannot watch {}: {e}", root.display()))?;
 
+    settle(
+        received,
+        interval,
+        move |changed: &mut Changed, event: notify::Result<notify::Event>| {
+            // A watcher error names no file to redraw for, so it is dropped
+            // with the same shrug as an event under some other path.
+            let Ok(event) = event else {
+                return false;
+            };
+
+            let mut counted = false;
+            for path in &event.paths {
+                match classify(path) {
+                    Some(Change::Document) => (changed.document, counted) = (true, true),
+                    Some(Change::Figure) => (changed.figures, counted) = (true, true),
+                    None => {}
+                }
+            }
+            counted
+        },
+        on_change,
+    );
+
+    Ok(Watch { _watcher: watcher })
+}
+
+/// A loop that folds a stream of nudges into one call per quiet interval.
+///
+/// Sending on the returned channel is what nudges it, and **dropping the
+/// sender ends the thread**, which is how a session's typing loop goes with
+/// the document it belongs to — the same mechanism [`Watch`] uses one door
+/// along.
+pub fn debounced(
+    interval: Duration,
+    mut on_settle: impl FnMut() + Send + 'static,
+) -> mpsc::Sender<()> {
+    let (nudges, received) = mpsc::channel();
+    settle(
+        received,
+        interval,
+        |_: &mut (), ()| true,
+        move |()| on_settle(),
+    );
+    nudges
+}
+
+/// The thread both debounces run on.
+///
+/// `absorb` takes each item into the accumulator and says whether it counted;
+/// an item that counts restarts the quiet interval, and one that does not is
+/// dropped without disturbing a compile already falling due. When the interval
+/// elapses, `on_settle` is handed the accumulator and the next window starts
+/// from `A::default()`.
+///
+/// It is one loop rather than two because the app now has two intervals over
+/// one shape: the filesystem's, which accumulates what changed, and the
+/// keyboard's, which accumulates nothing.
+fn settle<T, A>(
+    received: mpsc::Receiver<T>,
+    interval: Duration,
+    mut absorb: impl FnMut(&mut A, T) -> bool + Send + 'static,
+    mut on_settle: impl FnMut(A) + Send + 'static,
+) where
+    T: Send + 'static,
+    A: Default + Send + 'static,
+{
     std::thread::spawn(move || {
         let mut debounce = Debounce::new(interval);
+        let mut pending = A::default();
 
         loop {
-            let event = match debounce.wait(Instant::now()) {
+            let item = match debounce.wait(Instant::now()) {
                 Some(timeout) => match received.recv_timeout(timeout) {
-                    Ok(event) => Some(event),
+                    Ok(item) => Some(item),
                     Err(mpsc::RecvTimeoutError::Timeout) => None,
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 },
                 None => match received.recv() {
-                    Ok(event) => Some(event),
+                    Ok(item) => Some(item),
                     Err(mpsc::RecvError) => break,
                 },
             };
 
-            // A watcher error names no file to redraw for, so it is dropped
-            // with the same shrug as an event under some other path.
-            if let Some(Ok(event)) = event
-                && event.paths.iter().any(|path| relevant(path))
+            if let Some(item) = item
+                && absorb(&mut pending, item)
             {
                 debounce.touch(Instant::now());
             }
 
             if debounce.take(Instant::now()) {
-                on_change();
+                on_settle(std::mem::take(&mut pending));
             }
         }
     });
-
-    Ok(Watch { _watcher: watcher })
 }
 
 #[cfg(test)]
@@ -220,24 +352,22 @@ mod tests {
         assert_eq!(root(Path::new("paper.md")), Path::new("."));
     }
 
-    /// The document and both the figures it names redraw the page. A sibling
-    /// the document never names does not, though the watch covers it.
+    /// The document and both the figures it names reach the loop, and they
+    /// reach it as two different things. A sibling the document never names
+    /// reaches it as neither, though the watch covers it.
     #[test]
-    fn the_filter_admits_the_document_and_its_figures_and_nothing_else() {
+    fn the_filter_sorts_the_document_from_its_figures_and_drops_the_rest() {
         let dir = scratch_dir("filter");
         let document = dir.join("figure.md");
         let images = ["dot.png".to_string(), "figures/mark.svg".to_string()];
 
         let real = dir.canonicalize().unwrap();
+        let sort = |path: PathBuf| classify(&path, &document, &images);
 
-        assert!(is_relevant(&real.join("figure.md"), &document, &images));
-        assert!(is_relevant(&real.join("dot.png"), &document, &images));
-        assert!(is_relevant(
-            &real.join("figures/mark.svg"),
-            &document,
-            &images
-        ));
-        assert!(!is_relevant(&real.join("notes.txt"), &document, &images));
+        assert_eq!(sort(real.join("figure.md")), Some(Change::Document));
+        assert_eq!(sort(real.join("dot.png")), Some(Change::Figure));
+        assert_eq!(sort(real.join("figures/mark.svg")), Some(Change::Figure));
+        assert_eq!(sort(real.join("notes.txt")), None);
     }
 
     /// The event and the document name the same file and differ only by
@@ -254,7 +384,7 @@ mod tests {
             "the scratch directory is not symlinked, so this case proves nothing"
         );
 
-        assert!(is_relevant(&event, &document, &[]));
+        assert_eq!(classify(&event, &document, &[]), Some(Change::Document));
     }
 
     /// Two events inside the window are one compile; two outside are two.

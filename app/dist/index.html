@@ -85,7 +85,49 @@
       main {
         flex: 1;
         display: flex;
+        min-height: 0;
+      }
+
+      /*
+        The text pane. A plain textarea and nothing more: no highlighting, no
+        autocomplete, no formatting commands. Its text is what compiles — the
+        file beside it need never have held that text — and every change is
+        sent to Rust, which holds the buffer and owns the debounce.
+      */
+      #text {
+        flex: 0 0 40%;
+        min-width: 12ch;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 12px 14px;
+        border: 0;
+        resize: none;
+        background: var(--ground);
+        color: var(--ink);
+        font:
+          12px/1.6 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        tab-size: 4;
+      }
+      #text:disabled {
+        color: var(--quiet);
+      }
+
+      /* The divider the reader drags. It is the only chrome between panes. */
+      #divider {
+        flex: none;
+        width: 5px;
+        cursor: col-resize;
+        background: var(--edge);
+      }
+
+      #preview {
+        flex: 1;
+        display: flex;
         flex-direction: column;
+        min-width: 0;
         min-height: 0;
       }
       #pane {
@@ -115,6 +157,19 @@
         white-space: pre-wrap;
         color: var(--quiet);
       }
+      /*
+        The divergence a refused external change leaves. It is not an error and
+        not staleness — nothing failed to compile, and the page belongs to the
+        text in the pane. It is the file that has gone elsewhere.
+      */
+      #divergence {
+        flex: none;
+        margin: 0;
+        padding: 8px 12px;
+        background: var(--chrome);
+        border-bottom: 1px solid var(--edge);
+      }
+
       /* The error sits above the page it does not belong to. */
       #error {
         flex: none;
@@ -138,13 +193,24 @@
   <body>
     <header>
       <button id="open" type="button">Open…</button>
+      <button id="save" type="button">Save</button>
       <button id="export" type="button">Save a Copy…</button>
       <span id="status"></span>
     </header>
     <main>
-      <p id="message">Open a markdown file to see its PDF. ⌘O</p>
-      <p id="error" hidden></p>
-      <iframe id="pane" title="The compiled PDF" hidden></iframe>
+      <textarea
+        id="text"
+        spellcheck="false"
+        disabled
+        aria-label="The document's markdown"
+      ></textarea>
+      <div id="divider" role="separator" aria-orientation="vertical"></div>
+      <section id="preview">
+        <p id="message">Open a markdown file to see its PDF. ⌘O</p>
+        <p id="divergence" hidden></p>
+        <p id="error" hidden></p>
+        <iframe id="pane" title="The compiled PDF" hidden></iframe>
+      </section>
     </main>
 
     <script>
@@ -153,13 +219,31 @@
       const { listen } = window.__TAURI__.event
 
       const pane = document.getElementById('pane')
+      const text = document.getElementById('text')
       const message = document.getElementById('message')
+      const divergence = document.getElementById('divergence')
       const error = document.getElementById('error')
       const status = document.getElementById('status')
 
       // The object URL the pane is showing, so the previous one can be
       // released once the frame has left it.
       let drawn = null
+
+      /*
+        What this page has already taken from Rust. Both are counters Rust
+        keeps, and both exist to stop this page doing work that would cost the
+        reader something.
+
+        `revision` counts compiles that produced bytes: a signal that carries
+        no new page must not redraw the frame, because a redraw returns the
+        reader to page 1 and the app's own save now compiles nothing at all.
+
+        `reloaded` counts the times Rust replaced the buffer from disk. The
+        text is re-read on that and on nothing else, so a fetch can never race
+        a keystroke still in flight and put an older text back in the pane.
+      */
+      let drawnRevision = -1
+      let takenReload = -1
 
       async function openDocument() {
         const path = await open({
@@ -176,6 +260,22 @@
 
         try {
           await invoke('open_document', { path })
+        } catch (problem) {
+          fail(problem)
+        }
+      }
+
+      /*
+        Write the pane's text to the document's own path.
+
+        The text goes over first, so the file is the pane and not the pane a
+        moment ago: the keystroke that landed while the menu was opening is in
+        Rust's buffer before the save reads it.
+      */
+      async function saveDocument() {
+        try {
+          await invoke('edit', { text: text.value })
+          await invoke('save')
         } catch (problem) {
           fail(problem)
         }
@@ -231,10 +331,24 @@
         }
 
         report(state)
-        if (state.state !== 'current') return
+
+        // Rust took a text from disk: an open, or an external change over a
+        // clean buffer. That is the only time this page's own text is
+        // replaced.
+        if (state.reloaded !== takenReload) {
+          takenReload = state.reloaded
+          try {
+            text.value = await invoke('document_text')
+          } catch (problem) {
+            fail(problem)
+          }
+        }
+
+        if (state.state !== 'current' || state.revision === drawnRevision) return
 
         try {
           draw(await invoke('current_pdf'))
+          drawnRevision = state.revision
         } catch (problem) {
           fail(problem)
         }
@@ -256,7 +370,11 @@
         error.hidden = state.error === null
         error.classList.toggle('alone', !state.page)
 
+        divergence.textContent = state.divergence ?? ''
+        divergence.hidden = state.divergence === null
+
         message.hidden = state.state !== 'empty'
+        text.disabled = state.state === 'empty'
         pane.classList.toggle('stale', state.error !== null && state.page)
       }
 
@@ -303,12 +421,15 @@
         if (drawing) pane.classList.add('stale')
       }
 
-      // Back to the empty state, holding no document's page.
+      // Back to the empty state, holding no document's page and no text.
       function clear() {
         message.hidden = false
+        divergence.hidden = true
         error.hidden = true
         status.textContent = ''
         status.className = ''
+        text.value = ''
+        text.disabled = true
         pane.hidden = true
         pane.classList.remove('stale')
         pane.removeAttribute('src')
@@ -316,12 +437,50 @@
           URL.revokeObjectURL(drawn)
           drawn = null
         }
+        drawnRevision = -1
+        takenReload = -1
       }
 
+      /*
+        Drag the divider. The frame stops taking pointer events for the length
+        of the drag: WebKit's PDF view swallows them otherwise, and the divider
+        would stick the moment the pointer crossed the page.
+      */
+      const divider = document.getElementById('divider')
+      divider.addEventListener('pointerdown', (down) => {
+        divider.setPointerCapture(down.pointerId)
+        pane.style.pointerEvents = 'none'
+
+        const move = (at) => {
+          const width = Math.min(
+            Math.max(at.clientX, 120),
+            document.body.clientWidth - 160
+          )
+          text.style.flexBasis = `${width}px`
+        }
+        const up = () => {
+          divider.removeEventListener('pointermove', move)
+          divider.removeEventListener('pointerup', up)
+          pane.style.pointerEvents = ''
+        }
+
+        divider.addEventListener('pointermove', move)
+        divider.addEventListener('pointerup', up)
+      })
+
+      // Every change goes to Rust, which holds the buffer and owns the
+      // debounce. A debounce in this page would be logic reachable only by
+      // typing at the window, and no test could hold it.
+      text.addEventListener('input', () => {
+        invoke('edit', { text: text.value })
+      })
+
       document.getElementById('open').addEventListener('click', openDocument)
+      document.getElementById('save').addEventListener('click', saveDocument)
       document.getElementById('export').addEventListener('click', exportDocument)
       listen('open', openDocument)
-      listen('save', exportDocument)
+      listen('save', saveDocument)
+      listen('export', exportDocument)
       listen('rendered', refresh)
 
       // The launch state is a state like the others, and Rust names it too.

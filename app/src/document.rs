@@ -25,7 +25,13 @@ pub struct Render {
     pub pdf: Result<Vec<u8>, String>,
 }
 
-/// Read one document and the image files it names, then compile it to a PDF.
+/// Compile one markdown string, reading the image files it names from beside
+/// the document.
+///
+/// **The markdown is a parameter and not a path**, and that is the whole of
+/// what the text pane needed: the string the pane holds is what compiles, and
+/// the file beside it need never have held that text. `md2pdf_core::md_to_pdf`
+/// already took a `&str`, so `core` gained nothing for this.
 ///
 /// Every failure arrives as the sentence the CLI prints after its `error: `
 /// prefix, and the two classes are not the same type. A construct outside the
@@ -33,13 +39,10 @@ pub struct Render {
 /// `Display`; a file that will not read is no `Error` at all, and
 /// [`read_assets_with`] builds the plain sentence for it. So a document this
 /// app refuses is refused in the same words at the window and at the terminal.
-///
-/// The document is read once, and that one string serves both the image list
-/// and the compile.
-pub fn render(document: &Path) -> Render {
+pub fn render(directory: &Path, markdown: &str) -> Render {
     // The closure is not noise: `std::fs::read` names one lifetime where the
     // parameter below asks for any, so passing it directly does not compile.
-    render_with(document, |file| std::fs::read(file))
+    render_with(directory, markdown, |file| std::fs::read(file))
 }
 
 /// [`render`], with the file read supplied by the caller.
@@ -47,27 +50,40 @@ pub fn render(document: &Path) -> Render {
 /// The seam is Phase 1's [`read_assets_with`], one level up, and it exists for
 /// the same reason: a caller that counts its own reads can check a claim about
 /// them rather than argue it from the loop.
-pub fn render_with(document: &Path, read: impl FnMut(&Path) -> std::io::Result<Vec<u8>>) -> Render {
-    let markdown = match std::fs::read_to_string(document) {
-        Ok(markdown) => markdown,
-        Err(e) => {
-            return Render {
-                images: None,
-                pdf: Err(format!("cannot read {}: {e}", document.display())),
-            };
-        }
-    };
-
-    let directory = document.parent().unwrap_or(Path::new(""));
-
-    let images = md2pdf_core::image_paths(&markdown)
+pub fn render_with(
+    directory: &Path,
+    markdown: &str,
+    read: impl FnMut(&Path) -> std::io::Result<Vec<u8>>,
+) -> Render {
+    let images = md2pdf_core::image_paths(markdown)
         .ok()
         .map(|images| images.into_iter().map(|image| image.path).collect());
 
-    let pdf = read_assets_with(&markdown, directory, read)
-        .and_then(|assets| md2pdf_core::md_to_pdf(&markdown, &assets).map_err(|e| e.to_string()));
+    let pdf = read_assets_with(markdown, directory, read)
+        .and_then(|assets| md2pdf_core::md_to_pdf(markdown, &assets).map_err(|e| e.to_string()));
 
     Render { images, pdf }
+}
+
+/// Read a document's text, in the words the terminal uses for a file it cannot
+/// read.
+///
+/// The read left [`render`] when the pane's text became what compiles, and it
+/// landed here rather than at the caller because this sentence is one of the
+/// two the app owes the CLI. Phase 1 built it inside the compile; the same
+/// string reaches the page from one function further out.
+pub fn read_document(document: &Path) -> Result<String, String> {
+    std::fs::read_to_string(document)
+        .map_err(|e| format!("cannot read {}: {e}", document.display()))
+}
+
+/// The directory a document's figures resolve against: the one it sits in.
+///
+/// An empty parent is a document named with no directory at all, and joining a
+/// figure onto `""` resolves it against the working directory, which is what
+/// the CLI does for the same input.
+pub fn directory(document: &Path) -> &Path {
+    document.parent().unwrap_or(Path::new(""))
 }
 
 /// The window's title for an open document: the file's own name.
@@ -219,12 +235,20 @@ mod tests {
         assert_eq!(reads, [dir.join("dot.png")]);
     }
 
+    /// A fixture compiled the way the pane compiles: its text as a string,
+    /// against the directory it sits in.
+    fn render_fixture(name: &str) -> Render {
+        let document = fixture(name);
+        let markdown = read_document(&document).unwrap();
+        render(directory(&document), &markdown)
+    }
+
     /// A construct outside the dialect names itself and its line, in the words
     /// the terminal uses. The window shows this sentence; that half is read by
     /// eye, and this is the half a test can hold.
     #[test]
     fn a_construct_outside_the_dialect_names_itself_and_its_line() {
-        let error = render(&fixture("unsupported_html.md")).pdf.unwrap_err();
+        let error = render_fixture("unsupported_html.md").pdf.unwrap_err();
 
         assert!(error.contains("raw HTML block"), "{error}");
         assert!(error.contains("line 5"), "{error}");
@@ -236,9 +260,9 @@ mod tests {
     /// is missing.
     #[test]
     fn the_image_list_survives_a_failed_compile_but_not_a_failed_parse() {
-        assert_eq!(render(&fixture("unsupported_html.md")).images, None);
+        assert_eq!(render_fixture("unsupported_html.md").images, None);
 
-        let render = render(&fixture("figure.md"));
+        let render = render_fixture("figure.md");
         assert!(render.pdf.is_err());
         assert_eq!(
             render.images,

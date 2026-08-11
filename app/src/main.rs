@@ -32,6 +32,14 @@ const OPEN: &str = "open";
 /// The id of the Save-a-copy menu item, and the event it sends the page.
 ///
 /// It follows [`OPEN`] exactly: the item emits, and the page owns the dialog.
+const EXPORT: &str = "export";
+
+/// The id of the Save menu item, and the event it sends the page.
+///
+/// It opens no dialog — the document has a path already — but it still emits
+/// rather than acting, so that the item and the button beside it run one code
+/// path. The page hands its text over before it asks for the save, so the file
+/// is the pane and not the pane a moment ago.
 const SAVE: &str = "save";
 
 /// The signal the loop sends the page after every compile.
@@ -48,7 +56,7 @@ fn main() {
             app.set_menu(menu(app.handle())?)?;
             app.on_menu_event(|app, event| {
                 let id = event.id();
-                if (id == OPEN || id == SAVE)
+                if (id == OPEN || id == SAVE || id == EXPORT)
                     && let Some(window) = app.get_webview_window(MAIN)
                 {
                     let _ = window.emit(id.as_ref(), ());
@@ -67,6 +75,9 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             open_document,
+            document_text,
+            edit,
+            save,
             current_pdf,
             status,
             export_path,
@@ -105,6 +116,47 @@ async fn open_document(
         .lock()
         .expect("the session lock was poisoned")
         .open(document)
+}
+
+/// The text the pane should be holding.
+///
+/// The page asks for this when the status says the buffer was replaced from
+/// disk, and at no other time — a fetch on every compile would race the
+/// keystrokes still in flight and could put an older text back in the pane.
+#[tauri::command]
+fn document_text(session: tauri::State<'_, Mutex<Session>>) -> String {
+    session
+        .lock()
+        .expect("the session lock was poisoned")
+        .preview()
+        .text()
+        .to_string()
+}
+
+/// Take what the author has typed.
+///
+/// The compile is not here. It falls due one quiet interval later, on the
+/// session's own typing loop, which is what keeps a keystroke from costing a
+/// compile.
+#[tauri::command]
+fn edit(session: tauri::State<'_, Mutex<Session>>, text: String) {
+    session
+        .lock()
+        .expect("the session lock was poisoned")
+        .edit(text);
+}
+
+/// Write the pane's text to the document's own path.
+///
+/// It needs no dialog and so no capability: the path is the one the window
+/// already names. The save's own filesystem event arrives a moment later and
+/// compiles nothing, because the file and the buffer then say the same thing.
+#[tauri::command]
+fn save(session: tauri::State<'_, Mutex<Session>>) -> Result<(), String> {
+    session
+        .lock()
+        .expect("the session lock was poisoned")
+        .save()
 }
 
 /// What the pane should be showing now.
@@ -178,16 +230,20 @@ fn export(session: tauri::State<'_, Mutex<Session>>, path: String) -> Result<(),
 /// The window's menu.
 ///
 /// macOS draws no menu of its own, so every item the keyboard needs is named
-/// here — `Cmd-O` and `Shift-Cmd-S`, which are the two accelerators the app has.
+/// here — `Cmd-O`, `Cmd-S` and `Shift-Cmd-S`, which are the three accelerators
+/// the app has.
 ///
-/// The export takes `Shift-Cmd-S` and not `Cmd-S` deliberately. Phase 4 puts a
-/// text pane beside the preview, where `Cmd-S` means save the document, and an
-/// accelerator taken now would have to be given back then.
+/// `Cmd-S` saves the document and `Shift-Cmd-S` writes a copy of the PDF.
+/// Phase 3 gave the export the second of those and reserved the first for the
+/// text pane, so this phase spends the accelerator rather than taking one back.
 fn menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     let open = MenuItemBuilder::with_id(OPEN, "Open…")
         .accelerator("CmdOrCtrl+O")
         .build(app)?;
-    let save = MenuItemBuilder::with_id(SAVE, "Save a Copy…")
+    let save = MenuItemBuilder::with_id(SAVE, "Save")
+        .accelerator("CmdOrCtrl+S")
+        .build(app)?;
+    let export = MenuItemBuilder::with_id(EXPORT, "Save a Copy…")
         .accelerator("Shift+CmdOrCtrl+S")
         .build(app)?;
 
@@ -207,6 +263,7 @@ fn menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> 
             &SubmenuBuilder::new(app, "File")
                 .item(&open)
                 .item(&save)
+                .item(&export)
                 .separator()
                 .close_window()
                 .build()?,

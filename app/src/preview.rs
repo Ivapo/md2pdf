@@ -1,19 +1,25 @@
 //! What the pane is showing, and what keeps it current.
 //!
-//! [`Preview`] is the state the loop writes: the last good PDF bytes, how long
-//! they took, the image list the filter needs, whether the page still belongs
-//! to the text on disk, and the error when there is one. [`Session`] is that
-//! state plus the watch that keeps it up to date. Neither needs a window, so
-//! both are tested by ordinary tests rather than by a screenshot.
+//! [`Preview`] is the state the loop writes: the text the pane holds, the last
+//! good PDF bytes, how long they took, the image list the filter needs,
+//! whether the page still belongs to that text, and the error when there is
+//! one. [`Session`] is that state plus the two loops that keep it up to date —
+//! the watch, and the keyboard. Neither needs a window, so both are tested by
+//! ordinary tests rather than by a screenshot.
+//!
+//! **The buffer is what compiles.** The file beside it need never have held
+//! that text, and the two are compared rather than conflated: [`external_change`]
+//! is the whole of what an event naming the open document now means.
 
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
 use crate::document;
-use crate::watch::{self, Watch};
+use crate::watch::{self, Change, Changed, Watch};
 
 /// What the window says about the last compile.
 ///
@@ -35,6 +41,60 @@ pub enum State {
     Failed,
 }
 
+/// What an external change to the open document did.
+///
+/// The three are exhaustive over three strings, and they need no dirty flag:
+/// the file equal to the buffer is decided first, whatever the last-saved text
+/// is, and the rest splits on whether the buffer holds unsaved edits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum External {
+    /// The file already says what the buffer says — the app's own save
+    /// arriving back, or a change that changed nothing.
+    Unchanged,
+    /// The buffer was clean, so nothing could be lost. The disk copy is the
+    /// pane's text now. **This is the loop the app has shipped since Phase 2.**
+    Taken,
+    /// The buffer held unsaved edits and the disk moved under them. The work
+    /// is kept and the divergence is named.
+    Diverged,
+}
+
+/// The report a refused external change leaves for the author.
+///
+/// It names both ways out and takes neither: saving overwrites the disk,
+/// reopening takes it. **The app does not merge** — a three-way merge is an
+/// editor project, and this one is not that.
+const DIVERGED: &str = "this file changed on disk, and the pane holds unsaved edits. \
+    Save to write the pane over the file, or open the file again to take it.";
+
+/// OQ-5's rule: what an event naming the open document means.
+///
+/// Three strings and two comparisons. `file` is what the disk holds now,
+/// `buffer` is what the pane holds, and `saved` is the text as it stood at the
+/// last open or save.
+///
+/// **Refusing every external change would have been the wrong answer**, and
+/// the condition is what makes this one rule rather than a compromise: an
+/// author who is not typing has a clean buffer, so a save in another editor
+/// still redraws the page with no action taken in the window, which is the
+/// loop Phase 2 shipped and the README documents.
+///
+/// Two limits it accepts. An author who keeps typing between a save and that
+/// save's event lands in [`External::Diverged`], so the app can name a
+/// divergence that was really its own write — it loses nothing, and the next
+/// save clears it. And an external writer that happens to write exactly the
+/// author's unsaved text takes [`External::Unchanged`], which leaves the
+/// last-saved text unrefreshed. Both err toward keeping work.
+pub fn external_change(file: &str, buffer: &str, saved: &str) -> External {
+    if file == buffer {
+        External::Unchanged
+    } else if buffer == saved {
+        External::Taken
+    } else {
+        External::Diverged
+    }
+}
+
 /// The status line, as a value rather than as chrome.
 ///
 /// Every word in it is chosen here and the page only places it. A window that
@@ -51,6 +111,24 @@ pub struct Status {
     pub error: Option<String>,
     /// Is a page drawn under the message?
     pub page: bool,
+    /// The report a refused external change left, if there is one.
+    ///
+    /// **A divergence is not [`State::Stale`]**: nothing failed to compile,
+    /// and the page on screen belongs to the text in the pane. It is the file
+    /// that has gone elsewhere.
+    pub divergence: Option<String>,
+    /// How many times a compile has succeeded, so the page can tell new bytes
+    /// from a status that merely arrived.
+    ///
+    /// It is what stops a signal carrying no new page from redrawing the frame
+    /// and throwing the reader back to page 1 — which the app's own save now
+    /// does, since its event compiles nothing.
+    pub revision: u64,
+    /// How many times the buffer has been replaced from disk.
+    ///
+    /// The page re-reads the text on this and on nothing else, so a keystroke
+    /// in flight can never lose a race with a fetch of text it just sent.
+    pub reloaded: u64,
 }
 
 /// The pane's state, as Rust holds it.
@@ -58,14 +136,24 @@ pub struct Status {
 /// The bytes live here rather than only in the page, because the loop is what
 /// compiled them and the export has to write the same bytes the pane is
 /// showing — a file and a page that disagree would be worse than neither.
+///
+/// **The text lives here too**, for the same kind of reason: the rule that
+/// decides what an external change does is three comparisons over strings, and
+/// a buffer that lived only in the page would put that rule in the window,
+/// where no test could reach it.
 #[derive(Default)]
 pub struct Preview {
     document: Option<PathBuf>,
+    buffer: String,
+    saved: String,
     images: Vec<String>,
     pdf: Option<Vec<u8>>,
     elapsed: Option<Duration>,
+    revision: u64,
+    reloaded: u64,
     stale: bool,
     error: Option<String>,
+    divergence: Option<String>,
 }
 
 impl Preview {
@@ -77,6 +165,11 @@ impl Preview {
     /// The document the pane is showing, if one is open.
     pub fn document(&self) -> Option<&Path> {
         self.document.as_deref()
+    }
+
+    /// The text the pane holds, which is the text that compiles.
+    pub fn text(&self) -> &str {
+        &self.buffer
     }
 
     /// Does the page belong to older text than the file on disk?
@@ -116,6 +209,9 @@ impl Preview {
             time: self.elapsed.map(|took| format!("{} ms", took.as_millis())),
             error: self.error.clone(),
             page: self.pdf.is_some(),
+            divergence: self.divergence.clone(),
+            revision: self.revision,
+            reloaded: self.reloaded,
         }
     }
 
@@ -154,7 +250,97 @@ impl Preview {
         std::fs::write(path, pdf).map_err(|e| format!("cannot write {}: {e}", path.display()))
     }
 
-    /// Compile the open document and take in what came back.
+    /// Take the pane's text.
+    ///
+    /// It compiles nothing. The typing debounce decides when a compile falls
+    /// due, because one keystroke is not a document.
+    pub fn edit(&mut self, text: String) {
+        if self.document.is_some() {
+            self.buffer = text;
+        }
+    }
+
+    /// Read the document from disk into the buffer, and compile it.
+    ///
+    /// A file that will not read leaves the same message and the same *failed*
+    /// state a compile failure leaves, because that is what the author needs
+    /// to see either way and it is the sentence the terminal prints.
+    pub fn load(&mut self) {
+        let Some(document) = self.document.clone() else {
+            return;
+        };
+
+        match document::read_document(&document) {
+            Ok(text) => {
+                self.take(text);
+                self.compile();
+            }
+            Err(message) => {
+                self.stale = true;
+                self.error = Some(message);
+            }
+        }
+    }
+
+    /// Write the buffer to the open document's path.
+    ///
+    /// The last-saved text moves with it, which is what makes the buffer clean
+    /// again — and what makes this save's own filesystem event take
+    /// [`External::Unchanged`] a moment later, with no second compile and no
+    /// suppression that would have to win a race.
+    pub fn save(&mut self) -> Result<(), String> {
+        let document = self
+            .document
+            .clone()
+            .ok_or_else(|| "no document is open".to_string())?;
+
+        std::fs::write(&document, &self.buffer)
+            .map_err(|e| format!("cannot write {}: {e}", document.display()))?;
+
+        self.saved = self.buffer.clone();
+        self.divergence = None;
+        Ok(())
+    }
+
+    /// The disk moved under the open document: decide what that means.
+    ///
+    /// This is [`external_change`] with the file read for it and its answer
+    /// carried out. A document that will not read at this instant — one caught
+    /// mid-write — counts as [`External::Unchanged`]: the app keeps what it
+    /// has, and the write's next event decides.
+    pub fn reload(&mut self) -> External {
+        let Some(document) = self.document.clone() else {
+            return External::Unchanged;
+        };
+        let Ok(file) = document::read_document(&document) else {
+            return External::Unchanged;
+        };
+
+        let outcome = external_change(&file, &self.buffer, &self.saved);
+        match outcome {
+            External::Unchanged => {}
+            External::Taken => {
+                self.take(file);
+                self.compile();
+            }
+            External::Diverged => self.divergence = Some(DIVERGED.to_string()),
+        }
+        outcome
+    }
+
+    /// Take a text from disk as both the buffer and the last-saved text.
+    ///
+    /// The count it bumps is how the page knows to re-read: it replaces its
+    /// own text on this and on nothing else, so text the author is typing is
+    /// never overwritten by a fetch that raced it.
+    fn take(&mut self, text: String) {
+        self.saved = text.clone();
+        self.buffer = text;
+        self.reloaded += 1;
+        self.divergence = None;
+    }
+
+    /// Compile the pane's text and take in what came back.
     ///
     /// A success replaces the bytes and clears both the error and the stale
     /// mark. **A failure keeps the bytes**, records the message and sets the
@@ -172,7 +358,7 @@ impl Preview {
         };
 
         let started = Instant::now();
-        let render = document::render(&document);
+        let render = document::render(document::directory(&document), &self.buffer);
         let took = started.elapsed();
 
         if let Some(images) = render.images {
@@ -183,6 +369,7 @@ impl Preview {
             Ok(pdf) => {
                 self.pdf = Some(pdf);
                 self.elapsed = Some(took);
+                self.revision += 1;
                 self.stale = false;
                 self.error = None;
             }
@@ -194,14 +381,15 @@ impl Preview {
     }
 }
 
-/// One open document: its preview, and the watch that keeps it current.
+/// One open document: its preview, and the two loops that keep it current.
 ///
-/// Opening a second document moves the watch, because the old [`Watch`] is
-/// dropped before the new one starts.
+/// Opening a second document moves both, because the old [`Watch`] and the old
+/// typing channel are dropped before the new ones start.
 pub struct Session {
     state: Arc<Mutex<Preview>>,
     on_render: Arc<dyn Fn() + Send + Sync>,
     watch: Option<Watch>,
+    typing: Option<mpsc::Sender<()>>,
 }
 
 impl Session {
@@ -215,6 +403,7 @@ impl Session {
             state: Arc::new(Mutex::new(Preview::default())),
             on_render: Arc::new(on_render),
             watch: None,
+            typing: None,
         }
     }
 
@@ -223,10 +412,11 @@ impl Session {
         self.state.lock().expect("the preview lock was poisoned")
     }
 
-    /// Open a document: compile it once, and watch its directory from now on.
+    /// Open a document: read it, compile it once, and watch its directory from
+    /// now on.
     ///
-    /// The previous document's page goes with it. A page kept across an open
-    /// would belong to a file the window no longer names.
+    /// The previous document's page and text go with it. A page kept across an
+    /// open would belong to a file the window no longer names.
     pub fn open(&mut self, document: PathBuf) -> Result<(), String> {
         let root = watch::root(&document);
 
@@ -236,25 +426,51 @@ impl Session {
                 document: Some(document.clone()),
                 ..Preview::default()
             };
-            preview.compile();
+            preview.load();
         }
         (self.on_render)();
 
-        // The old watch goes before the new one starts, so the two never both
-        // hold the same directory.
+        // The old loops go before the new ones start, so no two of them ever
+        // hold the same document.
         self.watch = None;
+        self.typing = None;
+
+        self.typing = Some(watch::debounced(
+            watch::TYPING_DEBOUNCE,
+            self.recompile(document.clone()),
+        ));
         self.watch = Some(watch::start(
             &root,
             watch::DEBOUNCE,
-            self.filter(document.clone()),
-            self.recompile(document),
+            self.classifier(document.clone()),
+            self.on_change(document),
         )?);
 
         Ok(())
     }
 
+    /// Take the pane's text, and start the clock on the compile it will want.
+    ///
+    /// The keystroke crosses the IPC boundary and the debounce is Rust's,
+    /// which is what puts this on the testable side of the window.
+    pub fn edit(&self, text: String) {
+        self.preview().edit(text);
+        if let Some(typing) = &self.typing {
+            let _ = typing.send(());
+        }
+    }
+
+    /// Write the pane's text to the document's own path.
+    pub fn save(&self) -> Result<(), String> {
+        self.preview().save()
+    }
+
     /// The filter, closed over the image list the last successful parse left.
-    fn filter(&self, document: PathBuf) -> impl Fn(&Path) -> bool + Send + 'static {
+    ///
+    /// That list follows the buffer, because the buffer is the document now: a
+    /// figure named in text that has not been saved is watched for all the
+    /// same.
+    fn classifier(&self, document: PathBuf) -> impl Fn(&Path) -> Option<Change> + Send + 'static {
         let state = Arc::clone(&self.state);
         move |path| {
             let images = state
@@ -262,15 +478,61 @@ impl Session {
                 .expect("the preview lock was poisoned")
                 .images
                 .clone();
-            watch::is_relevant(path, &document, &images)
+            watch::classify(path, &document, &images)
         }
     }
 
-    /// What one settled change does.
+    /// What one settled window of filesystem events does.
     ///
-    /// It checks the document first. Dropping a [`Watch`] does not join its
-    /// thread, so a thread that was mid-compile when a second document opened
-    /// could otherwise write its page over the newer one.
+    /// **The document and the figures reach different code**, which is the
+    /// whole of what this phase changed in the loop. A figure that moved is
+    /// still a bare recompile, because nothing but the disk supplies a figure.
+    /// The document that moved runs [`Preview::reload`], because the pane's
+    /// own text is what compiles and the file is now a second opinion about
+    /// it.
+    ///
+    /// A window that took the disk copy compiled inside the rule, and it read
+    /// the new figures on the way, so the two never compile twice for one
+    /// window. And nothing is announced when nothing happened: the app's own
+    /// save arrives here, changes nothing, and must not redraw a frame the
+    /// reader has scrolled.
+    fn on_change(&self, document: PathBuf) -> impl FnMut(Changed) + Send + 'static {
+        let state = Arc::clone(&self.state);
+        let on_render = Arc::clone(&self.on_render);
+
+        move |changed: Changed| {
+            let mut announce = false;
+            {
+                let mut preview = state.lock().expect("the preview lock was poisoned");
+                if preview.document.as_deref() != Some(document.as_path()) {
+                    return;
+                }
+
+                let taken = if changed.document {
+                    let outcome = preview.reload();
+                    announce = outcome != External::Unchanged;
+                    outcome == External::Taken
+                } else {
+                    false
+                };
+
+                if changed.figures && !taken {
+                    preview.compile();
+                    announce = true;
+                }
+            }
+            if announce {
+                on_render();
+            }
+        }
+    }
+
+    /// What one settled pause in the typing does.
+    ///
+    /// It checks the document first. Dropping a [`Watch`] or a typing channel
+    /// does not join its thread, so a thread that was mid-compile when a
+    /// second document opened could otherwise write its page over the newer
+    /// one.
     fn recompile(&self, document: PathBuf) -> impl FnMut() + Send + 'static {
         let state = Arc::clone(&self.state);
         let on_render = Arc::clone(&self.on_render);
@@ -355,8 +617,12 @@ mod tests {
     }
 
     /// Give a change that should *not* compile long enough to prove it.
+    ///
+    /// It clears both intervals several times over: a keystroke's compile
+    /// falls due after [`watch::TYPING_DEBOUNCE`], which is the longer of the
+    /// two, and a filesystem event's after [`watch::DEBOUNCE`].
     fn settle() {
-        std::thread::sleep(watch::DEBOUNCE * 8);
+        std::thread::sleep(watch::TYPING_DEBOUNCE * 4);
     }
 
     /// A copy of `samples/article.md` and both the figures it names.
@@ -368,13 +634,14 @@ mod tests {
         document
     }
 
-    /// A preview holding one compiled document, built without a session.
+    /// A preview holding one document, read from disk and compiled, built
+    /// without a session.
     fn compiled(document: &Path) -> Preview {
         let mut preview = Preview {
             document: Some(document.to_path_buf()),
             ..Preview::default()
         };
-        preview.compile();
+        preview.load();
         preview
     }
 
@@ -395,32 +662,30 @@ mod tests {
             .collect()
     }
 
-    /// A compile error keeps the bytes and sets the mark. Fixing the document
+    /// A compile error keeps the bytes and sets the mark. Fixing the text
     /// clears both.
+    ///
+    /// The broken states are typed rather than written to the file, because
+    /// typing is how an author reaches them: a half-typed table, a fence not
+    /// yet closed.
     #[test]
     fn a_failed_compile_keeps_the_last_good_page_and_marks_it_stale() {
         let dir = scratch_dir("stale");
-        let document = article_in(&dir);
-
-        let mut preview = Preview {
-            document: Some(document.clone()),
-            ..Preview::default()
-        };
-        preview.compile();
+        let mut preview = compiled(&article_in(&dir));
 
         let good = preview.pdf().unwrap().to_vec();
         assert!(good.starts_with(b"%PDF"));
         assert!(!preview.is_stale());
         assert_eq!(preview.error(), None);
 
-        std::fs::write(&document, "# Broken\n\n<div>raw HTML</div>\n").unwrap();
+        preview.edit("# Broken\n\n<div>raw HTML</div>\n".to_string());
         preview.compile();
 
         assert_eq!(preview.pdf(), Some(good.as_slice()));
         assert!(preview.is_stale());
         assert!(preview.error().unwrap().contains("raw HTML block"));
 
-        std::fs::write(&document, "# Fixed\n\nOrdinary text.\n").unwrap();
+        preview.edit("# Fixed\n\nOrdinary text.\n".to_string());
         preview.compile();
 
         assert!(!preview.is_stale());
@@ -430,6 +695,10 @@ mod tests {
 
     /// The document and a figure it names each redraw the page. This is the
     /// real watcher, on a real directory, through the code the window runs.
+    ///
+    /// The document's half is the loop Phase 2 shipped, and it survives the
+    /// text pane exactly because the buffer here is clean: nobody has typed,
+    /// so nothing can be lost, and the rule takes the disk copy.
     #[test]
     fn a_saved_document_and_a_replaced_figure_each_compile_again() {
         let dir = scratch_dir("watch-article");
@@ -561,7 +830,7 @@ mod tests {
         let mut preview = compiled(&document);
         assert_eq!(preview.state(), State::Current);
 
-        std::fs::write(&document, "# Broken\n\n<div>raw HTML</div>\n").unwrap();
+        preview.edit("# Broken\n\n<div>raw HTML</div>\n".to_string());
         preview.compile();
         assert_eq!(preview.state(), State::Stale);
 
@@ -617,10 +886,9 @@ mod tests {
     #[test]
     fn the_stale_status_names_the_error_and_keeps_the_page() {
         let dir = scratch_dir("status-stale");
-        let document = article_in(&dir);
-        let mut preview = compiled(&document);
+        let mut preview = compiled(&article_in(&dir));
 
-        std::fs::write(&document, "# Broken\n\n<div>raw HTML</div>\n").unwrap();
+        preview.edit("# Broken\n\n<div>raw HTML</div>\n".to_string());
         preview.compile();
         let status = preview.status();
 
