@@ -5,12 +5,12 @@ note: >
   LaTeX math in markdown becomes typeset math in the PDF: the dialect allows a
   closed list of LaTeX commands, mitex converts them in process, and a command
   outside the list is an error naming the command and its line.
-status: draft
+status: accepted
 last_updated: 2026-08-11
 
 phases:
   - name: "Phase 1 — inline math on the page"
-    reviewed: null
+    reviewed: 2026-08-11
     shipped: null
     cut: null
     by: null
@@ -98,15 +98,18 @@ than stopped at the first step that disposes of an objection.
   converts to `f r a c \(a \,b \)`, which sets as letter-spaced garbage with no
   error at all. §2 records why that stays a documentation problem.
 - **No equation numbering, no labels, no cross-references.** Markdown carries no
-  syntax for any of the three. `\label{…}` is refused rather than ignored, per
-  §2's subset rule.
+  syntax for any of the three. `\label{…}` is refused rather than ignored,
+  because §2's scan admits no command that is not on the allowed list.
 - **No macro definitions that outlive a span.** A definition in one span visible
   from the next is a document-wide symbol table, which is a different subject.
 - **No LaTeX outside math.** `mitex::convert_text` is not called.
 - **No claim about mathematical accessibility.** Typst decides what tagging a
   math block carries; this spec neither adds to it nor tests it.
-- **Not every formula MiTeX can convert.** §2's subset rule is the whole of what
-  this dialect promises, and the gap is named at the point of refusal.
+- **Not every formula MiTeX can convert.** The allowed list is what this dialect
+  promises, and a command outside it is named at the point of refusal. **The
+  promise is about which commands are accepted, not about every way a formula can
+  be malformed**: §2 records what `mitex` repairs silently inside an allowed
+  command, and accepts it.
 - Out of scope, parked: citations and bibliography, which `mpdf-001` §1.1 parks
   separately; any second output form; and a math-aware preview in the desktop
   app beyond what it gets for free.
@@ -177,13 +180,13 @@ what ruled out bundling a prelude that covers everything MiTeX can emit.
 
 ### Why the dialect bounds the subset, rather than shipping MiTeX's prelude (decision, recorded)
 
-Two answers were available once the 180 was known.
+Two answers were available once the 168 was known.
 
 **Vendor the Typst half.** Copy `@preview/mitex`'s definitions into
 `core/assets/`. Rejected on three counts: those definitions are not in any crate
 this project can depend on, so they arrive by fetching a file from a package
 repository and committing it — a supply step this project has never taken; the
-result is ~180 definitions of another project's semantics that `core` would then
+result is ~168 definitions of another project's semantics that `core` would then
 own the correctness of, version-locked to a Rust crate that ships separately;
 and it would not fix the failures below anyway, which are semantic rather than
 lexical.
@@ -210,9 +213,14 @@ introduced to stop it.
 The same round found the rule was not even well-defined. Deciding which tokens
 in Typst markup are identifiers needs a parser: `\text{hello world}` converts to
 `#textmath[hello world];`, whose `hello` and `world` are content-block text
-rather than identifiers, so a naive scan refuses a construct this dialect
-intends to support. Named-argument keys (`arg0:`, `level:`), string-literal
-contents and content blocks all need the same distinction.
+rather than identifiers, so a naive scan refuses them as unresolvable.
+Named-argument keys (`arg0:`, `level:`), string-literal contents and content
+blocks all need the same distinction. (`\text` is deferred for reasons of its
+own, below; it is cited here because it is the clearest case of the ambiguity,
+which any content-bearing command would have shared. **With it off the list no
+allowed command emits a `#` escape or a content block at all**, so the
+tokenization problem has no live instance — but the `itemize` case above needs
+none of that and stands on its own.)
 
 **So the dialect checks what the author wrote.** Before conversion, the emitter
 scans the LaTeX source of the span and refuses anything not on a closed list.
@@ -241,13 +249,97 @@ new mechanism:
 - An **environment** is the name inside `\begin{name}` and `\end{name}`, checked
   against the allowed-environment list. `\begin` and `\end` are consumed by this
   rule and are not separately allowed as commands.
-- Anything else is refused, naming it and its line.
+- An **unescaped `%`** is refused. It is not a comment marker to this dialect and
+  it is not passed through; the reason is below, and it is the one rule here that
+  exists because of a measurement rather than because of the grammar.
+- `\text` is **not on the allowed list**, so it needs no rule of its own here and
+  is refused as any unlisted command is. §2 records why below.
+- **Every other character passes through untouched** — letters, digits,
+  operators, braces, `^`, `_`, `&`. Only an unrecognised control sequence, an
+  unrecognised control symbol, an unlisted environment name, and an unescaped
+  `%` are refused.
 
-**The limit it accepts, recorded rather than fixed: the scan does not model
-`%` comments**, so a command inside one is still checked and can be refused
-though it would never have been converted. That errs toward refusing, which is
-the direction that keeps the dialect honest, and `\%` is a control symbol so an
-escaped percent does not start a comment.
+### Why an unescaped `%` is refused (decision, recorded)
+
+A draft of the scan treated `%` as a limit rather than a rule, and said the scan
+"errs toward refusing, which is the direction that keeps the dialect honest".
+**Round 3 measured the other direction, and it is a silent drop.** `%` opens a
+LaTeX comment, so `mitex` discards the rest of the line:
+
+| the span an author writes | what `convert_math` returns |
+|---|---|
+| `$x = 100 % of y$` | `x  =  1 0 0  ` — " of y" gone |
+
+No control sequence, control symbol or environment appears anywhere in that
+span, so a scan without this rule passes it; the output is non-empty, so nothing
+downstream objects; and the PDF shows truncated prose. **That is `mpdf-001` §2's
+cardinal case, reachable by typing `100%` in a formula** — and it is the third
+instance of one shape, after `\includegraphics` in round 1 and `itemize` in
+round 2: content the check cannot see because it is looking at the wrong tokens.
+
+The rule is stated over the whole span rather than over the prose an author
+might put in a `\text` group, and it stays necessary with `\text` excluded:
+`100 % of y` needs no `\text` to reach the page truncated.
+
+Refusing costs the author nothing, because the grammar already carries the exit:
+`\%` is on the control-symbol list, so a percent sign that means a percent sign
+is written `\%` and reaches the page — the same one-character escape `mpdf-001`
+OQ-8 gave the dollar.
+
+### Why `\text` is not in the initial list (decision, recorded)
+
+`\text{…}` is the one allowed-list candidate whose argument reaches the page as
+**Typst markup rather than math**, and that single difference cost two review
+rounds and produced four blocking findings, none of which a character rule
+closes. It is deferred rather than solved, and OQ-6 carries it.
+
+The findings are recorded here because they are the input to that later phase,
+all measured against `mitex` 0.2.4 and parsed with Typst 0.15.1's own
+`typst::syntax::parse`:
+
+| the span an author writes | what reaches the page |
+|---|---|
+| `$\text{= head}$` | a `Heading` |
+| `$\text{- item}$` | a `ListItem` |
+| `$\text{1. item}$` | an `EnumItem` |
+| ``$\text{a `b` c}$`` | a `Raw` block |
+| `$\text{<tag>}$` | a `Label`, which does not print |
+| `$\text{50\$ each}$` | the literal words **"50dollar each"** |
+| `$\text{a \alpha b}$` | the literal words **"a alpha b"** |
+
+**The last two are why the answer is deferral rather than a wider character
+rule.** `mitex` maps a control symbol or command to a Typst *math symbol name* —
+`dollar`, `amp`, `alpha` — which is correct in math mode and becomes a literal
+word inside a markup content block. No set of refused characters reaches that,
+because the offending input is a backslash construct the dialect allows
+everywhere else.
+
+Three further facts bound the later phase. `.` is the case that shows why the
+rule cannot key to `core/src/emit.rs:SPECIAL`: that constant does not contain it,
+and `core/src/emit.rs:escape_into` carries it as a positional rule instead —
+`ch == '.' && line_is_all_digits(out)` — so `1. item` is an enumeration while
+`v1.0 ships` is clean. The group boundary is undefined for reachable inputs:
+`\text{= head` unclosed still emits the heading, `\text x` takes the next token,
+and `\text{a \text{= h} b}` nests. And a rule phrased as "a character `mitex`
+does not itself escape" cannot be written ahead of conversion without
+materialising the very hand-written list it exists to avoid.
+
+**What the deferral costs is prose inside a formula, and the exit is markdown.**
+An earlier draft of this paragraph claimed composition saved it —
+`$100\% \text{ of y}$`, with the leading part converting — and that was refuted
+by the very removal it defended: `\text` is an unlisted control sequence, so the
+scan refuses that whole span before `convert_math` ever runs. There is no
+leading part.
+
+The real exit is better than the one that was wrong, and needs no LaTeX at all:
+**`$100\%$ of y`** — a formula, closed, with ordinary markdown prose beside it,
+which the emitter has handled since `mpdf-001`. That is the shape a markdown
+author reaches for anyway, and the refusal names `\text` rather than mangling
+it.
+
+This follows `mpdf-001` Phase 8's precedent exactly, which refused a task list
+marker with "support is a later phase or a later spec; the named error is the
+honest floor meanwhile".
 
 ### Which commands are allowed, and why the list is not written here (decision, recorded)
 
@@ -260,14 +352,54 @@ below cannot be wrong about it.
 The prelude follows from the list rather than being chosen beside it. The
 derivation is mechanical, and an implementer runs it rather than guessing:
 convert each allowed command, collect the multi-character heads of the output,
-subtract what Typst's global, `math` and `sym` scopes define, and define exactly
-the remainder. From the earlier probe that remainder is known to include
-`mitexsqrt` (`\sqrt`), `textmath` (`\text`), `zws` (matrix separators),
-`mitexmathbf` (`\mathbf`) and the `matrix` family — but **the spec does not
-assert the set**, because Phase 1's gate requires one compiling fixture per
-allowed command, so a missing prelude entry fails the gate rather than shipping.
-That is the same reasoning `mpdf-001` used for `describe`: a claim is worth
-having only where something reaches every arm of it.
+subtract what the global, `math` and `sym` scopes of **Typst 0.15.1** define —
+the version `core/Cargo.toml` pins — and define exactly the remainder.
+
+Round 3 ran it over the allowed list as it then stood and it terminated at
+**eleven**: `matrix`, `pmatrix`, `bmatrix`, `vmatrix`, `aligned`, `mitexsqrt`,
+`mitexmathbf`, `textmath`, `sect`, `diff`, `negthinspace`. Round 6 re-derived it
+over the list as it now stands and got **ten** — the same set without
+`textmath`, which left with `\text`. The gate remains the authority, because the
+set moves with the Typst version.
+
+**That result is recorded as a measurement, not as the specification**, and the
+last three are why the distinction is not pedantry. `sect` (`\cap`) and `diff`
+(`\partial`) are **Typst version skew rather than MiTeX helpers** — `mitex`
+0.2.4 emits the pre-0.13 spellings where Typst 0.15.1 has `inter` and `partial`
+— so they look like ordinary Typst symbols and are exactly what a hand-written
+list omits. A draft of this paragraph proved the point against itself: it named
+`zws` as a prelude member, and Typst 0.15.1 defines `zws`, so the derivation
+subtracts it.
+
+The set therefore moves with the Typst version, which is what makes a list in
+prose the wrong instrument. **Phase 1's gate requires one compiling fixture per
+allowed command**, so a missed entry — including one a Typst upgrade creates —
+fails the gate rather than shipping. That is the reasoning `mpdf-001` used for
+`describe`: a claim is worth having only where something reaches every arm of it.
+
+### What `mitex` repairs silently, accepted rather than fixed (decision, recorded)
+
+This decision was made in round 1, lost in round 2's rewrite, and is restored
+here because the behaviour survives every version of the design. **`mitex` does
+not always refuse malformed input; sometimes it repairs it**, and the repairs are
+scan-clean — they use only allowed commands, so §2's scan passes them:
+
+| the span | what `convert_math` returns |
+|---|---|
+| `$\frac{a}{$` | `frac(a ,zws )` |
+| `$\sqrt{$` | `mitexsqrt(zws )` |
+| `$\frac{a}{b}{c}$` | `frac(a ,b )c ` |
+
+An unclosed group becomes an empty slot, and the document converts with a
+fraction that has an empty denominator.
+
+**It is accepted, and the reasoning is the same one that survived three rounds.**
+The failure is *visible on the page* rather than silent — a wrong-looking
+fraction is something an author reading their own PDF sees, which is the property
+the `%` case above lacked and why that one is refused and this one is not. The
+error class is narrow, since an unknown command is still an `Err`. And closing it
+means this project validating LaTeX group structure itself, which is a second
+parser to keep correct and the whole of what taking `mitex` was meant to avoid.
 
 ### Why the import is conditional (decision, recorded)
 
@@ -345,6 +477,22 @@ phases check it as a diff.
   question is whether that generalises or whether math needs its own.
   Answerable from code during review. Blocks Phase 2.
 
+- **OQ-6** — what does it take to support `\text{…}`? §2 defers it with the four
+  findings that decided the deferral, and they are the question's input rather
+  than the question. The shapes available: refuse every backslash construct and
+  every character `escape_into` would escape inside the group, which is simple
+  and refuses `\text{well-defined}` along with the hazards; or **escape the
+  group's content on the way out** rather than refusing it, which is what
+  `escape_into` already does correctly for body text and which would put the
+  emitter in the business of editing `mitex`'s output; or take the group's LaTeX
+  source and emit it as a Typst string, bypassing the converter for this one
+  command. The last is the least explored and may be the smallest. It also needs
+  the group boundary settled, which §2 records as undefined for three reachable
+  inputs. Design call, with the mechanism answerable from code. Blocks nothing;
+  it is a phase to append. **`\text` is the commonest LaTeX math command this
+  dialect will not accept**, so this is the first candidate for the list's growth
+  rather than one deferral among many.
+
 ## 4. Implementation phases
 
 Strictly sequential; each is one plan-mode pass. Both produce the observable.
@@ -375,7 +523,7 @@ text, from a document that today converts to nothing.*
   \subseteq \supset \cup \cap \setminus \emptyset \forall \exists \neg \land
   \lor`; the large operators `\sum \prod \int \oint \lim`; the constants
   `\infty \partial \nabla \ldots \cdots \dots`; the structural commands `\frac
-  \sqrt \binom \text \left \right`; the accents `\hat \bar \vec \tilde \dot
+  \sqrt \binom \left \right`, **`\text` excluded per §2**; the accents `\hat \bar \vec \tilde \dot
   \overline \underline`; the font commands `\mathbb \mathbf \mathrm \mathcal
   \mathit`; the named operators `\sin \cos \tan \log \ln \exp \min \max \det
   \gcd`; the control symbols §2 lists; and the environments `matrix pmatrix
@@ -410,6 +558,10 @@ text, from a document that today converts to nothing.*
   fixture — **not decoration**, since `mpdf-001`'s OQ-8 made that escape the
   documented exit from math and this phase must not take it away.
 
+  **This is one table, not 139 files.** The allowed list is a table in the
+  source, so the fixture set is the same table walked, and its size is what makes
+  it mechanical rather than what makes the phase large.
+
   (2) **Four refusals, each exiting non-zero and naming the command and its
   line**, at both the `core` and the CLI level: `\includegraphics{fig.png}`,
   which is round 1's asset-contract escape; `\label{eq}`, which is its silent
@@ -418,10 +570,20 @@ text, from a document that today converts to nothing.*
   the ordinary unknown. **An implementer who tests only the last ships the other
   three**, and the first three are named individually for that reason.
 
-  (3) A document with no math produces a Typst source with **no prelude
-  import**, asserted directly — the same property gate (5) checks from the other
-  side. (4) Math in an image's alt text produces the alt string §2 specifies,
-  and compiles. (5) `cargo test --workspace` passes with **no shipped golden
+  (3) **The character refusals, which are not command refusals and which gate
+  (2) would not reach.** `$x = 100 % of y$` exits non-zero naming the line, and
+  `$100\% of y$` — the escaped form — converts and puts the percent sign on the
+  page. **That second half is what stops the fix being a ban**, since §2 rests
+  the refusal on the escape existing. Then `$\text{a}$` exits non-zero naming
+  `\text`, which is the ordinary unlisted-command path and is what §2's deferral
+  rests on — **an implementer who adds `\text` to the list passes every other
+  case in this gate and fails this one**, which is the point of testing a
+  deferral rather than trusting it.
+
+  (4) A document with no math produces a Typst source with **no prelude
+  import**, asserted directly — the same property gate (6) checks from the other
+  side. (5) Math in an image's alt text produces the alt string §2 specifies,
+  and compiles. (6) `cargo test --workspace` passes with **no shipped golden
   file changed**, and `cli/src` and `app/src` untouched.
   Three places assert today that inline math is refused, and each is amended so
   its display half survives to Phase 2: `tests/fixtures/unsupported_math.md`,

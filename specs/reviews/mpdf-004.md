@@ -2,6 +2,116 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 6 — Phase 1 only — 2026-08-11 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, three non-blocking, all three folded after the
+verdict. **Rounds 4, 5 and 6 are past §7.6's cap and a person authorised each**,
+on the grounds round 3's escalation named: the author's fix had introduced the
+next blocker in three consecutive rounds, which is what a further pass catches.
+It kept catching them — rounds 4 and 5 found a fourth and a fifth instance — so
+the authorisations paid for themselves rather than merely being spent.
+
+**The convergence came from a deletion, not a rule.** Round 5's findings were all
+about `\text{…}`, and the response was to take `\text` off the allowed list and
+defer it to OQ-6. All four dissolved rather than being answered. The property
+that closes the whole six-round family is now stated and true: **no command on
+the allowed list reaches Typst's markup mode**, so the shape that produced every
+one of the six findings has no seventh instance available to it.
+
+**The best finding of the round was against the paragraph defending that
+deletion.** §2 claimed the deferral was cheap because composition still worked —
+`$100\% \text{ of y}$`, the leading part converting. The removal is exactly what
+falsifies it: `\text` is an unlisted control sequence, so the scan refuses the
+whole span before `convert_math` runs, and there is no leading part. The
+reviewer noted the irony to stop it recurring — its own round-5 phrasing had
+contrasted "prose inside the group" with "prose beside a formula" to argue the
+cost was small, and after the removal the cost *is* prose beside a formula. The
+paragraph now gives the exit that is actually available and is better than the
+one that was wrong: `$100\%$ of y`, a closed formula with ordinary markdown
+prose beside it, which needs no LaTeX and which `mpdf-001` has handled since its
+own Phase 1.
+
+Two smaller ones: the scan's closing bullet still said "the two cases above"
+where only `%` remains, and the tokenization argument gained a clause recording
+that with `\text` gone no allowed command emits a `#` escape or a content block
+at all — so that problem has no live instance, while the `itemize` case it rests
+on stands alone.
+
+**The round-0 question was re-asked and answered no.** The reviewer was given
+standing to call the deferral a round-0 objection — that a math phase without
+`\text` does not produce the observable — and declined: §1's usage example uses
+no `\text` and both its spans convert, the exit is the natural markdown shape
+rather than a workaround, and `mpdf-001` Phase 8's task-list precedent is apt.
+It re-ran the allowed list at **138 cases, 0 refusals**.
+
+It also re-derived the prelude over the list as it now stands and got **ten** —
+`matrix`, `pmatrix`, `bmatrix`, `vmatrix`, `aligned`, `mitexsqrt`,
+`mitexmathbf`, `sect`, `diff`, `negthinspace` — confirming the author's
+prediction that `textmath` was the only member to leave with `\text`.
+
+On this convergence: `status: accepted`, and `reviewed: 2026-08-11` on Phase 1.
+Phase 2 keeps `reviewed: null` and takes its own round.
+
+### Round 5 — Phase 1 only — 2026-08-11 — same reviewer, resumed with the author's changelog — **NOT READY**
+
+Verdict: `NOT READY`, four blocking. The author asked three specific questions
+about holes the fix's own designer would not think to ask, since round 4's fix
+was the reviewer's own suggestion. **All three were holes, and the round found a
+fourth.**
+
+- **`.` is not in `core/src/emit.rs:SPECIAL`.** `escape_into` carries it as a
+  positional rule instead — `ch == '.' && line_is_all_digits(out)` — so
+  `$\text{1. item}$` sets an `EnumItem` while `v1.0 ships` is clean. A rule keyed
+  to the constant is one rule short of the function.
+- **The rule needed the hand-written list it claimed to avoid.** The scan runs
+  before conversion, so evaluating "a character `mitex` does not itself escape"
+  means materialising `{#, *, _, @, [, ], ~, /}` — the very list the bullet said
+  it was not writing. And refusing `\` would have removed the exit the `%`
+  decision rests on, since `\text{100\% sure}` would then be unwritable.
+- **The fourth instance, which no character rule reaches.** `mitex` maps a
+  control symbol or command to a Typst *math symbol name* and drops it into a
+  markup content block, where it is a word: `$\text{50\$ each}$` sets "50dollar
+  each", `$\text{a \alpha b}$` sets "a alpha b". Both use constructs the dialect
+  allows everywhere else, and outside a `\text` group the same mapping is
+  correct.
+- **The group boundary was undefined** for three reachable inputs, and one
+  branch shipped the case gate (3) called sharpest: `\text{= head` unclosed is
+  repaired by `mitex` and still emits the heading, so a scanner requiring balance
+  would check nothing and under-refuse exactly that case.
+
+The author's response was to remove `\text` rather than to widen the rule, on
+the reading that the last finding is evidence about the construct rather than
+about the rule.
+
+### Round 4 — Phase 1 only — 2026-08-11 — same reviewer, resumed with the author's changelog — **NOT READY**
+
+Verdict: `NOT READY`, one blocking, two non-blocking. Round 3's `%` blocker was
+confirmed resolved, and the reviewer verified the half that makes the fix a
+redirection rather than a ban rather than assuming it: `100\% of y` converts and
+parses under Typst 0.15.1 with zero error nodes, so the escaped form does reach
+the page.
+
+**The finding was the fourth instance of the shape, and the author had asked for
+it.** `\text` content was worse than the single case round 3 recorded: `mitex`
+escapes **eight** of the characters Typst markup interprets — `#`, `*`, `_`,
+`@`, `[`, `]`, `~`, `/` — and leaves **six**: `` ` ``, `<`, `>`, `-`, `+`, `=`.
+The spec had said five and two. Parsed with Typst's own `typst::syntax::parse`,
+`$\text{= head}$` yields a `Heading`, `$\text{- item}$` a `ListItem`,
+`$\text{+ item}$` an `EnumItem`, a backtick pair a `Raw` block — all arriving as
+a single `Event::InlineMath`, the backtick case included, because the math span
+wins over the code span.
+
+The reviewer's proposed fix was to key the rule to `core/src/emit.rs:SPECIAL`
+rather than to a character list, on the grounds that the constant is already
+maintained against Typst's markup mode for `escape_into`'s sake. The author took
+it. Round 5 then found that fix insufficient — recorded above — and the
+subsection it produced survives as the record of why `\text` is deferred.
+
+The round also bounded the problem usefully, and that bound is what made the
+later deletion clean: re-sweeping all 139 allowed-list cases, `\text` was the
+only member emitting a `#` escape at all, and in plain math mode `-`, `=`, `<`,
+`>` and a backtick parse as operators with no markup nodes.
+
 ### Round 3 — Phase 1 only — 2026-08-11 — same reviewer, resumed with the author's changelog — **NOT READY (escalated at the cap)**
 
 Verdict: `NOT READY`, one blocking finding, five non-blocking. This is §7.6's cap,
