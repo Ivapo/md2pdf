@@ -9,4 +9,4 @@
 - **[desktop-app](desktop_app_spec.md)** — `mpdf-003` · accepted · done
   A macOS desktop app that shows the PDF while you write: a Tauri window wraps the same core crate, watches the document and its images, and re-renders.
 - **[math](math_spec.md)** — `mpdf-004` · draft · pending
-  LaTeX math in markdown becomes typeset math in the PDF: mitex converts each span in process, a bundled prelude supplies the symbols it emits, and a formula that will not convert is a named error.
+  LaTeX math in markdown becomes typeset math in the PDF: the dialect allows a closed list of LaTeX commands, mitex converts them in process, and a command outside the list is an error naming the command and its line.
