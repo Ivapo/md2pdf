@@ -6,7 +6,7 @@
   The core .md → .pdf pipeline: pulldown-cmark parses, a hand-written emitter maps events to Typst markup, and embedded Typst compiles the PDF, behind a CLI.
 - **[images](images_spec.md)** — `mpdf-002` · accepted · done
   Markdown images become PDF images: the emitter maps ![alt](path), callers supply the named files as bytes, and the CLI reads them from disk.
-- **[desktop-app](desktop_app_spec.md)** — `mpdf-003` · accepted · done
+- **[desktop-app](desktop_app_spec.md)** — `mpdf-003` · accepted · partial
   A macOS desktop app that shows the PDF while you write: a Tauri window wraps the same core crate, watches the document and its images, and re-renders.
 - **[math](math_spec.md)** — `mpdf-004` · accepted · done
   LaTeX math in markdown becomes typeset math in the PDF: the dialect allows a closed list of LaTeX commands, mitex converts them in process, and a command outside the list is an error naming the command and its line.

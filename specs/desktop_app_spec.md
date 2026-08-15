@@ -5,7 +5,7 @@ note: >
   A macOS desktop app that shows the PDF while you write: a Tauri window wraps
   the same core crate, watches the document and its images, and re-renders.
 status: accepted
-last_updated: 2026-08-11
+last_updated: 2026-08-15
 
 phases:
   - name: "Phase 1 — the window, and one compile on screen"
@@ -31,6 +31,11 @@ phases:
   - name: "Phase 5 — an app you can install"
     reviewed: 2026-08-11
     shipped: 2026-08-11
+    cut: null
+    by: null
+  - name: "Phase 6 — the page the author is on"
+    reviewed: null
+    shipped: null
     cut: null
     by: null
 
@@ -592,6 +597,19 @@ list to one item.
   reader scrolled, and a cursor lives in the app's own text pane. Design call,
   with the mechanism answerable from Typst's own crates. Blocks nothing; it is a
   phase to append if the answer is yes.
+
+  **Phase 6 drafts the yes, at heading granularity, and this entry stays open
+  until that phase's round converges** — `reviewed` is what closes a question
+  this spec left to a round, not the drafting of the phase that answers it.
+  What the phase settles if it holds: the anchor is a heading rather than the
+  cursor, because the Nth markdown heading is the Nth compiled one and no source
+  map is needed; "answerable from Typst's own crates" turns out to mean **no new
+  crate at all**, since the page comes from a `PagedDocument` that
+  `core/src/lib.rs:md_to_pdf` already builds and drops; and the `core` output
+  this entry predicted is one additive function rather than a change to an
+  existing signature. What the phase does **not** settle is whether heading
+  granularity is enough, which is a use question of the kind OQ-6 was answered
+  by rather than one a round can close.
 
 - **OQ-8** — what does it take to put this app on a machine that is not this
   one? Phase 5's round raised the question by falsifying the gate case that
@@ -1236,6 +1254,159 @@ Applications folder rather than from a build command.*
   it documents today, and the app section's closing sentence — "the window is
   still built from source; an installable `.app` comes later" — is corrected.
   One push.
+
+### Phase 6 — the page the author is on
+*Produces the observable: yes — the same PDF, opened at the page the author is
+editing rather than at page 1.*
+
+Appended 2026-08-15, after Phase 5 shipped, per the methodology's §6.1: the
+preview pane is this spec's subject, and OQ-7 reserved this item by name as "a
+phase to append if the answer is yes."
+
+- **Scope:** The pane opens on the page the caret is in. **The anchor is a
+  heading**, and everything below follows from that choice rather than from the
+  feature.
+
+  **Why a heading, and not the cursor.** The general answer is a map from
+  markdown offset to generated-Typst offset, fed to `typst-ide`'s own
+  editor-sync function; §2's rejected shape below records why that is a later
+  phase. What survives cheaply is an ordinal correspondence that already holds:
+  **the Nth heading in the markdown is the Nth heading in the compiled
+  document**, so nothing has to be mapped and — the load-bearing half —
+  **nothing new is written into the generated Typst source**. An anchor the
+  emitter *emits*, a `#metadata` marker before each block or a label per
+  paragraph, would rewrite all 17 shipped golden files, and "no shipped golden
+  file changes" is a clause every phase of `mpdf-001` and `mpdf-004` has held.
+  Headings are already in the output; that is the whole reason they are the
+  anchor.
+
+  **`core` gains one function, and this is the phase that crosses §2's
+  falsifiable claim.** That claim is "`core` gains nothing and changes nothing",
+  checked as a diff by all five shipped phases, and it is crossed here rather
+  than slipped past. The argument for letting it: the claim was about whether
+  *building the app* forced a rewrite of a library written for a CLI, and five
+  phases answered no. An additive export that leaves every existing signature
+  alone is not that rewrite — but it is the first thing to cross the line, so
+  the round should say whether the line moved or the claim was always narrower
+  than its wording. **`cli/src/main.rs` keeps calling `md_to_pdf` and is
+  untouched**, which is how that stays checkable.
+
+  The shape:
+
+  ```rust
+  pub struct Anchor { pub line: usize, pub page: usize }
+  pub struct Rendered { pub pdf: Vec<u8>, pub anchors: Vec<Anchor> }
+  pub fn md_to_pdf_with_anchors(md: &str, assets: &[Asset]) -> Result<Rendered>
+  ```
+
+  **`md_to_pdf` becomes a wrapper over it** rather than a second path —
+  `md_to_pdf_with_anchors(md, assets).map(|r| r.pdf)` — for the reason
+  `core/src/emit.rs:options` gives for one options builder: two paths over the
+  same input that could disagree eventually do.
+
+  **Where each half comes from.** The line: `core/src/emit.rs:Walk` gains a
+  `headings: Vec<usize>`, pushed at the `Tag::Heading` arm from
+  `line_of(md, range.start)` — the range `core/src/emit.rs:emit` already walks
+  with through `into_offset_iter()`, and the one every error in that file
+  already reports. The page: `core/src/lib.rs:md_to_pdf` already builds the
+  `PagedDocument` that `typst_pdf::pdf` consumes and then drops it. Measured
+  against the Typst 0.15.1 that `core/Cargo.toml` pins — its introspector
+  answers `query(&Selector::Elem(HeadingElem))` with the headings in document
+  order, and `position(location)` returns a
+  `PagedPosition { page: NonZeroUsize, point: Point }`. **So the page comes from
+  a value the function already holds, and no dependency is added.**
+
+  **The zip is by ordinal, and it is guarded rather than trusted.** Two facts
+  make the correspondence hold today and one keeps it honest tomorrow. Measured:
+  neither `core/assets/template.typ` nor `core/assets/press-release.typ` emits a
+  `heading` element of its own — both set the title with `text(size: …, weight:
+  "bold", title)` — so no bundled look contributes a heading the walk never saw.
+  And a heading inside a footnote definition is walked by
+  `core/src/emit.rs:collect_definitions`, whose `Walk` is discarded and whose
+  content is spliced in at the *reference*, so its line would name the wrong
+  place.
+
+  **If the two counts differ, the function returns no anchors at all** and the
+  pane behaves exactly as it does today. A wrong page is a lie about the
+  document, which `mpdf-001` §2 exists to refuse; no page is only the status
+  quo. That also makes a third look which set its title as a heading fail
+  visibly rather than silently mis-scroll.
+
+  **The app carries it and decides nothing.**
+  `app/src/document.rs:render_with` calls the new function and
+  `app/src/document.rs:Render` gains the anchors beside `pdf`;
+  `app/src/preview.rs:Preview` holds them with the bytes it already holds; and
+  `app/src/preview.rs:Status` — already `Serialize`, and already fetched by
+  `app/dist/index.html:refresh` immediately before it draws — carries them to
+  the page. **No new Tauri command**, because that fetch is already on the path
+  that draws.
+
+  The page's own work is inside `app/dist/index.html:draw`: the caret's line is
+  `text.value.slice(0, text.selectionStart).split('\n').length`, the target is
+  the last anchor whose `line` is at or below it, and the fragment goes on the
+  **fresh blob URL `draw` already mints on every compile**. `#page=N` on a *new*
+  blob URL is the operation Phase 2's round confirmed and OQ-6 records; nothing
+  here reuses a URL, which is the case that does not work.
+
+  **Counting newlines is not parsing markdown**, and the distinction is the
+  point rather than pedantry: the page owns no dialect knowledge and must not
+  start owning any. It also happens to be the one quantity the two sides agree
+  on, since `selectionStart` is a UTF-16 offset where a Rust line is derived
+  from bytes.
+
+  **What it costs, named here so the round can reject it rather than discover
+  it.** The precision is the document's heading density: a caret above the first
+  heading gets page 1, and a section that runs ten pages puts the author at its
+  top and no closer. And it follows the *author*, not the reader — an author who
+  scrolls the pane to page 5 while the caret sits on page 3 is returned to page
+  3 by the next compile. OQ-6's staleness objection does not reach that, because
+  the caret lives in the app's own pane, but it is a behaviour to judge in use
+  rather than an obvious win.
+
+  **The shape not taken (decision, recorded).** `typst-ide::jump_from_cursor`
+  maps a cursor in Typst source to a page *and* a point, which is what an editor
+  sync actually wants. It is rejected here on two counts, neither of them size
+  alone. The caret is in markdown against a **generated** source, so it needs a
+  map the emitter does not build — and building one is not "record two offsets
+  per event": `core/src/emit.rs:step` writes into a buffer stack, and
+  `core/src/emit.rs:prefixed` re-indents a list item's or a block quote's buffer
+  when it closes, invalidating every output offset recorded inside it after the
+  fact. And `typst-ide` is not in `Cargo.lock`, so it is a new dependency in a
+  workspace that pins every one it has. **It stays available**: if heading
+  granularity proves too coarse in use, that is the phase which follows, and
+  what it needs is the source map rather than a different anchor.
+- **Exit gate:** (1) A document whose headings sit on known lines produces
+  anchors naming exactly those lines, in order, with non-decreasing pages — a
+  `core` test, since this is where a wrong answer originates. (2)
+  `samples/article.md`, which is three pages, produces an anchor whose page is
+  greater than 1 for its last heading. **That is the case that proves the
+  feature rather than the plumbing**: a gate met only by one-page documents
+  would pass on an implementation that always answered 1. (3) A document with no
+  headings produces no anchors, and one whose caret sits above the first heading
+  resolves to page 1 — the two shapes the lookup has to handle without a special
+  case in the page. (4) **The count guard returns no anchors**, tested directly:
+  the zip is its own function taking the two counts, so the mismatch needs no
+  contrived document. The implementer additionally records **whether a mismatch
+  is reachable from markdown at all** — the footnote-definition heading is the
+  candidate — because a guard against nothing and a guard against something are
+  different claims and only one of them is worth its line. (5) `md_to_pdf`
+  returns what it returned before: `cargo test --workspace` passes, **no shipped
+  golden file changes**, and `cli/src` is untouched, which is §2's falsifiable
+  claim checked as a diff on the half of it this phase does not cross. (6) **The
+  observable, by eye, because no test reaches it**: open `samples/article.md` in
+  the app, put the caret in a section that falls on a later page, edit, and the
+  pane redraws on that page instead of page 1. OQ-6 was resolved in use on this
+  same sample, which is the precedent for judging this the same way.
+- **Close-out:** `rules/desktop.md` gains the anchor path — the new `core` call,
+  what `Status` now carries, and what `draw` does with it — and
+  `rules/pipeline.md` gains the new export beside `md_to_pdf`. **Expect to raise
+  both caps in the same pass**: `desktop.md` sits at 390 against 394 and
+  `pipeline.md` at 338 against 340, so neither has room for a paragraph. §2's
+  falsifiable-claim paragraph is **corrected in place rather than appended to**
+  if the round lets the crossing stand — "`core` gains nothing and changes
+  nothing" is a decision statement, not a citation, and a reader who carries it
+  forward would be wrong about what this spec now permits. The README's app
+  section gains one sentence. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
