@@ -214,11 +214,13 @@ pub(crate) fn options() -> Options {
     // without this option `[^1]` and `[^1]: The source.` are ordinary text, and
     // the escape rule prints the brackets on the page.
     options.insert(Options::ENABLE_FOOTNOTES);
-    // The last three carry the same argument, and each closes one arm of
-    // `describe` that nothing could reach. Strikethrough joins the dialect;
-    // a task list marker and math become errors that name themselves. Without
-    // these options `~~x~~`, `- [ ] a` and `$x$` arrive as text and the escape
-    // rule prints their markers, while `describe` claims all three are refused.
+    // The last three carry the same argument, and each closed one arm of
+    // `describe` that nothing could reach. Strikethrough and math are both in
+    // the dialect now, so only the task list marker still names itself as an
+    // error. Without these options `~~x~~`, `- [ ] a`, `$x$` and `$$x$$` arrive
+    // as text and the escape rule prints their markers on the page — which is
+    // the silent flattening the dialect refuses, whether the construct is one
+    // it converts or one it rejects.
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TASKLISTS);
     options.insert(Options::ENABLE_MATH);
@@ -463,7 +465,12 @@ fn step(
             // the disposition strikethrough got. No `$…$` is written into a
             // string that cannot typeset it, and a document whose only math
             // sits here still imports no prelude.
-            Event::InlineMath(latex) => capture.text.push_str(latex),
+            //
+            // Both forms belong here rather than below. `describe` no longer
+            // names either one, so a display span left to the reject arm would
+            // refuse an in-dialect construct with the nonsense message
+            // `unsupported markdown construct 'supported construct'`.
+            Event::InlineMath(latex) | Event::DisplayMath(latex) => capture.text.push_str(latex),
             // A break is whitespace under the alt reading, and one space is
             // what pulldown-cmark's own flattening writes for it.
             Event::SoftBreak | Event::HardBreak => capture.text.push(' '),
@@ -717,6 +724,30 @@ fn step(
             out.push('$');
             out.push_str(&markup);
             out.push('$');
+            *math = true;
+        }
+
+        // Typst's block equation is the same two delimiters with whitespace
+        // inside them — `typst::syntax::ast::Equation::block` tests for a space
+        // after the opening one and before the closing one, so `$ x $` is a
+        // block where `$x$`, `$ x$` and `$x $` are not. How that block then
+        // sits — its spacing, its alignment, whether it is numbered — is a look
+        // decision, and a look reaches it with
+        // `show math.equation.where(block: true)` over a Typst element, the way
+        // both bundled ones already reach `raw` and `table.cell`. So nothing
+        // here is exported and nothing joins the look contract.
+        //
+        // The arm consults no position. An image carries no signal about which
+        // form its author wanted, which is why `write_image` infers one from the
+        // paragraph; `$$` *is* that signal. So the block form is written
+        // wherever the span sits, and a paragraph holding one is split by it —
+        // which is what the author's own `$$` asked for.
+        Event::DisplayMath(latex) => {
+            let markup = math::convert(&latex, line_of(md, range.start))?;
+            let out = top(bufs);
+            out.push_str("$ ");
+            out.push_str(&markup);
+            out.push_str(" $");
             *math = true;
         }
 
@@ -1191,7 +1222,6 @@ fn describe(event: &Event) -> &'static str {
         Event::Html(_) | Event::InlineHtml(_) => "raw HTML",
         Event::FootnoteReference(_) => "footnote reference",
         Event::TaskListMarker(_) => "task list marker",
-        Event::DisplayMath(_) => "math",
         // The walk handles these, so they never reach this function. The match
         // must still cover them.
         Event::Text(_)
@@ -1199,6 +1229,7 @@ fn describe(event: &Event) -> &'static str {
         | Event::Code(_)
         | Event::HardBreak
         | Event::Rule
-        | Event::InlineMath(_) => "supported construct",
+        | Event::InlineMath(_)
+        | Event::DisplayMath(_) => "supported construct",
     }
 }
