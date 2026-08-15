@@ -19,6 +19,11 @@ phases:
     shipped: 2026-08-15
     cut: null
     by: null
+  - name: "Phase 3 — numbered display equations"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -530,9 +535,25 @@ phases check it as a diff.
   dialect will not accept**, so this is the first candidate for the list's growth
   rather than one deferral among many.
 
+- **OQ-7** — how does an author *reference* a numbered equation? Phase 3 puts a
+  number on the page and stops there, so "see equation (1)" is prose the author
+  types and keeps true by hand — which goes stale the moment an equation is
+  inserted above it. §1.2 refuses labels and cross-references on the grounds that
+  markdown carries no syntax for them, and that reason is untouched by Phase 3:
+  numbering needs no syntax, and a label does. The shapes available, none
+  explored: a `\label{…}`/`\ref{…}` pair admitted to the allowed list, which puts
+  a document-wide symbol table in `core` and is the thing §1.2's third non-goal
+  and its macro non-goal both refuse for the same reason; markdown's own link
+  syntax pointed at an equation, which invents dialect; or nothing, and the
+  manual reference is the answer permanently. **The last is a real candidate**,
+  because a document that numbers its equations to reference three of them is a
+  different document from one that numbers them for the reader's convenience.
+  Design call. Blocks nothing; it is a phase to append if the answer is yes.
+
 ## 4. Implementation phases
 
-Strictly sequential; each is one plan-mode pass. Both produce the observable.
+Strictly sequential; each is one plan-mode pass. All three produce the
+observable.
 
 ### Phase 1 — inline math on the page
 *Produces the observable: yes — a PDF with a typeset formula in its running
@@ -712,6 +733,159 @@ what a formula on its own lines is for.*
   existing one** rather than a restamp — the first stamp records when the inline
   half stopped being true, and a note that moved its own date would lose that.
   One push.
+
+### Phase 3 — numbered display equations
+*Produces the observable: yes — a PDF whose display equations carry `(1)`,
+`(2)`, which is what a document that refers to its own formulas needs.*
+
+Appended 2026-08-15, after Phase 2 shipped, per the methodology's §6.1: math is
+this spec's subject, and step 2 lands here rather than on a new document.
+
+- **Scope:** A document may ask for its display equations to be numbered, and
+  the two bundled looks decide what a number looks like. **Nothing about the
+  dialect changes** — no new command, no new environment, no change to §2's scan
+  — which is what keeps this phase small enough to be one plan-mode pass.
+
+  **This phase contradicts one third of a §1.2 non-goal, deliberately, and the
+  argument is that the non-goal's own reason does not cover it.** That bullet
+  reads "No equation numbering, no labels, no cross-references. Markdown carries
+  no syntax for any of the three." The reason is exactly right for labels and
+  cross-references, and it is **not a reason about numbering at all**: blanket
+  numbering needs no markdown syntax, because the author is not naming anything.
+  OQ-4's resolution had already located where it would live, in a sentence
+  written before anyone asked for it — "a look that wants different spacing,
+  alignment **or numbering** reaches it with `show math.equation.where(block:
+  true): …` in its own file." Labels and cross-references stay refused, and OQ-7
+  carries them.
+
+  **The frontmatter gains a fifth key, and the look gains a fifth argument.**
+  `core/src/frontmatter.rs:Frontmatter` gains `equations`, resolved the way
+  `template` is — a name checked against a closed set, with an error listing the
+  set — rather than a boolean, so that a later per-section or per-chapter scheme
+  is a new name rather than a new key. The initial set is two names, and the
+  default is the one that changes nothing.
+
+  ```markdown
+  ---
+  title: A paper
+  equations: numbered      # the other name is `plain`, which is the default
+  ---
+  ```
+
+  `core/src/emit.rs:header` passes it on, so its `#show: template.with(…)` call
+  carries five named arguments where it carries four today, and both
+  `core/assets/template.typ` and `core/assets/press-release.typ` take the
+  parameter and act on it.
+
+  **The author decides *whether* and the look decides *how*, and that seam is
+  the design.** Numbering is not a house style: a paper numbers its equations
+  because it refers to them, a press release with one formula in it does not, and
+  two documents in the *same* look will disagree. That is the shape `columns`
+  already has — an author override of a look's own default, which `mpdf-001`
+  Phase 9 settled. What the look keeps is the format: `(1)` against `1.`, where
+  it sits, what type it is set in. So this is `mpdf-001` §2's rule about look
+  decisions applied at the seam rather than against it.
+
+  **Two alternatives were available and both lose.**
+
+  *Number in the look and give the author no say.* The cheap one — one line per
+  look, no schema change, no emitter change, and **not one golden file moves**.
+  It loses because it answers a different question: every existing article-look
+  document with a display span would gain numbers nobody asked for, and an author
+  who wanted them off would have no way to say so. A default that cannot be
+  overridden is a decision taken away from the consumer this spec exists to
+  serve.
+
+  *Write the `set` rule from the emitter.* `core/src/emit.rs:header` could emit
+  `set math.equation(numbering: "(1)")` directly when the key is present, which
+  widens no look contract and moves no argument. It loses on `mpdf-001` §2's rule
+  — the one that kept the emitter out of the table header's boldness. The format
+  of a number is a look decision, and an emitter that writes `"(1)"` has taken
+  it.
+
+  **What the widening costs, stated because it is this phase's real price.** The
+  look contract moves from four named arguments to five, and `mpdf-001` Phase 9
+  fixed it at four. OQ-4 declined to widen it for Phase 2 and said so in as many
+  words — "nothing is added to the contract" — so this phase does the thing the
+  previous one avoided, and **the round should say whether the seam above is
+  worth it or whether the emitter route is less bad after all.**
+
+  **And every shipped golden file changes on line 3.** All 17 carry
+  `#show: template.with(title: …, author: …, columns: …, date: …)`, and all 17
+  gain a fifth argument. That is the largest golden movement in this project's
+  record — `mpdf-001`'s look phase moved 13 on their second line, gaining
+  `date: none`, and said so in its own commit message. **It is the same *kind* of
+  movement, which is what makes it acceptable**: a golden pins what a document
+  compiles to, and what a document compiles to has genuinely changed. It is not
+  the kind `mpdf-003` Phase 6 refused, where an anchor marker would have moved all
+  17 for a reason with nothing to do with what the document says.
+
+  **No document's typeset output changes unless its author asks**, because the
+  default name is the one that numbers nothing. The generated source moves for
+  every document; the PDF moves only for a document carrying the key. Gate (2)
+  holds those apart, and it is the case an implementer is likeliest to skip.
+
+  **What a number attaches to was measured rather than assumed.** One `$$…$$`
+  span is one equation and takes one number, whatever it contains. Measured on
+  2026-08-15 against the Typst 0.15.1 `core/Cargo.toml` pins, with the rule set in
+  `core/assets/template.typ` and the CLI run over a three-line `aligned` block
+  followed by a one-line span: the block took `(1)`, centred against its three
+  lines, and the span after it took `(2)`. Inline math was untouched in the same
+  document, because Typst's `math.equation` numbering applies to the block form
+  alone.
+
+  **That is LaTeX's `equation`-wrapping-`aligned`, not LaTeX's `align`**, and the
+  difference is the one an author arriving from LaTeX will trip on: `align`
+  numbers every line of a derivation, this numbers the derivation. A per-line
+  scheme needs the `align` environment on the allowed list and a second numbering
+  mechanism under it. Both are out of scope here, and `align` stays refused by
+  name, as §2's scan refuses it today.
+- **Exit gate:** (1) A fixture carrying `equations: numbered` and two display
+  spans matches its golden file and compiles to a PDF with the `%PDF` magic
+  bytes, and its golden shows the fifth argument in the `template.with` call.
+  **The same fixture carries an inline span**, so an implementation that numbered
+  both forms fails here rather than shipping.
+
+  (2) **A document without the key compiles to a PDF that is byte-identical to
+  the one it compiled to before this phase** — the property that keeps the
+  widening honest, and the case the whole design rests on. It is checkable
+  because the PDF is a pure function of the markdown and the assets, which
+  `mpdf-003` Phase 3's gate established and measured over five processes. An
+  implementer who makes `numbered` the default passes every other case here and
+  fails this one.
+
+  (3) A three-line `aligned` span takes **one** number and the next span takes
+  the next number, which is the limit §2 records rather than a behaviour to
+  discover in use.
+
+  (4) An `equations` value outside the set is a `Frontmatter` error naming the
+  key, its line and the accepted names, exactly as
+  `core/src/frontmatter.rs`'s template arm does — one mechanism, not two.
+
+  (5) Both looks honour the key. **Two fixtures, because one cannot carry both**:
+  `template: press-release` with `equations: numbered` numbers too, and its
+  golden shows the argument reaching the second look. An implementer who wires
+  only `template.typ` passes (1) through (4) and fails this.
+
+  (6) `cargo test --workspace` passes, and `cli/src` and `app/src` are untouched
+  — the claim `mpdf-003` §2 makes pointed the other way, which both prior phases
+  checked as a diff. **All 17 golden files change on line 3, and that is expected
+  rather than a failure**; a diff touching any other line of any of them is not.
+- **Close-out:** `rules/pipeline.md`'s frontmatter section gains the fifth key
+  and its two names, and its look-contract section is **corrected rather than
+  appended to** — it records four named arguments, which stops being true. Raise
+  `max_lines` in the same pass if it does not fit; the cap moved to 372 in
+  `mpdf-003` Phase 6 and the body sits at 368.
+
+  The README's frontmatter table gains the key, and its math section gains the
+  numbered form.
+
+  **§1.2's non-goal takes a dated `CORRECTED` note**, per §6.1, splitting the
+  bullet rather than deleting it: equation numbering is now supported and labels
+  and cross-references are still refused, with the reason — no markdown syntax —
+  now attached to the two it actually covers. **OQ-4's resolution needs no note**:
+  its sentence about a look reaching numbering is what this phase spends, not
+  something this phase falsifies. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
