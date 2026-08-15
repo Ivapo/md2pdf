@@ -6,7 +6,7 @@ note: >
   closed list of LaTeX commands, mitex converts them in process, and a command
   outside the list is an error naming the command and its line.
 status: accepted
-last_updated: 2026-08-14
+last_updated: 2026-08-15
 
 phases:
   - name: "Phase 1 — inline math on the page"
@@ -15,7 +15,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 2 — display math as its own block"
-    reviewed: null
+    reviewed: 2026-08-14
     shipped: null
     cut: null
     by: null
@@ -463,19 +463,56 @@ phases check it as a diff.
   gap: the scan refuses a specific control sequence or environment name, and
   that is what the message carries, with its line.
 
-- **OQ-4** — is a display formula's placement a look decision? An inline span
+- **OQ-4** — ~~is a display formula's placement a look decision? An inline span
   needs nothing. A block one has spacing, alignment, and a decision about
   breaking across columns — and `mpdf-001` §2 gives look decisions to
   `template.typ`, the rule that kept the emitter out of the table header's
   boldness. If it is one, both bundled looks gain an export and the emitter names
   it, which widens the look contract `mpdf-001` Phase 9 fixed. Design call.
-  Blocks Phase 2.
+  Blocks Phase 2.~~ **RESOLVED (2026-08-14), in Phase 2's round 1: it is a look
+  decision, and the look already has it — so nothing is added to the contract.**
 
-- **OQ-5** — does a display span alone in its paragraph arrive wrapped in a
+  Typst's block equation is written by putting whitespace inside both delimiters,
+  `$ … $` against the inline arm's `$…$`, and that *is* the rule:
+  `typst::syntax::ast:Equation::block` tests for a space after the opening
+  delimiter and before the closing one. Measured against Typst 0.15.1: `$ x $` is
+  a block equation, while `$x$`, `$ x$` and `$x $` are not — which also
+  corroborates the `normalise` step Phase 1 shipped, since converted markup that
+  kept its trailing space could not have become one.
+
+  A look that wants different spacing, alignment or numbering reaches it with
+  `show math.equation.where(block: true): …` in its own file. That is a show rule
+  over a Typst element rather than an export the emitter has to name, and **this
+  repo already does exactly that twice**: both looks carry `show raw: …` and
+  `show table.cell.where(y: 0): strong` for elements the emitter emits and never
+  exports. So the emitter writes the block form and decides nothing about how it
+  sits, `mpdf-001` Phase 9's look contract — `template` and `divider`, four named
+  arguments — is untouched, and Phase 2 keeps Phase 1's "no shipped golden file
+  changed".
+
+- **OQ-5** — ~~does a display span alone in its paragraph arrive wrapped in a
   paragraph the emitter must not print? `mpdf-002` hit this shape for images and
   `core/src/emit.rs` already tells a standalone image from an inline one, so the
   question is whether that generalises or whether math needs its own.
-  Answerable from code during review. Blocks Phase 2.
+  Answerable from code during review. Blocks Phase 2.~~ **RESOLVED (2026-08-14),
+  by probe in Phase 2's round 1: it does arrive wrapped, and the emitter needs no
+  rule for it.**
+
+  `DisplayMath` is an *inline* event. A `$$…$$` alone on its lines arrives as
+  `Start(Paragraph)`, `DisplayMath`, `End(Paragraph)`, and the same event also
+  arrives mid-paragraph, inside a heading, a table cell, a list item and a
+  footnote definition. The paragraph is printed as it always was; the block
+  equation inside it is what breaks the line, and Typst reads the spaced form as
+  a block wherever it sits — measured mid-paragraph, not only alone.
+
+  **It does not generalise from the image case, and does not need to.** An image
+  carries no signal about which form its author wanted, which is why
+  `core/src/emit.rs:write_image` infers one from `Walk.para` and the event that
+  follows. `$$` **is** that signal. So the display arm is position-blind: it
+  writes the block form wherever the span sits, and a paragraph holding one is
+  split by it, which is what the author's own `$$` asked for. Nothing is dropped
+  and nothing is guessed, so §2's rule is satisfied with no second error shape
+  and no new container state.
 
 - **OQ-6** — what does it take to support `\text{…}`? §2 defers it with the four
   findings that decided the deferral, and they are the question's input rather
@@ -606,24 +643,75 @@ text, from a document that today converts to nothing.*
 *Produces the observable: yes — a PDF with a centred display equation, which is
 what a formula on its own lines is for.*
 
-- **Scope:** `Event::DisplayMath(source)` becomes a block equation rather than
-  an inline one, per OQ-4's answer about where its placement is decided and
-  OQ-5's about how it arrives. It runs the same input scan Phase 1 built, over
-  the display span's own LaTeX.
-  `describe`'s math arm becomes unreachable, restoring `mpdf-001` Phase 8's
-  property in full.
+- **Scope:** In `core/src/emit.rs`, `Event::DisplayMath(source)` gains an arm
+  beside Phase 1's inline one, writing `$ ` + `core/src/math.rs:convert`'s output
+  + ` $` — Typst's block form, per OQ-4 — and setting the same `Walk.math` flag,
+  so the prelude import stays conditional on either form. `convert` already scans
+  before converting, so "the same input scan Phase 1 built" is one call rather
+  than a second mechanism. **The arm consults no position**, per OQ-5.
+
+  **A display span inside an image's alt text is decided here rather than left to
+  an implementer**, exactly as Phase 1 decided the inline case and `mpdf-001`
+  Phase 8 decided strikethrough. The capture in `core/src/emit.rs:step` gains
+  `Event::DisplayMath(latex)` beside its `InlineMath` arm, so the LaTeX source
+  arrives as text and the wrapper contributes nothing. Without it the capture's
+  `other` arm calls `describe` for an event `describe` no longer names as
+  refused, and `![a $$x$$ b](f.png)` fails with the nonsense
+  `unsupported markdown construct 'supported construct'`.
+
+  With both arms in place, `describe`'s math arm is **removed**:
+  `Event::DisplayMath(_)` joins the group `describe` documents as "the walk
+  handles these". That is the half of `mpdf-001` Phase 8's precedent that
+  applies — it dropped two arms as strikethrough joined the dialect — and it
+  restores that phase's property in full, since every arm `describe` still names
+  is reachable.
 - **Exit gate:** (1) A golden-file fixture with a display formula between two
-  paragraphs matches its golden file and compiles, and the golden shows the
-  block form rather than an inline one wrapped in a paragraph. (2) A display and
-  an inline formula in one document each take their own form — the case a single
-  shared arm would pass. (3) `describe` has no reachable math arm, by the means
-  `mpdf-001` Phase 8 used for the arms it made reachable. (4) A display formula
-  carrying a command outside the allowed list is refused with its own line
-  number, so the scan is not silently inline-only. (5) `cargo test --workspace` passes, and
-  `cli/src` and `app/src` are untouched again.
-- **Close-out:** Update `rules/pipeline.md` against the code, and the README's
-  math section gains the display form. Phase 1's `CORRECTED` note in `mpdf-001`
-  is extended rather than duplicated — one note, both forms. One push.
+  paragraphs matches its golden file and compiles to a PDF with the `%PDF` magic
+  bytes, and the golden shows `$ … $`, the spaced form OQ-4 fixed, rather than
+  the inline `$…$`. **Its formula uses a command the bundled prelude defines** —
+  `\sqrt`, or one of the matrix environments — so an arm that forgot the
+  `Walk.math` flag fails here as an unknown identifier, rather than passing on a
+  formula whose heads Typst defines anyway. **The same fixture carries a second
+  display span mid-paragraph, in a sentence of prose**, and the golden shows it
+  in that same spaced form: every other arm of this gate is satisfied by a
+  standalone span, so an arm that consulted position — block when alone, inline
+  in a sentence — would pass all five while contradicting the scope OQ-5 fixed.
+  The fixture this phase retires is itself a mid-paragraph span, so the case
+  costs one line. (2) A display and an inline formula in one document each take
+  their own form, which gate (1) alone would not catch, since one arm serving
+  both would pass it. (3) `describe` no longer names
+  math: `Event::DisplayMath(_)` sits in its "the walk handles these" group, which
+  is a grep rather than an inspection, and `![a $$x+y$$ b](f.png)` produces the
+  alt string `"a x+y b"` and compiles — the case that would otherwise turn an
+  in-dialect construct into that nonsense error. (4) A display formula carrying a
+  command outside the allowed list is refused with its own line number, so the
+  scan is not silently inline-only. (5) `cargo test --workspace` passes, **no
+  shipped golden file changes**, and `cli/src` and `app/src` are untouched again.
+
+  **Three shipped assertions retire, named here because `cargo test` finding them
+  is not the same as a phase budgeting for them**, which is the precedent Phase 1
+  set: `tests/fixtures/unsupported_display_math.md`, the `DISPLAY_MATH_MD` row in
+  `core/tests/golden_test.rs:each_refused_construct_names_itself_and_its_line`,
+  and the `unsupported_display_math.md` row in
+  `cli/tests/cli_test.rs:math_and_a_task_list_marker_exit_non_zero_and_name_themselves`.
+  That leaves the first of those two tests holding the task list marker alone and
+  the second holding two rows, since its `unsupported_math.md` row now names
+  `\includegraphics` — and CLI coverage of an inline refusal does not rest on the
+  retiring row either way, because
+  `cli/tests/cli_test.rs:each_refused_formula_exits_non_zero_and_names_its_latex`
+  writes its own document for all six shapes.
+- **Close-out:** `rules/pipeline.md`'s Math section is **corrected in place
+  rather than grown** — the display form replaces the sentence refusing it, and
+  the rejection paragraph loses its third item — so the cap Phase 1 set (a body
+  of 330 against `max_lines: 340`) is expected to hold; raise it in the same pass
+  if it does not. The README's math section gains the display form, and its "a
+  display formula **on its own lines**" sentence is corrected rather than
+  extended: the shipped refusal covered a mid-paragraph `$$x$$` too, which is
+  what its own fixture holds, and after this phase both positions typeset.
+  `mpdf-001` Phase 8's `CORRECTED` note gains **a second dated line beneath the
+  existing one** rather than a restamp — the first stamp records when the inline
+  half stopped being true, and a note that moved its own date would lose that.
+  One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

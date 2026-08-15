@@ -2,6 +2,104 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 2 only — 2026-08-14 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, two non-blocking, both folded after the verdict.
+All ten of round 1's findings had been accepted, so this round was confirmation
+plus the two things the author asked it to be sceptical of, and it was sceptical
+of both by measurement rather than by reading.
+
+**It re-derived the block-form rule rather than trusting the author's
+measurement**, and both agree: `Equation::block` in Typst 0.15.1 is a space node
+immediately inside each delimiter and nothing else, so `$ x $` is a block and
+`$x$`, `$ x$` and `$x $` are not.
+
+**The position-blind decision was tested against fourteen containers**, compiled
+under this repo's own `template.typ` and `math.typ` with `mitexsqrt` and
+`matrix` bodies so the prelude was exercised: standalone, mid-paragraph, in a
+heading, a list item, a nested list item, a block quote, a table cell, a
+footnote, link text, `#emph`, `#strike`, an `aligned` body, and a body ending in
+`normalise`'s trailing `\ `. All fourteen compiled with zero warnings and all
+parsed as `block: true`, and an inline-plus-display document gave `[false,
+true]`. The reason it holds is stronger than the sample: `Equation::block`
+consults only the equation's own first and last children, so position-blindness
+is a property of Typst's grammar rather than an assumption about context.
+
+**"No shipped golden file changes" was proved rather than estimated.** Every
+golden-backed fixture converts today and `DisplayMath` is an error today, so no
+such fixture can hold one; independently, the only `$$` under `tests/`, `core/`,
+`cli/` or `app/` is `tests/fixtures/unsupported_display_math.md`, which has no
+golden.
+
+The two non-blocking, both folded. **The gate did not pin the phase's newest
+decision**: every arm was satisfiable with standalone spans, so a
+position-*aware* arm — block when alone, inline in a sentence — would have
+passed all five while contradicting the scope. Gate (1) now carries a
+mid-paragraph span, which costs one line because the retiring fixture is itself
+one. And a closing gloss said two tests are left holding the task list marker
+alone; the CLI one keeps two rows, since its `unsupported_math.md` row now names
+`\includegraphics`. The instruction above it named the right three things to
+retire, so the gloss was wrong rather than the instruction.
+
+On this convergence: `status` was already `accepted`, and `reviewed: 2026-08-14`
+on Phase 2.
+
+### Round 1 — Phase 2 only — 2026-08-14 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0, for this episode:** yes. Phase 2 produces the observable — a `$$…$$`
+span exits non-zero today, and this sets it as a centred display equation, which
+is the other half of the construct §1's own example document carries. It is also
+the right next thing: Phase 1 shipped the dependency, the scan and the prelude,
+so this is only what a block needs beyond a span, and it is what makes
+`describe`'s math arm unreachable and restores `mpdf-001` Phase 8's property in
+full.
+
+Verdict: `NOT READY`, three blocking findings, seven non-blocking. All ten were
+accepted; none were rejected or deferred. The reviewer probed pulldown-cmark
+0.13.4 with the emitter's own option set rather than reasoning from memory,
+which is what produced the two measurements below.
+
+**Two blockers were the same shape: an open question the phase's own scope was
+defined by.** OQ-4 and OQ-5 both said "Blocks Phase 2" and both were unresolved,
+so an implementer had to choose unaided — and for OQ-4 the choice ranged from a
+form the emitter writes itself to an export both bundled looks gain, which would
+rewrite the first line of all 16 goldens and break
+`core/tests/golden_test.rs:every_bundled_template_meets_the_call_contract`. The
+phase's blast radius was undetermined until it was answered. **This is the same
+finding round 1 made against Phase 1**, and the methodology's §4 is the rule it
+comes from: a code-answerable question is answered *during review*.
+
+Both were answered in the round. OQ-4: **the look already has the decision**, so
+nothing joins the contract — Typst's block form is whitespace inside both
+delimiters, and a look reaches it with `show math.equation.where(block: true)`,
+which is what both looks already do for `raw` and `table.cell`. OQ-5: the
+reviewer's probe found `DisplayMath` is an *inline* event that arrives wrapped
+in a paragraph when alone and unwrapped when not, and the author's answer is
+that **the arm consults no position** — an image carries no signal about which
+form its author wanted, which is why `write_image` infers one, while `$$` *is*
+that signal.
+
+**The third blocker is the one a gate would not have caught.** Probed:
+`![a $$x+y$$ b](f.png)` emits `DisplayMath` inside the image's capture, which
+has no arm for it. So changing only the main match leaves gate (3) false, while
+moving `describe`'s arm without touching the capture makes alt text fail with
+`unsupported markdown construct 'supported construct'` — a nonsense message. It
+is the interaction `mpdf-001` Phase 8 decided for strikethrough and Phase 1
+decided for inline math, and the precedent says it is the spec's call, so it is
+now in the scope rather than left to an implementer.
+
+Of the seven non-blocking, the two worth recording: **gate (3) cited the wrong
+half of the Phase 8 precedent** — no test can show an arm is *un*reachable, and
+the applicable half is the one that *dropped* two arms, which turns the gate
+into a grep; and **no arm exercised the conditional prelude import on the
+display path**, since a fixture whose heads Typst already defines would pass
+even if the display arm forgot `Walk.math`. Gate (1)'s fixture is now keyed to a
+prelude-only head. The rest were precision: the phase named symbols but no
+files, the close-out did not say whether the rule's line cap moves, "extended
+rather than duplicated" left the `CORRECTED` note's stamp ambiguous, gate (2)'s
+trailing clause read backwards, and the README's "on its own lines" is
+imprecise about a refusal that also covers a mid-paragraph span.
+
 ### Round 6 — Phase 1 only — 2026-08-11 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, three non-blocking, all three folded after the
