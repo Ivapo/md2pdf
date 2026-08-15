@@ -13,9 +13,9 @@ covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the two walks footnotes need, the image asset
   channel, the LaTeX subset a formula may hold and the prelude it compiles
-  against, the bundled looks and the call contract they meet, the Typst world and
-  its bundled fonts, and the CLI contract
-max_lines: 340
+  against, the bundled looks and the call contract they meet, the heading anchors
+  a compile reports, the Typst world and its bundled fonts, and the CLI contract
+max_lines: 372
 generated: 2026-08-15
 ---
 
@@ -28,9 +28,15 @@ and write Typst markup; the embedded Typst compiler produces the PDF.
 markdown and a slice of `core/src/lib.rs:Asset` — one image file each, named by the path
 the markdown wrote — and returns the bytes; `core/src/lib.rs:image_paths` is the shopping
 list that names those files, in the order a reader meets them, which puts an image inside
-a footnote definition at the first reference to that footnote. None of the three touches
+a footnote definition at the first reference to that footnote.
+`core/src/lib.rs:md_to_pdf_with_anchors` returns those same bytes and, beside them, the
+page each heading landed on. None of the four touches
 the filesystem, the clock, or the network; `cli/src/main.rs` does all file I/O and all
 terminal output, the image files included.
+
+**`md_to_pdf` is a wrapper over `md_to_pdf_with_anchors`**, not a second route to the
+same bytes — two paths over one input that could disagree eventually do — so a caller
+wanting only the PDF pays nothing for the anchors and gets byte-identical output.
 
 ## The dialect
 
@@ -341,6 +347,30 @@ PDF differ between machines — silently, because this call touches the compile 
 the emitted source, so the golden files would stay byte-stable over a PDF that differed by
 machine. Every look does typeset a date, and takes it from the frontmatter's `date` key: the
 author writes the dateline.
+
+## The heading anchors
+
+`core/src/lib.rs:md_to_pdf_with_anchors` returns a `core/src/lib.rs:Rendered` — the bytes,
+and one `core/src/lib.rs:Anchor` per heading pairing the markdown line with the page its
+compiled form landed on. **The anchor is a heading because the Nth markdown heading is the
+Nth compiled one**, so no source map is needed and, load-bearing, **the emitter writes
+nothing for it**: `core/src/emit.rs:Walk` records each heading's line in a `headings` field
+that never reaches the output, so no golden file moves.
+
+The pages come from the compiled document's own introspector, queried for `HeadingElem` and
+resolved to a page each. **The extraction is inline in that function and cannot be factored
+out**: `typst` re-exports `typst-library`, `typst-syntax` and `typst-utils` and not
+`typst-layout`, so the document's type is unnameable here — method calls on the inferred
+value work, a helper taking it as a parameter would need a new pinned dependency. The PDF
+export comes *before* the query for the same reason: it is what pins that type.
+
+`core/src/lib.rs:anchors_from` pairs the two collections **by ordinal, and answers nothing
+when their counts differ**. The mismatch is real rather than defensive: a heading inside a
+footnote definition is walked by `core/src/emit.rs:collect_definitions` into a `Walk` that
+is discarded, and its content is spliced in at the *reference*, so the document typesets a
+heading the walk never counted. Two limits, recorded: it catches one extra or one missing
+and not one of each, and what it guards is a consumer's mis-scroll rather than a wrong
+document — no byte of the PDF depends on it.
 
 ## The CLI
 

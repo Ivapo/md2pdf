@@ -94,8 +94,12 @@ the file, or open the file again to take it. It never merges the two.
 
 A document that will not compile leaves the last good page on screen, dimmed, with the
 error above it — the same sentence the command prints — and the page comes back when you
-fix it. A redraw returns you to the first page: the pane is a real PDF view, and it
-tells the app nothing about where you were scrolled.
+fix it.
+
+**A redraw opens the page on the heading you are writing under.** The pane is a real PDF
+view and tells the app nothing about where you scrolled it, so it follows your cursor
+instead — to the nearest heading above it, which is as close as it can get without one.
+Opening a file, and taking one that changed underneath, still start you at page 1.
 
 The header says where the page stands — `current` with the time the compile took, or
 `stale` when the last one failed and the page you are looking at is the older one.

@@ -16,19 +16,23 @@ covers: >
   and the two debounces it runs on, the buffer that compiles and the rule an
   external change runs, the state the loop writes and the four states it
   reports, the export and its two refusals, the errors it puts on the page, the
-  bundle and the document association that launches it, and the configuration
-  facts a build enforces
-max_lines: 394
-generated: 2026-08-11
+  bundle and the document association that launches it, the anchor path that
+  opens the pane on the author's own page, and the configuration facts a build
+  enforces
+max_lines: 435
+generated: 2026-08-15
 ---
 
 # Desktop
 
 A macOS window that shows the PDF while you write it. `md2pdf-app` is the second
 wrapper around `md2pdf-core`, beside `md2pdf-cli`, and it calls no other code of
-this project's own; `core` gained nothing for it, at any phase. Today it opens one
+this project's own; **`core` gained one function for it, in Phase 6, and nothing
+in any other phase** — `core/src/lib.rs:md_to_pdf_with_anchors`, which is
+additive and left every existing signature alone. Today it opens one
 file at a time, holds that file's text in a pane beside the page, recompiles when
-the typing stops, says what state the page is in, saves the text back, and writes
+the typing stops, opens the page on the heading the caret is under, says what
+state the page is in, saves the text back, and writes
 the page to a file the user names. It bundles into an `.app` and a `.dmg`, and a
 `.md` double-clicked in Finder launches it on that document. **The bundle is
 unsigned**, which is a credential this machine does not hold rather than a step
@@ -122,11 +126,17 @@ It draws the artifact, not a picture of it: the bytes go into a `Blob` of type
 own PDF document view inside the frame. No JavaScript PDF viewer is bundled and
 none is wanted. The route is same-origin — a blob URL inherits the page's origin,
 where a custom URI scheme does not — and the bytes never touch the disk. The
-previous object URL is released once the frame has left it.
+previous object URL is released once the frame has left it. **`draw` takes a page
+as well as the bytes** and puts a `#page=N` fragment on the object URL it just
+minted; the fragment goes on the frame's `src` and not on the URL it keeps, so
+what it revokes next time is the object URL itself.
 
-**A re-render returns the reader to the first page.** WebKit's PDF view leaks
-nothing about where the reader was, so there is nothing to restore; `#page=N` on
-a fresh blob URL is honoured, so a position can be set but never learned.
+**A re-render moves the reader, and the app chooses where to.** WebKit's PDF view
+leaks nothing about where the reader was, so a position can never be *learned* —
+but `#page=N` on a **fresh** blob URL is honoured at load, so one can be set, and
+a redraw following the author's own edit is opened on the heading above their
+caret. A redraw that took a text from disk opens on page 1, as every redraw did
+before Phase 6.
 
 `refresh` asks for the status first, and for the bytes only when the state is
 `current` **and** the status's `revision` is one it has not drawn — so the page
@@ -134,6 +144,26 @@ never draws a frame it has been told is out of date, and never redraws one the
 reader has scrolled for a signal that compiled nothing, which the app's own save
 now is. It re-reads the document's text on the `reloaded` count and on nothing
 else, so a fetch cannot race a keystroke still in flight.
+
+**It captures whether it took a reload *before* it advances `takenReload`**, and
+hands `draw` no page on that pass. This is load-bearing rather than tidy:
+assigning a textarea's `value` moves its caret to the end of the control, so a
+pass that replaced the text would read the document's last line and open it on
+its last page. An open, an external reload over a clean buffer and a Finder
+launch therefore all still draw page 1. The rule is "took no reload", not "the
+author typed" — an external *figure* change carries a fragment though no
+keystroke caused it, which is left as it falls, since the caret is still where
+the author put it.
+
+`caretPage` is the lookup: the caret's line is the newlines before
+`text.selectionStart`, and the target is the last anchor at or below it, or
+nothing when there is none. **Counting newlines is not parsing markdown** — the
+page owns no knowledge of the dialect — and it is the one quantity both sides
+agree on, `selectionStart` being a UTF-16 offset where a line in Rust is counted
+from bytes. A caret above the first heading and a document with no headings take
+the same branch and ask for no page, which is where an unfragmented frame opens
+anyway. The precision is the document's heading density, and it follows the
+*author* rather than the reader.
 
 `report` places the status: the line in the header, the message in a bar above
 the pane, the divergence in a bar of its own, and the dimming a stale page wears
@@ -152,11 +182,18 @@ wrote.
 and hands that one string to both the image list and the compile. The read left it
 for `app/src/document.rs:read_document`, one call further out, so that the string
 the pane holds is what compiles; `md2pdf_core::md_to_pdf` already took a `&str`,
-so `core` gained nothing for the change. It returns a `Render`, which carries the
+so `core` gained nothing for *that* change. It returns a `Render`, which carries the
 image paths **even when the compile failed** — emission reads the text and not
 the disk, so a document whose figures are all missing still names them, and that
 is what keeps the watch filter alive while nothing compiles. `images` is `None`
 only when the document did not parse, and the caller then keeps the list it had.
+
+The compile itself is `md2pdf_core::md_to_pdf_with_anchors`, and `Render` carries
+its `anchors` beside the bytes. **They go the other way from `images`**: a failed
+compile has none, because they describe the *page* where the image list describes
+the text. `app/src/document.rs:Anchor` is `md2pdf_core::Anchor` again, and the
+duplication is the one `read_assets_with` already makes — this copy crosses to
+the page inside `Status`, so it must serialize, and `core` carries no serde.
 
 `app/src/document.rs:read_assets_with` mirrors `cli/src/main.rs:read_assets` —
 resolve each path against `app/src/document.rs:directory`, read each once, and
@@ -205,8 +242,9 @@ comment. `app/src/watch.rs:TYPING_DEBOUNCE` is 300 ms, and it is not protecting
 the compile: twenty compiles of each sample through the pane's path put the warm
 median at 1.5 ms and 0.6 ms, against 24.6 ms and 12.5 ms for the first compile of
 a process, which the app pays at the open. It is set to the pause between phrases
-rather than the gap between keystrokes, because a redraw costs the reader their
-page. `app/src/watch.rs:Debounce` takes the time as a parameter, so both tests
+rather than the gap between keystrokes, because a redraw moves the reader —
+narrowed but not removed by the anchor, which returns them to the top of the
+section they are in. `app/src/watch.rs:Debounce` takes the time as a parameter, so both tests
 need no clock and cannot flake.
 
 `app/src/watch.rs:settle` is the thread both intervals run on: it folds a stream
@@ -254,10 +292,14 @@ and compiles inside one lock scope, so nothing observable sits between
 the page uses it as a word and as a class.
 
 `app/src/preview.rs:Status` is that state, the compile time worded as `"28 ms"`,
-the error, whether a page is drawn, the divergence, and two counters — one value
-the page places rather than composes. **`revision` counts compiles that produced
-bytes** and `reloaded` counts the times the buffer was replaced from disk; both
-exist so the page can tell a signal apart from work it has already taken.
+the error, whether a page is drawn, the divergence, two counters and the anchors —
+one value the page places rather than composes. **`revision` counts compiles that
+produced bytes** and `reloaded` counts the times the buffer was replaced from
+disk; both exist so the page can tell a signal apart from work it has already
+taken. **The anchors ride the status because the status is already fetched on the
+path that draws**, so following the caret needs no command of its own. Like the
+compile time, they are replaced on a success and kept on a failure, so they always
+describe the page on screen rather than the last attempt at one.
 
 ## The rule an external change runs
 
