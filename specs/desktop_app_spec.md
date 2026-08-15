@@ -34,7 +34,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 6 — the page the author is on"
-    reviewed: null
+    reviewed: 2026-08-15
     shipped: null
     cut: null
     by: null
@@ -1275,10 +1275,17 @@ phase to append if the answer is yes."
   document**, so nothing has to be mapped and — the load-bearing half —
   **nothing new is written into the generated Typst source**. An anchor the
   emitter *emits*, a `#metadata` marker before each block or a label per
-  paragraph, would rewrite all 17 shipped golden files, and "no shipped golden
-  file changes" is a clause every phase of `mpdf-001` and `mpdf-004` has held.
-  Headings are already in the output; that is the whole reason they are the
-  anchor.
+  paragraph, would rewrite all 17 shipped golden files.
+
+  **A draft of this paragraph called that an invariant every phase has held, and
+  it is not one** — `mpdf-001`'s look phase moved thirteen goldens on their
+  second line, gaining `date: none`, and said so in its own commit message. The
+  distinction that survives is sharper than the false claim: those goldens moved
+  because **what the document compiles to** changed, which is the thing a golden
+  file exists to pin. An anchor marker moves all 17 for a reason that has nothing
+  to do with what the document says, and this phase's own gate (5) can hold "no
+  shipped golden file changes" only because it emits nothing. Headings are
+  already in the output; that is the whole reason they are the anchor.
 
   **`core` gains one function, and this is the phase that crosses §2's
   falsifiable claim.** That claim is "`core` gains nothing and changes nothing",
@@ -1310,11 +1317,26 @@ phase to append if the answer is yes."
   with through `into_offset_iter()`, and the one every error in that file
   already reports. The page: `core/src/lib.rs:md_to_pdf` already builds the
   `PagedDocument` that `typst_pdf::pdf` consumes and then drops it. Measured
-  against the Typst 0.15.1 that `core/Cargo.toml` pins — its introspector
-  answers `query(&Selector::Elem(HeadingElem))` with the headings in document
-  order, and `position(location)` returns a
-  `PagedPosition { page: NonZeroUsize, point: Point }`. **So the page comes from
-  a value the function already holds, and no dependency is added.**
+  against the Typst 0.15.1 that `core/Cargo.toml` pins — `PagedDocument::
+  introspector` answers `query(&HeadingElem::ELEM.select())` with the headings in
+  document order, and `position(location)` returns a
+  `PagedPosition { page: NonZeroUsize, point: Point }`. Two mechanical details,
+  recorded so they cost no build: `Selector::Elem` takes
+  `(Element, Option<SmallVec<…>>)` rather than a type, which is why the idiom is
+  `Element::select`; and two traits have to be in scope where nothing at the call
+  site looks like it needs them — `typst::introspection::Introspector` for
+  `query`, and `typst::foundations::NativeElement` for the `ELEM` const — while
+  `position`, being inherent, needs neither.
+
+  **So the page comes from a value the function already holds, and no dependency
+  is added — but that second half holds only while the type stays unnamed.**
+  `typst` re-exports `typst-library`, `typst-syntax` and `typst-utils`, and not
+  `typst-layout`, so `PagedDocument` and `PagedIntrospector` are unnameable from
+  `core` today. Method calls on the value `typst::compile` infers are fine; a
+  helper written `fn anchors(doc: &PagedDocument, …)` is not, and would force
+  `typst-layout` into a workspace that pins every dependency it has. **The
+  extraction therefore stays inline in `md_to_pdf_with_anchors`**, which is a
+  constraint on the implementation rather than a preference about it.
 
   **The zip is by ordinal, and it is guarded rather than trusted.** Two facts
   make the correspondence hold today and one keeps it honest tomorrow. Measured:
@@ -1327,10 +1349,16 @@ phase to append if the answer is yes."
   place.
 
   **If the two counts differ, the function returns no anchors at all** and the
-  pane behaves exactly as it does today. A wrong page is a lie about the
-  document, which `mpdf-001` §2 exists to refuse; no page is only the status
-  quo. That also makes a third look which set its title as a heading fail
-  visibly rather than silently mis-scroll.
+  pane behaves exactly as it does today, which makes a third look that set its
+  title as a heading fail visibly rather than silently mis-scroll.
+
+  **What the guard does not buy, stated because a draft of this overstated it:**
+  a count check catches one extra or one missing, not one of each, which is the
+  shape a footnote heading plus a heading that never materialises would produce
+  together. And the failure it guards is a **mis-scroll, not a wrong document** —
+  weaker than the class `mpdf-001` §2 refuses, since no byte of the PDF is
+  affected. The guard is worth its line for the common case and is not claimed to
+  be exhaustive.
 
   **The app carries it and decides nothing.**
   `app/src/document.rs:render_with` calls the new function and
@@ -1347,6 +1375,36 @@ phase to append if the answer is yes."
   **fresh blob URL `draw` already mints on every compile**. `#page=N` on a *new*
   blob URL is the operation Phase 2's round confirmed and OQ-6 records; nothing
   here reuses a URL, which is the case that does not work.
+
+  **The pane follows only a redraw that did not replace the text, and this rule
+  is the phase rather than a detail of it.** Round 1 found that without it the
+  feature breaks two shipped gates on its first keystroke. `app/dist/index.html:
+  refresh` assigns `text.value = await invoke('document_text')` whenever
+  `state.reloaded !== takenReload`, and **assigning `value` moves a textarea's
+  caret to the end of the control** — normative WHATWG behaviour, confirmed in a
+  browser during that round. `refresh` then falls through to `draw` in the same
+  pass, so the formula above would read the *last* line of the document and open
+  `samples/article.md` on page 3. That contradicts Phase 1's shipped gate case
+  (1), "Opening `samples/article.md` draws its first page", and §1's usage
+  sketch; it fires again on Phase 2's external-change reload over a clean buffer
+  and on Phase 5's Finder open.
+
+  The signal is already on the page and needs nothing new: the pass that
+  replaced the text is exactly the pass that must not follow. `refresh` captures
+  whether it took a reload **before** it updates `takenReload`, and hands `draw`
+  a target of `none` on that pass — so an open, an external reload and a Finder
+  launch all draw page 1 exactly as they do today, and only a redraw following
+  the author's own edit carries a fragment. **An open is not a cursor
+  movement**, which is the whole of the reasoning.
+
+  **The rule is "took no reload", not "the author typed", and round 2 found one
+  case where those differ**: an external *figure* change recompiles without
+  replacing the text, so it carries a fragment though no keystroke caused it.
+  That is left as it falls rather than special-cased. The caret is still where
+  the author put it, the page it names is still the page they were working on,
+  and adding a second suppression would be guessing at an intent the app cannot
+  see — which is the same reasoning that keeps the display arm position-blind in
+  `mpdf-004`. The mechanism sentence is the specification; the slogan is prose.
 
   **Counting newlines is not parsing markdown**, and the distinction is the
   point rather than pedantry: the page owns no dialect knowledge and must not
@@ -1384,29 +1442,59 @@ phase to append if the answer is yes."
   would pass on an implementation that always answered 1. (3) A document with no
   headings produces no anchors, and one whose caret sits above the first heading
   resolves to page 1 — the two shapes the lookup has to handle without a special
-  case in the page. (4) **The count guard returns no anchors**, tested directly:
-  the zip is its own function taking the two counts, so the mismatch needs no
-  contrived document. The implementer additionally records **whether a mismatch
-  is reachable from markdown at all** — the footnote-definition heading is the
-  candidate — because a guard against nothing and a guard against something are
-  different claims and only one of them is worth its line. (5) `md_to_pdf`
+  case in the page. (4) **The count guard returns no anchors**, tested at both
+  levels. The zip is its own function over the two collections — the walked lines
+  and the queried positions — so the mismatch needs no contrived document; and
+  the mismatch **is** reachable from markdown, which a draft of this gate left as
+  homework and round 1 answered: `[^1]: # A heading in a note` emits
+  `#footnote[= A heading in a note]`, a heading `collect_definitions` walked into
+  a discarded `Walk` and the document walk never counted. That document is the
+  second half of this case, and it is a real one rather than a constructed one.
+  (5) `md_to_pdf`
   returns what it returned before: `cargo test --workspace` passes, **no shipped
   golden file changes**, and `cli/src` is untouched, which is §2's falsifiable
   claim checked as a diff on the half of it this phase does not cross. (6) **The
   observable, by eye, because no test reaches it**: open `samples/article.md` in
   the app, put the caret in a section that falls on a later page, edit, and the
   pane redraws on that page instead of page 1. OQ-6 was resolved in use on this
-  same sample, which is the precedent for judging this the same way.
+  same sample, which is the precedent for judging this the same way. (7) **The
+  three shipped paths that must still open on page 1**, which gate (6) cannot
+  reach because it instructs the operator to move the caret first: opening
+  `samples/article.md` draws its first page, an external save over a clean buffer
+  redraws on page 1, and a Finder open of the same file draws its first page —
+  the last of which **takes Phase 5's gate (2) precondition with it**, since the
+  emitted `LSHandlerRank` is `Default` and any machine with an editor already
+  registered for `.md` keeps that editor; set this app as the handler through
+  Get Info → Open With → Change All first, or the case observes the wrong
+  program. **Phase 1's gate case (1) is one of the three and it is named here
+  rather than left to `cargo test`**, because the caret rule above is the only
+  thing keeping it true and a regression in it is invisible on any one-page
+  document.
+
+  **This phase reads two cases by eye rather than §2's one, and takes the
+  departure deliberately** — the precedent is Phase 5, which argued its own. (6)
+  is the observable and (7) is the regression that no test reaches, and they are
+  the same window in the same sitting: there is no JS harness, for the reason
+  Phase 4 recorded, so a rule that must hold *in the page* has nowhere else to be
+  checked. Every other case in this phase is an ordinary test.
 - **Close-out:** `rules/desktop.md` gains the anchor path — the new `core` call,
   what `Status` now carries, and what `draw` does with it — and
   `rules/pipeline.md` gains the new export beside `md_to_pdf`. **Expect to raise
   both caps in the same pass**: `desktop.md` sits at 390 against 394 and
-  `pipeline.md` at 338 against 340, so neither has room for a paragraph. §2's
-  falsifiable-claim paragraph is **corrected in place rather than appended to**
-  if the round lets the crossing stand — "`core` gains nothing and changes
-  nothing" is a decision statement, not a citation, and a reader who carries it
-  forward would be wrong about what this spec now permits. The README's app
-  section gains one sentence. One push.
+  `pipeline.md` at 338 against 340, so neither has room for a paragraph.
+
+  **Two paragraphs of §2 get a dated `CORRECTED` note each**, per §6.1's remedy
+  for shipped prose that is now misleading — a note beside the text, original
+  kept, because this spec is `accepted` and append-only and rewriting either
+  paragraph would rewrite history. The first is the falsifiable claim, "`core`
+  gains nothing and changes nothing", if the round lets the crossing stand. The
+  second is the one round 1 found and a draft of this close-out missed: §2's
+  "**A re-render therefore returns the reader to the first page**", which is the
+  measurement the pane's whole design rests on and which this phase makes false
+  for the author's own edits. **The same sentence is repeated as a comment in
+  `app/dist/index.html:draw`**, which the implementation touches anyway, so it is
+  corrected there in the same pass. The README's app section gains one sentence.
+  One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

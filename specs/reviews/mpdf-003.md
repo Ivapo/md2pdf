@@ -2,6 +2,103 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 6 only — 2026-08-15 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, and the round exists only because §7.4 requires one
+whenever changes are folded in at all. Round 2 was already READY; four non-blocking
+fixes went in after it, and the loop's own warning — a fix can introduce a blocker —
+is what this round tested. It did not: the diff is seven hunks, all inside Phase 6, and
+no shipped phase or gate numbering outside it moved.
+
+All four landed. The follow rule's slogan became its mechanism — "a redraw **that did
+not replace the text**", which matches `state.reloaded !== takenReload` exactly — and
+the figure-change case the reviewer found is named and left as it falls rather than
+special-cased, with governance settled in one line: *the mechanism sentence is the
+specification; the slogan is prose*. The two-by-eye departure is argued against Phase
+5's precedent. `NativeElement` joined the import list. The Finder case took Phase 5's
+`LSHandlerRank: Default` precondition inline.
+
+The reviewer re-checked the fold-in's one new cross-spec citation rather than take it:
+`mpdf-004`'s position-blind display arm does say what the analogy claims.
+
+### Round 2 — Phase 6 only — 2026-08-15 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`. All eight of round 1's findings had been accepted — no rejections in
+this episode.
+
+**The blocker was resolved and the reviewer traced the fix through the code rather than
+the changelog**, on all three questions it was asked. The signal exists where it is
+needed: `refresh` computes `state.reloaded !== takenReload` before it assigns, and
+`draw` has exactly one call site, strictly after the reload branch — so no flag has to
+be threaded anywhere. It fires on all three of gate (7)'s paths, via `Session::open` →
+`Preview::load` → `take` → `compile` with `clear()` having set `takenReload = -1`. And
+it composes with the existing gating: a reload pass whose compile failed returns before
+`draw` with `takenReload` already advanced, and the no-compile signals return at
+`revision === drawnRevision` and never reach `draw` at all, because `revision`
+increments only in `compile`'s `Ok` arm.
+
+Four new non-blocking, all accepted and folded in — see round 3.
+
+### Round 1 — Phase 6 only — 2026-08-15 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode — one appended phase, per §7.0).** *Does this produce the
+observable, and is it the right one?* Yes, on this spec's own established reading: all
+five shipped phases deliver "the same PDF" under a new condition — redrawn on save,
+written to a file, launched from Applications — and Phase 6 delivers it at the author's
+working position rather than page 1. The friction is recorded rather than assumed, and
+OQ-6 deliberately declined to close this as a non-goal once Phase 4 made the caret
+available. **The risk recorded rather than dismissed:** that same entry judged the
+friction *tolerable*, and heading-density precision may make this close to a no-op on
+the short documents that motivated it.
+
+Verdict: `NOT READY`. One blocking finding, seven non-blocking, **all eight accepted**.
+
+**The blocker is the best catch in this spec's record, because no gate in the phase
+reached it and the phase would have shipped it.** `app/dist/index.html:refresh` assigns
+`text.value = await invoke('document_text')` on a reload and falls through to `draw` in
+the same pass — and assigning `value` moves a textarea's caret to the end of the
+control, which is normative WHATWG behaviour the reviewer confirmed in a browser. So
+the caret formula would read the document's *last* line and open `samples/article.md`
+on page 3, contradicting Phase 1's shipped gate case (1), Phase 2's external-reload
+loop and Phase 5's Finder open. The fix makes the follow *condition* part of the phase
+— the pass that replaced the text is the pass that must not follow — and adds gate (7),
+the three shipped paths that must still open on page 1.
+
+**Two findings corrected claims this author had asserted rather than measured.** The
+phase said "no shipped golden file changes" was a clause every phase had held; it is
+not — `mpdf-001`'s look phase moved thirteen goldens on their second line, gaining
+`date: none`, and said so in its own commit message. The sharper distinction survives
+and is now what the paragraph rests on: those goldens moved because *what the document
+compiles to* changed, which is what a golden pins. And "no dependency is added" holds
+only while `PagedDocument` stays unnamed, since `typst` re-exports `typst-library`,
+`typst-syntax` and `typst-utils` but not `typst-layout` — so the extraction staying
+inline in `md_to_pdf_with_anchors` became a constraint rather than a preference.
+
+**One instruction to measure became a measured gate case.** Gate (4) had told the
+implementer to find out whether a count mismatch is reachable from markdown; the
+reviewer answered it, and the author reproduced it — `[^1]: # A heading in a note`
+emits `#footnote[= A heading in a note]`, a heading `collect_definitions` walked into a
+discarded `Walk`. That document is now the second half of the case.
+
+The rest: `Selector::Elem` takes `(Element, Option<SmallVec<…>>)` so the idiom is
+`Element::select`; the count guard was overstated and does not catch one-extra-and-one-
+missing, and what it guards is a mis-scroll rather than a wrong document; §2's "A
+re-render therefore returns the reader to the first page" goes stale and the close-out
+had missed it; and "corrected in place" was replaced by §6.1's actual remedy, a dated
+`CORRECTED` note beside the text with the original kept.
+
+**On the §2 crossing**, which the reviewer was asked to judge: the argument is adequate
+and a phase is the right mechanism. §6.1's ordered test lands on step 2 — the preview
+pane is this spec's own subject and OQ-7 reserved this item by name — and step 1 does
+not divert it, since nothing shipped is removed, `md_to_pdf`'s signature is unchanged
+and `cli/src/main.rs` keeps calling it. What it needed was the correction-mechanism
+wording, not a different spec.
+
+Numbers re-derived this round, so a later one can trust them: `tests/golden/` holds
+exactly 17 `.typ` files; `rules/desktop.md` is 390/394 and `rules/pipeline.md` 338/340;
+`samples/article.md` is three pages and its last heading lands on page 3, which is what
+makes gate (2) non-vacuous.
+
 ### Round 4 — Phase 5 only — 2026-08-11 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, zero non-blocking residuals. **This round is past
