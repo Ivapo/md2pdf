@@ -2,6 +2,102 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 3 only — 2026-08-15 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, at the loop's three-round cap. Round 2's blocker
+was resolved and the reviewer traced it through the files: gate (7) is two
+documents, one PDF per look, and the scoped-`set` construction that defeated the
+previous draft is written into the case by name.
+
+**The round answered the two questions it was asked rather than deferring them.**
+Whether a second by-eye item needs a departure argument: **no, and the sentence
+claiming it did was a false citation.** `mpdf-004` has no by-eye rule — the four
+occurrences in the whole file are inside Phase 3's own gate — and the cap belongs
+to `mpdf-003` §2, which scopes itself to that document and exists because a GUI's
+logic can hide behind a screenshot. The direct precedent runs the other way:
+`mpdf-001` Phase 9 reads two PDFs by eye in one phase, one per look, arguing no
+departure. Both mis-citations were corrected, including a second instance in gate
+(3) that the reviewer had not flagged. Whether gate (5) still earns its place
+beside (7): yes, and the division is now recorded — (7) dominates it at
+implementation time and is spent once, where (5) is the permanent assertion that
+notices a later edit deleting the parameter or the rule.
+
+Numbers re-checked this round, so a later one can trust them: `math.equation`
+appears in neither bundled look today, so (5)'s second needle is a real new
+assertion rather than one the sources already satisfy; `samples/press-release.md`
+names no images, so (2b)'s figure note belongs to `samples/article.md` alone.
+
+### Round 2 — Phase 3 only — 2026-08-15 — same reviewer, resumed with the author's changelog — **NOT READY**
+
+Verdict: `NOT READY`. All three of round 1's blockers resolved, and **one new
+blocker that the author's own fix introduced** — which is the hazard §7.3 names
+and the second time this corpus has recorded it.
+
+Fixing gate (5) to assert over the looks' *sources* removed the only case that
+ever compiled `press-release.typ` with `equations: numbered`, and nothing took it
+up. **The reviewer falsified the replacement by construction rather than by
+argument**: a rule written `if equations == "numbered" { set math.equation(…) }`
+compiles, emits a valid `%PDF`, satisfies both proposed needles, and puts zero
+numbers on the page, because a `set` inside a scoped block dies with the block.
+The remedy taken was the second of the two offered — (7) becomes two documents,
+one PDF per look — because `core/src/emit.rs:header` writes the same call whatever
+the look, so a press-release golden re-pins emitter code the article fixture
+already pins and still cannot see a number.
+
+Three non-blocking, all accepted: `samples/article.md`'s figures named in (2b);
+(5)'s two needles named in the spec rather than left to the implementer;
+`typst_string` for `typst_string_or_none`, whose `none` arm would be dead.
+
+### Round 1 — Phase 3 only — 2026-08-15 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode — one appended phase, per §7.0).** *Does this produce the
+observable, and is it the right one?* Yes: the typeset PDF, with its display
+equations carrying `(1)`, `(2)`, and it was asked for directly rather than
+inferred. **The risk recorded rather than dismissed:** most of the value of an
+equation number is in referencing it, and OQ-7 defers exactly that — so this
+phase may deliver typography without the function that motivates it, and the
+manual "see equation (1)" is fairly called a half-measure.
+
+Verdict: `NOT READY`. Three blocking findings, five non-blocking, **all eight
+accepted; no rejections in this episode.**
+
+**Two blockers were about the gate measuring nothing.** The sharpest: a golden
+file pins emitter output and the `%PDF` magic pins nothing, so gates (1), (3) and
+(5) claimed three discriminations their instruments could not make — an
+implementation numbering inline math, or a look taking the argument and ignoring
+it, would have passed every case. **This is the phase whose whole observable
+lives inside a look**, and `mpdf-001` Phase 9 had already recorded the answer: a
+golden cannot pin a look, so the observable needs an artifact of its own. And
+gate (2) claimed a PDF "byte-identical to the one it compiled to before this
+phase" with no referent — no PDF is committed, `/samples/*.pdf` is gitignored —
+resting on `mpdf-003` Phase 3's purity result, which is about *fixed* assets and
+so says nothing about a phase that changes both `.typ` files.
+
+**The third was a number the author asserted rather than derived.** "Every
+shipped golden file changes on line 3" is wrong for 15 of the 17:
+`core/src/emit.rs:header` writes the conditional prelude import between the
+`#import` and the `#show:` lines, so the `template.with` call sits on line 2
+except in `math.typ` and `display_math.typ`. Gate (6) had encoded the error as a
+pass/fail condition, inviting an implementer to "fix" a correct diff.
+
+The rest: the frontmatter gains a **sixth** key and not a fifth, since
+`template` selects the look rather than crossing to it; the wire form was
+unspecified, and a bare `equations: plain` fails at compile with `unknown
+variable: plain` rather than at the schema; eighteen shipped assertions move and
+none was budgeted, against this spec's own precedent; the scope left a live
+design choice open for the round to settle, which §3 forbids — the reviewer
+answered it (the seam is right, because the emitter route would write the format
+literal into `header`) and the resolution was recorded; and the close-out missed
+three stale "five"s, to which the author added a fourth the reviewer had not
+found.
+
+Grounding the round confirmed rather than corrected, so a later round need not
+re-verify: 17 goldens; `header` passes exactly four named arguments; a fifth look
+parameter is additive in both looks; `mpdf-001`'s look phase moved exactly 13
+goldens on their second line at commit `2d92ef4`, as claimed; and the phase's
+`aligned` measurement reproduces with a method a second person can follow.
+
+
 ### Round 2 — Phase 2 only — 2026-08-14 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, two non-blocking, both folded after the verdict.

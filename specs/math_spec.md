@@ -20,7 +20,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 3 — numbered display equations"
-    reviewed: null
+    reviewed: 2026-08-15
     shipped: null
     cut: null
     by: null
@@ -758,8 +758,11 @@ this spec's subject, and step 2 lands here rather than on a new document.
   true): …` in its own file." Labels and cross-references stay refused, and OQ-7
   carries them.
 
-  **The frontmatter gains a fifth key, and the look gains a fifth argument.**
-  `core/src/frontmatter.rs:Frontmatter` gains `equations`, resolved the way
+  **The frontmatter gains a sixth key, and the look gains a fifth argument.**
+  The two counts differ and an earlier draft of this sentence made them match:
+  `core/src/frontmatter.rs:Frontmatter` already carries five — `title`, `author`,
+  `columns`, `template`, `date` — of which `template` selects the look rather than
+  crossing to it, so four reach the call. It gains `equations`, resolved the way
   `template` is — a name checked against a closed set, with an error listing the
   set — rather than a boolean, so that a later per-section or per-chapter scheme
   is a new name rather than a new key. The initial set is two names, and the
@@ -776,6 +779,16 @@ this spec's subject, and step 2 lands here rather than on a new document.
   carries five named arguments where it carries four today, and both
   `core/assets/template.typ` and `core/assets/press-release.typ` take the
   parameter and act on it.
+
+  **The name crosses as a Typst string**, through
+  `core/src/emit.rs:typst_string`, which is the sibling of the
+  `typst_string_or_none` the emitter uses for three of the four arguments — this
+  key always has a name, so the `none` arm would be dead. Stated because the other
+  spelling costs a build:
+  measured on 2026-08-15, a bare `equations: plain` reaching the call unquoted
+  fails the compile with `typst compilation failed: unknown variable: plain`,
+  and it fails at *compile* rather than at the schema, so the error names a
+  Typst identifier the author never typed.
 
   **The author decides *whether* and the look decides *how*, and that seam is
   the design.** Numbering is not a house style: a paper numbers its equations
@@ -807,18 +820,29 @@ this spec's subject, and step 2 lands here rather than on a new document.
   look contract moves from four named arguments to five, and `mpdf-001` Phase 9
   fixed it at four. OQ-4 declined to widen it for Phase 2 and said so in as many
   words — "nothing is added to the contract" — so this phase does the thing the
-  previous one avoided, and **the round should say whether the seam above is
-  worth it or whether the emitter route is less bad after all.**
+  previous one avoided. **Round 1 was asked to overrule the seam and declined**,
+  on the ground that the emitter route would write the format literal `"(1)"`
+  into `core/src/emit.rs:header`, which is exactly what `mpdf-001` §2 keeps out of
+  the emitter. The seam stands, and this paragraph records the resolution rather
+  than leaving the question open, because §3 asks an implementer to plan from the
+  spec alone and a scope still choosing between two designs is not that.
 
-  **And every shipped golden file changes on line 3.** All 17 carry
-  `#show: template.with(title: …, author: …, columns: …, date: …)`, and all 17
-  gain a fifth argument. That is the largest golden movement in this project's
-  record — `mpdf-001`'s look phase moved 13 on their second line, gaining
-  `date: none`, and said so in its own commit message. **It is the same *kind* of
-  movement, which is what makes it acceptable**: a golden pins what a document
-  compiles to, and what a document compiles to has genuinely changed. It is not
-  the kind `mpdf-003` Phase 6 refused, where an anchor marker would have moved all
-  17 for a reason with nothing to do with what the document says.
+  **And every shipped golden file changes on its `template.with` line** — which
+  is **line 2 in fifteen of them and line 3 in two**, not line 3 in all
+  seventeen as a draft of this sentence said. `core/src/emit.rs:header` writes the
+  prelude import *between* the `#import` and the `#show:` lines and only for a
+  document that carries math, so only `tests/golden/math.typ` and
+  `tests/golden/display_math.typ` are pushed down. Re-derived 2026-08-15 by
+  grepping all 17.
+
+  All 17 gain a fifth argument, which is the largest golden movement in this
+  project's record — `mpdf-001`'s look phase moved 13 on their second line,
+  gaining `date: none`, and said so in its own commit message; round 1 confirmed
+  it against commit `2d92ef4`. **It is the same *kind* of movement, which is what
+  makes it acceptable**: a golden pins what a document compiles to, and what a
+  document compiles to has genuinely changed. It is not the kind `mpdf-003`
+  Phase 6 refused, where an anchor marker would have moved all 17 for a reason
+  with nothing to do with what the document says.
 
   **No document's typeset output changes unless its author asks**, because the
   default name is the one that numbers nothing. The generated source moves for
@@ -840,45 +864,154 @@ this spec's subject, and step 2 lands here rather than on a new document.
   scheme needs the `align` environment on the allowed list and a second numbering
   mechanism under it. Both are out of scope here, and `align` stays refused by
   name, as §2's scan refuses it today.
-- **Exit gate:** (1) A fixture carrying `equations: numbered` and two display
-  spans matches its golden file and compiles to a PDF with the `%PDF` magic
-  bytes, and its golden shows the fifth argument in the `template.with` call.
-  **The same fixture carries an inline span**, so an implementation that numbered
-  both forms fails here rather than shipping.
+- **Exit gate:** **A golden file cannot see a number on a page, and this is the
+  phase whose whole observable lives inside a look.** Round 1's sharpest finding
+  was that a draft of this gate claimed three discriminations its instruments
+  could not make: golden equality pins emitter output, `%PDF` pins nothing, and an
+  implementation that numbered inline math, or a look that took the argument and
+  ignored it, would have passed every case. `mpdf-001` Phase 9 hit this exact wall
+  and recorded the answer — *"a golden pins emitter output and cannot pin a look,
+  so the observable needs an artifact of its own"* — and solved it with a textual
+  assertion over each look's source plus a once-only read by eye. This gate takes
+  both.
 
-  (2) **A document without the key compiles to a PDF that is byte-identical to
-  the one it compiled to before this phase** — the property that keeps the
-  widening honest, and the case the whole design rests on. It is checkable
-  because the PDF is a pure function of the markdown and the assets, which
-  `mpdf-003` Phase 3's gate established and measured over five processes. An
-  implementer who makes `numbered` the default passes every other case here and
-  fails this one.
+  (1) A fixture carrying `equations: numbered` and two display spans matches its
+  golden file and compiles to a PDF with the `%PDF` magic bytes, and its golden
+  shows the fifth argument in the `template.with` call, **quoted**, per §2's
+  measured wire form. The same fixture carries an inline span — which this case
+  pins in the *source*, not on the page: the assertion is that the emitter still
+  writes the inline form, and case (7) is where inline staying unnumbered is
+  actually read.
 
-  (3) A three-line `aligned` span takes **one** number and the next span takes
-  the next number, which is the limit §2 records rather than a behaviour to
-  discover in use.
+  (2) **The default is inert, in the only two forms that are checkable**, because
+  "byte-identical to what it compiled to before this phase" has no referent in the
+  repo — no PDF is committed, `/samples/*.pdf` is gitignored, and a draft of this
+  case rested it on `mpdf-003` Phase 3's purity result, which is about *fixed*
+  assets and says nothing about a phase that changes both `.typ` files.
+
+  **(2a), a permanent test:** a document with no `equations` key and the same
+  document with `equations: plain` produce byte-identical PDFs. That is what
+  "inert at the default" means, and it holds inside one commit.
+
+  **(2b), a one-off check the implementer runs and records**, in the idiom
+  `mpdf-003` Phase 5's `codesign` output is recorded rather than asserted: compile
+  `samples/article.md` and `samples/press-release.md` at the parent commit into a
+  scratch directory, compile them again after the change, and compare the bytes.
+  **`samples/article.md` names `pipeline.svg` and `check.svg`**, so the scratch
+  directory takes the figures as well as the document — the same trap `mpdf-003`
+  Phase 3's gate spells out, and it fails loudly rather than quietly. Round 1 ran
+  exactly this on the minimal change and got SHA-256 `19e96791…` for
+  `samples/article.md` on both sides, so the property is known to hold; what this
+  case adds is that the implementer re-derives it rather than trusts it.
+
+  An implementer who makes `numbered` the default fails both halves.
+
+  (3) A three-line `aligned` span takes **one** number and the next span takes the
+  next, which is the limit this phase's scope measures. **This is read by eye in
+  (7)**, not asserted here: the numbers are produced by Typst at layout, and
+  nothing in the emitted source or the `%PDF` magic distinguishes one number from
+  three.
 
   (4) An `equations` value outside the set is a `Frontmatter` error naming the
   key, its line and the accepted names, exactly as
-  `core/src/frontmatter.rs`'s template arm does — one mechanism, not two.
+  `core/src/frontmatter.rs:Template::from_name` and `Template::names` do for the
+  template key — one mechanism, not two. **This one is a test**, and it is the
+  case that would otherwise let a bad name reach Typst as `unknown variable`.
 
-  (5) Both looks honour the key. **Two fixtures, because one cannot carry both**:
-  `template: press-release` with `equations: numbered` numbers too, and its
-  golden shows the argument reaching the second look. An implementer who wires
-  only `template.typ` passes (1) through (4) and fails this.
+  (5) **Both looks carry the parameter and act on it**, asserted over their
+  sources by extending
+  `core/tests/golden_test.rs:every_bundled_template_meets_the_call_contract`,
+  which already walks `BUNDLED_TEMPLATES` for `title:`, `author:`, `columns:` and
+  `date:` and is the widened contract's natural home. **Two needles per look, and
+  both are named here rather than left to the implementer**: the parameter
+  `equations`, and `math.equation` — the Typst element any numbering rule must
+  reach. Naming them is what removes the tautology in a `contains` check whose
+  author also writes the source it greps, which is the weakest instrument in this
+  repo's vocabulary. The format string is deliberately not named: `(1)` against
+  `1.` is the look's call, which is the whole seam this phase rests on.
+
+  **At implementation time (7) catches everything this case does and one thing it
+  cannot, so this case earns its place afterwards rather than during.** A by-eye
+  read runs once, in one sitting, and is then spent; this is the permanent
+  assertion that notices a later edit deleting the parameter or the rule from
+  either look — the job `every_bundled_template_meets_the_call_contract` already
+  does for the four existing arguments, and the reason `mpdf-001` Phase 9 added it
+  at all. Recorded because a reader comparing (5) against (7) will otherwise ask
+  whether (5) is redundant and may answer by deleting it.
 
   (6) `cargo test --workspace` passes, and `cli/src` and `app/src` are untouched
   — the claim `mpdf-003` §2 makes pointed the other way, which both prior phases
-  checked as a diff. **All 17 golden files change on line 3, and that is expected
-  rather than a failure**; a diff touching any other line of any of them is not.
-- **Close-out:** `rules/pipeline.md`'s frontmatter section gains the fifth key
-  and its two names, and its look-contract section is **corrected rather than
-  appended to** — it records four named arguments, which stops being true. Raise
-  `max_lines` in the same pass if it does not fit; the cap moved to 372 in
-  `mpdf-003` Phase 6 and the body sits at 368.
+  checked as a diff. **All 17 golden files change on their `template.with` line —
+  line 2 in fifteen, line 3 in `math.typ` and `display_math.typ` — and that is
+  expected rather than a failure**; a diff touching any other line of any of them
+  is not.
 
-  The README's frontmatter table gains the key, and its math section gains the
-  numbered form.
+  **Eighteen shipped assertions move, named here because `cargo test` finding
+  them is not the same as a phase budgeting for them** — the precedent both prior
+  phases set. Seventeen are the golden equality tests. The eighteenth is
+  `core/tests/golden_test.rs:absent_frontmatter_gets_every_default`, which asserts
+  the literal `template.with(title: none, author: none, columns: 2, date: none)`
+  and must gain the fifth argument. Round 1 measured the count by building the
+  minimal change.
+
+  (7) **Read by eye, on one PDF per look — two documents, not one.** This phase's
+  observable is a number on a page, which no test in this repo can see.
+
+  **No departure is owed for reading two, and a draft of this case implied one
+  was.** It cited "§2's cap on the by-eye list", which is not a rule of this spec
+  at all: the cap is `mpdf-003` §2's, it scopes itself to that document — "it does
+  not claim that every gate in *this spec* is a test" — and it exists because a
+  GUI's logic can hide behind a screenshot. Nothing here is a window. The direct
+  precedent runs the other way: `mpdf-001` Phase 9 reads **two** PDFs by eye in
+  one phase, one per look, and argues no departure because none was owed.
+
+  **The first document, in the article look**, carries three observations: its two
+  display spans carry `(1)` and `(2)`; its three-line `aligned` span carries
+  **one** number rather than three; and its inline span carries none. That is the
+  phase's observable, case (3)'s limit and case (1)'s inline claim, read where
+  they are visible.
+
+  **The second document is `template: press-release` with `equations: numbered`,
+  and it is read for one thing: that the numbers are there.** A draft of this gate
+  covered the second look with needles alone, and round 2 falsified it by
+  construction rather than by argument: a rule written as
+  `if equations == "numbered" { set math.equation(numbering: "(1)") }` compiles,
+  emits a valid `%PDF`, satisfies **both** of case (5)'s needles — it contains the
+  parameter and it contains `math.equation` — and puts **zero numbers on the
+  page**, because a `set` inside a scoped block dies with the block. `template.typ`
+  is caught by the first document above; without this one `press-release.typ` is
+  covered by nothing, and "the two bundled looks decide what a number looks like"
+  is half unheld.
+
+  **Two documents rather than a second golden fixture**, which was the other
+  remedy available and is the weaker one: `core/src/emit.rs:header` writes the
+  same call whatever the look, so a press-release fixture re-checks emitter code
+  the article fixture already covers and still cannot see a number. `mpdf-001`
+  Phase 9 read one PDF per look for this exact reason.
+- **Close-out:** `rules/pipeline.md`'s frontmatter section gains the sixth key
+  and its two names, and its look-contract section is **corrected rather than
+  appended to** — it records four named arguments, which stops being true, and it
+  says defaults apply "for all five". Raise `max_lines` in the same pass if it
+  does not fit; the cap moved to 372 in `mpdf-003` Phase 6 and the body sits at
+  368.
+
+  **"Five" goes stale in four places and each is corrected**, which round 1
+  found and a draft of this close-out named none of:
+  `core/src/frontmatter.rs`'s module doc opens "The schema is five keys";
+  `rules/pipeline.md` says the defaults hold "for all five, because
+  `core/src/emit.rs:header` always names all four arguments", which carries both
+  counts in one sentence and needs both moved; and **`README.md` says it twice** —
+  "It takes five keys, all optional" above the table, and "A key outside the five"
+  below it. The count the reviewer found was three; the README's second instance
+  is the fourth. The `frontmatter.rs` one is code rather than documentation and is
+  corrected in the same pass anyway, because it is the same stale fact again.
+
+  The README's frontmatter table gains the key, its math section gains the
+  numbered form, and **its look-contract sentence is corrected along with the one
+  after it** — it says `template` takes "`title`, `author`, `columns` and `date`
+  before its trailing document argument", and the next sentence says `md2pdf`
+  "names all four on every call". The fifth argument falsifies both, and round 2
+  found the second.
 
   **§1.2's non-goal takes a dated `CORRECTED` note**, per §6.1, splitting the
   bullet rather than deleting it: equation numbering is now supported and labels
