@@ -13,9 +13,10 @@ covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the two walks footnotes need, the image asset
   channel, the LaTeX subset a formula may hold and the prelude it compiles
-  against, the bundled looks and the call contract they meet, the heading anchors
-  a compile reports, the Typst world and its bundled fonts, and the CLI contract
-max_lines: 372
+  against, the bundled looks and the call contract they meet, the equation numbering
+  the author asks for and the look formats, the heading anchors a compile reports,
+  the Typst world and its bundled fonts, and the CLI contract
+max_lines: 392
 generated: 2026-08-15
 ---
 
@@ -151,9 +152,10 @@ space after the opening delimiter and before the closing one. Both arms call `co
 the scan is one mechanism, and the display one consults no position — `$$` is the author's
 own signal, where an image has none and `write_image` infers a form from `Walk.para`. So the
 block is written wherever the span sits, and a paragraph holding one is split by it. How
-that block then sits is a look decision, reached with
-`show math.equation.where(block: true)` the way both looks already reach `raw` and
-`table.cell`; nothing about math is exported, so the look contract is unchanged.
+that block then sits is a look decision, reached over the Typst element the way both looks
+already reach `raw` and `table.cell`; nothing about math is exported. Numbering is the one
+part of it the author has a say in, and it crosses in the frontmatter's `equations` key
+rather than as an export — the look still owns the format.
 
 The scan runs on what the author wrote, ahead of the conversion, and refuses anything off
 three closed lists in `core/src/math.rs` — `COMMANDS` (the Greek letters in both cases, the
@@ -235,12 +237,18 @@ magic still fails at compile time, with the compiler's own message.
 
 ## The frontmatter
 
-Five keys, all optional: `title` and `author`, strings; `date`, a free string the template
-typesets verbatim; `columns`, `1` or `2`; and `template`, the look, `article` or
-`press-release`. An absent block is valid, and `core/src/frontmatter.rs:Frontmatter::default`
-gives the article look, no title block, no date and two columns. Every document gets a value
-for all five, because `core/src/emit.rs:header` always names all four arguments and the
-selected file.
+Six keys, all optional: `title` and `author`, strings; `date`, a free string the template
+typesets verbatim; `columns`, `1` or `2`; `template`, the look, `article` or
+`press-release`; and `equations`, `plain` or `numbered`. An absent block is valid, and
+`core/src/frontmatter.rs:Frontmatter::default` gives the article look, no title block, no
+date, two columns and no equation numbers. Every document gets a value for all six, because
+`core/src/emit.rs:header` always names all five arguments and the selected file.
+
+`equations` is a name against a closed set rather than a boolean, so a later per-section
+scheme is a new name rather than a second key, and
+`core/src/frontmatter.rs:Equations::from_name` resolves it exactly as `Template::from_name`
+resolves the look. The author decides whether a document numbers its display equations; the
+look decides what a number looks like and where it sits.
 
 An absent `columns` takes the selected look's convention — `2` for `article`, `1` for
 `press-release` — resolved in `core/src/frontmatter.rs:parse` after the whole block is read,
@@ -256,9 +264,9 @@ key is reported before any later construct error.
 That parser is hand-written over a documented YAML subset, not a dependency, and applies
 the dialect's policy: one `key: value` scalar per line, blank and `#` comment lines
 skipped, one pair of quotes stripped. Nesting, a missing colon, an unknown key, a repeated
-key, any other `columns` value, and a `template` name outside the set are
-`Error::Frontmatter`, naming the key and the line. The `template` error lists the names it
-accepts.
+key, any other `columns` value, and a `template` or `equations` name outside its set are
+`Error::Frontmatter`, naming the key and the line. Both name errors list the names they
+accept.
 
 ## The escape rule
 
@@ -289,10 +297,21 @@ count — and the emitter passes the frontmatter through and adds no styling of 
 third look is a third `.typ` file and one enum variant.
 
 Every look exports `template` and `divider`, and its `template` takes `title`, `author`,
-`columns` and `date` before the trailing `doc`. That is the contract, because
-`core/src/emit.rs:header` names all four on every call; a look missing one would fail the
+`columns`, `date` and `equations` before the trailing `doc`. That is the contract, because
+`core/src/emit.rs:header` names all five on every call; a look missing one would fail the
 compile with an error naming neither the document nor the key. No golden file pins it, so a
-test in `core/tests/golden_test.rs` reads each look's source and asserts it.
+test in `core/tests/golden_test.rs` reads each look's source and asserts it — two needles for
+`equations`, the parameter and `math.equation`, because the parameter alone is satisfied by a
+look that takes it and ignores it.
+
+Both looks answer `equations` with
+`set math.equation(numbering: if equations == "numbered" { "(1)" } else { none })`, at the
+top level of the template body with the condition inside the argument. A `set` written
+inside a scoped `if` block would compile, emit a valid PDF and number nothing, because it
+dies with the block. `(1)` is each look's own choice and the two happen to agree; the
+emitter writes no format string anywhere. Typst numbers the block form alone, so an inline
+formula takes no number and one `$$…$$` span takes one whatever it holds — a multi-line
+`aligned` derivation is numbered once, against its lines, not once per line.
 
 The article's title block uses `place(scope: "parent", float: true)`, which lifts it out of
 the column grid so it spans the page; Typst supports that scope only together with `float`.

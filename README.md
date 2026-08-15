@@ -209,6 +209,13 @@ that sentence around it, which is what the double dollars ask for. If you meant 
 sign rather than a formula, write `\$`: the backslash stops the span, and the dollar reaches
 the page as itself.
 
+A document that refers to its own formulas can number them, with `equations: numbered` in
+the frontmatter. The numbers run `(1)`, `(2)` down the page and land on the display form
+only, so an inline `$…$` never takes one. One `$$…$$` span is one equation whatever it
+holds: a multi-line `aligned` derivation is numbered once, against its lines, rather than
+once per line. There is no way to *label* an equation and refer to it by name — "see
+equation (1)" is prose you keep true yourself.
+
 A formula is **LaTeX**, and the dialect accepts a bounded subset of it — the Greek
 letters, the relations and operators, sums, products and integrals, `\frac`, `\sqrt`,
 `\binom`, `\left`/`\right`, the accents, the font commands, the named operators, and the
@@ -304,7 +311,7 @@ reference does.
 
 ## Frontmatter
 
-A leading `---` block controls the layout. It takes five keys, all optional:
+A leading `---` block controls the layout. It takes six keys, all optional:
 
 ```markdown
 ---
@@ -313,6 +320,7 @@ author: Iva Po
 date: 10 August 2026        # a free string, typeset as you wrote it
 template: article           # article or press-release
 columns: 1                  # 1 or 2
+equations: numbered         # numbered or plain
 ---
 ```
 
@@ -329,11 +337,16 @@ saying so. A `columns` key of your own beats it.
 `date` is your text and nothing else. `md2pdf` never reads a clock, so the same file
 makes the same PDF on every machine and on any day.
 
+`equations: numbered` numbers the document's display formulas, `(1)`, `(2)`, down the
+page. `plain` is the default, so a file that says nothing gets no numbers and reads
+exactly as it did before. You say *whether*; the look says *how* — the format, and where
+on the line it sits. Both bundled looks write `(1)`.
+
 Without `title`, `author` and `date` together, the PDF gets no title block. Without the
 frontmatter altogether, it gets every default.
 
-A key outside the five, a `columns` value other than `1` or `2`, or a `template` name
-outside the two, is an error that names the key and its line:
+A key outside the six, a `columns` value other than `1` or `2`, or a `template` or
+`equations` name outside its set, is an error that names the key and its line:
 
 ```console
 $ md2pdf paper.md
@@ -356,8 +369,8 @@ the emitter do not need to know.
 
 A third look is a third `.typ` file plus one name in `core/src/frontmatter.rs`. It has one
 contract to meet: export `template` and `divider`, and let `template` take `title`,
-`author`, `columns` and `date` before its trailing document argument. `md2pdf` names all
-four on every call.
+`author`, `columns`, `date` and `equations` before its trailing document argument.
+`md2pdf` names all five on every call.
 
 ## Licence
 
