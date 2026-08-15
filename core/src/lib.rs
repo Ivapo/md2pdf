@@ -8,6 +8,7 @@
 
 mod emit;
 mod frontmatter;
+mod math;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
@@ -37,6 +38,14 @@ pub enum Error {
     /// The frontmatter block does not match the schema.
     #[error("frontmatter error at line {line}: {problem}")]
     Frontmatter { line: usize, problem: String },
+
+    /// A math span holds LaTeX outside the accepted subset.
+    ///
+    /// This is not an `UnsupportedConstruct`: the construct is a math span,
+    /// which the dialect supports, and what the error names is the LaTeX inside
+    /// it — a command, an environment or a character the author typed.
+    #[error("math error at line {line}: {problem}")]
+    Math { line: usize, problem: String },
 
     /// The document names an image file that the caller did not supply.
     #[error("no image file supplied for '{path}' at line {line}")]
@@ -242,9 +251,18 @@ const BOLD: &[u8] = include_bytes!("../assets/fonts/LibertinusSerif-Bold.otf");
 const ITALIC: &[u8] = include_bytes!("../assets/fonts/LibertinusSerif-Italic.otf");
 const BOLD_ITALIC: &[u8] = include_bytes!("../assets/fonts/LibertinusSerif-BoldItalic.otf");
 const MONO: &[u8] = include_bytes!("../assets/fonts/LibertinusMono-Regular.otf");
+/// The math font, which is a different kind of file from the four above: it
+/// carries an OpenType MATH table, and without one Typst has no glyphs for a
+/// math variable or a Greek letter at all — a formula sets as a row of boxes.
+/// The name it registers under is the one Typst's own default asks for, so no
+/// bundled look names a math family and the look contract is unchanged.
+///
+/// It is under the GUST Font License rather than the OFL the others carry;
+/// `assets/fonts/GUST-FONT-LICENSE.txt` is that licence.
+const MATH: &[u8] = include_bytes!("../assets/fonts/NewCMMath-Regular.otf");
 
 static FONTS: LazyLock<Vec<Font>> = LazyLock::new(|| {
-    [REGULAR, BOLD, ITALIC, BOLD_ITALIC, MONO]
+    [REGULAR, BOLD, ITALIC, BOLD_ITALIC, MONO, MATH]
         .into_iter()
         .flat_map(|data| Font::iter(Bytes::new(data)))
         .collect()
@@ -290,6 +308,13 @@ fn template_source(template: Template) -> &'static str {
 struct TypstWorld {
     main: Source,
     templates: Vec<Source>,
+    /// The math prelude, bound beside the looks rather than as one of them.
+    ///
+    /// It is deliberately not a `Template` variant: `Template::from_name`
+    /// resolves the `template` frontmatter key, so a variant here would make the
+    /// prelude selectable as a document look. A document that names no math
+    /// never imports it.
+    prelude: Source,
     assets: HashMap<FileId, Bytes>,
 }
 
@@ -302,6 +327,10 @@ impl TypstWorld {
         }
 
         Ok(Self {
+            prelude: Source::new(
+                file_id(emit::PRELUDE_NAME)?,
+                include_str!("../assets/math.typ").to_string(),
+            ),
             main: Source::new(file_id(MAIN_NAME)?, typst_source),
             templates,
             assets,
@@ -311,6 +340,9 @@ impl TypstWorld {
     fn lookup(&self, id: FileId) -> Option<&Source> {
         if id == self.main.id() {
             return Some(&self.main);
+        }
+        if id == self.prelude.id() {
+            return Some(&self.prelude);
         }
         self.templates.iter().find(|source| source.id() == id)
     }

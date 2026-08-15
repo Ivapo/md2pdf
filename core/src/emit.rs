@@ -25,6 +25,7 @@ use typst::syntax::VirtualPath;
 use unicase::UniCase;
 
 use crate::frontmatter::{self, Frontmatter};
+use crate::math;
 use crate::{Error, ImageRef, Result};
 
 /// Characters that Typst markup mode interprets inside a text run.
@@ -35,6 +36,22 @@ use crate::{Error, ImageRef, Result};
 const SPECIAL: &[char] = &[
     '\\', '#', '$', '*', '_', '`', '@', '<', '>', '[', ']', '~', '-', '+', '=', '/',
 ];
+
+/// The file the math prelude is bound under, and the name the import writes.
+///
+/// It sits beside `main.typ` in the same virtual root the looks resolve in, so
+/// the import needs no path of its own. `core/src/lib.rs` binds the bytes.
+pub(crate) const PRELUDE_NAME: &str = "math.typ";
+
+/// What the prelude defines, in the order the import lists them.
+///
+/// The names are written here rather than imported with `*` because Typst
+/// searches user scopes before the library: a glob would shadow `image`, `table`
+/// and `raw` — all of which the emitter calls — for the whole document. Naming
+/// them also keeps this list and `core/assets/math.typ` in step, since a name in
+/// one and not the other fails the compile.
+const PRELUDE_NAMES: &str =
+    "aligned, bmatrix, diff, matrix, mitexmathbf, mitexsqrt, negthinspace, pmatrix, sect, vmatrix";
 
 /// The file extensions Typst's own `determine_format_from_path` names.
 ///
@@ -133,6 +150,12 @@ struct Walk {
     pending: Option<(String, bool)>,
     /// Where the open paragraph began in the buffer that holds it.
     para: Option<usize>,
+    /// Whether this walk wrote any math.
+    ///
+    /// The prelude is imported only by a document that has one, which is what
+    /// keeps every shipped golden file two lines long. The walk finishes before
+    /// the header is written, so the answer is known in time.
+    math: bool,
 }
 
 impl Walk {
@@ -151,6 +174,7 @@ impl Walk {
             alt: None,
             pending: None,
             para: None,
+            math: false,
         }
     }
 
@@ -176,7 +200,7 @@ impl Walk {
 ///
 /// One builder for all of them: two walks of the same stream that disagreed
 /// about the options would disagree about what the document says.
-fn options() -> Options {
+pub(crate) fn options() -> Options {
     let mut options = Options::empty();
     // The parser is what recognises the frontmatter block, so nothing strips it
     // from the input and every reported line number stays true to the user's
@@ -217,10 +241,16 @@ fn label_of(text: &str) -> Label {
 /// What one walk of the definitions found.
 #[derive(Default)]
 struct Definitions {
-    /// Each definition's translated content and the images inside it, or the
-    /// first error its translation produced. A label defined twice is held
-    /// once: the second definition is refused where it stands.
-    bodies: HashMap<Label, Result<(String, Vec<ImageRef>)>>,
+    /// Each definition's translated content, the images inside it and whether it
+    /// carried math, or the first error its translation produced. A label
+    /// defined twice is held once: the second definition is refused where it
+    /// stands.
+    ///
+    /// The math flag travels with the content for the same reason the images do.
+    /// This walk's own `Walk` is thrown away, and the document's walk never
+    /// enters a definition's region, so a formula that appears only inside a
+    /// footnote would otherwise reach the page with no prelude imported.
+    bodies: HashMap<Label, Result<(String, Vec<ImageRef>, bool)>>,
     /// Every label that a reference outside a definition names.
     cited: HashSet<Label>,
 }
@@ -232,7 +262,7 @@ impl Definitions {
     /// document — an unresolved one produces no event at all and stays literal
     /// text — so a lookup at a reference finds one, and so does a lookup at a
     /// region the walk has just entered.
-    fn body(&self, label: &Label) -> &Result<(String, Vec<ImageRef>)> {
+    fn body(&self, label: &Label) -> &Result<(String, Vec<ImageRef>, bool)> {
         self.bodies
             .get(label)
             .expect("the parser resolves every reference against a definition")
@@ -332,8 +362,9 @@ fn collect_definitions(md: &str) -> Definitions {
             let body = match failure.take() {
                 Some(error) => Err(error),
                 None => {
+                    let math = walk.math;
                     let (content, images) = std::mem::replace(&mut walk, Walk::new()).finish();
-                    Ok((content.trim_matches('\n').to_string(), images))
+                    Ok((content.trim_matches('\n').to_string(), images, math))
                 }
             };
             // The first definition of a label is the one held. A second one is
@@ -376,7 +407,7 @@ pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>)> {
         step(&mut walk, md, event, range, Mode::Document(&mut notes))?;
     }
 
-    let mut out = header(&walk.front);
+    let mut out = header(&walk.front, walk.math);
     let (body, images) = walk.finish();
     out.push_str(body.trim_end_matches('\n'));
     out.push('\n');
@@ -405,6 +436,7 @@ fn step(
         alt,
         pending,
         para,
+        math,
     } = walk;
 
     // A definition's region is not part of the document's flow: its content
@@ -426,6 +458,12 @@ fn step(
         match &event {
             Event::Text(text) => capture.text.push_str(text),
             Event::Code(code) => capture.text.push_str(code),
+            // Alt text is plain text by CommonMark, so a formula inside it
+            // contributes its LaTeX source and the span contributes nothing —
+            // the disposition strikethrough got. No `$…$` is written into a
+            // string that cannot typeset it, and a document whose only math
+            // sits here still imports no prelude.
+            Event::InlineMath(latex) => capture.text.push_str(latex),
             // A break is whitespace under the alt reading, and one space is
             // what pulldown-cmark's own flattening writes for it.
             Event::SoftBreak | Event::HardBreak => capture.text.push(' '),
@@ -666,6 +704,22 @@ fn step(
             out.push(')');
         }
 
+        // A formula travels the same way a code span's content does: it is
+        // Typst markup by the time it is written, so it does not go through
+        // `escape_into`, which would break every span it touched.
+        //
+        // The metadata block needs no guard here, unlike the text arm: its body
+        // reaches the walk as raw code text, so no inline event is produced
+        // inside it at all.
+        Event::InlineMath(latex) => {
+            let markup = math::convert(&latex, line_of(md, range.start))?;
+            let out = top(bufs);
+            out.push('$');
+            out.push_str(&markup);
+            out.push('$');
+            *math = true;
+        }
+
         // A URL reaches Typst as a string literal, never as markup, so
         // `typst_string` carries it whatever it holds. The link text is
         // ordinary inline content, so the markup escape still applies to
@@ -783,9 +837,10 @@ fn step(
                     // at the position that error belongs to, which is what lets
                     // an error between this reference and that region be
                     // reported first.
-                    if let Ok((content, inside)) = notes.found.body(&label) {
+                    if let Ok((content, inside, inside_math)) = notes.found.body(&label) {
                         out.push_str(content);
                         images.extend(inside.iter().cloned());
+                        *math |= inside_math;
                     }
                     top(bufs).push_str(&format!("]<fn-{number}>"));
                 }
@@ -1000,7 +1055,14 @@ fn align_name(align: &Alignment) -> &'static str {
     }
 }
 
-/// The two lines the emitter puts above every document.
+/// The two lines the emitter puts above every document, and the third a
+/// document with math gets.
+///
+/// The math import is conditional because it is the only thing keeping the
+/// prelude out of every shipped golden file: a document that names no formula
+/// compiles to exactly the same two lines it always did. It sits between the
+/// look's import and the show rule, where a reader of `--emit-typst` finds both
+/// imports together.
 ///
 /// The import names the look the frontmatter selected, and every bundled look
 /// reaches the compiler as bytes in the world's virtual filesystem, so this
@@ -1013,9 +1075,14 @@ fn align_name(align: &Alignment) -> &'static str {
 /// A bundled look therefore accepts all four, and one missing an argument
 /// would fail the compile with an error naming neither the document nor the
 /// key.
-fn header(front: &Frontmatter) -> String {
+fn header(front: &Frontmatter, math: bool) -> String {
+    let prelude = match math {
+        true => format!("#import \"{PRELUDE_NAME}\": {PRELUDE_NAMES}\n"),
+        false => String::new(),
+    };
     format!(
         "#import \"{}\": template, divider\n\
+         {prelude}\
          #show: template.with(title: {}, author: {}, columns: {}, date: {})\n",
         front.template.file(),
         typst_string_or_none(front.title.as_deref()),
@@ -1124,11 +1191,14 @@ fn describe(event: &Event) -> &'static str {
         Event::Html(_) | Event::InlineHtml(_) => "raw HTML",
         Event::FootnoteReference(_) => "footnote reference",
         Event::TaskListMarker(_) => "task list marker",
-        Event::InlineMath(_) | Event::DisplayMath(_) => "math",
+        Event::DisplayMath(_) => "math",
         // The walk handles these, so they never reach this function. The match
         // must still cover them.
-        Event::Text(_) | Event::SoftBreak | Event::Code(_) | Event::HardBreak | Event::Rule => {
-            "supported construct"
-        }
+        Event::Text(_)
+        | Event::SoftBreak
+        | Event::Code(_)
+        | Event::HardBreak
+        | Event::Rule
+        | Event::InlineMath(_) => "supported construct",
     }
 }

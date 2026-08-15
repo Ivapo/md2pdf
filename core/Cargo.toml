@@ -11,6 +11,11 @@ path = "src/lib.rs"
 
 [dependencies]
 pulldown-cmark = "0.13.4"
+# The LaTeX-to-Typst converter, taken as a Rust crate rather than as the Typst
+# package of the same name: the package resolves through Typst's registry, which
+# is a network fetch, and loads a WASM plugin. `convert_math` is a pure function
+# over a string, so a formula is converted in process before Typst sees it.
+mitex = "0.2.4"
 thiserror = "2"
 # The parser keys its own footnote labels by `UniCase`, so the emitter matches
 # them the same way rather than by their raw spelling. This is already in the
