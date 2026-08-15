@@ -2,6 +2,7 @@
 title: A Sample Article
 author: Iva Po
 columns: 2
+equations: numbered
 ---
 
 # Introduction
@@ -15,7 +16,7 @@ it again, and the same text runs across the full width of the page instead.
 
 # What the frontmatter controls
 
-The block at the top of this file carries three of the five keys, and all five
+The block at the top of this file carries four of the six keys, and all six
 are optional. The title and the author become the block centred at the top of
 the first page. That block spans every column, whatever the column count is,
 because it is placed outside the column grid rather than inside the first
@@ -30,16 +31,23 @@ brings: 2 for an article, 1 for a press release. Delete the whole frontmatter
 block and the PDF still compiles: it simply arrives with no title block and
 two columns.
 
-A key outside those five is an error rather than a silent omission. So is a
-columns value of 3, and so is a template name outside the two. The tool names
+The equations key takes numbered or plain, and this file says numbered, which
+is why the two display formulas further down carry a number each. Leave it out
+and you get plain, so nothing is numbered and the page reads as it did before
+the key existed. You decide whether; the look decides what a number looks like.
+
+A key outside those six is an error rather than a silent omission. So is a
+columns value of 3, a template name outside the two, and an equations name
+outside the two. The tool names
 the key and the line, and exits with code 1, because a PDF that quietly
 ignored half of its own frontmatter would be lying about its source.
 
 # What the body may contain
 
 Headings, paragraph text, the inline constructs, the block constructs, links,
-tables, images, and footnotes. Heading levels 1 to 6 map to Typst headings of
-the same level, so the two below are real headings, not bold paragraphs.
+tables, images, footnotes, and formulas. Heading levels 1 to 6 map to Typst
+headings of the same level, so the two below are real headings, not bold
+paragraphs.
 
 ## A second level heading
 
@@ -131,6 +139,42 @@ alignment, and the header row comes out in bold:
 A row with too few cells is padded with empty ones, and a row with too many
 loses the extra. That is what GitHub-flavoured markdown does, and the emitter
 follows it rather than deciding anything of its own.
+
+# Formulas
+
+A formula is LaTeX, and it takes one of two forms. One pair of dollars sets it
+in the running text, so the Gaussian integral
+$\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}$ sits in this sentence at
+the size of the words around it.
+
+Two pairs set it as a block of its own:
+
+$$
+\sum_{i=1}^{n} i = \frac{n(n+1)}{2}
+$$
+
+This file asked for numbered equations, so that one carries a number and so
+does the next. A derivation set over several lines is still one formula, and
+takes one number rather than one per line:
+
+$$
+\begin{aligned}
+(x + y)^2 &= (x + y)(x + y) \\
+          &= x^2 + 2xy + y^2
+\end{aligned}
+$$
+
+The inline integral above carries no number, because only the block form is
+numbered. There is no way to label a formula and refer to it by name, so a
+sentence that says see equation (1) is prose you keep true yourself.
+
+The dialect accepts a bounded subset of LaTeX — the Greek letters $\alpha$,
+$\beta$ and $\pi$, the relations $\leq$ and $\neq$, the operators, the large
+operators, `\frac`, `\sqrt`, `\binom`, the accents, the font commands, the
+named operators, and a handful of environments. A command outside that list is
+an error naming the command and its line, rather than a formula that quietly
+loses part of itself. Write `\%` for a percent sign inside a formula, and `\$`
+for a dollar that is not opening one.
 
 # Links
 
