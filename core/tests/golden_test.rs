@@ -47,6 +47,8 @@ const DATED_TYP: &str = include_str!("../../tests/golden/dated.typ");
 const PRESS_RELEASE_MD: &str = include_str!("../../tests/fixtures/press_release.md");
 const PRESS_RELEASE_TYP: &str = include_str!("../../tests/golden/press_release.typ");
 const UNKNOWN_TEMPLATE_MD: &str = include_str!("../../tests/fixtures/unknown_template.md");
+const NUMBERED_EQUATIONS_MD: &str = include_str!("../../tests/fixtures/numbered_equations.md");
+const NUMBERED_EQUATIONS_TYP: &str = include_str!("../../tests/golden/numbered_equations.typ");
 
 /// Every bundled look, by the name the `template` key selects it with. Four
 /// tests read these: the header-row rule, and the three Phase 9 cases that no
@@ -1293,10 +1295,18 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 
 /// Every bundled look meets the call contract the emitter writes.
 ///
-/// `header` names all four arguments on every call and imports both names, so a
+/// `header` names all five arguments on every call and imports both names, so a
 /// look missing one would fail the compile with an error naming neither the
 /// document nor the key. Golden files pin emitter output only, so the
 /// templates' side of the contract needs an artifact of its own.
+///
+/// `equations` brings a second needle with it, `math.equation`: the parameter
+/// alone would be satisfied by a look that took the argument and ignored it,
+/// and this is the Typst element any numbering rule has to reach. The format
+/// string is deliberately not a needle — `(1)` against `1.` is each look's own
+/// call, which is the seam the phase rests on. A rule that reaches the element
+/// but from inside a scoped block satisfies both needles and still numbers
+/// nothing, which is why one PDF per look is read by eye as well.
 #[test]
 fn every_bundled_template_meets_the_call_contract() {
     for (file, source) in BUNDLED_TEMPLATES {
@@ -1307,6 +1317,8 @@ fn every_bundled_template_meets_the_call_contract() {
             "author:",
             "columns:",
             "date:",
+            "equations",
+            "math.equation",
         ] {
             assert!(source.contains(needle), "{file} does not carry `{needle}`");
         }
@@ -1721,4 +1733,97 @@ fn the_anchors_change_no_byte_of_the_pdf() {
         plain, rendered.pdf,
         "the two calls produced different bytes"
     );
+}
+
+// -- mpdf-004 Phase 3: numbered display equations -----------------------------
+
+#[test]
+fn the_numbered_equations_fixture_matches_its_golden_file() {
+    assert_eq!(
+        md_to_typst(NUMBERED_EQUATIONS_MD).unwrap(),
+        NUMBERED_EQUATIONS_TYP
+    );
+}
+
+/// The phase's observable, as far as an automated instrument reaches.
+///
+/// A golden pins emitter output and `%PDF` pins nothing about a page, so
+/// neither can see the number this phase exists to put there. That is read by
+/// eye, once, on one PDF per look — the answer `mpdf-001` Phase 9 recorded for
+/// the same wall. What these two cases hold is that the argument reaches the
+/// look in the form the look can use, and that the document still compiles with
+/// it.
+#[test]
+fn the_numbered_equations_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(NUMBERED_EQUATIONS_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each part of the fixture reaches Typst as the form the spec chose.
+#[test]
+fn the_numbered_equations_golden_carries_each_form() {
+    for (form, what) in [
+        (
+            r#"equations: "numbered""#,
+            "the key, quoted — unquoted it would fail the compile as an unknown variable",
+        ),
+        (
+            "$ aligned( a &= b + c \\ &= b + d + e \\ &= f ) $",
+            "the three-line derivation, as one block equation and so one number",
+        ),
+        (
+            "$ sum _(i = 1 )^(n ) i = frac(n \\(n + 1 \\),2 ) $",
+            "the span after it, which takes the next number",
+        ),
+        (
+            "$frac(a ,b )$",
+            "the inline span, still unspaced — Typst numbers the block form alone",
+        ),
+    ] {
+        assert!(
+            NUMBERED_EQUATIONS_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+}
+
+/// The default is inert: naming `plain` is the same as leaving the key out.
+///
+/// "Byte-identical to what it compiled to before this phase" has no referent in
+/// the repo — no PDF is committed — so the property is held inside one commit
+/// instead, by the two forms of the default compiling to the same bytes. An
+/// implementation that made `numbered` the default fails here.
+#[test]
+fn the_two_forms_of_the_default_compile_to_the_same_bytes() {
+    let body = "\n# Heading\n\nProse.\n\n$$\n\\sqrt{x^2 + y^2}\n$$\n";
+    let absent = md_to_pdf(&format!("---\ntitle: A\n---\n{body}"), &[]).unwrap();
+    let explicit =
+        md_to_pdf(&format!("---\ntitle: A\nequations: plain\n---\n{body}"), &[]).unwrap();
+
+    assert!(absent.starts_with(b"%PDF"), "the output is not a PDF");
+    assert_eq!(
+        absent, explicit,
+        "an absent `equations` key and `equations: plain` produced different bytes"
+    );
+}
+
+/// A name outside the set names the key, its line, and what it accepts.
+///
+/// This is the case that would otherwise let a bad name through the schema and
+/// reach Typst as `unknown variable`, naming an identifier the author never
+/// typed. It reads exactly as the `template` key's error does, because it is
+/// the same mechanism.
+#[test]
+fn an_equations_value_outside_the_schema_is_an_error_that_lists_the_names() {
+    let md = "---\nequations: yes\n---\n\n# Heading\n";
+    match md_to_typst(md) {
+        Err(Error::Frontmatter { line, problem }) => {
+            assert_eq!(line, 2);
+            for needle in ["equations", "plain", "numbered"] {
+                assert!(problem.contains(needle), "problem was: {problem}");
+            }
+        }
+        other => panic!("expected a Frontmatter error, got {other:?}"),
+    }
 }
