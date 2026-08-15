@@ -37,7 +37,8 @@ const STRIKETHROUGH_TYP: &str = include_str!("../../tests/golden/strikethrough.t
 const REFUSED_MATH_MD: &str = include_str!("../../tests/fixtures/unsupported_math.md");
 const MATH_MD: &str = include_str!("../../tests/fixtures/math.md");
 const MATH_TYP: &str = include_str!("../../tests/golden/math.typ");
-const DISPLAY_MATH_MD: &str = include_str!("../../tests/fixtures/unsupported_display_math.md");
+const DISPLAY_MATH_MD: &str = include_str!("../../tests/fixtures/display_math.md");
+const DISPLAY_MATH_TYP: &str = include_str!("../../tests/golden/display_math.typ");
 const TASK_LIST_MD: &str = include_str!("../../tests/fixtures/unsupported_task_list.md");
 const DATED_MD: &str = include_str!("../../tests/fixtures/dated.md");
 const DATED_TYP: &str = include_str!("../../tests/golden/dated.typ");
@@ -1162,23 +1163,20 @@ fn the_strikethrough_golden_carries_each_form() {
     }
 }
 
-/// The two constructs beside strikethrough name themselves and their line.
+/// The construct beside strikethrough names itself and its line.
 ///
 /// Both arms of `describe` were unreachable until this phase set their parser
 /// options, so both printed their markers on the page while the code claimed to
 /// refuse them.
 ///
-/// Math was refused in both its forms when this phase shipped. `mpdf-004` Phase
-/// 1 took the inline form into the dialect, so this test keeps the display form,
-/// which is what holds the `describe` arm reachable until that spec's Phase 2
-/// takes it too. `\$` is still the one-character way to keep a dollar as prose,
-/// and the strikethrough golden above still pins it.
+/// Math was refused in both its forms when this phase shipped, and this test
+/// held the display half after `mpdf-004` Phase 1 took the inline one. Phase 2
+/// of that spec took the display form too, so the marker is what is left here:
+/// `describe` no longer names math at all. `\$` is still the one-character way
+/// to keep a dollar as prose, and the strikethrough golden above still pins it.
 #[test]
 fn each_refused_construct_names_itself_and_its_line() {
-    for (md, construct, what) in [
-        (DISPLAY_MATH_MD, "math", "the display math span"),
-        (TASK_LIST_MD, "task list marker", "the task list marker"),
-    ] {
+    for (md, construct, what) in [(TASK_LIST_MD, "task list marker", "the task list marker")] {
         match md_to_typst(md) {
             Err(Error::UnsupportedConstruct {
                 construct: found,
@@ -1501,4 +1499,101 @@ fn math_inside_a_footnote_definition_imports_the_prelude() {
 
     let pdf = md_to_pdf(md, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+// -- mpdf-004 Phase 2: display math ------------------------------------------
+
+#[test]
+fn the_display_math_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(DISPLAY_MATH_MD).unwrap(), DISPLAY_MATH_TYP);
+}
+
+/// The phase's observable: a centred display equation, which is what a formula
+/// on its own lines is for.
+///
+/// The fixture's standalone formula is `\sqrt`, whose head only the bundled
+/// prelude defines. So an arm that wrote the block form but forgot `Walk.math`
+/// fails here as an unknown identifier, rather than passing on a formula whose
+/// heads Typst defines anyway.
+#[test]
+fn the_display_math_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(DISPLAY_MATH_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// The two forms are distinct in the output, and the display one is Typst's
+/// block.
+///
+/// `typst::syntax::ast::Equation::block` tests for a space immediately inside
+/// each delimiter, so the spacing is the whole difference between a block and an
+/// inline equation — an arm that wrote `$…$` for both would satisfy every other
+/// assertion in this phase.
+///
+/// The second display span sits mid-sentence rather than alone in its
+/// paragraph, because every other arm here is satisfied by a standalone one: an
+/// arm that consulted position — block when alone, inline in a sentence — would
+/// pass them all while contradicting the scope `mpdf-004` OQ-5 fixed.
+#[test]
+fn the_display_math_golden_carries_each_form() {
+    for (form, what) in [
+        // The flag reached the header from a document whose math is all display.
+        (
+            r#"#import "math.typ": aligned, bmatrix, diff"#,
+            "the prelude import, by name",
+        ),
+        (
+            "$ mitexsqrt(x ^(2 ) + y ^(2 )) <= | x | + | y | $",
+            "the standalone display span, in the spaced block form",
+        ),
+        (
+            "$ sum _(i = 1 )^(n ) i $",
+            "the mid-paragraph display span, in that same block form",
+        ),
+        (
+            "$frac(a ,b )$",
+            "the inline span beside it, still in the unspaced form",
+        ),
+    ] {
+        assert!(
+            DISPLAY_MATH_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+}
+
+/// A display span inside an image's alt text contributes its LaTeX source, the
+/// way the inline one does.
+///
+/// This is the case a gate on the main walk alone would not reach. `describe` no
+/// longer names math, so a capture with no arm for `DisplayMath` refuses an
+/// in-dialect construct with the nonsense message `unsupported markdown
+/// construct 'supported construct'`.
+#[test]
+fn display_math_in_alt_text_becomes_its_latex_source() {
+    let md = "# H\n\nA ![a $$x+y$$ b](dot.png) here.\n";
+    let typst = md_to_typst(md).unwrap();
+    assert!(typst.contains(r#"alt: "a x+y b""#), "{typst}");
+    assert!(!typst.contains("math.typ"), "{typst}");
+
+    let pdf = md_to_pdf(md, &[asset("dot.png", DOT_PNG)]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// The scan is not silently inline-only.
+///
+/// Both arms call `core/src/math.rs:convert`, which scans before it converts, so
+/// this is one mechanism rather than two — but an implementation that reached
+/// for `mitex::convert_math` directly in the display arm would pass every other
+/// case in this phase and let `\notacommand` through.
+#[test]
+fn a_refused_display_formula_names_its_latex_and_its_line() {
+    let md = "# H\n\nA $$\\notacommand$$ here.\n";
+    match md_to_typst(md) {
+        Err(Error::Math { problem, line }) => {
+            assert_eq!(problem, r"unsupported command '\notacommand'");
+            assert_eq!(line, 3);
+        }
+        other => panic!("expected a math error, got {other:?}"),
+    }
 }

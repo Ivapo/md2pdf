@@ -59,6 +59,7 @@ fn emit_typst_prints_the_golden_file() {
         ("list_spacing.md", "list_spacing.typ"),
         ("links.md", "links.typ"),
         ("math.md", "math.typ"),
+        ("display_math.md", "display_math.typ"),
         ("table.md", "table.typ"),
         // Emission reads paths and no bytes. This fixture names `fig#2.png`,
         // which no directory holds, and it still prints its golden file.
@@ -120,15 +121,15 @@ fn a_raw_html_block_exits_non_zero_and_names_it() {
 /// Each was an unreachable arm until this phase set its parser option, so each
 /// printed its markers on the page while the code claimed to refuse it.
 ///
-/// Math was refused in both its forms when this phase shipped. `mpdf-004` Phase
-/// 1 took the inline form into the dialect, so what the first fixture now names
-/// is the LaTeX inside the span rather than the span itself; the display form is
-/// refused whole until that spec's Phase 2.
+/// Math was refused in both its forms when this phase shipped, and `mpdf-004`
+/// took both of them into the dialect — the inline form in its Phase 1 and the
+/// display form in its Phase 2. So what the first fixture names is no longer the
+/// span but the LaTeX inside it, and the marker is the only construct left here
+/// that is refused whole.
 #[test]
 fn math_and_a_task_list_marker_exit_non_zero_and_name_themselves() {
     for (fixture_name, construct) in [
         ("unsupported_math.md", r"\includegraphics"),
-        ("unsupported_display_math.md", "math"),
         ("unsupported_task_list.md", "task list marker"),
     ] {
         let out = run(&[fixture(fixture_name).as_ref()]);
