@@ -4,16 +4,19 @@ sources:
   - core/src/lib.rs
   - core/src/emit.rs
   - core/src/frontmatter.rs
+  - core/src/math.rs
+  - core/assets/math.typ
   - core/assets/template.typ
   - core/assets/press-release.typ
   - cli/src/main.rs
 covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the two walks footnotes need, the image asset
-  channel, the bundled looks and the call contract they meet, the Typst world and
+  channel, the LaTeX subset a formula may hold and the prelude it compiles
+  against, the bundled looks and the call contract they meet, the Typst world and
   its bundled fonts, and the CLI contract
-max_lines: 280
-generated: 2026-08-10
+max_lines: 340
+generated: 2026-08-14
 ---
 
 # Pipeline
@@ -31,10 +34,10 @@ terminal output, the image files included.
 
 ## The dialect
 
-Eighteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
-emphasis, strong emphasis, strikethrough, inline code, hard line breaks, thematic breaks,
-links, images, bullet lists, ordered lists, code blocks, block quotes, pipe tables,
-footnotes, and a leading YAML frontmatter block. Heading levels map to Typst headings of
+Nineteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
+emphasis, strong emphasis, strikethrough, inline code, inline math, hard line breaks,
+thematic breaks, links, images, bullet lists, ordered lists, code blocks, block quotes,
+pipe tables, footnotes, and a leading YAML frontmatter block. Heading levels map to Typst headings of
 the same level.
 
 The inline constructs reach Typst as function calls, not as its own markup.
@@ -112,17 +115,17 @@ never raises. A definition whose translation failed keeps that error, and the se
 reports it at the region, so the first error in document order is still the one reported
 and the frontmatter still wins over a construct error below it.
 
-**Everything else is an error** — raw HTML, a task list marker, and math in both its
-forms. `core/src/emit.rs:describe` names the construct, `Error::UnsupportedConstruct`
-carries that name with the 1-based line, and the CLI prints it to stderr and exits 1.
-Nothing is dropped or flattened silently.
+**Everything else is an error** — raw HTML, a task list marker, and display math.
+`core/src/emit.rs:describe` names the construct, `Error::UnsupportedConstruct` carries
+that name with the 1-based line, and the CLI prints it to stderr and exits 1. Nothing is
+dropped or flattened silently.
 
 Every arm of `describe` is reachable, which is a property rather than an accident: a name
 refuses nothing until a parser option produces the event it names, and
 `Options::ENABLE_TASKLISTS` and `Options::ENABLE_MATH` are what make the last two arrive.
 Typst has no checkbox element, and a drawn marker would be a look decision the template
-owns; math is parked for a later spec. `\$` is the exit math leaves prose: the backslash
-suppresses the span and the dollar reaches the page as itself.
+owns. Display math is refused whole, which is what keeps that arm reachable now the
+inline form converts; the section below holds the inline form.
 
 Two link shapes are errors too, and the link arm names them itself rather than through
 `describe`. An empty destination, legal CommonMark, would reach Typst as `#link("")`,
@@ -130,6 +133,51 @@ whose compile error names neither construct nor line; the test is on the resolve
 destination, so a reference definition with an empty destination is caught with it. A
 non-empty link title is something neither `link` nor the PDF can carry, so passing the link
 on would drop it. An empty title is not a title, and the link stays in-dialect.
+
+## Math
+
+An inline `$…$` span becomes `$…$` of Typst markup: `core/src/math.rs:convert` scans the
+LaTeX, `mitex::convert_math` converts it, and the result is written between the delimiters
+**unescaped**, because it is markup by then — through `escape_into` a fraction would set as
+letters. A display `$$…$$` span is still an error.
+
+The scan runs on what the author wrote, ahead of the conversion, and refuses anything off
+three closed lists in `core/src/math.rs` — `COMMANDS` (the Greek letters in both cases, the
+relations, the operators, the set and logic commands, the large operators, the constants,
+`\frac \sqrt \binom \left \right`, the accents, the font commands, the named operators),
+`SYMBOLS` (`\\ \, \; \: \! \{ \} \% \& \_ \# \$`), and `ENVIRONMENTS`
+(`matrix pmatrix bmatrix vmatrix cases aligned`, matched case-sensitively). An unescaped
+`%` is refused too. `core/src/math.rs:walk` is the one traversal that finds them, which is
+what lets a test read the fixture back through the same rule the refusal uses.
+`Error::Math` carries the problem and the 1-based line: `math error at line 3: unsupported
+command '\notacommand'`.
+
+It reads the input rather than the converted output because the failures that matter are
+invisible in that output. `\includegraphics` converts to an `#image` call for a path
+`check_image` never saw; `\label` to the empty string; `\begin{itemize}` to markup-mode
+list syntax Typst then reads as an operator; and `%` opens a LaTeX comment, so mitex drops
+the rest of the line and the PDF shows truncated prose. `\%` is that one's one-character
+exit. `\text` is off the list for a reason of its own: its argument reaches the page as
+Typst markup, where `\text{= head}` sets a heading and `\text{a \alpha b}` sets the words
+"a alpha b". `\$` is still the exit math leaves prose — the backslash suppresses the span,
+and the dollar reaches the page as itself.
+
+What mitex repairs is accepted rather than fixed. `$\frac{a}{$` converts to `frac(a ,zws )`
+and sets a fraction with an empty denominator: wrong on the page, which is the property the
+`%` case lacked, and closing it would mean validating LaTeX group structure here.
+`core/src/math.rs:normalise` collapses the markup to one line and keeps it from ending in a
+backslash, which would escape the `$` that closes the equation.
+
+`core/assets/math.typ` defines the ten names mitex writes that Typst 0.15.1 does not: the
+four matrix environments, `aligned`, `mitexsqrt`, `mitexmathbf`, `negthinspace`, and `sect`
+and `diff` — mitex writing the pre-0.13 spellings of `inter` and `partial`. That set is
+derived, not chosen: convert every allowed command, take the multi-character heads, subtract
+Typst's global, `math` and `sym` scopes, define the remainder. So it moves with the Typst
+version, and `tests/fixtures/math.md` is what proves it complete — one formula per allowed
+command, where a missing definition is a compile error. `core/src/emit.rs:header` imports
+those names, and only for a document that has math, so every golden file written before
+still opens with the same two lines. The flag rides a footnote definition's content the way
+its images do, because that walk is discarded before the header is written.
 
 ## Images and their files
 
@@ -252,8 +300,10 @@ keeps its footnote insertions per column.
 
 ## The world
 
-`core/src/lib.rs:TypstWorld` holds `main.typ`, every bundled template, and the images the
-document names, all under `VirtualRoot::Project`. It implements no package resolution, so no
+`core/src/lib.rs:TypstWorld` holds `main.typ`, every bundled template, the math prelude,
+and the images the document names, all under `VirtualRoot::Project`. The prelude is bound
+beside the looks rather than as one of them: a `Template` variant would make it selectable
+from the `template` frontmatter key. It implements no package resolution, so no
 import can reach the network on any target. It binds every look rather than the selected one,
 so the walk never has to plumb its choice out: the looks are compile-time constants either
 way, and `core/src/lib.rs:template_source` maps each `Template` variant to its `include_str!`,
@@ -265,10 +315,14 @@ so a relative path in the generated source resolves to the file id built from th
 path, and `collect` keys the map by it. `World::source` is untouched by the assets — an
 image is never Typst source — which is what keeps the import story exactly as it was.
 
-Fonts are embedded with `include_bytes!` from `core/assets/fonts/`, under the OFL: five
-faces from one Libertinus release, so their metrics agree. Serif Regular, Bold, Italic and
+Fonts are embedded with `include_bytes!` from `core/assets/fonts/`: five faces from one
+Libertinus release, so their metrics agree, under the OFL. Serif Regular, Bold, Italic and
 BoldItalic carry body text; Libertinus Mono carries `#raw`, which every look names in a
-`show raw` rule. Every face the dialect can
+`show raw` rule. NewCMMath-Regular carries math and is the sixth, under the GUST Font
+License beside them — a math font is a different kind of file, carrying an OpenType MATH
+table, and without one Typst has no glyph for a variable or a Greek letter and a formula
+sets as a row of boxes. It registers under the family Typst's own default math asks for,
+so no look names a math family. Every face the dialect can
 reach is bundled, because Typst renders the closest match it finds and synthesises none —
 without the italic, `#emph` would come out as body text. No target discovers fonts from
 the OS, so the same markdown compiles to the same PDF on every machine.

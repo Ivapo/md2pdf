@@ -816,6 +816,16 @@ later reader can check in one sitting.
   range. No new mechanism is needed. The accepted cost and its `\$` exit are
   recorded in OQ-8; the README documents the escape at close-out.
 
+  > **CORRECTED 2026-08-14, by `mpdf-004` Phase 1.** The paragraph above and
+  > OQ-8's resolution are the record of what was decided in August 2026, and
+  > they are kept. Half of it is no longer true of the code: **the inline form
+  > `$x$` is in the dialect now**, scanned against a closed list of LaTeX
+  > commands and converted by `mitex`, and only `$$x$$` still falls to the
+  > reject arm. That is what keeps `describe`'s math arm reachable until
+  > `mpdf-004` Phase 2 takes the display form too. The `\$` escape is
+  > untouched and still the way to keep a dollar as prose. See
+  > `specs/math_spec.md`; `rules/pipeline.md` is what tracks the code.
+
 - **Exit gate:** Golden-file tests, three cases, plus the full existing suite,
   which the option change touches — no shipped golden file changes, because
   the corpus census finds no `~~` pair, no pairable `$` and no task-list

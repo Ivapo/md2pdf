@@ -119,12 +119,14 @@ the one thing an unsigned bundle cannot do.
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
-constructs, links, tables, images, footnotes, and strikethrough**:
+constructs, links, tables, images, footnotes, strikethrough, and inline math**:
 
 ````markdown
 # Introduction
 
 Body text with *emphasis*, **strong emphasis**, ~~struck text~~, and `inline code`.
+
+A formula in the running text, $\sum_{i=1}^{n} i = \frac{n(n+1)}{2}$, typesets as math.
 
 A hard line break ends this line,\
 and this line follows it in the same paragraph.
@@ -190,14 +192,30 @@ That is deliberate. Dropping or flattening content would ship a PDF that lies ab
 source, so the tool names what it cannot yet handle. Support arrives construct by
 construct.
 
-Math is an error in both its forms, `$x$` and `$$x$$`, and a task list item, `- [ ] a`,
-is one too. If you meant a dollar sign rather than a formula, write `\$`: the backslash
-stops the span, and the dollar reaches the page as itself.
+A display formula on its own lines, `$$x$$`, is an error for now, and a task list item,
+`- [ ] a`, is one too. If you meant a dollar sign rather than a formula, write `\$`: the
+backslash stops the span, and the dollar reaches the page as itself.
+
+An inline formula is **LaTeX**, and the dialect accepts a bounded subset of it — the Greek
+letters, the relations and operators, sums, products and integrals, `\frac`, `\sqrt`,
+`\binom`, `\left`/`\right`, the accents, the font commands, the named operators, and the
+`matrix`, `pmatrix`, `bmatrix`, `vmatrix`, `cases` and `aligned` environments. A command
+outside that list is an error naming the command and its line, rather than a formula that
+quietly loses part of itself:
 
 ```console
 $ md2pdf paper.md
-error: unsupported markdown construct 'math' at line 12
+error: math error at line 12: unsupported command '\text'
 ```
+
+Two things that follow from it. `\text{…}` is not on the list yet, so prose inside a
+formula is written beside it instead — `$100\%$ of the sample` rather than
+`$100\% \text{ of the sample}$`. And a `%` inside a formula must be written `\%`, because
+LaTeX reads a bare one as a comment and would drop the rest of the line.
+
+The formula is LaTeX and not Typst's own math syntax, which matters because Typst's is
+close enough to look like it should work: `$frac(a,b)$` is not an error, it just sets as
+the letters `f r a c (a, b)`. Write `$\frac{a}{b}$`.
 
 Body text reaches the PDF verbatim. Characters that Typst would otherwise interpret are
 escaped for you, so a `$5` that markdown does not read as a formula stays five dollars:
@@ -330,6 +348,7 @@ four on every call.
 
 ## Licence
 
-The code is MIT. The bundled fonts are under the SIL Open Font Licence — Libertinus Serif
-in four faces for body text, and Libertinus Mono for code. See
-`core/assets/fonts/OFL.txt`.
+The code is MIT. Most of the bundled fonts are under the SIL Open Font Licence —
+Libertinus Serif in four faces for body text, and Libertinus Mono for code; see
+`core/assets/fonts/OFL.txt`. The math font, NewCMMath-Regular, is under the GUST Font
+Licence; see `core/assets/fonts/GUST-FONT-LICENSE.txt`.
