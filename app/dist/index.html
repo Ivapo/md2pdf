@@ -235,8 +235,9 @@
         reader something.
 
         `revision` counts compiles that produced bytes: a signal that carries
-        no new page must not redraw the frame, because a redraw returns the
-        reader to page 1 and the app's own save now compiles nothing at all.
+        no new page must not redraw the frame, because a redraw moves the
+        reader off whatever they were looking at and the app's own save now
+        compiles nothing at all.
 
         `reloaded` counts the times Rust replaced the buffer from disk. The
         text is re-read on that and on nothing else, so a fetch can never race
@@ -366,10 +367,18 @@
 
         report(state)
 
-        // Rust took a text from disk: an open, or an external change over a
-        // clean buffer. That is the only time this page's own text is
-        // replaced.
-        if (state.reloaded !== takenReload) {
+        /*
+          Rust took a text from disk: an open, or an external change over a
+          clean buffer. That is the only time this page's own text is replaced.
+
+          The answer is captured before `takenReload` moves, because the pass
+          that replaced the text is exactly the pass that must not follow the
+          caret: assigning a textarea's `value` moves its caret to the end of
+          the control, so following one here would open every document on its
+          last page. An open is not a cursor movement.
+        */
+        const tookReload = state.reloaded !== takenReload
+        if (tookReload) {
           takenReload = state.reloaded
           try {
             text.value = await invoke('document_text')
@@ -381,11 +390,39 @@
         if (state.state !== 'current' || state.revision === drawnRevision) return
 
         try {
-          draw(await invoke('current_pdf'))
+          const bytes = await invoke('current_pdf')
+          draw(bytes, tookReload ? null : caretPage(state.anchors))
           drawnRevision = state.revision
         } catch (problem) {
           fail(problem)
         }
+      }
+
+      /*
+        The page the caret is in: the last heading at or above it, and `null`
+        when there is none — a caret above the first heading, or a document with
+        no headings at all. Both want page 1, which is where a frame with no
+        fragment opens by itself, so neither is a case here.
+
+        Counting newlines is not parsing markdown, and the distinction is the
+        point rather than pedantry: this page owns no knowledge of the dialect
+        and must not start owning any. It is also the one quantity both sides
+        agree on, `selectionStart` being a UTF-16 offset where a line in Rust is
+        counted from bytes.
+
+        The precision is the document's heading density, and it follows the
+        author rather than the reader: scroll the pane elsewhere and the next
+        compile brings it back to the caret.
+      */
+      function caretPage(anchors) {
+        const line = text.value.slice(0, text.selectionStart).split('\n').length
+
+        let page = null
+        for (const anchor of anchors) {
+          if (anchor.line > line) break
+          page = anchor.page
+        }
+        return page
       }
 
       /*
@@ -419,15 +456,19 @@
         accessibility tagging survives. The blob is same-origin, and the bytes
         never touch the disk.
 
-        A re-render returns the reader to the first page. WebKit's PDF view
-        leaks nothing about where the reader was, so there is nothing to
-        restore; the spec's §2 records the measurement and OQ-6 carries it.
+        WebKit's PDF view leaks nothing about where the reader was, so a
+        re-render cannot restore their place. It can set one: `#page=N` on a
+        *fresh* object URL is honoured at load, which is why `page` goes on the
+        one minted here and never on a URL already in the frame. The app follows
+        the author's caret with it, and opens on page 1 when asked for nothing.
       */
-      function draw(bytes) {
+      function draw(bytes, page) {
         const url = URL.createObjectURL(
           new Blob([bytes], { type: 'application/pdf' })
         )
-        pane.src = url
+        // The fragment goes on the frame and not on `drawn`: what is revoked
+        // below has to be the object URL itself.
+        pane.src = page === null ? url : `${url}#page=${page}`
         pane.hidden = false
 
         if (drawn) URL.revokeObjectURL(drawn)

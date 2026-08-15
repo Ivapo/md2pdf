@@ -60,9 +60,11 @@ pub const DEBOUNCE: Duration = Duration::from_millis(100);
 /// Three hundred milliseconds is therefore two orders of magnitude above the
 /// compile itself, and the compile is not what it is protecting. It is set to
 /// the pause between phrases rather than the gap between keystrokes, for a
-/// reason particular to this app: **every redraw returns the reader to the
-/// first page**, which the spec's §2 records and OQ-7 carries, so a page
-/// redrawn mid-word costs more here than the compile behind it does.
+/// reason particular to this app: **a redraw moves the reader**, so a page
+/// redrawn mid-word costs more here than the compile behind it does. The pane
+/// now opens on the heading above the caret rather than on page 1, which
+/// narrows that cost without removing it — the reader still loses wherever
+/// they had scrolled to inside the section they are working in.
 pub const TYPING_DEBOUNCE: Duration = Duration::from_millis(300);
 
 /// The one directory a document's watch covers.

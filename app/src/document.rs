@@ -9,6 +9,22 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use md2pdf_core::Asset;
+use serde::Serialize;
+
+/// One heading, and the page its typeset form landed on.
+///
+/// This is `md2pdf_core::Anchor` again, and the duplication is deliberate for
+/// the same reason [`read_assets_with`] duplicates its counterpart: this one
+/// crosses to the page inside `crate::preview::Status`, so it must serialize,
+/// and giving `core` a serde dependency for two `usize` fields would widen what
+/// the app asks of it well past the one function it gained.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Anchor {
+    /// The 1-based line of the markdown heading.
+    pub line: usize,
+    /// The 1-based page its compiled form landed on.
+    pub page: usize,
+}
 
 /// What one compile produced, and what the document named while producing it.
 pub struct Render {
@@ -23,6 +39,13 @@ pub struct Render {
 
     /// The bytes, or the sentence the terminal would print.
     pub pdf: Result<Vec<u8>, String>,
+
+    /// Where each heading landed, for the pane to open on.
+    ///
+    /// Empty when the compile failed, and empty when `core`'s own count guard
+    /// declined to answer. Unlike [`Render::images`] this describes the *page*
+    /// rather than the text, so it is only ever as good as the bytes beside it.
+    pub anchors: Vec<Anchor>,
 }
 
 /// Compile one markdown string, reading the image files it names from beside
@@ -59,10 +82,32 @@ pub fn render_with(
         .ok()
         .map(|images| images.into_iter().map(|image| image.path).collect());
 
-    let pdf = read_assets_with(markdown, directory, read)
-        .and_then(|assets| md2pdf_core::md_to_pdf(markdown, &assets).map_err(|e| e.to_string()));
+    let rendered = read_assets_with(markdown, directory, read).and_then(|assets| {
+        md2pdf_core::md_to_pdf_with_anchors(markdown, &assets).map_err(|e| e.to_string())
+    });
 
-    Render { images, pdf }
+    // The anchors describe the bytes, so a failure has none — where `images`
+    // above survives one, because it describes the text.
+    let (pdf, anchors) = match rendered {
+        Ok(rendered) => (
+            Ok(rendered.pdf),
+            rendered
+                .anchors
+                .into_iter()
+                .map(|anchor| Anchor {
+                    line: anchor.line,
+                    page: anchor.page,
+                })
+                .collect(),
+        ),
+        Err(message) => (Err(message), Vec::new()),
+    };
+
+    Render {
+        images,
+        pdf,
+        anchors,
+    }
 }
 
 /// Read a document's text, in the words the terminal uses for a file it cannot

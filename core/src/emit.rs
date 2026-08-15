@@ -144,6 +144,18 @@ struct Walk {
     front: Frontmatter,
     /// Every image the walk has met, in the order it met them.
     images: Vec<ImageRef>,
+    /// The line every heading the walk has met sits on, in that order.
+    ///
+    /// Nothing is written into the output for these — the heading is already
+    /// there, which is the whole reason it is the anchor. A marker the emitter
+    /// emitted would move every shipped golden file for a reason that has
+    /// nothing to do with what the document says.
+    ///
+    /// A definition's walk collects these too and is then discarded, so a
+    /// heading inside a footnote definition never reaches the document's list
+    /// while its spliced content still typesets one. `md_to_pdf_with_anchors`
+    /// guards that mismatch by count.
+    headings: Vec<usize>,
     /// The alt text being flattened out of one image's content.
     alt: Option<AltCapture>,
     /// An image call waiting for the next event to settle its form.
@@ -171,6 +183,7 @@ impl Walk {
             meta_offset: None,
             front: Frontmatter::default(),
             images: Vec::new(),
+            headings: Vec::new(),
             alt: None,
             pending: None,
             para: None,
@@ -390,12 +403,16 @@ fn collect_definitions(md: &str) -> Definitions {
 
 /// Translate one markdown document into Typst markup.
 ///
-/// The second half of the result is every image the document names, in the
+/// The second part of the result is every image the document names, in the
 /// order a reader meets them — which puts an image inside a footnote definition
 /// at the first reference to that footnote, where its content is set. One walk
 /// writes both, so the source and the shopping list cannot disagree about which
 /// paths the dialect accepts.
-pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>)> {
+///
+/// The third is the line each heading sits on, in document order, which
+/// [`crate::md_to_pdf_with_anchors`] pairs with the pages the compiled headings
+/// landed on. It comes from the same walk for the same reason.
+pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>, Vec<usize>)> {
     let found = collect_definitions(md);
     let mut notes = Notes {
         found: &found,
@@ -409,11 +426,15 @@ pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>)> {
         step(&mut walk, md, event, range, Mode::Document(&mut notes))?;
     }
 
+    // Taken off the walk before `finish` consumes it, the way the math flag
+    // already is, so `Walk::finish` and `collect_definitions` need no change.
+    let headings = std::mem::take(&mut walk.headings);
+
     let mut out = header(&walk.front, walk.math);
     let (body, images) = walk.finish();
     out.push_str(body.trim_end_matches('\n'));
     out.push('\n');
-    Ok((out, images))
+    Ok((out, images, headings))
 }
 
 /// Translate one event into the walk's own state.
@@ -435,6 +456,7 @@ fn step(
         meta_offset,
         front,
         images,
+        headings,
         alt,
         pending,
         para,
@@ -544,6 +566,10 @@ fn step(
         }
 
         Event::Start(Tag::Heading { level, .. }) => {
+            // The line, for the anchor. It is recorded and never written, so
+            // the emitted markup is exactly what it was before this existed.
+            headings.push(line_of(md, range.start));
+
             let out = top(bufs);
             out.push('\n');
             for _ in 0..level as usize {

@@ -129,6 +129,12 @@ pub struct Status {
     /// The page re-reads the text on this and on nothing else, so a keystroke
     /// in flight can never lose a race with a fetch of text it just sent.
     pub reloaded: u64,
+    /// Where each heading landed in the page the pane is showing.
+    ///
+    /// The page picks the last one at or above its caret and opens the frame
+    /// there. It rides the status because the status is already fetched on the
+    /// path that draws, so this needs no command of its own.
+    pub anchors: Vec<document::Anchor>,
 }
 
 /// The pane's state, as Rust holds it.
@@ -148,6 +154,7 @@ pub struct Preview {
     saved: String,
     images: Vec<String>,
     pdf: Option<Vec<u8>>,
+    anchors: Vec<document::Anchor>,
     elapsed: Option<Duration>,
     revision: u64,
     reloaded: u64,
@@ -212,6 +219,7 @@ impl Preview {
             divergence: self.divergence.clone(),
             revision: self.revision,
             reloaded: self.reloaded,
+            anchors: self.anchors.clone(),
         }
     }
 
@@ -349,9 +357,10 @@ impl Preview {
     /// worse than the command it replaces. The mark is what stops the kept
     /// page from silently claiming to be the current text.
     ///
-    /// **The duration travels with the bytes**, replaced on a success and kept
-    /// on a failure exactly as they are, so the time the window shows always
-    /// describes the page on screen rather than the last attempt at one.
+    /// **The duration and the anchors travel with the bytes**, replaced on a
+    /// success and kept on a failure exactly as they are, so the time the window
+    /// shows and the page the pane opens on always describe the page on screen
+    /// rather than the last attempt at one.
     pub fn compile(&mut self) {
         let Some(document) = self.document.clone() else {
             return;
@@ -368,6 +377,7 @@ impl Preview {
         match render.pdf {
             Ok(pdf) => {
                 self.pdf = Some(pdf);
+                self.anchors = render.anchors;
                 self.elapsed = Some(took);
                 self.revision += 1;
                 self.stale = false;

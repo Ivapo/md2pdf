@@ -18,7 +18,13 @@ use crate::frontmatter::Template;
 use typst::LibraryExt;
 use typst::World;
 use typst::diag::{FileError, FileResult, SourceDiagnostic, Warned};
-use typst::foundations::{Bytes, Datetime, Duration};
+// Two of these are in scope for one expression each and look unused at the call
+// site: `Introspector` because `query` is a trait method, and `NativeElement`
+// because `ELEM` is an associated const. `position`, being inherent, needs
+// neither.
+use typst::foundations::{Bytes, Datetime, Duration, NativeElement};
+use typst::introspection::Introspector;
+use typst::model::HeadingElem;
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
 use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
@@ -93,6 +99,27 @@ pub struct ImageRef {
     pub line: usize,
 }
 
+/// One heading, and the page its typeset form landed on.
+///
+/// `line` is the 1-based line of the markdown heading; `page` is the 1-based
+/// page of the compiled one. The Nth heading in the markdown is the Nth heading
+/// in the document, which is what makes this pairing possible without a source
+/// map and without the emitter writing an anchor of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Anchor {
+    pub line: usize,
+    pub page: usize,
+}
+
+/// What one compile produced: the bytes, and where the headings landed.
+#[derive(Debug, Clone)]
+pub struct Rendered {
+    pub pdf: Vec<u8>,
+    /// One entry per heading, in document order. **Empty when the two counts
+    /// disagreed**, which [`anchors_from`] explains.
+    pub anchors: Vec<Anchor>,
+}
+
 /// Translate markdown into Typst markup.
 ///
 /// The output imports the look the frontmatter selected, and every bundled
@@ -123,15 +150,79 @@ pub fn image_paths(md: &str) -> Result<Vec<ImageRef>> {
 ///
 /// `assets` supplies the bytes of every path [`image_paths`] listed. An asset
 /// the document never names is ignored.
+///
+/// This is [`md_to_pdf_with_anchors`] with the anchors dropped, rather than a
+/// second path to the same bytes. Two paths over the same input that could
+/// disagree eventually do.
 pub fn md_to_pdf(md: &str, assets: &[Asset]) -> Result<Vec<u8>> {
-    let (typst_source, images) = emit::emit(md)?;
+    md_to_pdf_with_anchors(md, assets).map(|rendered| rendered.pdf)
+}
+
+/// Compile to a PDF, and say which page each heading landed on.
+///
+/// The bytes are exactly what [`md_to_pdf`] returns — this reads the compiled
+/// document and writes nothing into it, so a caller that wants only the PDF
+/// loses nothing by asking for both.
+///
+/// **The extraction is inline here and cannot be factored out.** `typst`
+/// re-exports `typst-library`, `typst-syntax` and `typst-utils` and not
+/// `typst-layout`, so the compiled document's type is unnameable in this crate:
+/// method calls on the value the compiler infers are fine, a helper taking it as
+/// a parameter is not, and writing one would mean adding a dependency to a
+/// workspace that pins every one it has.
+pub fn md_to_pdf_with_anchors(md: &str, assets: &[Asset]) -> Result<Rendered> {
+    let (typst_source, images, headings) = emit::emit(md)?;
     let world = TypstWorld::new(typst_source, collect(&images, assets)?)?;
 
     let Warned { output, .. } = typst::compile(&world);
     let document = output.map_err(|diags| Error::Compile(join(&diags)))?;
 
-    typst_pdf::pdf(&document, &PdfOptions::default())
-        .map_err(|diags| Error::PdfExport(join(&diags)))
+    // The export comes first because it is what names the document's type.
+    // `typst::compile` is generic over its output and this crate cannot write
+    // that type down, so nothing may call a method on `document` until a use
+    // like this one has pinned it.
+    let pdf = typst_pdf::pdf(&document, &PdfOptions::default())
+        .map_err(|diags| Error::PdfExport(join(&diags)))?;
+
+    // The headings the document actually typeset, in document order. Neither
+    // bundled look emits one of its own — both set their title with `text`, not
+    // with a heading — so every element here came from the walk's own markup.
+    let introspector = document.introspector();
+    let pages: Vec<usize> = introspector
+        .query(&HeadingElem::ELEM.select())
+        .iter()
+        .filter_map(|heading| heading.location())
+        .filter_map(|location| introspector.position(location))
+        .map(|position| position.page.get())
+        .collect();
+
+    Ok(Rendered {
+        pdf,
+        anchors: anchors_from(headings, pages),
+    })
+}
+
+/// Pair each walked heading line with the page its typeset form landed on.
+///
+/// **Unequal counts return nothing**, and a pane fed no anchors behaves exactly
+/// as it did before they existed. The counts can genuinely differ: a heading
+/// inside a footnote definition is walked into a `Walk` that is discarded and
+/// its content is spliced in at the *reference*, so it typesets a heading the
+/// document walk never counted — and its line would name the wrong place.
+///
+/// Two things this guard is not. It catches one extra or one missing, **not one
+/// of each**. And what it guards is a mis-scroll rather than a wrong document —
+/// no byte of the PDF depends on it.
+fn anchors_from(lines: Vec<usize>, pages: Vec<usize>) -> Vec<Anchor> {
+    if lines.len() != pages.len() {
+        return Vec::new();
+    }
+
+    lines
+        .into_iter()
+        .zip(pages)
+        .map(|(line, page)| Anchor { line, page })
+        .collect()
 }
 
 // -- assets -----------------------------------------------------------------
