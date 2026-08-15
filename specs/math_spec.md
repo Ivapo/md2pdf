@@ -16,7 +16,7 @@ phases:
     by: null
   - name: "Phase 2 — display math as its own block"
     reviewed: 2026-08-14
-    shipped: null
+    shipped: 2026-08-15
     cut: null
     by: null
 
