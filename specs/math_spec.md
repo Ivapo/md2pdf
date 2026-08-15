@@ -21,7 +21,7 @@ phases:
     by: null
   - name: "Phase 3 — numbered display equations"
     reviewed: 2026-08-15
-    shipped: null
+    shipped: 2026-08-15
     cut: null
     by: null
 
@@ -105,6 +105,17 @@ than stopped at the first step that disposes of an objection.
 - **No equation numbering, no labels, no cross-references.** Markdown carries no
   syntax for any of the three. `\label{…}` is refused rather than ignored,
   because §2's scan admits no command that is not on the allowed list.
+
+  > **CORRECTED 2026-08-15, by `mpdf-004` Phase 3.** The bullet above is the
+  > record of what was decided on 2026-08-10 and it is kept, but it bundles
+  > three items under one reason that covers only two of them. **Equation
+  > numbering is supported now**, through the frontmatter's `equations` key:
+  > blanket numbering needs no markdown syntax, because the author is naming
+  > nothing. **Labels and cross-references are still refused**, and "markdown
+  > carries no syntax" is exactly the reason for those two — a label is a name,
+  > and naming needs syntax. `\label{…}` is still refused by §2's scan, on the
+  > same grounds as before. OQ-7 carries what is left. See §4's Phase 3;
+  > `rules/pipeline.md` is what tracks the code.
 - **No macro definitions that outlive a span.** A definition in one span visible
   from the next is a document-wide symbol table, which is a different subject.
 - **No LaTeX outside math.** `mitex::convert_text` is not called.
