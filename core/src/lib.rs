@@ -497,3 +497,43 @@ impl World for TypstWorld {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The zip pairs by ordinal, and refuses to when the counts disagree.
+    ///
+    /// It is its own function so this case needs no document at all: the
+    /// mismatch it guards is reachable from markdown, and
+    /// `golden_test.rs:a_heading_inside_a_footnote_definition_withdraws_the_anchors`
+    /// reaches it — but a guard tested only through a document is a guard whose
+    /// boundary nothing pins.
+    #[test]
+    fn the_zip_pairs_by_ordinal_and_withdraws_on_a_mismatch() {
+        assert_eq!(
+            anchors_from(vec![3, 9, 20], vec![1, 1, 2]),
+            vec![
+                Anchor { line: 3, page: 1 },
+                Anchor { line: 9, page: 1 },
+                Anchor { line: 20, page: 2 },
+            ]
+        );
+
+        for (lines, pages, what) in [
+            (vec![3, 9], vec![1], "one page missing"),
+            (vec![3], vec![1, 1], "one page too many"),
+            (vec![3], vec![], "no pages at all"),
+            (vec![], vec![1], "a page with no heading"),
+        ] {
+            assert!(
+                anchors_from(lines, pages).is_empty(),
+                "the guard let {what} through"
+            );
+        }
+
+        // Nothing on either side is not a mismatch; it is a document without
+        // headings, and the answer is the same empty list.
+        assert!(anchors_from(vec![], vec![]).is_empty());
+    }
+}

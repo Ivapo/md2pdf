@@ -4,7 +4,9 @@
 //! Fixtures and golden files live at the workspace root because the CLI tests
 //! read the same ones.
 
-use md2pdf_core::{Asset, Error, ImageRef, image_paths, md_to_pdf, md_to_typst};
+use md2pdf_core::{
+    Asset, Error, ImageRef, image_paths, md_to_pdf, md_to_pdf_with_anchors, md_to_typst,
+};
 
 const BASIC_MD: &str = include_str!("../../tests/fixtures/basic.md");
 const BASIC_TYP: &str = include_str!("../../tests/golden/basic.typ");
@@ -1596,4 +1598,125 @@ fn a_refused_display_formula_names_its_latex_and_its_line() {
         }
         other => panic!("expected a math error, got {other:?}"),
     }
+}
+
+// -- mpdf-003 Phase 6: the page the author is on -----------------------------
+
+/// The sample the app's own gate opens, and the two figures it names on lines
+/// 158 and 162.
+///
+/// It is here rather than under `tests/fixtures/` because the case it serves is
+/// about *pages*, and this is the document this project has that runs to three
+/// of them. A fixture short enough to fit the others would answer 1 for every
+/// heading and prove nothing.
+const ARTICLE_MD: &str = include_str!("../../samples/article.md");
+const PIPELINE_SVG: &[u8] = include_bytes!("../../samples/pipeline.svg");
+const CHECK_SVG: &[u8] = include_bytes!("../../samples/check.svg");
+
+fn article_assets() -> Vec<Asset> {
+    vec![
+        asset("pipeline.svg", PIPELINE_SVG),
+        asset("check.svg", CHECK_SVG),
+    ]
+}
+
+/// Every heading is anchored, at the line the markdown wrote it on, in order.
+///
+/// The lines are spelled out rather than computed, because a helper that
+/// derived them would derive them the same way the walk does and agree with a
+/// wrong answer.
+#[test]
+fn each_heading_is_anchored_at_its_own_line() {
+    let md = "---\ntitle: T\n---\n\n# One\n\nText.\n\n## Two\n\nText.\n\n### Three\n\nText.\n";
+
+    let rendered = md_to_pdf_with_anchors(md, &[]).unwrap();
+    let lines: Vec<usize> = rendered.anchors.iter().map(|a| a.line).collect();
+    assert_eq!(lines, vec![5, 9, 13], "{:?}", rendered.anchors);
+
+    let pages: Vec<usize> = rendered.anchors.iter().map(|a| a.page).collect();
+    assert!(
+        pages.windows(2).all(|pair| pair[0] <= pair[1]),
+        "the pages run backwards: {pages:?}"
+    );
+    assert!(
+        pages.iter().all(|&page| page >= 1),
+        "a page is numbered from zero: {pages:?}"
+    );
+}
+
+/// The anchors reach a page that is not the first one.
+///
+/// **This is the case that proves the feature rather than the plumbing.** Every
+/// other case here is met by an implementation that always answers 1, and so is
+/// the app: a pane fed nothing but page 1 behaves exactly as it did before this
+/// phase existed. `samples/article.md` runs to three pages, and its last heading
+/// is on the last of them.
+#[test]
+fn the_articles_last_heading_is_not_on_the_first_page() {
+    let rendered = md_to_pdf_with_anchors(ARTICLE_MD, &article_assets()).unwrap();
+
+    let last = rendered.anchors.last().expect("the article names headings");
+    assert!(
+        last.page > 1,
+        "the last heading came back on page {}: {:?}",
+        last.page,
+        rendered.anchors
+    );
+}
+
+/// A document with no headings has no anchors, and the pane then asks for no
+/// page — which is the same branch a caret above the first heading takes.
+#[test]
+fn a_document_with_no_headings_has_no_anchors() {
+    let md = "---\ntitle: T\n---\n\nJust a paragraph.\n";
+
+    let rendered = md_to_pdf_with_anchors(md, &[]).unwrap();
+    assert!(rendered.anchors.is_empty(), "{:?}", rendered.anchors);
+    assert!(rendered.pdf.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// The counts can disagree over real markdown, and the guard then answers
+/// nothing rather than guessing.
+///
+/// A heading inside a footnote definition is walked by
+/// `core/src/emit.rs:collect_definitions` into a `Walk` that is discarded, and
+/// its content is spliced in at the *reference* — so the compiled document holds
+/// a heading the document walk never counted, and pairing by ordinal from there
+/// on would name the wrong line for every heading after it.
+#[test]
+fn a_heading_inside_a_footnote_definition_withdraws_the_anchors() {
+    let md = "---\ntitle: T\n---\n\n# One\n\nA claim.[^1]\n\n[^1]: # A heading in a note\n";
+
+    // The mismatch is real: the walk sees one heading and the document typesets
+    // two.
+    let typst = md_to_typst(md).unwrap();
+    assert!(
+        typst.contains("#footnote[= A heading in a note]"),
+        "the definition no longer splices a heading: {typst}"
+    );
+
+    let rendered = md_to_pdf_with_anchors(md, &[]).unwrap();
+    assert!(
+        rendered.anchors.is_empty(),
+        "the guard let a mismatched pairing through: {:?}",
+        rendered.anchors
+    );
+    assert!(rendered.pdf.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// `md_to_pdf` returns what it always returned, and the anchors cost the bytes
+/// nothing.
+///
+/// The wrapper is the point: two paths over the same input that could disagree
+/// eventually do, so this asserts they are one path rather than two that happen
+/// to agree today.
+#[test]
+fn the_anchors_change_no_byte_of_the_pdf() {
+    let plain = md_to_pdf(ARTICLE_MD, &article_assets()).unwrap();
+    let rendered = md_to_pdf_with_anchors(ARTICLE_MD, &article_assets()).unwrap();
+
+    assert_eq!(
+        plain, rendered.pdf,
+        "the two calls produced different bytes"
+    );
 }
