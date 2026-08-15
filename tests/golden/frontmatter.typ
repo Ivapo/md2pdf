@@ -1,5 +1,5 @@
 #import "template.typ": template, divider
-#show: template.with(title: "A Minimal Example", author: "Iva Po", columns: 2, date: none)
+#show: template.with(title: "A Minimal Example", author: "Iva Po", columns: 2, date: none, equations: "plain")
 
 = Introduction
 

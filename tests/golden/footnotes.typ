@@ -1,5 +1,5 @@
 #import "template.typ": template, divider
-#show: template.with(title: "Footnotes", author: "Iva Po", columns: 2, date: none)
+#show: template.with(title: "Footnotes", author: "Iva Po", columns: 2, date: none, equations: "plain")
 
 = Footnotes
 

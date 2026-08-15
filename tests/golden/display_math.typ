@@ -1,6 +1,6 @@
 #import "template.typ": template, divider
 #import "math.typ": aligned, bmatrix, diff, matrix, mitexmathbf, mitexsqrt, negthinspace, pmatrix, sect, vmatrix
-#show: template.with(title: "Display math", author: none, columns: 2, date: none)
+#show: template.with(title: "Display math", author: none, columns: 2, date: none, equations: "plain")
 
 = Display math
 

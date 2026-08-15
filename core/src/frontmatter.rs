@@ -1,6 +1,6 @@
 //! Parses the leading YAML frontmatter block.
 //!
-//! The schema is five keys, so this is a hand-written parser over a documented
+//! The schema is six keys, so this is a hand-written parser over a documented
 //! YAML subset rather than a dependency. It follows the same policy the emitter
 //! applies to markdown: anything outside the subset is an error that names the
 //! offending key and its line, never a guess.
@@ -63,6 +63,42 @@ impl Template {
     }
 }
 
+/// Whether a document's display equations are numbered.
+///
+/// A name checked against a closed set rather than a boolean, so that a later
+/// per-section or per-chapter scheme is a new name here rather than a second
+/// key. The author decides *whether*; the look decides *how* a number is
+/// formatted and where it sits, which is why this crosses to the template as a
+/// name and carries no format of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Equations {
+    Plain,
+    Numbered,
+}
+
+impl Equations {
+    /// Every accepted name. The default sits first, as `Template::ALL`'s does.
+    pub const ALL: [Equations; 2] = [Equations::Plain, Equations::Numbered];
+
+    /// The name a document writes in the `equations` key, and the string the
+    /// emitter hands the look.
+    pub fn name(self) -> &'static str {
+        match self {
+            Equations::Plain => "plain",
+            Equations::Numbered => "numbered",
+        }
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        Equations::ALL.into_iter().find(|e| e.name() == name)
+    }
+
+    /// The accepted names, for the error a name outside the set raises.
+    fn names() -> String {
+        Equations::ALL.map(Equations::name).join(" or ")
+    }
+}
+
 /// The layout keys a document may carry.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Frontmatter {
@@ -71,6 +107,7 @@ pub(crate) struct Frontmatter {
     pub columns: u8,
     pub template: Template,
     pub date: Option<String>,
+    pub equations: Equations,
 }
 
 impl Default for Frontmatter {
@@ -84,6 +121,9 @@ impl Default for Frontmatter {
     /// follows the selected look, so `parse` resolves it once the whole block
     /// is read, and the value below is what a document with no `template` key
     /// lands on.
+    ///
+    /// `equations` defaults to the name that numbers nothing, so a document
+    /// written before the key existed compiles to the same page it always did.
     fn default() -> Self {
         Self {
             title: None,
@@ -91,6 +131,7 @@ impl Default for Frontmatter {
             columns: Template::Article.columns(),
             template: Template::Article,
             date: None,
+            equations: Equations::Plain,
         }
     }
 }
@@ -160,6 +201,18 @@ pub(crate) fn parse(block: &str, first_line: usize) -> Result<Frontmatter> {
                     ));
                 };
                 out.template = template;
+            }
+            "equations" => {
+                let Some(equations) = Equations::from_name(value) else {
+                    return Err(problem(
+                        line,
+                        format!(
+                            "key 'equations' takes {}, not '{value}'",
+                            Equations::names()
+                        ),
+                    ));
+                };
+                out.equations = equations;
             }
             other => return Err(problem(line, format!("unknown key '{other}'"))),
         }
@@ -265,6 +318,37 @@ mod tests {
     }
 
     #[test]
+    fn both_equation_names_parse() {
+        for (name, equations) in [
+            ("plain", Equations::Plain),
+            ("numbered", Equations::Numbered),
+        ] {
+            let out = parse(&format!("equations: {name}\n"), 2).unwrap();
+            assert_eq!(out.equations, equations);
+        }
+    }
+
+    /// A document that leaves the key out numbers nothing.
+    #[test]
+    fn an_absent_equations_key_numbers_nothing() {
+        assert_eq!(parse("title: A\n", 2).unwrap().equations, Equations::Plain);
+    }
+
+    /// A name outside the set names the key and lists what it accepts, exactly
+    /// as the `template` key does. One mechanism, not two.
+    #[test]
+    fn an_equations_name_outside_the_set_lists_the_names_it_accepts() {
+        match parse("equations: yes\n", 2) {
+            Err(Error::Frontmatter { problem, .. }) => {
+                assert!(problem.contains("equations"), "problem was: {problem}");
+                assert!(problem.contains("plain"), "problem was: {problem}");
+                assert!(problem.contains("numbered"), "problem was: {problem}");
+            }
+            other => panic!("expected a Frontmatter error, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn the_date_is_kept_as_it_was_written() {
         let out = parse("date: 10 August 2026\n", 2).unwrap();
         assert_eq!(out.date.as_deref(), Some("10 August 2026"));
@@ -276,6 +360,7 @@ mod tests {
             ("title: A\nsubtitle: B\n", "subtitle"),
             ("title: A\ncolumns: 3\n", "columns"),
             ("title: A\ntemplate: ieee\n", "press-release"),
+            ("title: A\nequations: yes\n", "numbered"),
             ("title: A\ntitle: B\n", "title"),
             ("title: A\njust a line\n", "key: value"),
             ("title: A\n  nested: B\n", "nested keys"),

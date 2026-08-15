@@ -3,7 +3,7 @@
 // does, and the parser and the emitter know nothing about either.
 //
 // The emitter names every argument on every call, so this file takes the same
-// four the article look takes. It sets only what the frontmatter supplied and
+// five the article look takes. It sets only what the frontmatter supplied and
 // prints no fixed text of its own: the look is this file's job, and the words
 // on the page are the author's.
 
@@ -17,7 +17,7 @@
 
 // `divider` is defined above because a Typst closure captures the scope it is
 // written in. The masthead calls it, so it has to exist by this line.
-#let template(title: none, author: none, columns: 1, date: none, doc) = {
+#let template(title: none, author: none, columns: 1, date: none, equations: "plain", doc) = {
   // A press release runs in one column by convention, and the frontmatter
   // resolves the count to 1 where the document left the key out. An author who
   // writes `columns: 2` still gets two.
@@ -38,6 +38,13 @@
   set heading(numbering: none)
   show heading: set text(weight: "bold", size: 12pt)
   show heading: set block(above: 1.8em, below: 0.85em)
+
+  // A press release rarely numbers a formula, but the author asks rather than
+  // the look, so this file answers the same question the article look answers
+  // and reaches the same convention: `(1)`. The set rule sits at the top level
+  // with the condition inside the argument, because a `set` written inside a
+  // scoped `if` block dies with the block and would number nothing at all.
+  set math.equation(numbering: if equations == "numbered" { "(1)" } else { none })
 
   // The masthead. The dateline sits above the title, where a press release
   // carries it, and the title is set flush left rather than centred, which is
