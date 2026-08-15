@@ -825,6 +825,14 @@ later reader can check in one sitting.
   > `mpdf-004` Phase 2 takes the display form too. The `\$` escape is
   > untouched and still the way to keep a dollar as prose. See
   > `specs/math_spec.md`; `rules/pipeline.md` is what tracks the code.
+  >
+  > **CORRECTED 2026-08-15, by `mpdf-004` Phase 2.** The other half has gone
+  > too: **`$$x$$` is in the dialect now**, set as Typst's block equation, and
+  > `describe` no longer names math at all. This phase's property — every arm
+  > `describe` names is reachable — is restored by that arm being dropped
+  > rather than kept alive, which is the half of this phase's own precedent
+  > that applied. A second stamp rather than a moved one, because the first
+  > records when the inline half stopped being true.
 
 - **Exit gate:** Golden-file tests, three cases, plus the full existing suite,
   which the option change touches — no shipped golden file changes, because

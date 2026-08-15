@@ -119,14 +119,19 @@ the one thing an unsigned bundle cannot do.
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
-constructs, links, tables, images, footnotes, strikethrough, and inline math**:
+constructs, links, tables, images, footnotes, strikethrough, and math in both its forms**:
 
 ````markdown
 # Introduction
 
 Body text with *emphasis*, **strong emphasis**, ~~struck text~~, and `inline code`.
 
-A formula in the running text, $\sum_{i=1}^{n} i = \frac{n(n+1)}{2}$, typesets as math.
+A formula in the running text, $\sum_{i=1}^{n} i = \frac{n(n+1)}{2}$, typesets as math,
+and one written between double dollars is set as a block of its own:
+
+$$
+\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
+$$
 
 A hard line break ends this line,\
 and this line follows it in the same paragraph.
@@ -192,11 +197,15 @@ That is deliberate. Dropping or flattening content would ship a PDF that lies ab
 source, so the tool names what it cannot yet handle. Support arrives construct by
 construct.
 
-A display formula on its own lines, `$$x$$`, is an error for now, and a task list item,
-`- [ ] a`, is one too. If you meant a dollar sign rather than a formula, write `\$`: the
-backslash stops the span, and the dollar reaches the page as itself.
+A task list item, `- [ ] a`, is an error for now.
 
-An inline formula is **LaTeX**, and the dialect accepts a bounded subset of it — the Greek
+A formula takes one of two forms. `$…$` sets in the running text, and `$$…$$` sets as a
+block of its own — wherever you write it, so a `$$…$$` in the middle of a sentence breaks
+that sentence around it, which is what the double dollars ask for. If you meant a dollar
+sign rather than a formula, write `\$`: the backslash stops the span, and the dollar reaches
+the page as itself.
+
+A formula is **LaTeX**, and the dialect accepts a bounded subset of it — the Greek
 letters, the relations and operators, sums, products and integrals, `\frac`, `\sqrt`,
 `\binom`, `\left`/`\right`, the accents, the font commands, the named operators, and the
 `matrix`, `pmatrix`, `bmatrix`, `vmatrix`, `cases` and `aligned` environments. A command

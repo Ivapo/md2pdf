@@ -16,7 +16,7 @@ covers: >
   against, the bundled looks and the call contract they meet, the Typst world and
   its bundled fonts, and the CLI contract
 max_lines: 340
-generated: 2026-08-14
+generated: 2026-08-15
 ---
 
 # Pipeline
@@ -35,10 +35,10 @@ terminal output, the image files included.
 ## The dialect
 
 Nineteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
-emphasis, strong emphasis, strikethrough, inline code, inline math, hard line breaks,
-thematic breaks, links, images, bullet lists, ordered lists, code blocks, block quotes,
-pipe tables, footnotes, and a leading YAML frontmatter block. Heading levels map to Typst headings of
-the same level.
+emphasis, strong emphasis, strikethrough, inline code, math in both its forms, hard line
+breaks, thematic breaks, links, images, bullet lists, ordered lists, code blocks, block
+quotes, pipe tables, footnotes, and a leading YAML frontmatter block. Heading levels map to
+Typst headings of the same level.
 
 The inline constructs reach Typst as function calls, not as its own markup.
 `#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
@@ -115,17 +115,17 @@ never raises. A definition whose translation failed keeps that error, and the se
 reports it at the region, so the first error in document order is still the one reported
 and the frontmatter still wins over a construct error below it.
 
-**Everything else is an error** — raw HTML, a task list marker, and display math.
+**Everything else is an error** — raw HTML and a task list marker.
 `core/src/emit.rs:describe` names the construct, `Error::UnsupportedConstruct` carries
 that name with the 1-based line, and the CLI prints it to stderr and exits 1. Nothing is
 dropped or flattened silently.
 
 Every arm of `describe` is reachable, which is a property rather than an accident: a name
 refuses nothing until a parser option produces the event it names, and
-`Options::ENABLE_TASKLISTS` and `Options::ENABLE_MATH` are what make the last two arrive.
-Typst has no checkbox element, and a drawn marker would be a look decision the template
-owns. Display math is refused whole, which is what keeps that arm reachable now the
-inline form converts; the section below holds the inline form.
+`Options::ENABLE_TASKLISTS` is what makes the marker arrive. Typst has no checkbox element,
+and a drawn marker would be a look decision the template owns. `describe` names no math
+arm: `Options::ENABLE_MATH` now brings a construct the walk handles, in both its forms, and
+the section below holds them.
 
 Two link shapes are errors too, and the link arm names them itself rather than through
 `describe`. An empty destination, legal CommonMark, would reach Typst as `#link("")`,
@@ -139,7 +139,15 @@ on would drop it. An empty title is not a title, and the link stays in-dialect.
 An inline `$…$` span becomes `$…$` of Typst markup: `core/src/math.rs:convert` scans the
 LaTeX, `mitex::convert_math` converts it, and the result is written between the delimiters
 **unescaped**, because it is markup by then — through `escape_into` a fraction would set as
-letters. A display `$$…$$` span is still an error.
+letters. A display `$$…$$` span becomes `$ … $`, the same delimiters with whitespace inside
+them, which is Typst's block equation: `typst::syntax::ast:Equation::block` tests for a
+space after the opening delimiter and before the closing one. Both arms call `convert`, so
+the scan is one mechanism, and the display one consults no position — `$$` is the author's
+own signal, where an image has none and `write_image` infers a form from `Walk.para`. So the
+block is written wherever the span sits, and a paragraph holding one is split by it. How
+that block then sits is a look decision, reached with
+`show math.equation.where(block: true)` the way both looks already reach `raw` and
+`table.cell`; nothing about math is exported, so the look contract is unchanged.
 
 The scan runs on what the author wrote, ahead of the conversion, and refuses anything off
 three closed lists in `core/src/math.rs` — `COMMANDS` (the Greek letters in both cases, the
