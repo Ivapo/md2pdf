@@ -35,7 +35,7 @@ phases:
     by: null
   - name: "Phase 6 — the page the author is on"
     reviewed: 2026-08-15
-    shipped: null
+    shipped: 2026-08-15
     cut: null
     by: null
 
@@ -124,6 +124,18 @@ would need, `mpdf-001` §1's "not a rewrite" was wrong, and the review round
 should say so rather than let the edit through quietly. Round 1 confirmed the
 claim holds for Phase 1: `md_to_pdf`, `image_paths`, `Asset`, `ImageRef` and
 `Error` are already public at the crate root, and Phase 1 needs nothing else.
+
+> **CORRECTED 2026-08-15, by Phase 6.** The paragraph above is kept as it was
+> written and is no longer true as stated. `core` gained one function —
+> `core/src/lib.rs:md_to_pdf_with_anchors`, plus the `Anchor` and `Rendered` it
+> returns — and Phase 6's round let the crossing stand. **What the claim was
+> really about survived it**: no existing signature changed, `md_to_pdf` became a
+> wrapper over the new function rather than a second path, `cli/src` is
+> untouched, and five phases had already answered the question the claim was
+> asking, which is whether building a window forces a rewrite of a library
+> written for a CLI. Read the sentence as *the app forces no rewrite of `core`*,
+> which is what the five diffs before it checked and what Phase 6's own gate (5)
+> still checks on the half it does not cross.
 
 ### Why a third crate, not a mode of the CLI (decision, recorded)
 
@@ -218,6 +230,18 @@ spec records rather than hides, and it is the price of §2's decision that the
 pane draws the artifact: the alternative that would fix it is the SVG fallback,
 which stops drawing the artifact. OQ-6 carries the question, and Phase 2 does
 not answer it.
+
+> **CORRECTED 2026-08-15, by Phase 6.** The paragraph above is kept as it was
+> written and is no longer true of every re-render. The measurement it rests on
+> still holds — the view leaks nothing, so the reader's place cannot be *learned*
+> — but Phase 6 spends the write direction the paragraph above it already
+> records: a redraw following the author's own edit carries `#page=N` for the
+> heading above their caret. **A redraw that took a text from disk still returns
+> them to the first page**, which is every open, every external reload over a
+> clean buffer, and every Finder launch — so the sentence stays true of exactly
+> the cases Phases 1, 2 and 5 gated on it. What changed is that the app now
+> restores a position it still cannot observe, by following the author rather
+> than the reader.
 
 ### Why the watch set is the document's own directory (decision, recorded)
 
@@ -583,7 +607,7 @@ list to one item.
   own round rather than an answer made here. What is settled is the pane: it
   draws the artifact, and Phase 4 is designed against a PDF view.
 
-- **OQ-7** — should the preview follow the author's cursor, mapping the line
+- **OQ-7** — ~~should the preview follow the author's cursor, mapping the line
   being edited to a page and setting `#page=N` on each fresh blob URL? OQ-6
   handed the question to Phase 4's round, and **that round put it outside Phase
   4**, for a reason worth stating rather than a matter of size. Nothing in
@@ -596,12 +620,14 @@ list to one item.
   OQ-6's third shape does not reach it: that number went stale because the
   reader scrolled, and a cursor lives in the app's own text pane. Design call,
   with the mechanism answerable from Typst's own crates. Blocks nothing; it is a
-  phase to append if the answer is yes.
+  phase to append if the answer is yes.~~
 
-  **Phase 6 drafts the yes, at heading granularity, and this entry stays open
+  ~~**Phase 6 drafts the yes, at heading granularity, and this entry stays open
   until that phase's round converges** — `reviewed` is what closes a question
-  this spec left to a round, not the drafting of the phase that answers it.
-  What the phase settles if it holds: the anchor is a heading rather than the
+  this spec left to a round, not the drafting of the phase that answers it.~~
+  **RESOLVED (2026-08-15), when Phase 6's round converged at zero blocking in
+  round 3: yes, at heading granularity.**
+  What the phase settles, and the round checked: the anchor is a heading rather than the
   cursor, because the Nth markdown heading is the Nth compiled one and no source
   map is needed; "answerable from Typst's own crates" turns out to mean **no new
   crate at all**, since the page comes from a `PagedDocument` that
@@ -610,6 +636,22 @@ list to one item.
   existing signature. What the phase does **not** settle is whether heading
   granularity is enough, which is a use question of the kind OQ-6 was answered
   by rather than one a round can close.
+
+  **Two things the round added that this entry could not have.** That
+  `PagedDocument` is nameable only *inside* the function that builds it, because
+  `typst` re-exports `typst-library`, `typst-syntax` and `typst-utils` and not
+  `typst-layout` — so "no new crate at all" holds on a condition rather than
+  outright, and the extraction staying inline is a constraint rather than a
+  preference. And the feature needed a rule this entry never suspected: **the
+  pane follows only a redraw that did not replace the text**, because assigning a
+  textarea's `value` moves its caret to the end of the control, and without it
+  the first keystroke would have broken three shipped gates. An open is not a
+  cursor movement.
+
+  **This entry is struck at the phase's close-out rather than in the round that
+  converged**, which is where its own sentence puts the job. The review commit
+  missed it, and this is the next place that could take it; nothing about the
+  answer changed in between.
 
 - **OQ-8** — what does it take to put this app on a machine that is not this
   one? Phase 5's round raised the question by falsifying the gate case that
