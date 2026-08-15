@@ -58,6 +58,7 @@ fn emit_typst_prints_the_golden_file() {
         ("blocks.md", "blocks.typ"),
         ("list_spacing.md", "list_spacing.typ"),
         ("links.md", "links.typ"),
+        ("math.md", "math.typ"),
         ("table.md", "table.typ"),
         // Emission reads paths and no bytes. This fixture names `fig#2.png`,
         // which no directory holds, and it still prints its golden file.
@@ -117,12 +118,16 @@ fn a_raw_html_block_exits_non_zero_and_names_it() {
 /// Math and a task list marker exit non-zero and name themselves.
 ///
 /// Each was an unreachable arm until this phase set its parser option, so each
-/// printed its markers on the page while the code claimed to refuse it. Math is
-/// refused in both its forms.
+/// printed its markers on the page while the code claimed to refuse it.
+///
+/// Math was refused in both its forms when this phase shipped. `mpdf-004` Phase
+/// 1 took the inline form into the dialect, so what the first fixture now names
+/// is the LaTeX inside the span rather than the span itself; the display form is
+/// refused whole until that spec's Phase 2.
 #[test]
 fn math_and_a_task_list_marker_exit_non_zero_and_name_themselves() {
     for (fixture_name, construct) in [
-        ("unsupported_math.md", "math"),
+        ("unsupported_math.md", r"\includegraphics"),
         ("unsupported_display_math.md", "math"),
         ("unsupported_task_list.md", "task list marker"),
     ] {
@@ -283,4 +288,62 @@ fn a_frontmatter_document_writes_a_pdf() {
 
     let bytes = std::fs::read(&output).unwrap();
     assert!(bytes.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// A document with formulas converts, and the PDF carries them.
+///
+/// `mpdf-004`'s observable at the CLI level: a document that exited non-zero
+/// before this phase now produces a PDF.
+#[test]
+fn a_document_with_formulas_writes_a_pdf() {
+    let out_path = scratch("math.pdf");
+    let out = run(&[
+        fixture("math.md").as_ref(),
+        "-o".as_ref(),
+        out_path.as_ref(),
+    ]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let bytes = std::fs::read(&out_path).unwrap();
+    assert!(bytes.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// Every shape the dialect refuses inside a formula exits non-zero at the CLI,
+/// naming the LaTeX the author typed and its line.
+///
+/// The library test of the same name proves the error; this one proves the user
+/// sees it. The documents are written here rather than kept as fixtures because
+/// each is one line long and the set is the point, not the files.
+#[test]
+fn each_refused_formula_exits_non_zero_and_names_its_latex() {
+    for (name, span, named) in [
+        (
+            "math_includegraphics.md",
+            r"\includegraphics{fig.png}",
+            r"\includegraphics",
+        ),
+        ("math_label.md", r"\label{eq}", r"\label"),
+        (
+            "math_itemize.md",
+            r"\begin{itemize}\item a\end{itemize}",
+            "itemize",
+        ),
+        ("math_unknown.md", r"\notacommand", r"\notacommand"),
+        ("math_percent.md", "x = 100 % of y", "%"),
+        ("math_text.md", r"\text{a}", r"\text"),
+    ] {
+        let path = scratch(name);
+        std::fs::write(&path, format!("# H\n\nA ${span}$ here.\n")).unwrap();
+
+        let out = run(&[path.as_ref()]);
+        assert!(!out.status.success(), "{name} should have failed");
+
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(stderr.contains(named), "{name} stderr: {stderr}");
+        assert!(stderr.contains("line 3"), "{name} stderr: {stderr}");
+    }
 }

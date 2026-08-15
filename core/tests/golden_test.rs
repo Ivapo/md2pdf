@@ -34,7 +34,9 @@ const FOOTNOTES_MD: &str = include_str!("../../tests/fixtures/footnotes.md");
 const FOOTNOTES_TYP: &str = include_str!("../../tests/golden/footnotes.typ");
 const STRIKETHROUGH_MD: &str = include_str!("../../tests/fixtures/strikethrough.md");
 const STRIKETHROUGH_TYP: &str = include_str!("../../tests/golden/strikethrough.typ");
-const INLINE_MATH_MD: &str = include_str!("../../tests/fixtures/unsupported_math.md");
+const REFUSED_MATH_MD: &str = include_str!("../../tests/fixtures/unsupported_math.md");
+const MATH_MD: &str = include_str!("../../tests/fixtures/math.md");
+const MATH_TYP: &str = include_str!("../../tests/golden/math.typ");
 const DISPLAY_MATH_MD: &str = include_str!("../../tests/fixtures/unsupported_display_math.md");
 const TASK_LIST_MD: &str = include_str!("../../tests/fixtures/unsupported_task_list.md");
 const DATED_MD: &str = include_str!("../../tests/fixtures/dated.md");
@@ -1164,12 +1166,16 @@ fn the_strikethrough_golden_carries_each_form() {
 ///
 /// Both arms of `describe` were unreachable until this phase set their parser
 /// options, so both printed their markers on the page while the code claimed to
-/// refuse them. Math is refused in both its forms; support is a later spec's
-/// subject, and `\$` is the one-character way to keep a dollar as prose.
+/// refuse them.
+///
+/// Math was refused in both its forms when this phase shipped. `mpdf-004` Phase
+/// 1 took the inline form into the dialect, so this test keeps the display form,
+/// which is what holds the `describe` arm reachable until that spec's Phase 2
+/// takes it too. `\$` is still the one-character way to keep a dollar as prose,
+/// and the strikethrough golden above still pins it.
 #[test]
 fn each_refused_construct_names_itself_and_its_line() {
     for (md, construct, what) in [
-        (INLINE_MATH_MD, "math", "the inline math span"),
         (DISPLAY_MATH_MD, "math", "the display math span"),
         (TASK_LIST_MD, "task list marker", "the task list marker"),
     ] {
@@ -1303,4 +1309,196 @@ fn every_bundled_template_meets_the_call_contract() {
             assert!(source.contains(needle), "{file} does not carry `{needle}`");
         }
     }
+}
+
+// -- mpdf-004 Phase 1: inline math -------------------------------------------
+
+#[test]
+fn the_math_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(MATH_MD).unwrap(), MATH_TYP);
+}
+
+/// The phase's observable, and the case that proves the bundled prelude
+/// complete.
+///
+/// The fixture sets one formula per command the dialect allows, so a symbol the
+/// derivation missed is an unknown identifier here and the compile fails. That
+/// is why `mpdf-004` §2 states the prelude's derivation rather than its
+/// membership: this test cannot be wrong about it, and a list in prose could.
+#[test]
+fn the_math_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(MATH_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each part of the fixture reaches Typst as the form the spec chose.
+///
+/// The equality test above pins the whole output, but it cannot say *why* the
+/// output is right. This one names the rules an edit could quietly drop: that
+/// the content is markup rather than escaped text, that the import is by name,
+/// and that the escapes the dialect rests on reach the page.
+#[test]
+fn the_math_golden_carries_each_form() {
+    for (form, what) in [
+        // The prelude is imported by name, not with a glob: Typst searches user
+        // scopes before the library, so `*` would shadow `image`, `table` and
+        // `raw` — all of which the emitter calls — for the whole document.
+        (
+            r#"#import "math.typ": aligned, bmatrix, diff"#,
+            "the prelude import, by name",
+        ),
+        // Converted markup, written between the delimiters unescaped. Through
+        // `escape_into` this would read `frac\(a \,b \)` and set as letters.
+        ("$frac(a ,b )$", "the fraction, as markup"),
+        // A prelude member doing its job: `mat` with no delimiter.
+        ("$matrix( a zws , b zws ; c zws , d )$", "the matrix"),
+        // Version skew rather than a MiTeX helper: mitex 0.2.4 writes the
+        // pre-0.13 spelling of `inter`, which is exactly the kind of entry a
+        // hand-written prelude omits.
+        ("$A sect B$", "the intersection, under mitex's own spelling"),
+        // The escape the `%` refusal rests on. Refusing an unescaped `%` costs
+        // the author nothing only because this reaches the page.
+        ("$1 0 0 %$", "the escaped percent sign"),
+        // A dollar inside a formula, and a dollar beside one. Both survive.
+        ("$dollar 5$", "the escaped dollar, inside math"),
+        (r"a \$5 to \$10 range", "the escaped dollar pair, as prose"),
+    ] {
+        assert!(
+            MATH_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+}
+
+/// Every shape the dialect refuses inside a formula names the LaTeX the author
+/// typed, and its line.
+///
+/// The first four are the escapes that decided the design. `\includegraphics`
+/// converts to an `#image` call for a path no check ever saw, `\label` to the
+/// empty string, and `\begin{itemize}` to markup-mode list syntax that Typst
+/// then flattens to an operator — none of them visible in the converted output,
+/// which is why the check reads the LaTeX instead. `\notacommand` is the
+/// ordinary unknown, and an implementer who tested only that one would ship the
+/// other three.
+///
+/// The last two are not command refusals and no command list would reach them.
+/// `%` opens a LaTeX comment, so `mitex` drops the rest of the line and the PDF
+/// shows truncated prose. `\text` is the deferral `mpdf-004` OQ-6 carries, and
+/// it is tested rather than trusted: an implementer who adds it to the list
+/// passes every other case here and fails this one.
+#[test]
+fn each_math_refusal_names_its_latex_and_its_line() {
+    for (md, problem, what) in [
+        (
+            REFUSED_MATH_MD,
+            r"unsupported command '\includegraphics'",
+            "the asset-contract escape, from the fixture",
+        ),
+        (
+            "# H\n\nA $\\label{eq}$ here.\n",
+            r"unsupported command '\label'",
+            "the silent drop",
+        ),
+        (
+            "# H\n\nA $\\begin{itemize}\\item a\\end{itemize}$ here.\n",
+            "unsupported environment 'itemize'",
+            "the silent flattening",
+        ),
+        (
+            "# H\n\nA $\\notacommand$ here.\n",
+            r"unsupported command '\notacommand'",
+            "the ordinary unknown",
+        ),
+        (
+            "# H\n\nA $x = 100 % of y$ here.\n",
+            "unescaped '%' — write '\\%' for a percent sign",
+            "the comment that would truncate the line",
+        ),
+        (
+            "# H\n\nA $\\text{a}$ here.\n",
+            r"unsupported command '\text'",
+            "the deferred command",
+        ),
+    ] {
+        match md_to_typst(md) {
+            Err(Error::Math {
+                problem: found,
+                line,
+            }) => {
+                assert_eq!(found, problem, "for {what}");
+                assert_eq!(line, 3, "for {what}");
+            }
+            other => panic!("expected `{problem}` for {what}, got {other:?}"),
+        }
+    }
+}
+
+/// The escaped percent sign converts and reaches the page.
+///
+/// This is the half that makes the refusal above a redirection rather than a
+/// ban: the whole argument for refusing `%` is that `\%` costs one character and
+/// works.
+#[test]
+fn the_escaped_percent_sign_converts_and_compiles() {
+    let md = "# H\n\nA $100\\% of y$ here.\n";
+    assert!(md_to_typst(md).unwrap().contains("$1 0 0 % o f y$"));
+
+    let pdf = md_to_pdf(md, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// A document with no math imports no prelude.
+///
+/// The import is conditional for exactly this reason: every golden file shipped
+/// before this phase opens with the same two lines it always did, so "no shipped
+/// golden file changed" and "the prelude is bundled" are both true.
+#[test]
+fn a_document_without_math_imports_no_prelude() {
+    for (typst, what) in [
+        (md_to_typst(BASIC_MD).unwrap(), "the basic fixture"),
+        (md_to_typst(FOOTNOTES_MD).unwrap(), "the footnotes fixture"),
+    ] {
+        assert!(!typst.contains("math.typ"), "{what} imports the prelude");
+    }
+    assert!(
+        BASIC_TYP.starts_with("#import \"template.typ\": template, divider\n#show: template.with(")
+    );
+}
+
+/// Math inside an image's alt text contributes its LaTeX source, and nothing
+/// else.
+///
+/// Alt is plain text by CommonMark and Typst's `alt` is a string, so the span
+/// contributes what the author typed and the wrapper contributes nothing — the
+/// same disposition strikethrough got. No `$…$` is written into a string that
+/// cannot typeset it, and a document whose only formula sits here imports no
+/// prelude.
+#[test]
+fn math_in_alt_text_becomes_its_latex_source() {
+    let md = "# H\n\nA ![a $x+y$ b](dot.png) here.\n";
+    let typst = md_to_typst(md).unwrap();
+    assert!(typst.contains(r#"alt: "a x+y b""#), "{typst}");
+    assert!(!typst.contains("math.typ"), "{typst}");
+
+    let pdf = md_to_pdf(md, &[asset("dot.png", DOT_PNG)]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// A formula inside a footnote definition still imports the prelude.
+///
+/// The definitions take a walk of their own, and that walk is thrown away once
+/// its content is stored — so the flag that decides the import travels with the
+/// content, exactly as the images do. Without it a document whose only formula
+/// sits in a footnote emits `$…$` with nothing defining what it uses, and the
+/// compile fails naming source the author never wrote.
+#[test]
+fn math_inside_a_footnote_definition_imports_the_prelude() {
+    let md = "# H\n\nA claim.[^1]\n\n[^1]: Because $\\sqrt{x} \\leq x$ here.\n";
+    let typst = md_to_typst(md).unwrap();
+    assert!(typst.contains("math.typ"), "{typst}");
+    assert!(typst.contains("$mitexsqrt(x ) <= x$"), "{typst}");
+
+    let pdf = md_to_pdf(md, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
 }

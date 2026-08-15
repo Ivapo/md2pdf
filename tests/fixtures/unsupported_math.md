@@ -1,3 +1,3 @@
 # Inline math
 
-A formula $x + y$ inside a sentence is math, and this dialect refuses it.
+A formula $\includegraphics{fig.png}$ names a command outside the dialect.
