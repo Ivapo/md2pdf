@@ -5,3 +5,7 @@
 
 # tauri-build writes the capability schemas beside tauri.conf.json.
 /app/gen/
+
+# The wasm spike builds into these; the module is 25.7 MB and is never committed.
+/web/pkg/
+/web/target/

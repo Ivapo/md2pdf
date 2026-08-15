@@ -1,0 +1,35 @@
+# A spike, not a front end. It exists to answer three questions a browser can
+# answer and this machine cannot: whether `md2pdf-core` runs as WebAssembly at
+# all, what the module costs over the wire, and whether Safari agrees with
+# Chromium about both. It makes no design claim — the browser front end is a
+# spec nobody has written, and `mpdf-001` §1.1 parked it.
+#
+# **Deliberately not a workspace member.** The empty `[workspace]` table below
+# detaches it from the root workspace, so `cargo build --workspace` and
+# `cargo test --workspace` — which every phase's exit gate runs — behave exactly
+# as they did before this directory existed.
+[workspace]
+
+[package]
+name = "md2pdf-web-spike"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+md2pdf-core = { path = "../core" }
+wasm-bindgen = "0.2.104"
+console_error_panic_hook = "0.1.7"
+
+# The module is the whole download, so it is optimised for size rather than
+# speed. Measured on 2026-08-15: 25.7 MB raw, 7.8 MB brotli. The fonts are
+# 2.5 MB of that; the rest is Typst and the PDF writer.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"

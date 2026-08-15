@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>md2pdf — wasm spike</title>
+<style>
+  :root { color-scheme: light dark; --line: color-mix(in srgb, currentColor 18%, transparent); }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100dvh; display: grid; grid-template-rows: auto auto 1fr;
+    font: 14px/1.5 system-ui, -apple-system, sans-serif;
+  }
+  header { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  header b { font-weight: 650; }
+  header span { opacity: .65; }
+  #status {
+    padding: 6px 14px; border-bottom: 1px solid var(--line);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    white-space: pre-wrap; overflow-x: auto;
+  }
+  #status.bad { color: #b00020; }
+  @media (prefers-color-scheme: dark) { #status.bad { color: #ff8a8a; } }
+  main { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+  @media (max-width: 720px) { main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
+  textarea {
+    border: 0; border-right: 1px solid var(--line); resize: none; padding: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+    background: transparent; color: inherit; min-height: 0;
+  }
+  textarea:focus { outline: none; }
+  iframe { border: 0; width: 100%; height: 100%; min-height: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <b>md2pdf</b> <span>— <code>md2pdf-core</code> compiled to wasm32, converting in this page. No server.</span>
+</header>
+
+<div id="status">booting…</div>
+
+<main>
+  <textarea id="text" spellcheck="false" aria-label="markdown source"></textarea>
+  <iframe id="pane" title="the compiled PDF"></iframe>
+</main>
+
+<script type="module">
+/*
+  A spike, not a front end. It answers what this machine cannot: whether the
+  crate runs as WebAssembly, what the module costs over the wire, and whether
+  Safari agrees with Chromium. It carries no images — a browser has no
+  filesystem, and that file story belongs to a spec nobody has written.
+*/
+const text = document.getElementById('text')
+const pane = document.getElementById('pane')
+const status = document.getElementById('status')
+
+const SAMPLE = `---
+title: Compiled in your browser
+author: wasm32-unknown-unknown
+columns: 1
+---
+
+# Introduction
+
+Every byte of this PDF was produced by \`md2pdf-core\` running as WebAssembly,
+inside the page that is showing it. Nothing was sent anywhere.
+
+Type on the left. The page follows.
+
+# What the dialect carries
+
+*Emphasis*, **strong**, \`monospace\`, and math like $\\sqrt{x^2 + y^2} \\leq |x| + |y|$
+— each needing its own bundled face, because Typst renders what it finds and
+synthesises nothing.
+
+> A block quote, to show the look does something with it.
+
+# Where this stops
+
+Images need a file, and a browser has no filesystem. That is the one thing the
+desktop app does which this page cannot, and it is a design question rather than
+a missing line of code.
+`
+
+const KB = (n) => (n / 1024).toFixed(0) + ' KB'
+const MB = (n) => (n / 1048576).toFixed(1) + ' MB'
+
+/*
+  Whether the host compressed the module, read from the page rather than
+  asserted. `encodedBodySize` is what crossed the wire and `decodedBodySize` is
+  what the module weighs, and the pair is only readable same-origin — which a
+  page serving its own wasm is.
+*/
+function transfer() {
+  const entry = performance
+    .getEntriesByType('resource')
+    .find((r) => r.name.endsWith('.wasm'))
+
+  if (!entry || !entry.decodedBodySize) return 'module: size not reported'
+  if (!entry.encodedBodySize || entry.encodedBodySize === entry.decodedBodySize) {
+    return `module: ${MB(entry.decodedBodySize)} UNCOMPRESSED over the wire`
+  }
+  const ratio = (entry.decodedBodySize / entry.encodedBodySize).toFixed(1)
+  return `module: ${MB(entry.encodedBodySize)} over the wire, ${MB(entry.decodedBodySize)} decoded (${ratio}x)`
+}
+
+let drawn = null
+let timer = null
+let wasm = null
+
+function draw(bytes) {
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
+  pane.src = url
+  if (drawn) URL.revokeObjectURL(drawn)
+  drawn = url
+}
+
+function compile() {
+  const md = text.value
+  try {
+    const t0 = performance.now()
+    const bytes = wasm.render(md)
+    const ms = performance.now() - t0
+
+    status.className = ''
+    status.textContent =
+      `current · ${ms.toFixed(0)} ms · ${KB(bytes.length)} PDF · anchors ${wasm.anchors(md) || '(none)'}\n` +
+      boot
+    draw(bytes)
+  } catch (e) {
+    // The last good page stays, as it does in the desktop app: an author
+    // mid-edit passes through broken states constantly.
+    status.className = 'bad'
+    status.textContent = String(e.message ?? e) + '\n' + boot
+  }
+}
+
+let boot = ''
+
+try {
+  const t0 = performance.now()
+  const mod = await import('./pkg/md2pdf_web_spike.js')
+  await mod.default()
+  wasm = mod
+  boot = `${transfer()} · instantiated in ${(performance.now() - t0).toFixed(0)} ms · ${navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome') ? 'WebKit' : 'Blink'}`
+
+  text.value = SAMPLE
+  compile()
+
+  text.addEventListener('input', () => {
+    clearTimeout(timer)
+    timer = setTimeout(compile, 300)
+  })
+} catch (e) {
+  status.className = 'bad'
+  status.textContent = 'failed to start: ' + (e.message ?? e)
+  console.error(e)
+}
+</script>
+</body>
+</html>
