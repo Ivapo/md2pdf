@@ -6,12 +6,12 @@ note: >
   closed list of LaTeX commands, mitex converts them in process, and a command
   outside the list is an error naming the command and its line.
 status: accepted
-last_updated: 2026-08-11
+last_updated: 2026-08-14
 
 phases:
   - name: "Phase 1 — inline math on the page"
     reviewed: 2026-08-11
-    shipped: null
+    shipped: 2026-08-14
     cut: null
     by: null
   - name: "Phase 2 — display math as its own block"
