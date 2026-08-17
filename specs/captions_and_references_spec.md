@@ -12,7 +12,7 @@ last_updated: 2026-08-15
 phases:
   - name: "Phase 1 — a captioned figure"
     reviewed: 2026-08-15
-    shipped: null
+    shipped: 2026-08-17
     cut: null
     by: null
   - name: "Phase 2 — tables and listings take the same treatment"
@@ -385,6 +385,20 @@ call it recorded, and **everything after that region is separator newlines and
 nothing else**. Any content written in between fails the third, so no clearing
 has to be scattered across the emitter's arms for a caption to refuse to attach
 to the wrong thing.
+
+**CORRECTED 2026-08-17, on shipping Phase 1: the append-only claim now has
+exactly one exception, and it is the splice itself.** The paragraph above says
+no `truncate` touches a `bufs` frame anywhere in `core/src/emit.rs`, which was
+true when it was measured and stopped being true the moment the rewrite it
+argues for was written: `core/src/emit.rs:splice_caption` truncates back to the
+recorded point and appends the wrapper. **The argument is unchanged and this is
+what it was for** — the one non-append write is the one that spends the record,
+and it updates the record in the same breath, so every *other* write is still an
+append and a live record's offset still cannot shift under it. Recorded because
+a later reader re-deriving the measurement will find that `truncate` and needs
+to know it is the sanctioned one rather than a hole in the design.
+`rules/pipeline.md` carries the corrected wording, since that is the artifact
+that tracks the code.
 
 **The separators are the one detail an implementer will otherwise rediscover.**
 By the time the caption's first `Text` arrives, `core/src/emit.rs:step`'s
