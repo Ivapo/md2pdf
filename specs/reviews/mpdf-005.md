@@ -2,6 +2,49 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 4 — Phase 1 only — 2026-08-15 — same reviewer, resumed with the author's changelog — **NOT READY (past the cap, by the human's decision)**
+
+Verdict: `NOT READY`, one blocking. **Run past §7.6's three-round cap on the
+human's explicit authorisation**, recorded here because going past the cap is a
+decision a person makes.
+
+**Round 3's blocker was accepted in its conclusion and rejected in its premise,
+and the reviewer confirmed the rejection against the code.** Rounds 2 and 3 both
+claimed a held image call would be lost — at the document's end, then at a
+footnote region's end. `core/src/emit.rs:Walk::finish` drains `pending` itself,
+under a doc comment that says why it exists, and both walk-ending sites go
+through it. **No image is dropped at either site**, and the drain the spec had
+promised to add would have fixed a bug that does not exist.
+
+What survives is smaller and real: `finish` destructures `(call, _)` and writes
+`write_image(…, false)`, discarding the form. Held one paragraph longer, a
+standalone image reaching `finish` is demoted to `#box(image(…))` — visible
+rather than silent, and a one-line fix in the one place both sites share. Round
+3's conclusion also survives: two sites, and the footnote one covered by nothing,
+since `tests/fixtures/footnotes.md` ends its definition with a list.
+
+**The new blocker is the second consecutive one caused by perturbing the flush
+timing**, which is a fact about the design rather than about the prose.
+`Walk.para` is a buffer *offset*, not a flag —
+`core/src/emit.rs:step` computes `opened: *para == Some(top(bufs).len())` against
+the length recorded when the paragraph opened. Holding the flush past
+`Start(Paragraph)` means the held call is appended *after* `para` was recorded,
+so the offsets no longer match and **the second of two consecutive standalone
+images is demoted to `#box(image(…))`**. Re-derived by the author against the
+shipped binary: both are bare `#image(…)` today. An `awk` sweep of
+`tests/fixtures/*.md` and `samples/*.md` finds **no two consecutive standalone
+image paragraphs anywhere**, so no gate case reaches the shape.
+
+One non-blocking: gate (3a)'s "a new fixture case" does not say which file, and
+adding the footnote-final image to `tests/fixtures/footnotes.md` would move a
+shipped golden and fail gate (7). Outstanding at escalation.
+
+**Escalated again rather than folded.** Two rounds running, the blocker came from
+the deferral colliding with machinery it was not designed against, which is
+evidence about the mechanism; the author's recommendation to the human is to
+replace the deferral rather than patch it. `status` stays `draft` and Phase 1's
+`reviewed` stays `null`.
+
 ### Round 3 — Phase 1 only — 2026-08-15 — same reviewer, resumed with the author's changelog — **NOT READY (escalated at the cap)**
 
 Verdict: `NOT READY`, one blocking, at the loop's three-round cap. Round 2's

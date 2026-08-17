@@ -206,8 +206,11 @@ later figure treatment, and it spends that hook.
 
 **Only the standalone form is wrapped.** An inline image inside a sentence stays
 a `box(image(…))` and takes no caption, no number and no label — a figure is a
-block that floats, and one inside a clause is not a figure. `write_image` already
-tells the two apart, so this needs no new state.
+block that floats, and one inside a clause is not a figure.
+`core/src/emit.rs:step`'s standalone test already tells the two apart and is not
+changed. It does not follow that nothing is added: the deferral below holds a
+settled call one paragraph longer than it holds one today, which is state, and
+§2's attachment subsection is where that is stated exactly.
 
 ### The caption is a `: ` line, and it is what makes a figure (decision, recorded)
 
@@ -335,15 +338,49 @@ bare `#image(…)` is flushed first and the paragraph is printed as it always wa
 **The standalone test itself does not change**, which is the property the
 blank-line form was chosen for.
 
-**A longer deferral needs a drain, and this is where an image goes missing.**
-`core/src/emit.rs:emit` runs the event loop and then calls `walk.finish()` with
-no post-loop flush of `pending`; that is safe today only because the flush always
-fires on the very next event. Held across a paragraph boundary, an image that is
-the document's **last block** has no next event and would be dropped from the
-PDF entirely — the silent-drop class `mpdf-001` §2 exists to refuse. `emit` gains
-that drain, and it is named here rather than left to be discovered because
-`tests/fixtures/images.md` ends with exactly that shape: the last line of
-`tests/golden/images.typ` is a standalone `#image("dot.png")`.
+**A longer deferral meets an existing drain, and the hazard is a demotion rather
+than a drop.** Rounds 2 and 3 both reported that a held call would be lost —
+first at the end of the document, then at the end of a footnote region — and
+**both were wrong about what happens, which is recorded because the wrong version
+names the wrong fix.** `core/src/emit.rs:Walk::finish` already drains `pending`,
+and its own doc comment says why it exists: "This writes one anyway, in the
+inline form, rather than let a future change drop an image silently." Both sites
+that end a walk go through it — `core/src/emit.rs:emit` and
+`core/src/emit.rs:collect_definitions`, which takes a footnote body with
+`std::mem::replace(&mut walk, Walk::new()).finish()`. **So no image is dropped,
+at either site, and no new drain is added.**
+
+What `finish` discards is the *form*. `Walk.pending` is an
+`Option<(String, bool)>` whose flag is `opened`, and the settled verdict is
+computed at the flush in `core/src/emit.rs:step` as
+`opened && matches!(&event, Event::End(TagEnd::Paragraph))`. `finish` does not
+recompute it; it writes `write_image(&mut self.bufs, &call, false)` — the inline
+form, unconditionally. That is correct today, because a call never survives to
+`finish`: the flush always fires on the very next event, exactly as the comment
+says.
+
+**Held one paragraph longer, a call can survive to `finish`, and a standalone
+image then reaches the page as `#box(image(…))`.** A block that sat on its own
+becomes an inline box inside a paragraph — visible, not silent, and still a
+faithfulness regression of the kind §2 refuses. **So the held call carries its
+settled verdict rather than `opened`, and `finish` honours it instead of writing
+`false`.** One line, in the one place both call sites already share, which is why
+this is not two fixes.
+
+Two shapes reach it, and they are not equally covered. A document whose last
+block is a standalone image moves `tests/golden/images.typ`, whose final line is
+`#image("dot.png")`, so gate (2) and gate (7) catch that one. **A footnote
+definition whose last block is a standalone image is caught by nothing** —
+`tests/fixtures/footnotes.md` ends its definition with a list — so gate (3a)
+names it.
+
+**One buffer detail, stated so it is not rediscovered.** By the time the first
+`Text` of the following paragraph is examined, `core/src/emit.rs:step`'s
+paragraph arms have each pushed a `'\n'` into `top(bufs)` — one closing the
+image's paragraph and one opening the caption's — for a paragraph that is about
+to be consumed rather than printed. Both are unwound when the caption is taken.
+Gate (1)'s byte-exact golden pins the result either way, so this is a note to the
+implementer rather than a decision.
 
 ### Why the caption is the author's and the format is the look's (decision, recorded)
 
@@ -441,9 +478,13 @@ moves neither, and Phase 1's gate names them.
 ## 3. Open questions
 
 - **OQ-1** — ~~what is the syntax for a caption and for a name?~~ **RESOLVED
-  (2026-08-15), in round 1: the caption is a `: ` line immediately after the
-  construct, and a name rides its end as `{#name}`.** §2 records the choice and
-  the census behind it. Alt text stays refused as a caption source, on
+  (2026-08-15), in round 1 and corrected in round 2: the caption is a paragraph
+  of its own, separated by a blank line, opening `: `; a name rides its end as
+  `{#name}`.** Round 1's resolution said "the line immediately after the
+  construct", and round 2 falsified that by running the parser — with no blank
+  line the image and the caption are one paragraph joined by a `SoftBreak`, and
+  the example converted to the inline form plus literal `: ` text. §2 records the
+  choice, the census behind it, and the rejected spelling. Alt text stays refused as a caption source, on
   `mpdf-002` §1.1's ground; a fenced-div wrapper was weighed and is more syntax
   than one line of prose needs.
 
@@ -550,9 +591,11 @@ about it.*
   flush in `core/src/emit.rs:step`, not in `core/src/emit.rs:write_image`**, per
   §2 — the caption is a later event than the image, and `pending` is the deferral
   the emitter already runs for `standalone`. The deferral is held across
-  `Start(Paragraph)` to the first `Text`, **and `core/src/emit.rs:emit` gains a
-  post-loop drain**, without which a document ending in a standalone image loses
-  it. `core/src/emit.rs:step`'s standalone test is **not** changed.
+  `Start(Paragraph)` to the first `Text`. **`core/src/emit.rs:Walk::finish`
+  already drains a held call, at both sites that end a walk, so no drain is
+  added** — what changes is that the held call carries its settled standalone
+  verdict and `finish` honours it, where today it writes the inline form
+  unconditionally. `core/src/emit.rs:step`'s standalone test is **not** changed.
 
   **An image with no caption line is written exactly as it is today**, per §2's
   uncaptioned decision. The inline form is untouched. Nothing else in the dialect
@@ -593,10 +636,16 @@ about it.*
   reaches the page as text — the measured behaviour §2 records, asserted so that
   an implementer who "fixes" it by widening the standalone test fails here.
 
-  (3a) **A document whose last block is a standalone image still carries that
-  image**, asserted over `tests/fixtures/images.md`, which ends with one. This is
-  the drain §2 names; without it the image is dropped and no other case in this
-  gate would notice.
+  (3a) **A standalone image that is the last block of a walk keeps the
+  standalone form**, at both sites — the end of the document, which
+  `tests/fixtures/images.md` already ends with, and **the end of a footnote
+  definition, which needs a new fixture case because
+  `tests/fixtures/footnotes.md` ends its definition with a list.** §2 records
+  that `Walk::finish` drains such a call in the *inline* form, so an
+  implementation that leaves that line alone demotes a block figure to a
+  `#box(image(…))` inside a paragraph. The document-final shape is caught by
+  gates (2) and (7) as a moved golden; **the footnote shape is caught by nothing
+  else in this gate**, which is why it is named.
 
   (4) **Both refusals, each naming its line**: a `: ` line with no text after it,
   and a second `: ` line beneath the first. And the case that stops the rule being
