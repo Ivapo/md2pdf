@@ -116,6 +116,66 @@ struct AltCapture {
     depth: usize,
 }
 
+/// A standalone image call the walk has already written, and where it sits.
+///
+/// A caption looks *back* at this; an image is never held forward waiting for
+/// one. The flush timing in `step` is load-bearing for `Walk::finish`, for
+/// `collect_definitions`, and for `Walk.para`'s offset, so it does not move, and
+/// a rewrite of what was written costs none of them anything.
+///
+/// The record is verified where it is spent rather than invalidated from the
+/// walk's other arms, which rests on a property of the whole file: every write
+/// into a `bufs` frame is an append. The splice below is the one exception, and
+/// it updates this record in the same breath.
+struct Figure {
+    /// How deep the buffer stack was when the call was written.
+    depth: usize,
+    /// Where the call begins in that frame.
+    start: usize,
+    /// Exactly what stands there, checked before the point is spent.
+    written: String,
+    /// The same call without its `#`, which is what a `#figure(…)` wraps.
+    ///
+    /// Stale once `captioned` is set, and unread after that: one construct
+    /// takes one caption, so a spent point is never wrapped a second time.
+    body: String,
+    /// Whether a caption has already spliced here.
+    ///
+    /// This does not fall out of the three checks in [`Figure::live`]. A
+    /// spliced region carries `#figure(…)`, which the content check accepts, so
+    /// without this flag a second `: ` line would print as prose where the
+    /// dialect names an error.
+    captioned: bool,
+}
+
+impl Figure {
+    /// Whether the recorded point is still the thing it recorded.
+    ///
+    /// Three conditions, all read here and none maintained at a distance: the
+    /// same frame is on top, the region still carries the call it recorded, and
+    /// everything after it is the separator newlines the paragraph arms push.
+    /// Anything written in between — a heading, a rule, prose, an inline image —
+    /// fails the third, and a buffer frame opened in between fails the first.
+    fn live(&self, bufs: &[String]) -> bool {
+        bufs.len() == self.depth
+            && bufs[self.depth - 1]
+                .get(self.start..)
+                .and_then(|rest| rest.strip_prefix(self.written.as_str()))
+                .is_some_and(|tail| tail.bytes().all(|byte| byte == b'\n'))
+    }
+}
+
+/// The caption paragraph being collected, over the figure it will attach to.
+struct Caption {
+    /// The line the `: ` sits on, which every refusal here names.
+    line: usize,
+    /// The caption's own text, unescaped, for the `{#name}` test.
+    ///
+    /// The escaped form in the buffer cannot serve: `escape_into` turns the `#`
+    /// of a name into `\#`, and the check is on what the author typed.
+    text: String,
+}
+
 /// Everything one walk of the event stream carries from event to event.
 ///
 /// These were locals in one loop body. Grouping them is what lets that body be
@@ -160,6 +220,14 @@ struct Walk {
     alt: Option<AltCapture>,
     /// An image call waiting for the next event to settle its form.
     pending: Option<(String, bool)>,
+    /// The last standalone image this walk wrote, and where it stands.
+    ///
+    /// A caption line splices it into a `#figure(…)`. Nothing else reads it,
+    /// so a document with no caption in it carries this and writes exactly what
+    /// it always wrote.
+    figure: Option<Figure>,
+    /// The caption being collected, while its paragraph is open.
+    caption: Option<Caption>,
     /// Where the open paragraph began in the buffer that holds it.
     para: Option<usize>,
     /// Whether this walk wrote any math.
@@ -186,6 +254,8 @@ impl Walk {
             headings: Vec::new(),
             alt: None,
             pending: None,
+            figure: None,
+            caption: None,
             para: None,
             math: false,
         }
@@ -459,6 +529,8 @@ fn step(
         headings,
         alt,
         pending,
+        figure,
+        caption,
         para,
         math,
     } = walk;
@@ -529,7 +601,21 @@ fn step(
     // call waits here until the next event settles it.
     if let Some((call, opened)) = pending.take() {
         let standalone = opened && matches!(&event, Event::End(TagEnd::Paragraph));
+        let start = top(bufs).len();
         write_image(bufs, &call, standalone);
+        // Only the standalone form is a candidate for a caption. A figure is a
+        // block that floats, and an image inside a clause is not one, so the
+        // inline form records nothing — and, by writing where a record would
+        // have to end in newlines, retires any point still standing.
+        if standalone {
+            *figure = Some(Figure {
+                depth: bufs.len(),
+                start,
+                written: top(bufs)[start..].to_string(),
+                body: call,
+                captioned: false,
+            });
+        }
     }
 
     match event {
@@ -561,6 +647,13 @@ fn step(
             *para = Some(out.len());
         }
         Event::End(TagEnd::Paragraph) => {
+            // A caption's paragraph is consumed rather than printed: its
+            // content goes into the figure above it, and the `'\n'` this arm
+            // pushes below closes the figure's own block.
+            if let Some(open) = caption.take() {
+                let content = bufs.pop().expect("a caption end follows its start");
+                splice_caption(bufs, figure, &open, &content)?;
+            }
             *para = None;
             top(bufs).push('\n');
         }
@@ -706,7 +799,48 @@ fn step(
                 meta_offset.get_or_insert(range.start);
                 meta.push_str(&text);
             } else {
-                escape_into(top(bufs), &text);
+                // A paragraph that opens with `: ` immediately after a
+                // standalone image is that image's caption. Everywhere else
+                // the marker is the ordinary prose it is today, which is what
+                // keeps it from being a ban on a line an author may already
+                // have written: the collision window is one paragraph in one
+                // position.
+                let marked = match *para == Some(top(bufs).len()) {
+                    true => caption_marker(&text),
+                    false => None,
+                };
+                if let Some(rest) = marked
+                    && let Some(recorded) = figure.as_ref()
+                    && recorded.live(bufs)
+                {
+                    if recorded.captioned {
+                        return Err(Error::UnsupportedConstruct {
+                            construct: "second caption for one figure".to_string(),
+                            line: line_of(md, range.start),
+                        });
+                    }
+                    *caption = Some(Caption {
+                        line: line_of(md, range.start),
+                        text: rest.to_string(),
+                    });
+                    // The caption is prose, so its content is walked as inline
+                    // markdown into a frame of its own — the mechanism a list
+                    // item, a block quote and a table cell already use.
+                    //
+                    // `para` is an offset into the frame below, and comparing
+                    // it against this one's length would be reading a number
+                    // against the wrong buffer. Clearing it is also what makes
+                    // an image inside a caption unable to take the standalone
+                    // form: a caption is not a paragraph.
+                    *para = None;
+                    bufs.push(String::new());
+                    escape_into(top(bufs), rest);
+                } else {
+                    if let Some(open) = caption.as_mut() {
+                        open.text.push_str(&text);
+                    }
+                    escape_into(top(bufs), &text);
+                }
             }
         }
         Event::SoftBreak => top(bufs).push('\n'),
@@ -1024,6 +1158,91 @@ fn write_image(bufs: &mut [String], call: &str, standalone: bool) {
         out.push_str(call);
         out.push(')');
     }
+}
+
+// -- captions ---------------------------------------------------------------
+
+/// The caption a paragraph's first text run opens with, if it opens with the
+/// marker at all.
+///
+/// `: ` is the marker because it costs nothing in this dialect: it is Pandoc's
+/// own table-caption spelling, GFM gives it no meaning, and `options` parses
+/// such a line as an ordinary paragraph.
+///
+/// The colon alone is the marker too. It is how an author writes one with
+/// nothing after it — the parser strips a line's trailing space, so `": "`
+/// never survives as a text event — and that shape is a mistake the dialect
+/// names rather than a caption it guesses at.
+fn caption_marker(text: &str) -> Option<&str> {
+    match text {
+        ":" => Some(""),
+        _ => text.strip_prefix(": "),
+    }
+}
+
+/// Rewrite a recorded standalone image into the figure its caption makes it.
+///
+/// **The caption is what makes a figure**, which is why this runs only where a
+/// caption line stands. An uncaptioned `#figure` prints no number and still
+/// consumes the counter, so the next captioned one would read "Figure 2" with
+/// no Figure 1 anywhere, and `figure` centres its body where a bare block sits
+/// flush left. Wrapping unconditionally would therefore re-lay-out and
+/// mis-number every document that shows an image, which is the property
+/// `mpdf-004` Phase 3 stated: no document's typeset output changes unless its
+/// author asks.
+///
+/// The truncate unwinds two newlines the paragraph arms have already pushed —
+/// one closing the image's paragraph, one opening the caption's, for a
+/// paragraph that is about to be consumed. It is the one write in this file
+/// that is not an append, and it updates the record it spends.
+///
+/// The emitter writes no supplement, no separator and no number: the author
+/// supplies the words, and the look decides what a caption looks like.
+fn splice_caption(
+    bufs: &mut [String],
+    figure: &mut Option<Figure>,
+    caption: &Caption,
+    content: &str,
+) -> Result<()> {
+    let refuse = |construct: &str| {
+        Err(Error::UnsupportedConstruct {
+            construct: construct.to_string(),
+            line: caption.line,
+        })
+    };
+
+    // A marker with no caption after it would put a bare "Figure 1:" on the
+    // page, which is a mistake better named than emitted.
+    let content = content.trim();
+    if content.is_empty() {
+        return refuse("caption with no text");
+    }
+
+    // A name is a later phase's, and a name that silently did nothing is the
+    // drop the dialect refuses. The test reads what the author typed, because
+    // `escape_into` has turned the `#` of a name into `\#` by now. A caption
+    // that genuinely ends in a `{#…}` group is refused with it, which is
+    // honest: that is the shape a name will claim.
+    let typed = caption.text.trim_end();
+    if let Some(open) = typed.rfind('{')
+        && typed.ends_with('}')
+        && typed[open..].starts_with("{#")
+    {
+        return refuse("caption with a name");
+    }
+
+    let recorded = figure
+        .as_mut()
+        .expect("a caption opens only over a recorded figure");
+    let call = format!("#figure({}, caption: [{content}])", recorded.body);
+
+    let out = top(bufs);
+    out.truncate(recorded.start);
+    out.push_str(&call);
+
+    recorded.written = call;
+    recorded.captioned = true;
+    Ok(())
 }
 
 /// Lay a block out under a prefix: the first line takes `prefix`, and every

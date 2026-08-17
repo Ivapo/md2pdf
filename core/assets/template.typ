@@ -43,6 +43,19 @@
   // derivation takes a single number against its lines rather than one each.
   set math.equation(numbering: if equations == "numbered" { "(1)" } else { none })
 
+  // A caption. The author supplies the words and asks for the treatment by
+  // writing a caption at all; this look decides everything about how one
+  // looks — the supplement, the number, the separator, the size and the side
+  // it sits on. The emitter writes no "Figure", no ":" and no "1" anywhere,
+  // which is the seam the table header's boldness already sits on.
+  //
+  // Beneath the figure is Typst's own default, and it is written out rather
+  // than inherited: a look that owns the format owns the position with it, and
+  // the other bundled look answers this same question for itself.
+  set figure.caption(position: bottom, separator: [. ])
+  show figure: set block(above: 1.4em, below: 1.4em)
+  show figure.caption: set text(size: 9pt)
+
   // The title block spans every column. `scope: "parent"` is what lifts it out
   // of the column grid, and Typst supports that only together with `float`.
   // A document with none of the three keys gets no title block at all. The

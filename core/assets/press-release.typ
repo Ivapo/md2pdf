@@ -46,6 +46,19 @@
   // scoped `if` block dies with the block and would number nothing at all.
   set math.equation(numbering: if equations == "numbered" { "(1)" } else { none })
 
+  // A caption, answered the way this look answers everything else: for itself.
+  // The author writes the words and asks for the treatment; the supplement,
+  // the number, the separator and the size are decided here, and the emitter
+  // writes none of them. Where the article look separates the number from the
+  // words with a full stop, this one uses a dash, which is the point of the
+  // seam rather than a disagreement to reconcile.
+  //
+  // The caption still sets beneath the figure. A press release runs one wide
+  // column and a caption above the thing it names would read as a heading.
+  set figure.caption(position: bottom, separator: [ — ])
+  show figure: set block(above: 1.2em, below: 1.2em)
+  show figure.caption: set text(size: 9.5pt)
+
   // The masthead. The dateline sits above the title, where a press release
   // carries it, and the title is set flush left rather than centred, which is
   // what separates this look from the article's on the page. A document that
