@@ -7,7 +7,7 @@ note: >
   what a caption and a number look like, and a reference that names one stays
   true when another is inserted above it.
 status: accepted
-last_updated: 2026-08-15
+last_updated: 2026-08-17
 
 phases:
   - name: "Phase 1 — a captioned figure"
@@ -16,7 +16,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 2 — tables and listings take the same treatment"
-    reviewed: null
+    reviewed: 2026-08-17
     shipped: null
     cut: null
     by: null
@@ -425,6 +425,11 @@ resolved that in round 1: a caption needs no argument crossing the seam, only a
 reach `raw` and `table.cell` without an export. It may still widen in Phase 2, on
 OQ-2's answer rather than on captions.
 
+**Closed 2026-08-17, with OQ-3's own note: it does not widen.** OQ-2 resolved to
+no frontmatter key, so nothing crosses in Phase 2 either, and the two bundled
+looks reach a table and a listing with the rules they already carry. The sentence
+above is left standing because it was true when written.
+
 ### Why the check is on what the author wrote (decision, recorded)
 
 `mpdf-004` §2 settled this shape once and it applies unchanged: **a construct
@@ -575,6 +580,12 @@ moves neither, and Phase 1's gate names them.
   untouched here. **It may still move in Phase 2**, where OQ-2's frontmatter
   answer could push keys across; that is Phase 2's question, not this one's.
 
+  **Closed 2026-08-17: it does not move.** OQ-2 resolved to no frontmatter key at
+  all, so there is nothing to push across, and Phase 2's own scope says the
+  contract stays at five for the second phase running. The clause above is left
+  standing because it was true when written; this note is what stops a
+  consistency sweep reading it as live.
+
 - **OQ-4 — should a reference to an equation read `(1)` or `Equation 1`?** §2
   measured that the page and the reference disagree today, because the format
   lives in `math.equation` and the supplement lives in `ref`. Typst's
@@ -582,6 +593,30 @@ moves neither, and Phase 1's gate names them.
   element is another; both are look decisions by §2's seam, which means the
   answer may be "the two looks decide, and they may differ". Answerable from code
   during review. Blocks Phase 3.
+
+  **WIDENED 2026-08-17, by Phase 2's round 2, and the harder half is new: under
+  the default an equation reference does not read anything, because it does not
+  compile.** Typst's "cannot reference X without numbering" is generic over the
+  element rather than special to `figure`, and both looks set
+  `math.equation(numbering: … else { none })` while `mpdf-004` Phase 3 made
+  `plain` the frontmatter default — so the default path *is* the unnumbered one.
+  Measured against the pinned 0.15.1 by putting a labelled `$ x = 1 $` and a
+  `@ref` to it in a look and compiling twice: `equations: plain` fails with
+  ``cannot reference equation without numbering``, `equations: numbered`
+  compiles.
+
+  **So Phase 3's "a reference becomes `@name` … equations included" would fail
+  the compile for every document that did not opt in**, which is a correctness
+  claim rather than a typographic one and is why this is recorded against OQ-4
+  rather than left to be found late. It also explains why §2's measurement table
+  did not catch it: that probe was run "with `mpdf-004` Phase 3's numbering rule
+  active", which is the non-default. Three shapes for Phase 3 to weigh — refuse
+  an equation reference in a `plain` document, with an error naming the key the
+  author would have to set; number equations always and let a look hide the
+  number typographically, which contradicts `mpdf-004` Phase 3's shipped default;
+  or scope Phase 3's labels to the three `figure` kinds and leave equations to a
+  later phase. **Not Phase 2's problem** — Phase 2 ships no reference and touches
+  no look.
 
 - **OQ-5** — ~~is "referencing" a framework with two kinds, or two subjects?~~
   **RESOLVED (2026-08-15), at convergence rather than in a round: two subjects.
@@ -644,6 +679,29 @@ moves neither, and Phase 1's gate names them.
   as it does today; that is a judgement for Phase 3's round, not an assumption
   here. The alternative is a spelling of its own, which invents dialect and owes
   nothing to shipped work. Design call. **Blocks Phase 3.**
+
+- **OQ-9 — should a look ever suppress a kind's numbering, given what it costs?**
+  Raised by Phase 2's round 1, which found the question live in the gate with
+  nothing carrying it — §4's own failure mode, an unresolved question with no
+  phase attached. OQ-2 resolved that suppression *belongs* to a look, and that
+  stands. What was not known then is the price, measured 2026-08-17 against the
+  pinned 0.15.1: **a figure with `numbering: none` cannot be referenced at all**,
+  and Typst fails the compile with `cannot reference figure without numbering`.
+  So a look that suppresses a kind breaks every Phase 3 cross-reference to that
+  kind, in documents whose authors chose neither.
+
+  That is not a reason it can never happen — it is a reason it is a decision with
+  a consequence rather than a styling preference. The real want behind it is
+  narrow and legitimate: a press release with one photograph does not want
+  *"Figure 1"* under it, and it has nothing to cross-reference either. Three
+  shapes if it is ever taken up: suppress per kind in one look and accept that
+  references to that kind are a compile error there; keep numbering and let the
+  look hide the supplement and number typographically, which keeps `ref` working
+  and is the only one of the three that costs nothing; or a frontmatter key,
+  which OQ-2 refused and which this does not reopen. **The middle one is the
+  draft's default if the question is ever asked.** Design call, and one with no
+  consumer yet. Blocks nothing — Phase 2 suppresses nothing and Phase 3 needs no
+  answer to work.
 
 ## 4. Implementation phases
 
@@ -771,9 +829,12 @@ about it.*
 *Produces the observable: yes — a PDF whose tables and code blocks carry the same
 captions and their own counters.*
 
-- **Scope:** `core/src/emit.rs:table_call` and the fenced-block arm of
-  `core/src/emit.rs:step` take Phase 1's wrapper. No new syntax: if this phase
-  needs any, Phase 1 chose wrongly.
+- **Scope:** `core/src/emit.rs:step`'s `Event::End(TagEnd::Table)` and
+  `Event::End(TagEnd::CodeBlock)` arms take Phase 1's wrapper. **The arms, not
+  `core/src/emit.rs:table_call`** — that is a pure formatter returning a string
+  and can record neither a buffer offset nor a frame depth, so whether it keeps
+  its `#` is an implementer's choice and the record and the splice land in the
+  arm either way. No new syntax: if this phase needs any, Phase 1 chose wrongly.
 
   **No frontmatter key lands here, and that is OQ-2's resolution rather than an
   omission.** This is the phase that first has more than one counter, and it
@@ -783,12 +844,36 @@ captions and their own counters.*
   at `mpdf-004` Phase 3's five for the second phase running — the widening OQ-3
   left open for this phase does not happen.
 
-  Two things follow that Phase 1 did not have to face. `table_call` writes
-  `#table(` **with** the `#` where `image_call` omits it, so the inner `#` has to
-  go before the call can sit inside a `#figure(…)`. And with three kinds
-  numbering independently, whether the press-release look should suppress any of
-  them is a live look decision — Phase 1 shipped it numbering figures, and
-  changing that moves a page.
+  **Neither look file changes, and both keep all three kinds numbered.** Round 1
+  was right that the draft left this unmade while gate (8) demanded it, so it is
+  made here rather than delegated: `core/assets/template.typ` and
+  `core/assets/press-release.typ` are untouched by this phase, and their
+  kind-agnostic `show figure` and `figure.caption` rules cover a table and a
+  listing the moment the emitter emits one.
+
+  **Measured 2026-08-17, and the measurement is what decides it rather than
+  taste:** a figure whose numbering a look has suppressed **cannot be referenced
+  at all** — Typst fails the compile with `cannot reference figure without
+  numbering`, confirmed against the pinned 0.15.1 by putting a suppressed,
+  labelled figure and a `@ref` to it in a look and isolating the cause to the
+  suppression alone. So a look that suppressed a kind would make **every Phase 3
+  cross-reference to that kind fail to compile**, in a document whose author
+  chose neither the look's suppression nor the failure. OQ-2 is unchanged as a
+  mechanism — the look is still where suppression belongs — but exercising it
+  costs something that lands two phases away, so nothing is suppressed until
+  there is a reason bigger than that cost. A press release that wants an
+  unnumbered photograph is a real want and it is now a question with a price,
+  which is what OQ-9 carries.
+
+  Two asymmetries follow that Phase 1 did not have to face, and an implementer
+  trips on both. `table_call` writes `#table(` **with** the `#` where
+  `image_call` omits it, so the inner `#` has to go before the call can sit
+  inside a `#figure(…)`. And **the separators are owned differently**: for a
+  standalone image the leading `'\n'` comes from the `Event::Start(Tag::Paragraph)`
+  arm, so the recorded `start` lands after it on its own, where for these two the
+  *same arm* pushes the `'\n'` and then the call — so the record must start after
+  that newline, or `core/src/emit.rs:splice_caption`'s truncate eats the block
+  separator and glues `#figure(` onto the line above.
 
   **The code-block arm is one arm.** `core/src/emit.rs:step` handles fenced and
   indented blocks in the same `Event::End(TagEnd::CodeBlock)`, differing only in
@@ -804,8 +889,8 @@ captions and their own counters.*
   (1) **A new fixture carrying a captioned table and a captioned code block**
   matches its golden and compiles to a PDF with the `%PDF` magic bytes. The
   golden shows `#figure(table(` and `#figure(raw(` — **with no inner `#`**. That
-  is the asymmetry §2 recorded and the one thing in this phase an implementer
-  trips on; it fails the *compile* rather than a comparison, since a `#` inside a
+  is the first of the scope's two asymmetries, and the sharper of them to
+  diagnose; it fails the *compile* rather than a comparison, since a `#` inside a
   code context is a syntax error, so the case exists to make that failure legible
   rather than to discover it. One of the two captions carries `*emphasis*`, which
   holds Phase 1's "walked as inline markdown" over the constructs it did not
@@ -818,8 +903,10 @@ captions and their own counters.*
   `#table(` in the corpus and `tests/golden/blocks.typ` the only
   `#raw(block: true`. Neither gains a `figure`.
 
-  (3) **The three kinds number independently.** One document with a captioned
-  image, a captioned table and a captioned code block reads *"Figure 1"*,
+  (3) **The three kinds number independently.** **The same fixture as (1)**,
+  which therefore carries a captioned image as well as the table and the block —
+  one document rather than three, because the property is that the counters do
+  not share, and only one document can show that. It reads *"Figure 1"*,
   *"Table 1"* and *"Listing 1"* — not 1, 2 and 3. **This is the case the phase
   exists for and the one no golden can see**: the emitter writes no supplement
   and no counter, so the source is identical whether Typst keeps one counter or
@@ -846,20 +933,38 @@ captions and their own counters.*
 
   (7) `cargo test --workspace` passes with **no shipped golden file changed** —
   `tests/golden/captions.typ` included, which is why the new cases go in a
-  fixture of their own rather than into Phase 1's — and `cli/src` and `app/src`
-  untouched, checked as a diff.
+  fixture of their own rather than into Phase 1's — and `cli/src`, `app/src` and
+  both look files untouched, checked as a diff.
   `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`
-  passes unchanged: `samples/article.md` carries **both** a table and a fenced
-  block and captions neither, so neither is wrapped and its pagination cannot
-  move. `samples/press-release.md` carries a table on the same terms.
+  passes unchanged: `samples/article.md` carries a table, a fenced block **and an
+  indented one**, all three captionable after this phase and all three
+  uncaptioned, so none is wrapped and its pagination cannot move.
+  `samples/press-release.md` carries a table on the same terms — **checked by
+  hand rather than by that test**, because no Rust test compiles that sample, so
+  naming it here protects nothing on its own.
 
-  (8) **Read by eye, one PDF per look — two documents**, for (3) and for the
-  decision this phase has to take. Each is read for the three supplements and the
-  three counters at 1. **The press-release look's own call lands here**: a press
-  release carrying one photograph is the case OQ-2 named as belonging to a look,
-  and Phase 1 shipped that look numbering figures. Suppressing any kind there is
-  a page that moves, so it is decided in this phase's round and read here, not
-  assumed either way.
+  (8) **Read by eye, one PDF per look — two documents**: the new fixture in the
+  article look, and a scratch copy carrying `template: press-release`, which is
+  how Phase 1 read its two. Three things on each, and the second and third are
+  new rather than inherited:
+
+  - **the three supplements and the three counters each at 1** — case (3) seen
+    where it is visible, and true of *both* documents, since neither look
+    suppresses a kind;
+  - **the wrapped code block is centred**, where every uncaptioned code block in
+    the corpus sits flush left. §2 measured that `figure` centres its body for an
+    image and it applies unchanged to a `raw` block, so this is new behaviour
+    rather than a regression — gate (2) protects every uncaptioned block — but it
+    is the most visible thing this phase does to a page and it would otherwise
+    ship unremarked;
+  - **the caption reads under the block it names**, not under the one after it,
+    and each block keeps the space around it that an uncaptioned one has. Round 2
+    was right that this is *not* the separator asymmetry seen from the page —
+    that bug glues `#figure(` to the line above, and `figure` being a block
+    element, Typst breaks it out anyway, so its symptom is spacing at most.
+    Gate (1)'s golden and gate (5) net both byte-exactly; this read is here
+    because a page is where a reader would notice either, not because it is the
+    only instrument that can.
 
 ### Phase 3 — labels and cross-references
 *Produces the observable: yes — a PDF whose "as Figure 1 shows" is still true

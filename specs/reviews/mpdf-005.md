@@ -2,6 +2,120 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 2 only — 2026-08-17 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, at round two. **Converged**, and Phase 2's
+`reviewed` is set to 2026-08-17. `status` was already `accepted`.
+
+Round 1's blocker was verified resolved in the files rather than in the
+changelog. The reviewer re-derived the claim the fix rests on — that both looks'
+caption rules are kind-agnostic — and confirmed it: `set figure.caption(…)`,
+`show figure: set block(…)` and `show figure.caption: set text(…)` in each file,
+not one `.where(kind: …)` among them, and Typst's `figure` default
+`numbering: "1"` overridden nowhere. So a captioned table and a captioned
+listing are styled and numbered the day the emitter emits one, with zero look
+edits, and gate (7)'s diff check makes that enforceable rather than trusted.
+
+**The reviewer also named the property that makes the fix safe, which the author
+had not:** the numbering measurement is load-bearing as a *reason* and not as a
+*dependency*. If it were wrong, Phase 2's work would be unchanged, because
+nothing in the phase needs a look edit either way. The decision is keyed to the
+right artifact.
+
+Five non-blocking, all accepted; none rejected this round.
+
+**One is a Phase 3 correctness finding that this round's own measurement
+surfaced, and it is the round's best catch.** Typst's "cannot reference X
+without numbering" is generic over the element, not special to `figure`. Both
+looks set `math.equation(numbering: … else { none })` and `mpdf-004` Phase 3
+made `plain` the frontmatter default — so **the default path is the unnumbered
+one**, and Phase 3's "a reference becomes `@name` … equations included" would
+fail the compile for every document that did not opt in. Measured by the author
+before folding it in, twice against the pinned 0.15.1: `equations: plain` fails
+with ``cannot reference equation without numbering``; `equations: numbered`
+compiles. It also explains why §2's table missed it — that probe ran with
+`mpdf-004` Phase 3's numbering rule active, which is the non-default. Recorded
+against OQ-4 with three shapes for Phase 3 to weigh. Not Phase 2's problem:
+Phase 2 ships no reference and touches no look.
+
+The other four: gate (8)'s third bullet claimed to catch the separator asymmetry
+and does not — that bug glues `#figure(` to the line above and Typst breaks the
+block out anyway, so the symptom is spacing, and gate (1)'s golden and gate (5)
+net it byte-exactly; the read stays, its rationale is corrected. Gate (1) still
+said "the one thing an implementer trips on" after the scope moved to two. OQ-9
+carried no §4 classification. And `last_updated` was three revisions stale.
+
+### Round 1 — Phase 2 only — 2026-08-17 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode — one appended phase, per §7.0).** *Does this phase
+produce the observable, and is it the right one?* Yes: the typeset PDF, with
+tables and code blocks carrying captions and their own counters. **The risk
+recorded rather than dismissed:** the conversation that prompted this spec asked
+about *labels*, and Phase 2 widens the carrier to two more constructs while the
+motivating function still lands in Phase 3 — the same flag Phase 1's round 0
+raised. The ordering is right rather than accidental: Phase 3 makes `@name` read
+"Table 1", which needs a table to be a figure at all, so Phase 2 is a
+prerequisite rather than a detour; and Phase 3 is blocked by OQ-4, OQ-7 and OQ-8
+while Phase 2 was unblocked by OQ-2's resolution the same day.
+
+Verdict: `NOT READY`. One blocking, eight non-blocking; seven accepted, one
+rejected.
+
+**The blocker was the phase not being self-contained on its look half, and it
+was the author's own defect twice over.** Phase 2's scope named `emit.rs` and
+three things it leaves untouched but never said whether either `.typ` file
+changes, while gate (8) handed the phase an unmade design call outright —
+"decided in this phase's round". No `OQ-N` carried it, which is §4's named
+failure mode. **The two halves of gate (8) could not both hold**: it demanded
+"three supplements and three counters at 1" while leaving open a suppression
+that would falsify exactly that on the press-release PDF. OQ-2's own text pulled
+both ways — "it belongs in `press-release.typ`, where this resolution puts it"
+against "whether that look should suppress is left to Phase 2".
+
+**Resolved by measurement rather than by taste, and the measurement inverted the
+question.** A figure whose numbering a look has suppressed **cannot be
+referenced at all**: Typst fails with ``cannot reference figure without
+numbering``, isolated by removing only the suppression and changing nothing
+else. So suppression in a look breaks every Phase 3 cross-reference to that
+kind, in documents whose authors chose neither. Neither look changes and both
+keep all three kinds numbered; gate (7) asserts it as a diff; **OQ-9** now
+carries the parked want with its price, and records that the cheapest of its
+three shapes is a look hiding the supplement typographically while numbering
+stays on, which leaves `ref` working.
+
+**Grounding confirmed rather than corrected, so a later round need not
+re-verify.** The reviewer built and ran the shipped binary to settle the one
+question reasoning alone would not: after a table, a fenced block and an
+indented block alike, a following image-only paragraph still emits the
+*standalone* form — the same `*para == Some(top(bufs).len())` predicate the
+caption branch tests — and the separator is exactly `\n\n` in every case. So
+`Figure::live`'s three conditions and `splice_caption`'s truncate carry over
+unchanged, and Phase 1's mechanism does extend as the phase assumes. Every
+number re-derived: one golden each for `#table(` and `#raw(block: true`;
+`samples/article.md` carries a table, a fenced block **and an indented one**,
+captioning none; `samples/press-release.md` carries an uncaptioned table;
+`tests/fixtures/captions.md` carries neither construct, so Phase 1's golden
+cannot move.
+
+Six non-blocking accepted and folded: the separator-ownership asymmetry, which
+Phase 1 never met and which would otherwise glue `#figure(` to the line above;
+`table_call` named as the site where a pure formatter can record neither offset
+nor depth, so the scope now names both `End` arms; "the fenced-block arm"
+contradicting the paragraph below it; gate (7) understating the article's three
+constructs and over-claiming `samples/press-release.md`, which no Rust test
+compiles; **the centring read**, since a wrapped `raw` block is centred where
+every code block in the corpus sits flush left and no gate could see it; and the
+gate (1)/(3) fixture ambiguity, now one fixture carrying all three kinds. Two
+stale forward-looking clauses in OQ-3 and §2 took dated closing notes.
+
+**One rejected**, recorded so it is not re-raised: the refusal message reads
+"second caption for one figure" over a table and a code block. A captioned table
+*is* a Typst `figure`, so the message names the element the emitter writes; gate
+(4) asks for the construct and the line, both unchanged; and the string is
+asserted verbatim by `core/tests/golden_test.rs:each_caption_refusal_names_its_construct_and_its_line`,
+so changing it moves shipped work for wording. If it is worth changing, it is
+worth changing for all kinds at once, which is not this phase.
+
 ### Round 5 — Phase 1 only — 2026-08-15 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, at round five — **two rounds past §7.6's cap, each
