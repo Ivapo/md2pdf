@@ -123,7 +123,8 @@ the one thing an unsigned bundle cannot do.
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
-constructs, links, tables, images, footnotes, strikethrough, and math in both its forms**:
+constructs, links, tables, images and their captions, footnotes, strikethrough, and math
+in both its forms**:
 
 ````markdown
 # Introduction
@@ -161,6 +162,8 @@ fn main() {}
 | a table   | yes       |
 
 ![A diagram of the three steps](figures/pipeline.svg)
+
+: The conversion pipeline, with the *emitter* in the middle.
 
 A claim that needs a source[^1].
 
@@ -270,9 +273,36 @@ png  jpg  jpeg  gif  webp  svg  svgz  pdf
 ```
 
 The text in the square brackets is alt text. It reaches the accessibility layer of the
-PDF rather than the page, so it is not a caption and nothing numbers it. There is no
-syntax for a width, a rotation or a crop; the image takes its natural size, bounded by
-the column.
+PDF rather than the page, so it is never used as a caption. There is no syntax for a
+width, a rotation or a crop; the image takes its natural size, bounded by the column.
+
+### Captions
+
+A paragraph of its own beneath an image, opening `: `, is that image's caption:
+
+```markdown
+![The three steps, drawn as boxes](figures/pipeline.svg)
+
+: The conversion pipeline, with the *emitter* in the middle.
+```
+
+The blank line above the caption is required. Without it the two are one paragraph, and
+the image stays in the line with `: ` printed as text beside it.
+
+**A caption is what makes a figure.** An image with one is set as a numbered figure —
+*Figure 1*, *Figure 2*, counted and renumbered by Typst whenever anything moves, with the
+caption beneath it. An image without one is the plain block it has always been, takes no
+number, and consumes none: a document written before this release typesets exactly as it
+did. The caption is ordinary markdown, so emphasis, `code`, links and formulas all work
+inside one. The word "Figure", the number's format and the punctuation after it belong to
+the look, so the two bundled ones differ.
+
+Only a standalone image takes a caption. An image inside a sentence is not a figure, and a
+`: ` paragraph anywhere else — after prose, after a table, after a code block — is
+ordinary text, unchanged. Three things are errors, each naming the line: a `: ` with
+nothing after it, a second caption under one image, and a caption ending in `{#name}`.
+That last one is reserved: **there is no way yet to name a figure and refer to it, so
+"see Figure 1" is prose you keep true yourself**, as it is for equations.
 
 A file that `md2pdf` cannot read is an error that names the path, the line that asked
 for it, and the reason:
@@ -371,6 +401,10 @@ A third look is a third `.typ` file plus one name in `core/src/frontmatter.rs`. 
 contract to meet: export `template` and `divider`, and let `template` take `title`,
 `author`, `columns`, `date` and `equations` before its trailing document argument.
 `md2pdf` names all five on every call.
+
+Everything else a look decides, it decides over Typst's own elements with `show` and `set`
+rules, taking no argument at all. A table's header row, a code block's font and a figure's
+caption all reach a look that way — which is why a caption added no sixth argument.
 
 ## Licence
 

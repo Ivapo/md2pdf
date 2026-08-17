@@ -12,12 +12,13 @@ sources:
 covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the two walks footnotes need, the image asset
-  channel, the LaTeX subset a formula may hold and the prelude it compiles
+  channel, the caption that makes an image a figure and the splice that attaches
+  it, the LaTeX subset a formula may hold and the prelude it compiles
   against, the bundled looks and the call contract they meet, the equation numbering
   the author asks for and the look formats, the heading anchors a compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 392
-generated: 2026-08-15
+max_lines: 444
+generated: 2026-08-17
 ---
 
 # Pipeline
@@ -41,11 +42,11 @@ wanting only the PDF pays nothing for the anchors and gets byte-identical output
 
 ## The dialect
 
-Nineteen things are supported: headings at levels 1–6, paragraph text, soft breaks,
+Twenty things are supported: headings at levels 1–6, paragraph text, soft breaks,
 emphasis, strong emphasis, strikethrough, inline code, math in both its forms, hard line
-breaks, thematic breaks, links, images, bullet lists, ordered lists, code blocks, block
-quotes, pipe tables, footnotes, and a leading YAML frontmatter block. Heading levels map to
-Typst headings of the same level.
+breaks, thematic breaks, links, images, image captions, bullet lists, ordered lists, code
+blocks, block quotes, pipe tables, footnotes, and a leading YAML frontmatter block. Heading
+levels map to Typst headings of the same level.
 
 The inline constructs reach Typst as function calls, not as its own markup.
 `#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
@@ -66,7 +67,8 @@ escape, which is what stops Typst reading an autolink's own text as a second lin
 email autolink's destination is the bare address, because pulldown-cmark leaves the scheme
 to the renderer, so the emitter prepends `mailto:`.
 
-An image is `#image(…)` or `#box(image(…))`; the section below holds the whole subject.
+An image is `#image(…)`, `#box(image(…))` or `#figure(image(…), caption: […])`; the
+section below holds the whole subject, the caption included.
 
 Lists become `- ` and `N. ` items, every ordered item carrying its own number, so a start
 other than 1 needs no mechanism of its own. A code block becomes
@@ -206,6 +208,46 @@ The path and the alt go through `typst_string`, and an empty alt leaves the argu
 No size is emitted: with neither dimension forced, Typst bounds an image by the available
 space and keeps its aspect ratio.
 
+A standalone image with a caption beneath it becomes
+`#figure(image(…), caption: […])` instead. **The caption is what makes a figure**: an
+uncaptioned one is written exactly as above, because a `#figure` with no caption prints no
+number and still consumes the counter — so the next captioned one would read "Figure 2"
+with no Figure 1 on the page — and because `figure` centres its body where a bare block
+sits flush left. The inline form is never wrapped: a figure is a block that floats, and an
+image inside a clause is not one.
+
+The caption is a paragraph of its own, immediately after the image, opening `: `. The
+blank line is required: without it the image and the caption are one paragraph joined by a
+`SoftBreak`, so the image takes the inline form and the marker reaches the page as text.
+`: ` costs nothing here — it is Pandoc's own table-caption spelling, GFM gives it no
+meaning, and `core/src/emit.rs:options` parses such a line as an ordinary paragraph.
+`core/src/emit.rs:caption_marker` reads it, and the colon alone counts, since a line's
+trailing space does not survive the parser. A `: ` paragraph anywhere else — after prose,
+after a table, after a fenced block — is the ordinary paragraph it has always been, so the
+marker is one paragraph in one position and not a ban.
+
+The attachment is a **splice at a recorded point**, not a longer hold on the pending slot:
+the flush timing is load-bearing for `core/src/emit.rs:Walk::finish`, for
+`core/src/emit.rs:collect_definitions` and for `Walk.para`'s offset, and it does not move.
+`core/src/emit.rs:Figure` records where a standalone call was written;
+`core/src/emit.rs:splice_caption` truncates back to it and writes the wrapper, unwinding
+the two `'\n'` the paragraph arms pushed for a paragraph that is consumed rather than
+printed. `core/src/emit.rs:Figure::live` verifies the point where it is spent rather than
+clearing it from the walk's other arms — same frame depth, same recorded call, only
+separator newlines after it — which holds because every other write into a `bufs` frame is
+an append. Its `captioned` flag is the one thing those three checks cannot supply: a
+spliced region carries `#figure(…)`, which the content check accepts.
+
+The caption's content is walked as inline markdown into a frame on the same buffer stack a
+list item uses, so emphasis, code, a link and a `$…$` span all work inside one, and `para`
+is cleared as that frame opens — it is an offset into the frame below, and clearing it also
+stops an image inside a caption taking the standalone form. Three caption shapes are
+errors, each an `UnsupportedConstruct` naming the author's line: a marker with no text,
+which would put a bare "Figure 1:" on the page; a second caption for one figure; and a
+caption ending in a `{#name}` group, which is not yet a Typst label and which shipping as
+a silent no-op would be the drop the dialect refuses. That last test reads what the author
+typed, because the markup escape has turned its `#` into `\#` by then.
+
 Alt text is flattened, not emitted, because Typst's `alt` is a plain string.
 `core/src/emit.rs:AltCapture` takes every event between the image's two: text and code
 contribute their text, a soft or hard break contributes one space, emphasis, strong,
@@ -312,6 +354,16 @@ dies with the block. `(1)` is each look's own choice and the two happen to agree
 emitter writes no format string anywhere. Typst numbers the block form alone, so an inline
 formula takes no number and one `$$…$$` span takes one whatever it holds — a multi-line
 `aligned` derivation is numbered once, against its lines, not once per line.
+
+A caption crosses no argument at all. Each look carries `set figure.caption(…)`,
+`show figure: …` and `show figure.caption: …` of its own, reaching a Typst element the way
+both already reach `raw` and `table.cell`, so the contract stays at five. The author
+supplies the words and asks for the treatment by writing a caption; the look decides the
+supplement, the number, the separator, the size and the side — the article separates with a
+full stop and the press release with a dash, and both set the caption beneath. The emitter
+writes no `"Figure"`, no `":"` and no `"1"` anywhere. A second test in
+`core/tests/golden_test.rs` asserts two needles per look, `show figure` and
+`figure.caption`; the position is deliberately not one of them.
 
 The article's title block uses `place(scope: "parent", float: true)`, which lifts it out of
 the column grid so it spans the page; Typst supports that scope only together with `float`.
