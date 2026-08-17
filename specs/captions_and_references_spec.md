@@ -518,16 +518,52 @@ moves neither, and Phase 1's gate names them.
   `mpdf-001` shipped — is a separate call, and OQ-8 carries it against Phase 3.
   That split is what unblocks Phase 1 without pre-deciding the harder half.
 
-- **OQ-2 — does `equations: numbered` generalise, and how?** `mpdf-004` Phase 3
-  shipped that key on 2026-08-15, and its name presumes equations are a special
-  case. Three shapes: **sibling keys** — `figures:`, `tables:`, `listings:` —
-  which is purely additive, needs no supersession, and keeps every document
-  written today working, at the cost of four keys where one concept exists; a
-  single `numbering:` key taking a list, which is tidier and **contradicts a
-  shipped key**, forcing `supersedes` and a `cut` on a phase that shipped the day
-  before; or both, which is two ways to say one thing and the worst of the three.
-  **The draft's default is sibling keys**, which is why `supersedes` is `null` in
-  the frontmatter. Design call. Blocks Phase 2.
+- **OQ-2** — ~~does `equations: numbered` generalise, and how?~~ **RESOLVED
+  (2026-08-17), after Phase 1 shipped and from a measurement against it: it does
+  not generalise, and nothing generalises it. There is no frontmatter key for
+  figures, tables or listings — the caption is the ask, and the look decides
+  whether a kind carries a number.** The draft offered three shapes and its own
+  default was sibling keys; the answer is a fourth the draft did not list, and
+  **`supersedes` stays `null` for the reason the draft wanted rather than the one
+  it named**.
+
+  **The question presumed a symmetry that the Typst defaults do not have, which
+  is what dissolves it.** `math.equation` defaults to `numbering: none`, so
+  `equations: numbered` exists to turn numbering **on** and its default `plain`
+  is the inert one. `figure` defaults to `numbering: "1"`, so a key here would
+  turn numbering **off**. Sibling keys would therefore be four keys over one
+  value set with *opposite* defaults — `equations: plain` against
+  `figures: numbered` — which reads as a symmetry and behaves as a trap.
+
+  **And the off case needs no key, which is the measurement.** Taken 2026-08-17
+  against the shipped Phase 1 by adding one line to `core/assets/template.typ`
+  and compiling `tests/fixtures/captions.md`:
+  `show figure.where(kind: image): set figure(numbering: none)` returns the
+  caption to bare prose — no supplement, no number, no separator — **per kind,
+  with no argument crossing the seam and no key in the frontmatter.** That is
+  OQ-3's resolution applied one construct further along, and it means the look
+  can already express everything a key would have carried.
+
+  **So `equations` stops being an inconsistency and becomes the odd case
+  explained.** An equation has no caption, so there is no authorial act to read
+  the ask from, which is exactly why `mpdf-004` Phase 3 needed a key; a figure
+  has one, and writing it *is* the ask. The two answers differ because the two
+  constructs differ, not because one of them is a legacy.
+
+  **The consumer that most wants an unnumbered caption is a look, not a
+  document.** A press release carrying one photograph almost certainly does not
+  want *"Figure 1"* under it, and that is a fact about press releases rather than
+  about any one press release — so it belongs in `core/assets/press-release.typ`,
+  where this resolution puts it. Whether that look should in fact suppress is a
+  look decision left to Phase 2, not settled here: Phase 1 shipped it numbering
+  figures, and changing that moves a page.
+
+  What this costs, recorded rather than waved past: an author who wants captions
+  without numbers in *one* document edits a look instead of a frontmatter key.
+  No such consumer exists yet, and §5's scope discipline refuses the
+  pre-abstraction until one does. **If one turns up, the answer is a new
+  question and a new phase, not this one reopened** — and it starts from a
+  corpus where the key was never added, which is the cheaper place to start.
 
 - **OQ-3** — ~~does the look contract widen a sixth time?~~ **RESOLVED
   (2026-08-15), in round 1, for Phase 1: no, and nothing is added to the
@@ -737,8 +773,22 @@ captions and their own counters.*
 
 - **Scope:** `core/src/emit.rs:table_call` and the fenced-block arm of
   `core/src/emit.rs:step` take Phase 1's wrapper. No new syntax: if this phase
-  needs any, Phase 1 chose wrongly. OQ-2's frontmatter answer lands here, because
-  this is the phase that first has more than one counter to switch.
+  needs any, Phase 1 chose wrongly.
+
+  **No frontmatter key lands here, and that is OQ-2's resolution rather than an
+  omission.** This is the phase that first has more than one counter, and it
+  switches none of them: the caption is the ask, and each look decides per kind
+  with a `show figure.where(kind: …)` rule. So `core/src/frontmatter.rs` is
+  untouched, `core/src/emit.rs:header` is untouched, and the look contract stays
+  at `mpdf-004` Phase 3's five for the second phase running — the widening OQ-3
+  left open for this phase does not happen.
+
+  Two things follow that Phase 1 did not have to face. `table_call` writes
+  `#table(` **with** the `#` where `image_call` omits it, so the inner `#` has to
+  go before the call can sit inside a `#figure(…)`. And with three kinds
+  numbering independently, whether the press-release look should suppress any of
+  them is a live look decision — Phase 1 shipped it numbering figures, and
+  changing that moves a page.
 - **Exit gate:** to be written.
 
 ### Phase 3 — labels and cross-references
