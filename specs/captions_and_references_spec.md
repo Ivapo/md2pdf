@@ -789,7 +789,77 @@ captions and their own counters.*
   numbering independently, whether the press-release look should suppress any of
   them is a live look decision — Phase 1 shipped it numbering figures, and
   changing that moves a page.
-- **Exit gate:** to be written.
+
+  **The code-block arm is one arm.** `core/src/emit.rs:step` handles fenced and
+  indented blocks in the same `Event::End(TagEnd::CodeBlock)`, differing only in
+  whether a `lang` argument is written, and both reach Typst as `raw(block:
+  true, …)`. So both take a caption. §2's list says "a fenced code block", and
+  this is that sentence read against the code rather than narrowed: splitting
+  them would make a `: ` line a caption after one kind of block and prose after
+  another, with nothing on the page to tell an author which they had written.
+- **Exit gate:** eight cases, and the shape is Phase 1's because the mechanism
+  is Phase 1's. What is new is that there are now three recordable constructs
+  where there was one, and three counters where there was one.
+
+  (1) **A new fixture carrying a captioned table and a captioned code block**
+  matches its golden and compiles to a PDF with the `%PDF` magic bytes. The
+  golden shows `#figure(table(` and `#figure(raw(` — **with no inner `#`**. That
+  is the asymmetry §2 recorded and the one thing in this phase an implementer
+  trips on; it fails the *compile* rather than a comparison, since a `#` inside a
+  code context is a syntax error, so the case exists to make that failure legible
+  rather than to discover it. One of the two captions carries `*emphasis*`, which
+  holds Phase 1's "walked as inline markdown" over the constructs it did not
+  cover.
+
+  (2) **An uncaptioned table and an uncaptioned code block are byte-for-byte
+  unchanged**, which is Phase 1's central decision applied to two more
+  constructs: the caption is what makes a figure. Measured 2026-08-17, the blast
+  radius is **one golden each** — `tests/golden/table.typ` carries the only
+  `#table(` in the corpus and `tests/golden/blocks.typ` the only
+  `#raw(block: true`. Neither gains a `figure`.
+
+  (3) **The three kinds number independently.** One document with a captioned
+  image, a captioned table and a captioned code block reads *"Figure 1"*,
+  *"Table 1"* and *"Listing 1"* — not 1, 2 and 3. **This is the case the phase
+  exists for and the one no golden can see**: the emitter writes no supplement
+  and no counter, so the source is identical whether Typst keeps one counter or
+  three. It is read by eye, with (8).
+
+  (4) **Phase 1's three refusals hold over both new constructs**, each naming its
+  line: a `: ` line with no text, a second `: ` line, and a caption ending
+  `{#name}`, after a table and after a code block. They run through the code
+  Phase 1 shipped, so this is a regression net rather than new behaviour — and it
+  is cheap, which is the argument for having it rather than assuming it.
+
+  (5) **A caption reaches the construct above it and no other.** A table, then a
+  code block, then a caption: the caption attaches to the code block and the
+  table stays bare. **New in this phase**, because Phase 1 had one recordable
+  construct and could not express the case. It pins that the record is the last
+  one written rather than the last one of its kind.
+
+  (6) **The look contract does not widen, asserted as a diff.**
+  `core/src/frontmatter.rs` and `core/src/emit.rs:header` are untouched and
+  `every_bundled_template_meets_the_call_contract` is unchanged at five
+  arguments. **This is OQ-2's resolution held as a test rather than as prose** —
+  the phase that was drafted to add frontmatter keys adds none, and an
+  implementer who reaches for one fails here.
+
+  (7) `cargo test --workspace` passes with **no shipped golden file changed** —
+  `tests/golden/captions.typ` included, which is why the new cases go in a
+  fixture of their own rather than into Phase 1's — and `cli/src` and `app/src`
+  untouched, checked as a diff.
+  `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`
+  passes unchanged: `samples/article.md` carries **both** a table and a fenced
+  block and captions neither, so neither is wrapped and its pagination cannot
+  move. `samples/press-release.md` carries a table on the same terms.
+
+  (8) **Read by eye, one PDF per look — two documents**, for (3) and for the
+  decision this phase has to take. Each is read for the three supplements and the
+  three counters at 1. **The press-release look's own call lands here**: a press
+  release carrying one photograph is the case OQ-2 named as belonging to a look,
+  and Phase 1 shipped that look numbering figures. Suppressing any kind there is
+  a page that moves, so it is decided in this phase's round and read here, not
+  assumed either way.
 
 ### Phase 3 — labels and cross-references
 *Produces the observable: yes — a PDF whose "as Figure 1 shows" is still true
