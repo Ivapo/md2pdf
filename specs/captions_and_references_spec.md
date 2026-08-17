@@ -62,6 +62,7 @@ wrong. After this spec the author writes a caption and a name, and points at it:
 
 ```markdown
 ![The three steps, drawn as boxes](pipeline.svg)
+
 : The conversion pipeline. {#fig:pipeline}
 
 As [](#fig:pipeline) shows, the emitter sits in the middle.
@@ -70,10 +71,11 @@ As [](#fig:pipeline) shows, the emitter sits in the middle.
 and the PDF reads *"As Figure 1 shows…"*, with the caption set beneath the
 image, both renumbered by Typst whenever anything moves.
 
-**The caption syntax above is illustrative, not decided.** It is the central
-design call of this spec and OQ-1 carries it; §2 fixes the mechanism, the seam
-and the enforcement, and deliberately does not fix the spelling before a review
-round has argued it.
+**The caption half of that sketch is decided** — §2 fixes the `: ` line and the
+`{#name}` that may ride it, and OQ-1 records why. **The reference half,
+`[](#fig:pipeline)`, is not**: it is the one spelling that reinterprets a
+construct `mpdf-001` shipped, and OQ-8 carries it. Phase 1 needs only the
+caption, so nothing downstream of that question blocks it.
 
 ### 1.1 Why this is a new spec and not a phase of an existing one
 
@@ -181,14 +183,19 @@ to close. §2's scan rule below is the answer.
 
 ### Nothing is wrapped today, and `mpdf-002` left the hook (decision, recorded)
 
-Measured by grep on 2026-08-15: **`figure` appears nowhere** — not in
-`core/src/emit.rs`, not in `core/assets/template.typ` or
-`core/assets/press-release.typ`, and not in any of the 18 shipped golden files.
-The three constructs reach Typst bare:
+Measured by grep on 2026-08-15 and re-derived by round 1: **the Typst element
+`figure` appears nowhere** — not in `core/src/emit.rs`, not in
+`core/assets/template.typ` or `core/assets/press-release.typ`, and not in any of
+the 18 shipped golden files. (The *word* occurs twice, in a comment about the
+Windows path `C:\figure.png` and in `core/src/lib.rs`; the claim is about the
+element.) The three constructs reach Typst bare:
 
-- `core/src/emit.rs:image_call` writes `image(path, alt: …)`, and
-  `core/src/emit.rs:write_image` decides standalone against inline.
-- `core/src/emit.rs:table_call` writes `table(…)`.
+- `core/src/emit.rs:image_call` writes `image(path, alt: …)` **without a leading
+  `#`**, which `core/src/emit.rs:write_image` adds for the standalone form and
+  omits inside a `box` for the inline one.
+- `core/src/emit.rs:table_call` writes `#table(…)` — **with** the `#`, unlike
+  `image_call`. Recorded because it is the asymmetry Phase 2 trips on: that inner
+  `#` has to be dropped before the call can sit inside a `#figure(…)`.
 - `core/src/emit.rs:step` writes `#raw(block: true, …)` for a fenced block.
 
 **That bare standalone `#image` is a designed extension point, not an
@@ -202,6 +209,142 @@ a `box(image(…))` and takes no caption, no number and no label — a figure is
 block that floats, and one inside a clause is not a figure. `write_image` already
 tells the two apart, so this needs no new state.
 
+### The caption is a `: ` line, and it is what makes a figure (decision, recorded)
+
+**A caption is a paragraph of its own, immediately after the construct, opening
+`: `.** A name may ride the end of that line as `{#name}`, which Phase 3
+implements and Phase 1 refuses as it refuses anything else it does not yet
+accept.
+
+```markdown
+![The three steps, drawn as boxes](pipeline.svg)
+
+: The conversion pipeline, with the *emitter* in the middle.
+```
+
+**The blank line is required, and round 2 is why.** A draft of this section put
+the caption on the very next line, which reads better and is what an author
+reaches for. Measured against `pulldown-cmark` 0.13.4 under
+`core/src/emit.rs:options`: that form is **one paragraph**, not two — the events
+are `Start(Paragraph)`, the image, `SoftBreak`, `Text(": …")`, `End(Paragraph)`.
+Run through today's emitter it converts to `#box(image(…))` — the *inline* form —
+followed by a literal `: The conversion pipeline…`, because
+`core/src/emit.rs:step` tests standalone-ness by whether `End(TagEnd::Paragraph)`
+is the next event and a `SoftBreak` is not it.
+
+So the prettier spelling is not a syntax choice, it is a change to the
+standalone test — **the one discrimination every image in the dialect flows
+through**, and the blast radius this phase is scoped to avoid. The blank-line
+form leaves that test untouched, which is what keeps gate (2)'s "an uncaptioned
+image is byte-for-byte unchanged" provable rather than hopeful. Recorded because
+the rejected spelling is the one a later reader will propose.
+
+Chosen over the two alternatives round 1 was asked to weigh. **Alt text is not
+reused**: `mpdf-002` §1.1 refused it because alt is accessibility metadata, and
+§1.2 keeps that. **A fenced-div wrapper** (`::: figure … :::`) is unambiguous and
+generalises, and it is more syntax than the job needs — a caption is one line of
+prose, and a three-line wrapper around a one-line construct reads as ceremony.
+
+`: ` is the marker because **it costs nothing in this dialect**. It is Pandoc's
+own table-caption spelling, so it is the closest thing to a convention; GFM gives
+it no meaning, since definition lists are not in GFM and `pulldown-cmark` with
+`core/src/emit.rs:options` parses such a line as an ordinary paragraph. Censused
+2026-08-15 across `tests/fixtures/` and `samples/`: **no line anywhere in the
+corpus begins with `: `**, which is the same instrument `mpdf-001` Phase 8 used
+before claiming a marker.
+
+**A `: ` line is a caption only where a caption can attach**, which is
+immediately after a standalone image (Phase 1), a table, a fenced code block
+(Phase 2) or a display equation (Phase 3). Everywhere else it stays the ordinary
+paragraph it is today. That is what keeps the marker from being a ban: a document
+that opens a paragraph with `: ` somewhere else is untouched, and the collision
+window is one paragraph in one position, which the census finds empty.
+
+### Why an uncaptioned construct is not wrapped (decision, recorded)
+
+**A standalone image with no caption line stays exactly the bare `#image(…)` it
+is today.** Round 1 measured both halves of the alternative, and each is a
+failure this project has a rule against:
+
+- An uncaptioned `#figure(image(…))` **prints no number and still consumes the
+  counter**, so a captioned figure after an uncaptioned one reads *"Figure 2"*
+  with no Figure 1 anywhere on the page.
+- `figure` centres its body where a bare block sits flush left — measured as a
+  bounding box moving from `xMin=70.87` to `277.48`, plus `figure`'s own gap.
+
+Wrapping unconditionally therefore silently re-lays-out and mis-numbers every
+existing document that shows an image. **`mpdf-004` Phase 3 stated the property
+this violates** — "no document's typeset output changes unless its author asks" —
+and this spec inherits it whole.
+
+So the caption is not decoration on a figure; **the caption is what makes it a
+figure.** One rule, and three things fall out of it: no shipped golden file
+changes in Phase 1 (OQ-6), `cli/tests/cli_test.rs:emit_typst_reads_no_image`
+keeps passing over its uncaptioned `tests/fixtures/figure.md`, and an author who
+wants a number gets one by writing the caption that a numbered figure wants
+anyway.
+
+### What a caption may contain, and what is refused (decision, recorded)
+
+**The caption's text is walked as inline markdown, not escaped as literal text.**
+`*emphasis*`, `` `code` ``, a link and a `$…$` span all work inside one, because
+a caption is prose and a caption that alone in the document could not carry
+markdown would be the surprise. This needs no new mechanism: the caption's
+content is a run of inline events, and `core/src/emit.rs` already walks such a
+run into a buffer of its own for a list item, a block quote and a table cell —
+the `bufs` stack is the mechanism, and the caption is one more frame on it. (A
+footnote definition is *not* a fourth example: it gets a whole separate `Walk` in
+`core/src/emit.rs:collect_definitions`, which is a different mechanism and the
+one OQ-7 is about.)
+
+Two refusals, each naming the author's line, per `mpdf-004` §2's rule that the
+error names what the author typed:
+
+- **A `: ` line carrying no text.** A caption marker with no caption is a
+  mistake, and emitting an empty `caption: []` would put a bare *"Figure 1:"* on
+  the page.
+- **A second `: ` line** immediately after the first. One construct takes one
+  caption; the second line is either a mistake or a paragraph the author did not
+  mean to mark, and both are better named than guessed.
+
+**Not refused, deliberately: a `: ` line that follows nothing captionable.** It
+is ordinary prose, unchanged, per the rule above. Refusing it would break a
+document that never asked for a caption, which is the direction this project's
+§2 rule does not run in.
+
+### Where the caption attaches, and why it is not `write_image` (decision, recorded)
+
+Round 1 caught this and it is recorded so an implementer does not re-derive it:
+**the caption arrives as a later parser event than the image, so
+`core/src/emit.rs:write_image` cannot see it.** It is handed a finished call and
+a `standalone` flag, and by then the caption has not been parsed.
+
+**The emitter already defers exactly this way, and the mechanism is extended
+rather than invented.** `core/src/emit.rs:step` holds a finished image call in
+`Walk.pending` and settles `standalone` one event late, because a standalone
+image is only known to be standalone once the paragraph closes.
+
+**"One event later" is not enough, and round 2 measured why.** With the caption
+in its own paragraph the events after the image's `End(Paragraph)` are
+`Start(Paragraph)` and then the first `Text`, and only that `Text` says whether a
+caption follows. So the deferral is held across those two events: a `pending`
+call survives `Start(Paragraph)`, and the first `Text` of that paragraph either
+opens `: ` — in which case the pair is written `#figure(…)` and the caption
+paragraph is consumed rather than printed — or it does not, in which case the
+bare `#image(…)` is flushed first and the paragraph is printed as it always was.
+**The standalone test itself does not change**, which is the property the
+blank-line form was chosen for.
+
+**A longer deferral needs a drain, and this is where an image goes missing.**
+`core/src/emit.rs:emit` runs the event loop and then calls `walk.finish()` with
+no post-loop flush of `pending`; that is safe today only because the flush always
+fires on the very next event. Held across a paragraph boundary, an image that is
+the document's **last block** has no next event and would be dropped from the
+PDF entirely — the silent-drop class `mpdf-001` §2 exists to refuse. `emit` gains
+that drain, and it is named here rather than left to be discovered because
+`tests/fixtures/images.md` ends with exactly that shape: the last line of
+`tests/golden/images.typ` is a standalone `#image("dot.png")`.
+
 ### Why the caption is the author's and the format is the look's (decision, recorded)
 
 This is `mpdf-004` Phase 3's seam, reused deliberately rather than reinvented:
@@ -214,10 +357,11 @@ table header's boldness, applied one construct further along.
 
 What that costs is that both bundled looks gain a `show figure` rule and a
 `show figure.caption` rule of their own, and the two may disagree — which is the
-point, not a defect. Whether the *look contract* widens again is OQ-3, and the
-answer is not obviously yes: a caption needs no argument crossing the seam, only
-a `show` rule over an element the emitter emits, which is how both looks already
-reach `raw` and `table.cell` without an export.
+point, not a defect. **The look contract does not widen for a caption** — OQ-3
+resolved that in round 1: a caption needs no argument crossing the seam, only a
+`show` rule over an element the emitter emits, which is how both looks already
+reach `raw` and `table.cell` without an export. It may still widen in Phase 2, on
+OQ-2's answer rather than on captions.
 
 ### Why the check is on what the author wrote (decision, recorded)
 
@@ -229,8 +373,9 @@ Two rules follow, and both exist because of the measurement above.
 
 - **A label is scanned, not passed through.** A name must be a closed character
   set, checked in `core` with the author's line, because Typst's own failure
-  names `<a-name>` with no line. The set and its shape are OQ-1's business, but
-  *that* it is checked here is fixed.
+  names `<a-name>` with no line. The name's character set is Phase 3's to fix,
+  and its spelling in a reference is OQ-8's; *that* it is checked here rather
+  than left to Typst is fixed.
 - **A reference to a name the document does not declare is refused by `core`,
   before Typst sees it.** This is the one place `core` does need to collect
   labels — not to make references work, which Typst does, but to make the *error*
@@ -270,48 +415,42 @@ The differences are structural, and each one lands somewhere different:
 **One thing is owed to the citation spec that does not yet exist, and it is
 cheap: the addressing convention.** If this spec spells a name one way and a
 citation spec spells it another, the dialect grows two ways to point at
-something. So OQ-1 must choose a syntax that a citation spec could extend rather
-than contradict, and OQ-5 asks whether "referencing" is a framework with two
+something. So OQ-8 must choose a spelling that a citation spec could extend
+rather than contradict, and OQ-5 asks whether "referencing" is a framework with two
 kinds — which decides whether that later spec carries `extends: mpdf-005` or
 `related` alone. That question is asked here and answered there; it is not a
 reason to build the second subject now.
 
-### Why this changes nothing in `cli` or `app` (decision, recorded)
+### Why `cli/src` and `app/src` are untouched (decision, recorded)
 
 Neither wrapper reads the dialect. `cli/src/main.rs` and `app/src/document.rs`
 both hand a markdown string and an asset list to `md2pdf_core::md_to_pdf`, so a
 captioned, numbered, cross-referenced document converts through both the moment
 `core` supports it. Each phase checks it as a diff, as `mpdf-004`'s three did.
 
+**The claim is about `cli/src` and `app/src`, not about their tests**, and round
+1 was right that the looser phrasing overreached. Two shipped assertions sit in
+this work's blast radius even though no wrapper source changes, and both are safe
+only because of the decision above: `cli/tests/cli_test.rs:emit_typst_reads_no_image`
+asserts a bare `#image("dot.png"` over an *uncaptioned* fixture, and
+`core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`
+asserts pagination over `samples/article.md`, whose images are uncaptioned too.
+Wrapping unconditionally would move both. Wrapping only what carries a caption
+moves neither, and Phase 1's gate names them.
+
 ## 3. Open questions
 
-- **OQ-1 — what is the syntax for a caption and for a name?** **The central
-  design call, and the one thing markdown gives no help with.** Alt text is the
-  only caption-shaped field in the whole of markdown and `mpdf-002` §1.1 refused
-  to repurpose it, on the ground that alt is accessibility metadata — a reason
-  this spec accepts and its §1.2 restates. Tables, code blocks and equations have
-  nothing at all. The shapes available:
+- **OQ-1** — ~~what is the syntax for a caption and for a name?~~ **RESOLVED
+  (2026-08-15), in round 1: the caption is a `: ` line immediately after the
+  construct, and a name rides its end as `{#name}`.** §2 records the choice and
+  the census behind it. Alt text stays refused as a caption source, on
+  `mpdf-002` §1.1's ground; a fenced-div wrapper was weighed and is more syntax
+  than one line of prose needs.
 
-  a **Pandoc-style attributes** — `{#fig:pipeline}` after the construct, with the
-  caption on an adjacent line. Generalises to all four constructs uniformly, is
-  familiar to anyone who has used `pandoc-crossref`, and is unambiguously new
-  syntax rather than a reinterpretation of old.
-
-  b **A marked adjacent paragraph** — a line beginning `: ` beneath the
-  construct, as the §1 sketch draws it. Less invented-looking, but `: ` at the
-  start of a line is a definition-list marker in several dialects, so it claims
-  syntax a later phase might want.
-
-  c **Markdown's own link syntax for the reference half** — `[](#fig:pipeline)`.
-  Attractive because it invents nothing, but `mpdf-001` shipped links that keep a
-  `#` fragment intact in the destination, so this **reinterprets shipped
-  behaviour** and needs §6.1 step 1 worked before it can be a phase rather than a
-  supersession. It may survive that test if it is scoped to a fragment matching a
-  name the same document declares — a document with no names then behaves
-  exactly as it does today — but that is a judgement for a review round, not an
-  assumption for a draft.
-
-  Design call. **Blocks Phase 1**, and everything downstream of it.
+  **The question split, and only the caption half was Phase 1's.** The reference
+  spelling — `[](#fig:pipeline)`, the one shape that reinterprets a construct
+  `mpdf-001` shipped — is a separate call, and OQ-8 carries it against Phase 3.
+  That split is what unblocks Phase 1 without pre-deciding the harder half.
 
 - **OQ-2 — does `equations: numbered` generalise, and how?** `mpdf-004` Phase 3
   shipped that key on 2026-08-15, and its name presumes equations are a special
@@ -324,12 +463,15 @@ captioned, numbered, cross-referenced document converts through both the moment
   **The draft's default is sibling keys**, which is why `supersedes` is `null` in
   the frontmatter. Design call. Blocks Phase 2.
 
-- **OQ-3 — does the look contract widen a sixth time?** `mpdf-001` Phase 9 fixed
-  it at four named arguments and `mpdf-004` Phase 3 moved it to five, at the cost
-  of every shipped golden file. A caption may need nothing — a `show figure`
-  rule reaches the element without an export, the way both looks already reach
-  `raw` and `table.cell`. But OQ-2's answer may push one or three more arguments
-  across. Answerable from code during review, once OQ-2 lands. Blocks Phase 1.
+- **OQ-3** — ~~does the look contract widen a sixth time?~~ **RESOLVED
+  (2026-08-15), in round 1, for Phase 1: no, and nothing is added to the
+  contract.** A caption needs no argument crossing the seam. Both looks already
+  reach `raw` and `table.cell` with `show` rules and no export —
+  `core/assets/template.typ` and `core/assets/press-release.typ` each carry two —
+  so `show figure` and `show figure.caption` are reached the same way.
+  `mpdf-001` Phase 9's contract, moved to five by `mpdf-004` Phase 3, is
+  untouched here. **It may still move in Phase 2**, where OQ-2's frontmatter
+  answer could push keys across; that is Phase 2's question, not this one's.
 
 - **OQ-4 — should a reference to an equation read `(1)` or `Equation 1`?** §2
   measured that the page and the reference disagree today, because the format
@@ -348,20 +490,43 @@ captioned, numbered, cross-referenced document converts through both the moment
   applied retroactively without renaming an accepted spec.** Design call. Blocks
   nothing in the code; blocks `status: accepted`.
 
-- **OQ-6 — does a `figure` wrapper move a shipped golden file, and how many?**
-  Every fixture carrying a standalone image or a table changes shape, which is
-  the second-largest golden movement the project would have taken after
-  `mpdf-004` Phase 3's seventeen. Answerable from code during review by building
-  the minimal change and counting, which is the method `mpdf-004` Phase 3's round
-  1 used to correct a number the author had asserted. Blocks Phase 1's gate,
-  which cannot say "no shipped golden changes" or "these change" until it is
-  counted.
+- **OQ-6** — ~~does a `figure` wrapper move a shipped golden file, and how
+  many?~~ **RESOLVED (2026-08-15), in round 1: none, for Phase 1 — and the
+  draft's guess was wrong twice over.** It called this "the second-largest golden
+  movement the project would have taken"; round 1 counted, and exactly **one**
+  golden carries a standalone `#image(` (`tests/golden/images.typ`) and **one** a
+  `#table(` (`tests/golden/table.typ`), with `tests/golden/strikethrough.typ`
+  holding only an inline `box(image(` that Phase 1 leaves alone. So the
+  unconditional wrap would have moved **one** file, the smallest movement in the
+  record rather than the second largest.
 
-- **OQ-7 — what does a caption inside a footnote definition do?** Footnote
-  bodies are walked twice by `core/src/emit.rs:collect_definitions` and the first
-  walk is discarded, which is why `mpdf-003` Phase 6 had to withdraw its heading
-  anchors when the counts disagreed. A label declared in a discarded walk is the
-  same hazard. Answerable from code during review. Blocks Phase 3.
+  **And §2's answer to B-3 takes it to zero**: no fixture carries a caption line,
+  so nothing is wrapped and no shipped golden changes at all. Phase 1 can
+  therefore assert "no shipped golden file changed", as `mpdf-004` Phases 1 and 2
+  both did. Recorded as a measurement rather than a claim, because the number
+  moves the moment a fixture gains a caption.
+
+- **OQ-7 — what does a caption or a name inside a footnote definition do?**
+  **The draft's grounding for this was wrong and round 1 corrected it**, which
+  matters because the wrong version names the wrong hazard.
+  `core/src/emit.rs:collect_definitions` walks a footnote body **once** and keeps
+  the translated body; the document walk then *skips* that region. What is
+  discarded is the headings vector, which is why `core/src/lib.rs:anchors_from`
+  withdraws every anchor when the counts disagree. So the real question is
+  whether a name declared inside a spliced body is visible to a reference outside
+  it, and whether a figure inside one takes a number in document order.
+  Answerable from code during review. Blocks Phase 3.
+
+- **OQ-8 — how is a reference spelled?** Split out of OQ-1, which resolved its
+  caption half. `[](#fig:pipeline)` invents nothing, and that is exactly its
+  problem: `mpdf-001` shipped links that keep a `#` fragment intact in a
+  destination — `tests/golden/links.typ` pins one — so this **reinterprets shipped
+  behaviour** and needs §6.1 step 1 worked before it can be a phase rather than a
+  supersession. It may survive that test scoped to a fragment matching a name the
+  same document declares, since a document with no names would then behave exactly
+  as it does today; that is a judgement for Phase 3's round, not an assumption
+  here. The alternative is a spelling of its own, which invents dialect and owes
+  nothing to shipped work. Design call. **Blocks Phase 3.**
 
 ## 4. Implementation phases
 
@@ -375,16 +540,94 @@ the way a reader coming from `mpdf-004` Phase 3 would expect.
 image, which is what a document that shows something needs in order to talk
 about it.*
 
-- **Scope:** One construct only — the standalone image — so that OQ-1's syntax is
-  tested by a real consumer before three more constructs are committed to it.
-  `core/src/emit.rs:write_image` wraps the standalone form in `figure`; the inline
-  form is untouched. Both bundled looks gain a `show figure` rule. The caption
-  scan and its named error land here, with the author's line.
-- **Exit gate:** to be written when OQ-1 and OQ-3 resolve. It must include the
-  golden movement OQ-6 counts, a refusal naming a malformed caption and its line,
-  and one PDF read by eye per look — `mpdf-001` Phase 9's answer for anything
-  whose observable lives inside a look, which `mpdf-004` Phase 3 had to reach for
-  again.
+- **Scope:** One construct only — the standalone image — so that §2's caption
+  syntax is tested by a real consumer before three more constructs are committed
+  to it.
+
+  In `core/src/emit.rs`, a paragraph opening `: ` immediately after a pending
+  standalone image becomes that image's caption, and the pair is written
+  `#figure(image(…), caption: [ … ])`. **The attachment happens at the `pending`
+  flush in `core/src/emit.rs:step`, not in `core/src/emit.rs:write_image`**, per
+  §2 — the caption is a later event than the image, and `pending` is the deferral
+  the emitter already runs for `standalone`. The deferral is held across
+  `Start(Paragraph)` to the first `Text`, **and `core/src/emit.rs:emit` gains a
+  post-loop drain**, without which a document ending in a standalone image loses
+  it. `core/src/emit.rs:step`'s standalone test is **not** changed.
+
+  **An image with no caption line is written exactly as it is today**, per §2's
+  uncaptioned decision. The inline form is untouched. Nothing else in the dialect
+  gains a caption in this phase: a `: ` line after a table, a fenced block or a
+  display span is ordinary prose until Phases 2 and 3, and a `: ` line after
+  anything else is ordinary prose permanently.
+
+  The caption's content is walked as inline markdown into a buffer of its own on
+  the `bufs` stack. **`{#name}` is not implemented here**; a caption line ending
+  in one is refused as this phase refuses any caption it cannot yet write, naming
+  the line — Phase 3 is where it becomes a Typst label, and shipping a name that
+  silently did nothing is the drop `mpdf-001` §2 refuses.
+
+  Both bundled looks gain a `show figure` rule and a `show figure.caption` rule.
+  No look argument is added, per OQ-3. **Neither `core/src/frontmatter.rs` nor
+  `core/src/emit.rs:header` changes**, so the look contract stays at
+  `mpdf-004` Phase 3's five.
+- **Exit gate:** (1) A new fixture carrying a captioned standalone image matches
+  its golden file and compiles to a PDF with the `%PDF` magic bytes. **Its caption
+  carries `*emphasis*` and a `` `code` `` span**, and the golden shows them as
+  Typst markup rather than escaped text — the case that pins §2's "walked as
+  inline markdown" against the cheaper implementation that writes the caption as a
+  string literal, which would pass a gate whose caption was plain prose.
+
+  (2) **An uncaptioned standalone image is byte-for-byte unchanged.**
+  `tests/golden/images.typ` gains no `figure`, and
+  `cli/tests/cli_test.rs:emit_typst_reads_no_image` still passes over its
+  uncaptioned `tests/fixtures/figure.md`. **This is the case that holds §2's
+  central decision**: an implementer who wraps unconditionally passes (1) and
+  fails only here, and round 1 measured what that costs — an uncaptioned `figure`
+  consumes the counter, so the next captioned one reads "Figure 2" with no Figure
+  1 on the page, and the body is centred where a bare block sits flush left.
+
+  (3) An inline image inside a sentence is unchanged: its golden still shows
+  `box(image(`, and it takes no caption from a `: ` paragraph beneath it. **The
+  same case pins the blank line**: an image with `: …` on the *very next line* is
+  one paragraph joined by a `SoftBreak`, so it stays the inline form and the `: `
+  reaches the page as text — the measured behaviour §2 records, asserted so that
+  an implementer who "fixes" it by widening the standalone test fails here.
+
+  (3a) **A document whose last block is a standalone image still carries that
+  image**, asserted over `tests/fixtures/images.md`, which ends with one. This is
+  the drain §2 names; without it the image is dropped and no other case in this
+  gate would notice.
+
+  (4) **Both refusals, each naming its line**: a `: ` line with no text after it,
+  and a second `: ` line beneath the first. And the case that stops the rule being
+  a ban — **a `: ` paragraph that follows nothing captionable reaches the page as
+  ordinary prose**, unchanged and with no error. An implementer who refuses `: `
+  everywhere passes the first half and fails the second.
+
+  (5) A caption line ending in `{#name}` is refused with its line, per the scope.
+
+  (6) **Both looks carry the two rules**, asserted over their sources by a test
+  of its own walking `core/tests/golden_test.rs:BUNDLED_TEMPLATES`, with two
+  needles per look: `show figure` and `figure.caption`. **Not** by extending
+  `every_bundled_template_meets_the_call_contract`, which is named for the
+  five-argument contract that OQ-3 resolved does *not* widen here — hanging a
+  caption assertion off it would leave a test whose name stopped describing it.
+  The caption's *position* — above or below — is deliberately not a needle,
+  because it is each look's own call, per §2's seam.
+
+  (7) `cargo test --workspace` passes with **no shipped golden file changed** —
+  the property OQ-6 measured, which holds only because uncaptioned constructs are
+  not wrapped — and `cli/src` and `app/src` untouched, checked as a diff.
+  `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`
+  passes unchanged, since `samples/article.md`'s images carry no captions.
+
+  (8) **Read by eye, one PDF per look — two documents.** A golden pins emitter
+  output and cannot see a caption's type, its position, or the word "Figure",
+  all of which live inside the look. `mpdf-001` Phase 9 read two PDFs for exactly
+  this reason and `mpdf-004` Phase 3 reached for it again. Each document is read
+  for three things: the caption sets beneath the image, it reads "Figure 1", and
+  the emphasis in the caption is italic — which is (1)'s claim seen where it is
+  visible rather than in the source.
 
 ### Phase 2 — tables and listings take the same treatment
 *Produces the observable: yes — a PDF whose tables and code blocks carry the same
