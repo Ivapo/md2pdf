@@ -61,6 +61,7 @@ fn emit_typst_prints_the_golden_file() {
         ("math.md", "math.typ"),
         ("display_math.md", "display_math.typ"),
         ("numbered_equations.md", "numbered_equations.typ"),
+        ("captions.md", "captions.typ"),
         ("table.md", "table.typ"),
         // Emission reads paths and no bytes. This fixture names `fig#2.png`,
         // which no directory holds, and it still prints its golden file.

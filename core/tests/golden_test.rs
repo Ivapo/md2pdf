@@ -49,6 +49,8 @@ const PRESS_RELEASE_TYP: &str = include_str!("../../tests/golden/press_release.t
 const UNKNOWN_TEMPLATE_MD: &str = include_str!("../../tests/fixtures/unknown_template.md");
 const NUMBERED_EQUATIONS_MD: &str = include_str!("../../tests/fixtures/numbered_equations.md");
 const NUMBERED_EQUATIONS_TYP: &str = include_str!("../../tests/golden/numbered_equations.typ");
+const CAPTIONS_MD: &str = include_str!("../../tests/fixtures/captions.md");
+const CAPTIONS_TYP: &str = include_str!("../../tests/golden/captions.typ");
 
 /// Every bundled look, by the name the `template` key selects it with. Four
 /// tests read these: the header-row rule, and the three Phase 9 cases that no
@@ -1825,5 +1827,163 @@ fn an_equations_value_outside_the_schema_is_an_error_that_lists_the_names() {
             }
         }
         other => panic!("expected a Frontmatter error, got {other:?}"),
+    }
+}
+
+// -- mpdf-005 Phase 1: a captioned figure -------------------------------------
+
+/// The phase's own document, and the one that pins every case here but the
+/// refusals.
+///
+/// It carries six shapes on purpose. The captioned figure is the observable;
+/// the two consecutive standalone images, the footnote-final one and the
+/// document-final one are the three the rejected design was measured breaking;
+/// and the inline image with a `: ` paragraph beneath it, plus the image with
+/// `: …` on the very next line, are what hold the marker to one paragraph in
+/// one position.
+///
+/// They are here rather than in `tests/fixtures/images.md` or
+/// `tests/fixtures/footnotes.md` because editing either would move a shipped
+/// golden, which this phase asserts it does not — the same reason `mpdf-004`
+/// Phase 2 wrote a fixture of its own rather than extending `math.md`.
+#[test]
+fn the_captions_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(CAPTIONS_MD).unwrap(), CAPTIONS_TYP);
+}
+
+#[test]
+fn the_captions_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(CAPTIONS_MD, &images_assets()).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each part of the fixture reaches Typst as the form the spec chose.
+///
+/// The equality test above pins the whole file, but it cannot say which line is
+/// load-bearing. These name the rules, so an edit that drops one fails with a
+/// message pointing at the rule it dropped.
+#[test]
+fn the_captions_golden_carries_each_form() {
+    for (form, what) in [
+        (
+            r#"#figure(image("dot.png", alt: "The three steps, drawn as boxes"), caption: ["#,
+            "the captioned image, wrapped — the call the phase exists to write",
+        ),
+        (
+            "#emph[emitter]",
+            "the caption's emphasis, as Typst markup — a caption is prose, not a string literal",
+        ),
+        (
+            r#"#raw("raw")"#,
+            "the caption's code span, walked the same way for the same reason",
+        ),
+        (
+            "#image(\"mark.svg\", alt: \"a check mark\")\n\n#image(\"dot.png\", alt: \"The three steps again\")",
+            "two consecutive standalone images, both bare — the shape a longer deferral demoted",
+        ),
+        (
+            "#footnote[The last block of this definition is an image.\n\n#image(",
+            "a definition whose last block is a standalone image, still standalone",
+        ),
+        (
+            "#box(image(\"mark.svg\", alt: \"a check mark\")) sits inside this sentence",
+            "the inline form, which takes no caption from the paragraph beneath it",
+        ),
+        (
+            "\n: This paragraph follows prose rather than a figure",
+            "a `: ` paragraph following prose, reaching the page as the prose it is",
+        ),
+        (
+            "#box(image(\"dot.png\", alt: \"The three steps, drawn as boxes\"))\n: This line has no blank line",
+            "the missing blank line: one paragraph, so the inline form and a literal marker",
+        ),
+    ] {
+        assert!(
+            CAPTIONS_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+}
+
+/// An image with no caption line beneath it is the bare block it always was.
+///
+/// **This is the case that holds the phase's central decision**, and the one an
+/// implementer who wraps every standalone image fails while passing everything
+/// above. Round 1 measured what that costs: an uncaptioned `#figure` prints no
+/// number and still consumes the counter, so the next captioned one reads
+/// "Figure 2" with no Figure 1 on the page, and `figure` centres its body where
+/// a bare block sits flush left — a bounding box moving from `xMin=70.87` to
+/// `277.48`.
+#[test]
+fn an_uncaptioned_standalone_image_is_not_wrapped() {
+    assert_eq!(md_to_typst(IMAGES_MD).unwrap(), IMAGES_TYP);
+    assert!(
+        !IMAGES_TYP.contains("figure"),
+        "the images golden gained a figure"
+    );
+}
+
+/// Each caption shape the dialect refuses names its construct and its line.
+///
+/// The first would put a bare "Figure 1:" on the page. The second is the one
+/// that does not fall out of the record's own checks — a spliced region carries
+/// `#figure(…)`, which the content check accepts, so an implementer who left it
+/// to those three gets silence here instead of an error. The third is a name,
+/// which is a later phase's: shipping one that silently did nothing is the drop
+/// the dialect exists to refuse.
+#[test]
+fn each_caption_refusal_names_its_construct_and_its_line() {
+    for (md, construct, line, what) in [
+        (
+            "# H\n\n![alt](dot.png)\n\n:\n",
+            "caption with no text",
+            5,
+            "the marker with nothing after it",
+        ),
+        (
+            "# H\n\n![alt](dot.png)\n\n: A caption.\n\n: A second one.\n",
+            "second caption for one figure",
+            7,
+            "a second caption for one figure",
+        ),
+        (
+            "# H\n\n![alt](dot.png)\n\n: A caption. {#fig:one}\n",
+            "caption with a name",
+            5,
+            "the name this phase does not yet write",
+        ),
+    ] {
+        match md_to_typst(md) {
+            Err(Error::UnsupportedConstruct {
+                construct: found,
+                line: found_line,
+            }) => {
+                assert_eq!(found, construct, "for {what}");
+                assert_eq!(found_line, line, "for {what}");
+            }
+            other => panic!("expected `{construct}` for {what}, got {other:?}"),
+        }
+    }
+}
+
+/// Both bundled looks decide what a caption looks like.
+///
+/// Deliberately not an extension of
+/// `every_bundled_template_meets_the_call_contract`: that test is named for the
+/// five-argument call contract, and a caption does not widen it — a `show` rule
+/// over an element the emitter emits needs no export, the way both looks
+/// already reach `raw` and `table.cell`. Hanging these needles off it would
+/// leave a test whose name had stopped describing it.
+///
+/// The caption's *position* is deliberately not a needle. Above or below is
+/// each look's own call, which is the seam this phase rests on, and where it
+/// landed is what the by-eye read on one PDF per look is for.
+#[test]
+fn every_bundled_template_styles_a_caption() {
+    for (file, source) in BUNDLED_TEMPLATES {
+        for needle in ["show figure", "figure.caption"] {
+            assert!(source.contains(needle), "{file} does not carry `{needle}`");
+        }
     }
 }
