@@ -2,6 +2,52 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 5 — Phase 1 only — 2026-08-15 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, at round five — **two rounds past §7.6's cap, each
+authorised by the human as its own decision.**
+
+Round 4's blocker was not patched. **Three rounds had found three different
+constructs broken by one cause** — holding `Walk.pending` a paragraph longer than
+the machinery around it was written for: `Walk::finish`'s hardcoded inline form,
+the second `finish()` site in `core/src/emit.rs:collect_definitions`, and
+`Walk.para`'s offset. That is evidence about the design, so the mechanism was
+replaced rather than the symptom fixed, and the rejected deferral is recorded in
+§2 with all three failures so a later reader does not propose it again.
+
+**The replacement looks back instead of holding forward**: `write_image` records
+where a standalone call began, and a `: ` paragraph splices the recorded region
+into `#figure(…)`. The reviewer tested the load-bearing claim — that the flush
+timing does not change *at all*, making the three symptoms unreachable rather
+than fixed — and confirmed it at each of the three sites.
+
+**It also verified the property the look-behind rests on, which the author had
+asserted:** every write into a `bufs` frame in `core/src/emit.rs` is an append —
+no `truncate`, `insert`, `replace_range`, `drain` or `remove` touches one — so a
+recorded offset cannot shift while its frame is live. That is what makes "verify
+at use" sound rather than optimistic, and it is why gates (2) and (7) are now
+structurally true instead of hopeful: the record is inert unless a `: ` paragraph
+appears, and the census found none in the corpus.
+
+Three non-blocking, all accepted. The `Walk.para` analogy overstated — `para` is
+cleared at `Event::End(TagEnd::Paragraph)` as well as compared at use, so §2 now
+borrows the comparison and says so. The second-`: `-line refusal does **not**
+fall out of the three spend conditions, because a spliced region carries
+`#figure(…)` and would fail the content check into silence rather than the error
+gate (4) demands; §2 now names the state that closes it. And OQ-5 was the one
+item left between the verdict and a plannable phase.
+
+**OQ-5 resolved at convergence rather than in a round**, recorded as an author's
+call taken outside the loop because it gated `status: accepted` and no round had
+been asked to decide it: **two subjects, not a framework.** §2's own argument for
+excluding citations is the evidence — opposite direction, a new asset channel
+across three crates against `core` alone, and a different observable. A shared
+spelling convention is not a framework; OQ-8 honours it at no cost.
+
+**Converged.** `status` set to `accepted` and Phase 1's `reviewed` set to
+2026-08-15. Phases 2 and 3 stay `null` and are not cleared to build: OQ-2 blocks
+Phase 2, and OQ-4, OQ-7 and OQ-8 block Phase 3.
+
 ### Round 4 — Phase 1 only — 2026-08-15 — same reviewer, resumed with the author's changelog — **NOT READY (past the cap, by the human's decision)**
 
 Verdict: `NOT READY`, one blocking. **Run past §7.6's three-round cap on the

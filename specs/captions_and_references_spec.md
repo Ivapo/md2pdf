@@ -6,12 +6,12 @@ note: >
   cross-references: the emitter wraps them in Typst's `figure`, the looks decide
   what a caption and a number look like, and a reference that names one stays
   true when another is inserted above it.
-status: draft
+status: accepted
 last_updated: 2026-08-15
 
 phases:
   - name: "Phase 1 — a captioned figure"
-    reviewed: null
+    reviewed: 2026-08-15
     shipped: null
     cut: null
     by: null
@@ -207,10 +207,10 @@ later figure treatment, and it spends that hook.
 **Only the standalone form is wrapped.** An inline image inside a sentence stays
 a `box(image(…))` and takes no caption, no number and no label — a figure is a
 block that floats, and one inside a clause is not a figure.
-`core/src/emit.rs:step`'s standalone test already tells the two apart and is not
-changed. It does not follow that nothing is added: the deferral below holds a
-settled call one paragraph longer than it holds one today, which is state, and
-§2's attachment subsection is where that is stated exactly.
+`core/src/emit.rs:step`'s standalone test already tells the two apart, **and
+neither it nor the flush that reads it changes** — an inline image is never
+recorded as a splice point, so it can never take a caption. The one thing added
+is the record itself, which §2's attachment subsection states exactly.
 
 ### The caption is a `: ` line, and it is what makes a figure (decision, recorded)
 
@@ -310,6 +310,15 @@ error names what the author typed:
   caption; the second line is either a mistake or a paragraph the author did not
   mean to mark, and both are better named than guessed.
 
+  **This one does not fall out of §2's three spend conditions and needs state of
+  its own**, which is recorded because an implementer will otherwise get silence
+  where the gate demands an error: once a caption has spliced, the recorded
+  region carries `#figure(…)` rather than the `#image(…)` it recorded, so a
+  following `: ` paragraph fails the second condition and would print as prose
+  rather than be refused. The walk therefore remembers that the point it just
+  spent was spent, which is what turns the second line into the named error gate
+  (4) pins.
+
 **Not refused, deliberately: a `: ` line that follows nothing captionable.** It
 is ordinary prose, unchanged, per the rule above. Refusing it would break a
 document that never asked for a caption, which is the direction this project's
@@ -322,65 +331,67 @@ Round 1 caught this and it is recorded so an implementer does not re-derive it:
 `core/src/emit.rs:write_image` cannot see it.** It is handed a finished call and
 a `standalone` flag, and by then the caption has not been parsed.
 
-**The emitter already defers exactly this way, and the mechanism is extended
-rather than invented.** `core/src/emit.rs:step` holds a finished image call in
-`Walk.pending` and settles `standalone` one event late, because a standalone
-image is only known to be standalone once the paragraph closes.
+**The caption looks back at an image already written; it does not hold the image
+waiting for a caption.** That direction is the design, and it was chosen after
+the other one failed three times.
 
-**"One event later" is not enough, and round 2 measured why.** With the caption
-in its own paragraph the events after the image's `End(Paragraph)` are
-`Start(Paragraph)` and then the first `Text`, and only that `Text` says whether a
-caption follows. So the deferral is held across those two events: a `pending`
-call survives `Start(Paragraph)`, and the first `Text` of that paragraph either
-opens `: ` — in which case the pair is written `#figure(…)` and the caption
-paragraph is consumed rather than printed — or it does not, in which case the
-bare `#image(…)` is flushed first and the paragraph is printed as it always was.
-**The standalone test itself does not change**, which is the property the
-blank-line form was chosen for.
+**What was tried, and why it is recorded rather than deleted.** A draft extended
+`Walk.pending` — the deferral `core/src/emit.rs:step` already runs, which holds a
+finished image call and settles `standalone` one event late — to hold across
+`Start(Paragraph)` as far as the following paragraph's first `Text`, which is the
+first event that says whether a caption follows. Rounds 2, 3 and 4 each found a
+different construct broken by that hold, and the third is what condemned the
+approach rather than the wording:
 
-**A longer deferral meets an existing drain, and the hazard is a demotion rather
-than a drop.** Rounds 2 and 3 both reported that a held call would be lost —
-first at the end of the document, then at the end of a footnote region — and
-**both were wrong about what happens, which is recorded because the wrong version
-names the wrong fix.** `core/src/emit.rs:Walk::finish` already drains `pending`,
-and its own doc comment says why it exists: "This writes one anyway, in the
-inline form, rather than let a future change drop an image silently." Both sites
-that end a walk go through it — `core/src/emit.rs:emit` and
-`core/src/emit.rs:collect_definitions`, which takes a footnote body with
-`std::mem::replace(&mut walk, Walk::new()).finish()`. **So no image is dropped,
-at either site, and no new drain is added.**
+- `core/src/emit.rs:Walk::finish` drains a held call in the **inline** form —
+  `write_image(&mut self.bufs, &call, false)`, the `bool` discarded — which is
+  correct today only because a call never survives to it. Held longer, a
+  standalone image reaches the page as `#box(image(…))`.
+- Both walk-ending sites hit that: `core/src/emit.rs:emit`, and
+  `core/src/emit.rs:collect_definitions`, which takes a footnote body with
+  `std::mem::replace(&mut walk, Walk::new()).finish()`.
+- **`Walk.para` is a buffer offset, not a flag.** `step` computes
+  `opened: *para == Some(top(bufs).len())` against the length recorded when the
+  paragraph opened. A call flushed *after* that recording appends to the buffer
+  and the offsets stop matching — so **the second of two consecutive standalone
+  images is demoted to `#box(image(…))`**, measured against the shipped binary,
+  where both are bare `#image(…)` today.
 
-What `finish` discards is the *form*. `Walk.pending` is an
-`Option<(String, bool)>` whose flag is `opened`, and the settled verdict is
-computed at the flush in `core/src/emit.rs:step` as
-`opened && matches!(&event, Event::End(TagEnd::Paragraph))`. `finish` does not
-recompute it; it writes `write_image(&mut self.bufs, &call, false)` — the inline
-form, unconditionally. That is correct today, because a call never survives to
-`finish`: the flush always fires on the very next event, exactly as the comment
-says.
+Three symptoms, one cause: the flush timing is load-bearing for machinery that
+was not written against a longer hold. **So the flush timing does not change at
+all.**
 
-**Held one paragraph longer, a call can survive to `finish`, and a standalone
-image then reaches the page as `#box(image(…))`.** A block that sat on its own
-becomes an inline box inside a paragraph — visible, not silent, and still a
-faithfulness regression of the kind §2 refuses. **So the held call carries its
-settled verdict rather than `opened`, and `finish` honours it instead of writing
-`false`.** One line, in the one place both call sites already share, which is why
-this is not two fixes.
+**The mechanism is a recorded splice point.** When
+`core/src/emit.rs:write_image` writes a standalone call, the walk records where
+it began in the buffer that received it. When a paragraph's first `Text` opens
+`: `, the caption accumulates in a frame of its own on the `bufs` stack, and at
+that paragraph's end the recorded region is rewritten from `#image(…)` to
+`#figure(image(…), caption: [ … ])`. `Walk.pending` behaves exactly as it does
+today, `Walk::finish` is untouched, `Walk.para` is never read at a moment its
+offset has moved, and every one of the three symptoms above is unreachable
+rather than fixed.
 
-Two shapes reach it, and they are not equally covered. A document whose last
-block is a standalone image moves `tests/golden/images.typ`, whose final line is
-`#image("dot.png")`, so gate (2) and gate (7) catch that one. **A footnote
-definition whose last block is a standalone image is caught by nothing** —
-`tests/fixtures/footnotes.md` ends its definition with a list — so gate (3a)
-names it.
+**The record is verified at use, never invalidated at a distance**, which is the
+property that keeps this from becoming its own bookkeeping problem. It rests on
+something true of the whole emitter rather than on care: **every write into a
+`bufs` frame is an append** — no `truncate`, `insert`, `replace_range`, `drain`
+or `remove` touches one anywhere in `core/src/emit.rs` — so a recorded offset
+cannot shift while its frame is live. (`Walk.para` is the nearest idiom but not
+an exact one: it is compared at use *and* cleared, at `Event::End(TagEnd::Paragraph)`.
+What this borrows is the comparison, not the clearing.) A recorded point is spent
+only when three things hold: the buffer
+frame is the same depth it was written at, the recorded region still carries the
+call it recorded, and **everything after that region is separator newlines and
+nothing else**. Any content written in between fails the third, so no clearing
+has to be scattered across the emitter's arms for a caption to refuse to attach
+to the wrong thing.
 
-**One buffer detail, stated so it is not rediscovered.** By the time the first
-`Text` of the following paragraph is examined, `core/src/emit.rs:step`'s
-paragraph arms have each pushed a `'\n'` into `top(bufs)` — one closing the
-image's paragraph and one opening the caption's — for a paragraph that is about
-to be consumed rather than printed. Both are unwound when the caption is taken.
-Gate (1)'s byte-exact golden pins the result either way, so this is a note to the
-implementer rather than a decision.
+**The separators are the one detail an implementer will otherwise rediscover.**
+By the time the caption's first `Text` arrives, `core/src/emit.rs:step`'s
+paragraph arms have pushed a `'\n'` closing the image's paragraph and another
+opening the caption's, for a paragraph that is about to be consumed rather than
+printed. Both are unwound by the splice. Gate (1)'s byte-exact golden pins the
+result either way.
 
 ### Why the caption is the author's and the format is the look's (decision, recorded)
 
@@ -522,14 +533,29 @@ moves neither, and Phase 1's gate names them.
   answer may be "the two looks decide, and they may differ". Answerable from code
   during review. Blocks Phase 3.
 
-- **OQ-5 — is "referencing" a framework with two kinds, or two subjects?** If
-  internal cross-references and external citations are two kinds under one
-  framework, a citation spec later carries `extends: mpdf-005` and this spec must
-  reserve the namespace per §2 — which also means renaming this file before it is
-  accepted. If they are two subjects, `related` is the whole edge and nothing is
-  reserved. **This is asked now because §2's namespace reservation cannot be
-  applied retroactively without renaming an accepted spec.** Design call. Blocks
-  nothing in the code; blocks `status: accepted`.
+- **OQ-5** — ~~is "referencing" a framework with two kinds, or two subjects?~~
+  **RESOLVED (2026-08-15), at convergence rather than in a round: two subjects.
+  Nothing is reserved, `related` is the whole edge, and this file is not
+  renamed.** Recorded as an author's call taken outside the rounds, because it
+  gated `status: accepted` and no round had been asked to decide it.
+
+  **§2's own argument for excluding citations is the evidence.** A framework
+  under §2 reserves *named kinds sharing a mechanism*; these share none. The
+  direction is opposite — inward at content this compile already holds, outward
+  at a record the document does not contain. The channel is different, and it is
+  the concrete part: a bibliography needs a new asset kind across
+  `core/src/lib.rs:Asset`, `core/src/lib.rs:image_paths` and `mpdf-003`'s watch
+  loop, where everything here touches `core` alone. And the observable differs —
+  typography of existing content against a section the markdown never names. Two
+  subjects that share a spelling convention are not one framework with two kinds;
+  **a shared convention is honoured by OQ-8 choosing a spelling a citation spec
+  could extend, which costs nothing and reserves nothing.**
+
+  So a citation spec, if written, carries `related` rather than
+  `extends: mpdf-005`. That is the same reading `mpdf-004` §1.1 worked against
+  `mpdf-001` §1.1 and this spec's §1.1 worked against `mpdf-002` §1.1 — a
+  non-goals list is not a §2 framework — now applied to this spec's own
+  non-goal so it does not claim more standing than it argued for.
 
 - **OQ-6** — ~~does a `figure` wrapper move a shipped golden file, and how
   many?~~ **RESOLVED (2026-08-15), in round 1: none, for Phase 1 — and the
@@ -585,17 +611,19 @@ about it.*
   syntax is tested by a real consumer before three more constructs are committed
   to it.
 
-  In `core/src/emit.rs`, a paragraph opening `: ` immediately after a pending
-  standalone image becomes that image's caption, and the pair is written
-  `#figure(image(…), caption: [ … ])`. **The attachment happens at the `pending`
-  flush in `core/src/emit.rs:step`, not in `core/src/emit.rs:write_image`**, per
-  §2 — the caption is a later event than the image, and `pending` is the deferral
-  the emitter already runs for `standalone`. The deferral is held across
-  `Start(Paragraph)` to the first `Text`. **`core/src/emit.rs:Walk::finish`
-  already drains a held call, at both sites that end a walk, so no drain is
-  added** — what changes is that the held call carries its settled standalone
-  verdict and `finish` honours it, where today it writes the inline form
-  unconditionally. `core/src/emit.rs:step`'s standalone test is **not** changed.
+  In `core/src/emit.rs`, a paragraph opening `: ` immediately after a standalone
+  image becomes that image's caption, and the pair is rewritten
+  `#figure(image(…), caption: [ … ])`. **The attachment is a splice at a point
+  recorded when `core/src/emit.rs:write_image` wrote the standalone call**, per
+  §2 — not a longer hold on `Walk.pending`, which rounds 2 to 4 measured breaking
+  three separate constructs.
+
+  **Nothing about the existing flush changes**: `Walk.pending` is settled one
+  event late exactly as today, `core/src/emit.rs:step`'s standalone test is
+  untouched, `core/src/emit.rs:Walk::finish` is untouched, and `Walk.para` is
+  never read at a moment its offset has moved. The record is verified where it is
+  spent — same frame depth, same recorded call, only separators after it — rather
+  than invalidated from the emitter's other arms.
 
   **An image with no caption line is written exactly as it is today**, per §2's
   uncaptioned decision. The inline form is untouched. Nothing else in the dialect
@@ -636,16 +664,27 @@ about it.*
   reaches the page as text — the measured behaviour §2 records, asserted so that
   an implementer who "fixes" it by widening the standalone test fails here.
 
-  (3a) **A standalone image that is the last block of a walk keeps the
-  standalone form**, at both sites — the end of the document, which
-  `tests/fixtures/images.md` already ends with, and **the end of a footnote
-  definition, which needs a new fixture case because
-  `tests/fixtures/footnotes.md` ends its definition with a list.** §2 records
-  that `Walk::finish` drains such a call in the *inline* form, so an
-  implementation that leaves that line alone demotes a block figure to a
-  `#box(image(…))` inside a paragraph. The document-final shape is caught by
-  gates (2) and (7) as a moved golden; **the footnote shape is caught by nothing
-  else in this gate**, which is why it is named.
+  (3a) **The three shapes that broke the rejected design keep the standalone
+  form**, each an uncaptioned image and so each unchanged from today. They are
+  named individually because §2 records that each was measured breaking, and
+  because a future implementer who reaches back for the deferral fails here
+  rather than shipping:
+
+  - **two consecutive standalone image paragraphs** — both bare `#image(…)`,
+    which an `awk` sweep confirms no fixture or sample carries today, so no other
+    case reaches the shape;
+  - **a standalone image as a footnote definition's last block** — the shape
+    `core/src/emit.rs:collect_definitions` ends a walk on, and one
+    `tests/fixtures/footnotes.md` does not have, since its definition ends with a
+    list;
+  - **a standalone image as the document's last block** — already covered from
+    the other side by gates (2) and (7), since `tests/golden/images.typ` ends
+    with one, and included here so the three sit together.
+
+  **These go in the new fixture and its new golden, not into
+  `tests/fixtures/footnotes.md` or `tests/fixtures/images.md`** — editing either
+  would move a shipped golden and fail gate (7), which is the same reason
+  `mpdf-004` Phase 2 wrote a fixture of its own rather than extending `math.md`.
 
   (4) **Both refusals, each naming its line**: a `: ` line with no text after it,
   and a second `: ` line beneath the first. And the case that stops the rule being
