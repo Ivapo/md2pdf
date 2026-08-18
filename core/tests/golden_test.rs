@@ -55,6 +55,12 @@ const CAPTIONED_BLOCKS_MD: &str = include_str!("../../tests/fixtures/captioned_b
 const CAPTIONED_BLOCKS_TYP: &str = include_str!("../../tests/golden/captioned_blocks.typ");
 const CROSS_REFERENCES_MD: &str = include_str!("../../tests/fixtures/cross_references.md");
 const CROSS_REFERENCES_TYP: &str = include_str!("../../tests/golden/cross_references.typ");
+const EQUATION_NAMES_MD: &str = include_str!("../../tests/fixtures/equation_names.md");
+const EQUATION_NAMES_TYP: &str = include_str!("../../tests/golden/equation_names.typ");
+const PLAIN_EQUATION_NAMES_MD: &str =
+    include_str!("../../tests/fixtures/plain_equation_names.md");
+const PLAIN_EQUATION_NAMES_TYP: &str =
+    include_str!("../../tests/golden/plain_equation_names.typ");
 
 /// Every bundled look, by the name the `template` key selects it with. Four
 /// tests read these: the header-row rule, and the three Phase 9 cases that no
@@ -2465,23 +2471,24 @@ fn a_caption_line_carrying_only_a_name_is_refused() {
     }
 }
 
-/// No equation is named and none is referenced.
+/// A `: ` line after a display equation is the ordinary paragraph it has always
+/// been, and the equation in this fixture stays unnamed.
 ///
-/// **This is what keeps the phase off the compile failure OQ-4 measured.** Both
-/// looks set `math.equation(numbering: … else { none })` and the frontmatter
-/// default is `plain`, so an implementer who extended labels to equations makes
-/// every document that did not write `equations: numbered` fail to compile —
-/// a correctness regression rather than a typographic one. A `: ` line after a
-/// display equation is the ordinary paragraph it has always been.
+/// **Phase 4 held this rather than reversing it.** OQ-10 chose the closing `$$`
+/// as the carrier for an equation's name, permanently rather than for one
+/// phase, so the caption marker still attaches after a standalone image, a
+/// table and a code block and nowhere else. An implementer who reached for the
+/// caption line as the carrier after all fails here, and this shipped golden is
+/// the only one where a display equation stands next to a `: ` marker.
 #[test]
-fn no_equation_is_named_or_referenced() {
+fn a_marker_line_after_a_display_equation_is_still_prose() {
     assert!(
         CROSS_REFERENCES_TYP.contains("\n: This paragraph follows a display equation,"),
         "the `: ` line after the equation stopped being ordinary prose"
     );
     assert!(
         !CROSS_REFERENCES_TYP.contains("<eq:"),
-        "an equation took a label"
+        "the fixture's equation took a label it never asked for"
     );
 
     // The equation itself is untouched, and so is the key that numbers it.
@@ -2490,11 +2497,334 @@ fn no_equation_is_named_or_referenced() {
         "the fixture stopped taking the shipped default"
     );
 
-    // A name written on a `: ` line beneath an equation is prose too, marker
-    // and all — there is no figure above it to record.
+    // A name written on a `: ` line beneath an equation is prose, marker and
+    // all: there is no figure above it to record, and the group is a paragraph
+    // away from the equation rather than adjacent to it.
     let typst = md_to_typst("# H\n\n$$\nx = 1\n$$\n\n: A line. {#eq:one}\n").unwrap();
     assert!(
         typst.contains("\n: A line. {\\#eq:one}"),
         "a name after an equation was read as a declaration: {typst}"
     );
+}
+
+// -- mpdf-005 Phase 4: equations join ---------------------------------------
+
+/// The named equation and the reference that points at it, byte for byte.
+///
+/// A fixture of its own rather than an addition to `cross_references.md`, whose
+/// golden is shipped work gate (4) asserts does not move.
+#[test]
+fn the_equation_names_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(EQUATION_NAMES_MD).unwrap(), EQUATION_NAMES_TYP);
+}
+
+#[test]
+fn the_equation_names_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(EQUATION_NAMES_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// The label sits immediately after the closing `$`, and the group is gone.
+///
+/// The reference is `#ref(<name>)`, Phase 3's spelling reused unchanged — no
+/// `#link(` is written for it, and nothing of `{#eq:pythagoras}` reaches the
+/// page.
+#[test]
+fn the_equation_names_golden_carries_each_form() {
+    for (form, what) in [
+        (
+            "$ a ^(2 ) + b ^(2 ) = c ^(2 ) $ <eq:pythagoras>",
+            "the label immediately after the closing `$`",
+        ),
+        ("#ref(<eq:pythagoras>)", "the reference to it"),
+        (
+            "in #ref(<eq:pythagoras>). The prose",
+            "a reference ending a sentence, the shape ordinary prose puts one in",
+        ),
+        (
+            "$ sum _(i = 1 )^(n ) i = frac(n \\(n + 1 \\),2 ) $\n",
+            "the unnamed equation after it, taking no label",
+        ),
+    ] {
+        assert!(
+            EQUATION_NAMES_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+
+    // The group leaves the page with the name, the way a caption's does.
+    assert!(
+        !EQUATION_NAMES_TYP.contains("{\\#"),
+        "the name group reached the page"
+    );
+    assert!(
+        !EQUATION_NAMES_TYP.contains("#link("),
+        "a reference was written as a link"
+    );
+}
+
+/// A reference to an equation in a document that did not number its equations
+/// is refused in `core`, naming the line and naming the key.
+///
+/// **This is the case the phase exists for**, and it is the *default* path:
+/// both looks answer the key with `set math.equation(numbering: … else
+/// { none })` and `plain` is what an absent key means, so Typst fails the whole
+/// compile with `cannot reference equation without numbering` — a message
+/// carrying neither the author's line nor the key they would have to set.
+#[test]
+fn an_equation_reference_without_the_key_is_refused_naming_the_key() {
+    let md = "---\nequations: plain\n---\n\n# H\n\n$$\nx = 1\n$$ {#eq:one}\n\nAs [](#eq:one) shows.\n";
+
+    match md_to_typst(md) {
+        Err(Error::Name { line, problem }) => {
+            assert_eq!(line, 11, "the line the reference sits on");
+            assert!(
+                problem.contains("equations: numbered"),
+                "the problem `{problem}` does not name the key"
+            );
+            assert!(
+                problem.contains("'eq:one'"),
+                "the problem `{problem}` does not name what the author typed"
+            );
+        }
+        other => panic!("expected a name error, got {other:?}"),
+    }
+}
+
+/// Naming an equation is not refused there — only pointing at one is.
+///
+/// The pair with the case above is what pins where the refusal sits. A labelled
+/// unnumbered equation compiles perfectly well, and refusing the name would
+/// break a document that names an equation before it points at one, which is a
+/// direction the dialect's rule does not run in.
+#[test]
+fn a_name_on_an_equation_in_a_plain_document_is_not_refused() {
+    assert_eq!(
+        md_to_typst(PLAIN_EQUATION_NAMES_MD).unwrap(),
+        PLAIN_EQUATION_NAMES_TYP
+    );
+    assert!(
+        PLAIN_EQUATION_NAMES_TYP.contains("$ E = m c ^(2 ) $ <eq:energy>"),
+        "the label is missing from a document that numbers nothing"
+    );
+    assert!(
+        PLAIN_EQUATION_NAMES_TYP.contains(r#"equations: "plain""#),
+        "the fixture stopped taking the shipped default"
+    );
+}
+
+#[test]
+fn the_plain_equation_names_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(PLAIN_EQUATION_NAMES_MD, &images_assets()).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// An unnamed display equation is byte-for-byte unchanged, in all three shipped
+/// goldens that carry one.
+///
+/// The three are named individually because the count is what a sweep gets
+/// wrong: `cross_references.typ` is the one Phase 3 shipped, and the only
+/// shipped golden where a display equation stands next to a `: ` marker
+/// paragraph — the exact interaction this phase touches. Byte-exactness itself
+/// is each fixture's own equality test; this is the claim they add up to,
+/// written where a reader can find it.
+#[test]
+fn no_shipped_display_equation_took_a_label() {
+    for (golden, file) in [
+        (DISPLAY_MATH_TYP, "display_math.typ"),
+        (NUMBERED_EQUATIONS_TYP, "numbered_equations.typ"),
+        (CROSS_REFERENCES_TYP, "cross_references.typ"),
+    ] {
+        assert!(
+            golden.contains("$ "),
+            "{file} stopped carrying a display equation"
+        );
+        assert!(golden.contains("$\n"), "{file} lost its block delimiters");
+        assert!(!golden.contains(" <eq"), "{file} took an equation label");
+    }
+}
+
+/// The group must be the whole of the run, on both sides, and an inline span
+/// takes no name.
+///
+/// **The leading-text shape is the one that matters here.** `core`'s caption
+/// finder takes the *last* group on a line, so an implementation that reused it
+/// whole would refuse the trailing shape and label the leading one — passing
+/// every other case in this phase and shipping a rule the dialect does not
+/// have.
+#[test]
+fn a_group_that_is_not_the_whole_run_names_nothing() {
+    // Emitted rather than read off the golden: a needle over a golden constant
+    // holds only what that file says, and the file is written by the same
+    // implementation the case is meant to catch.
+    for (md, form, what) in [
+        (
+            "# H\n\n$$\nw = 4\n$$ {#eq:trailing} and more\n",
+            "$ w = 4 $ {\\#eq:trailing} and more",
+            "text after the group",
+        ),
+        (
+            "# H\n\n$$\ny = 5\n$$ see {#eq:leading}\n",
+            "$ y = 5 $ see {\\#eq:leading}",
+            "text before the group",
+        ),
+        (
+            "# H\n\nAn inline $x + 1$ {#eq:inline} here.\n",
+            "$x + 1$ {\\#eq:inline}",
+            "an inline span, which Typst never numbers",
+        ),
+        (
+            "# H\n\n$$\nz = 6\n$$\n{#eq:nextline}\n",
+            "$ z = 6 $\n{\\#eq:nextline}",
+            "a group a soft break away, which is no longer adjacent",
+        ),
+    ] {
+        let typst = md_to_typst(md).unwrap();
+        assert!(
+            typst.contains(form),
+            "{what} stopped reaching the page as prose: {typst}"
+        );
+    }
+
+    // And the same three, standing in a document that compiles.
+    for form in [
+        "$ w = 4 $ {\\#eq:trailing} and more",
+        "$ y = 5 $ see {\\#eq:leading}",
+        "$x + 1$ {\\#eq:inline}",
+    ] {
+        assert!(
+            PLAIN_EQUATION_NAMES_TYP.contains(form),
+            "the golden file does not carry `{form}`"
+        );
+    }
+}
+
+/// A caption line holding a display span keeps its own name.
+///
+/// **The record's liveness test does not refuse this and a draft of the phase
+/// claimed it did.** The caption's marker arm pushes its `bufs` frame before
+/// anything later in that paragraph is written, so a span inside a caption
+/// records at that deeper frame and would be spent at the same one, with
+/// nothing in between to fail the content check. Both conditions hold, and
+/// without the guard the label lands on the equation while the figure loses the
+/// name it has carried since Phase 3 — a silent reassignment of a shipped
+/// meaning, which nothing else here would catch.
+#[test]
+fn a_caption_holding_a_display_span_keeps_its_own_name() {
+    // Emitted rather than read off the golden, for the reason above: this is
+    // the case no other one covers, so it has to fail a wrong implementation on
+    // its own bytes.
+    let typst =
+        md_to_typst("# H\n\n![alt](dot.png)\n\n: See $$x = 1$$ {#fig:one}\n\nAt [](#fig:one).\n")
+            .unwrap();
+    assert!(
+        typst.contains(
+            "#figure(image(\"dot.png\", alt: \"alt\"), caption: [See $ x = 1 $]) <fig:one>"
+        ),
+        "the display span inside the caption took the caption's name: {typst}"
+    );
+    assert!(
+        typst.contains("#ref(<fig:one>)"),
+        "the reference stopped resolving against the figure: {typst}"
+    );
+
+    assert!(
+        PLAIN_EQUATION_NAMES_TYP.contains(
+            "caption: [The pipeline, whose middle step is $ y = m x + b $]) <fig:pipeline>"
+        ),
+        "the same shape in a document that compiles"
+    );
+}
+
+/// Phase 3's name rules hold over the fourth construct, each naming the line.
+///
+/// The clauses are shared with a caption's name and the *finding* rule is not,
+/// so these run through code Phase 3 shipped and this is a regression net
+/// rather than new behaviour — except the last, which is new: an equation and a
+/// figure share one namespace, because a document has one set of names.
+#[test]
+fn each_equation_name_refusal_names_the_authors_line() {
+    let equation = "# H\n\n$$\nx = 1\n$$ ";
+
+    for (md, line, needle, what) in [
+        (
+            format!("{equation}{{#eq one}}\n"),
+            5,
+            "letters, digits, '-', '_', ':' and '.'",
+            "a character outside the set, the error listing the set",
+        ),
+        (
+            format!("{equation}{{#:foo}}\n"),
+            5,
+            "begins with ':' or '.'",
+            "a name Typst would not read as a name at all",
+        ),
+        (
+            format!("{equation}{{#.foo}}\n"),
+            5,
+            "begins with ':' or '.'",
+            "the same rule over a leading full stop",
+        ),
+        (
+            format!("{equation}{{#fn-1}}\n"),
+            5,
+            "reserved for footnotes",
+            "the namespace the emitter already owns",
+        ),
+        (
+            format!("{equation}{{#}}\n"),
+            5,
+            "a name is empty",
+            "a group with no name inside it",
+        ),
+        (
+            format!("{equation}{{#one}}\n\n![alt](dot.png)\n\n: A caption. {{#one}}\n"),
+            9,
+            "declared twice",
+            "one namespace over an equation and a figure, refused where the second stands",
+        ),
+    ] {
+        match md_to_typst(&md) {
+            Err(Error::Name { line: found, problem }) => {
+                assert_eq!(found, line, "for {what}");
+                assert!(
+                    problem.contains(needle),
+                    "for {what}, the problem `{problem}` does not name `{needle}`"
+                );
+            }
+            other => panic!("expected a name error for {what}, got {other:?}"),
+        }
+    }
+}
+
+/// Both after-the-walk refusals are one pass, and the earliest line wins.
+///
+/// A document may hold an undeclared reference on one line and an equation
+/// reference in a `plain` document on another. Which is reported is a choice
+/// rather than an accident, and the container is a `Vec` so that two runs over
+/// one document agree.
+#[test]
+fn the_earliest_line_wins_across_both_reference_refusals() {
+    let named = "---\nequations: plain\n---\n\n# H\n\n$$\nx = 1\n$$ {#eq:one}\n\n";
+
+    // The equation reference stands first, so it is the error even though the
+    // undeclared one below it is the older of the two classes.
+    match md_to_typst(&format!("{named}A [](#eq:one) here.\n\nAnd [](#missing).\n")) {
+        Err(Error::Name { line, problem }) => {
+            assert_eq!(line, 11);
+            assert!(problem.contains("equations: numbered"), "problem: {problem}");
+        }
+        other => panic!("expected a name error, got {other:?}"),
+    }
+
+    // Reversed, the undeclared one wins — so neither class is preferred.
+    match md_to_typst(&format!("{named}And [](#missing).\n\nA [](#eq:one) here.\n")) {
+        Err(Error::Name { line, problem }) => {
+            assert_eq!(line, 11);
+            assert!(problem.contains("'missing'"), "problem: {problem}");
+        }
+        other => panic!("expected a name error, got {other:?}"),
+    }
 }
