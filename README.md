@@ -123,8 +123,8 @@ the one thing an unsigned bundle cannot do.
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
-constructs, links, tables, images and their captions, footnotes, strikethrough, and math
-in both its forms**:
+constructs, links, tables, images, captions, footnotes, strikethrough, and math in both
+its forms**:
 
 ````markdown
 # Introduction
@@ -160,6 +160,8 @@ fn main() {}
 | Construct | Supported |
 | --------- | :-------: |
 | a table   | yes       |
+
+: What this release carries.
 
 ![A diagram of the three steps](figures/pipeline.svg)
 
@@ -276,33 +278,8 @@ The text in the square brackets is alt text. It reaches the accessibility layer 
 PDF rather than the page, so it is never used as a caption. There is no syntax for a
 width, a rotation or a crop; the image takes its natural size, bounded by the column.
 
-### Captions
-
-A paragraph of its own beneath an image, opening `: `, is that image's caption:
-
-```markdown
-![The three steps, drawn as boxes](figures/pipeline.svg)
-
-: The conversion pipeline, with the *emitter* in the middle.
-```
-
-The blank line above the caption is required. Without it the two are one paragraph, and
-the image stays in the line with `: ` printed as text beside it.
-
-**A caption is what makes a figure.** An image with one is set as a numbered figure —
-*Figure 1*, *Figure 2*, counted and renumbered by Typst whenever anything moves, with the
-caption beneath it. An image without one is the plain block it has always been, takes no
-number, and consumes none: a document written before this release typesets exactly as it
-did. The caption is ordinary markdown, so emphasis, `code`, links and formulas all work
-inside one. The word "Figure", the number's format and the punctuation after it belong to
-the look, so the two bundled ones differ.
-
-Only a standalone image takes a caption. An image inside a sentence is not a figure, and a
-`: ` paragraph anywhere else — after prose, after a table, after a code block — is
-ordinary text, unchanged. Three things are errors, each naming the line: a `: ` with
-nothing after it, a second caption under one image, and a caption ending in `{#name}`.
-That last one is reserved: **there is no way yet to name a figure and refer to it, so
-"see Figure 1" is prose you keep true yourself**, as it is for equations.
+An image alone in its paragraph can carry a caption, which is what turns it into a
+numbered figure. The next section covers that, for a table and a code block as well.
 
 A file that `md2pdf` cannot read is an error that names the path, the line that asked
 for it, and the reason:
@@ -316,6 +293,52 @@ Bytes that disagree with their extension are an error too. So are four destinati
 a URL and a `data:` URI, because nothing is fetched over the network; an absolute path,
 which converts on one machine only; and a path with a `..` segment, which escapes the
 document's own folder.
+
+## Captions
+
+A paragraph of its own beneath an image, a table or a code block, opening `: `, is that
+block's caption:
+
+````markdown
+![The three steps, drawn as boxes](figures/pipeline.svg)
+
+: The conversion pipeline, with the *emitter* in the middle.
+
+| Construct | Counter |
+| --------- | :-----: |
+| a table   | its own |
+
+: The constructs and the counters they keep.
+
+```rust
+fn main() {}
+```
+
+: The entry point.
+````
+
+**A caption is what makes a figure.** A block with one is set as a numbered figure —
+*Figure 1*, *Table 1*, *Listing 1* — and each kind counts on its own, so inserting a
+table above a listing does not renumber the listing. Typst renumbers them all whenever anything moves, and
+the caption sets beneath. A block without a caption is the plain block it has always been:
+it takes no number and consumes none, so a document written before this release typesets
+exactly as it did. The caption is ordinary markdown, so emphasis, `code`, links and
+formulas all work inside one. The words "Figure", "Table" and "Listing", the number's
+format and the punctuation after it belong to the look, so the two bundled ones differ.
+
+**Leave the blank line above a caption.** Above an image it is required: without it the
+two are one paragraph, and the image stays in the line with `: ` printed as text beside
+it. Above a table it is required too, because markdown reads a non-blank line after the
+last row as one more row, so the marker lands in a cell. Above a code block it is
+optional, since a fence ends at its closing fence — but one rule for all three is easier
+to keep than three.
+
+Only a standalone image takes a caption; an image inside a sentence is not a figure. A
+`: ` paragraph anywhere else — after prose, after a heading, after a list — is ordinary
+text, unchanged. Three things are errors, each naming the line: a `: ` with nothing after
+it, a second caption under one block, and a caption ending in `{#name}`. That last one is
+reserved: **there is no way yet to name a figure and refer to it, so "see Figure 1" is
+prose you keep true yourself**, as it is for equations.
 
 ## Footnotes
 

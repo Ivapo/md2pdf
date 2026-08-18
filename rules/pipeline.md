@@ -12,12 +12,12 @@ sources:
 covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the two walks footnotes need, the image asset
-  channel, the caption that makes an image a figure and the splice that attaches
-  it, the LaTeX subset a formula may hold and the prelude it compiles
-  against, the bundled looks and the call contract they meet, the equation numbering
+  channel, the caption that makes an image, a table or a code block a figure and
+  the splice that attaches it, the LaTeX subset a formula may hold and the prelude
+  it compiles against, the bundled looks and the call contract they meet, the equation numbering
   the author asks for and the look formats, the heading anchors a compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 444
+max_lines: 487
 generated: 2026-08-17
 ---
 
@@ -44,7 +44,7 @@ wanting only the PDF pays nothing for the anchors and gets byte-identical output
 
 Twenty things are supported: headings at levels 1–6, paragraph text, soft breaks,
 emphasis, strong emphasis, strikethrough, inline code, math in both its forms, hard line
-breaks, thematic breaks, links, images, image captions, bullet lists, ordered lists, code
+breaks, thematic breaks, links, images, captions, bullet lists, ordered lists, code
 blocks, block quotes, pipe tables, footnotes, and a leading YAML frontmatter block. Heading
 levels map to Typst headings of the same level.
 
@@ -67,12 +67,14 @@ escape, which is what stops Typst reading an autolink's own text as a second lin
 email autolink's destination is the bare address, because pulldown-cmark leaves the scheme
 to the renderer, so the emitter prepends `mailto:`.
 
-An image is `#image(…)`, `#box(image(…))` or `#figure(image(…), caption: […])`; the
-section below holds the whole subject, the caption included.
+An image is `#image(…)`, `#box(image(…))` or `#figure(image(…), caption: […])`; the two
+sections below hold the whole subject, the caption's own section covering a table and a
+code block with it.
 
 Lists become `- ` and `N. ` items, every ordered item carrying its own number, so a start
 other than 1 needs no mechanism of its own. A code block becomes
-`#raw(block: true, lang: …)`, the tag the first word of the fence's info string and absent
+`#raw(block: true, lang: …)` — or `#figure(raw(…), caption: […])` where a caption follows
+it — the tag the first word of the fence's info string and absent
 for an indented block; one trailing newline is stripped, because pulldown-cmark reports the
 final line's terminator as part of the content and a literal that kept it would typeset a
 phantom empty line. A block quote becomes `#quote(block: true)[…]`. Neither lists nor
@@ -87,7 +89,8 @@ stack and indent it as they close, so nothing is ever indented while it is writt
 keeps `core/src/emit.rs:line_is_all_digits` reading an un-indented line, and is why a code
 block, one markup line holding a string literal, survives the indentation around it.
 
-A table becomes `#table(columns: N, align: (…), table.header(…), …)`, one markdown row to
+A table becomes `#table(columns: N, align: (…), table.header(…), …)`, or
+`#figure(table(…), caption: […])` where a caption follows it, one markdown row to
 one line. `Options::ENABLE_TABLES` is what parses it at all, a pipe table being GFM rather
 than CommonMark. The column count is the alignment vector's length, which an integer
 `columns` turns into that many auto-sized columns; `align` maps `None` to `auto` and is
@@ -209,44 +212,9 @@ No size is emitted: with neither dimension forced, Typst bounds an image by the 
 space and keeps its aspect ratio.
 
 A standalone image with a caption beneath it becomes
-`#figure(image(…), caption: […])` instead. **The caption is what makes a figure**: an
-uncaptioned one is written exactly as above, because a `#figure` with no caption prints no
-number and still consumes the counter — so the next captioned one would read "Figure 2"
-with no Figure 1 on the page — and because `figure` centres its body where a bare block
-sits flush left. The inline form is never wrapped: a figure is a block that floats, and an
-image inside a clause is not one.
-
-The caption is a paragraph of its own, immediately after the image, opening `: `. The
-blank line is required: without it the image and the caption are one paragraph joined by a
-`SoftBreak`, so the image takes the inline form and the marker reaches the page as text.
-`: ` costs nothing here — it is Pandoc's own table-caption spelling, GFM gives it no
-meaning, and `core/src/emit.rs:options` parses such a line as an ordinary paragraph.
-`core/src/emit.rs:caption_marker` reads it, and the colon alone counts, since a line's
-trailing space does not survive the parser. A `: ` paragraph anywhere else — after prose,
-after a table, after a fenced block — is the ordinary paragraph it has always been, so the
-marker is one paragraph in one position and not a ban.
-
-The attachment is a **splice at a recorded point**, not a longer hold on the pending slot:
-the flush timing is load-bearing for `core/src/emit.rs:Walk::finish`, for
-`core/src/emit.rs:collect_definitions` and for `Walk.para`'s offset, and it does not move.
-`core/src/emit.rs:Figure` records where a standalone call was written;
-`core/src/emit.rs:splice_caption` truncates back to it and writes the wrapper, unwinding
-the two `'\n'` the paragraph arms pushed for a paragraph that is consumed rather than
-printed. `core/src/emit.rs:Figure::live` verifies the point where it is spent rather than
-clearing it from the walk's other arms — same frame depth, same recorded call, only
-separator newlines after it — which holds because every other write into a `bufs` frame is
-an append. Its `captioned` flag is the one thing those three checks cannot supply: a
-spliced region carries `#figure(…)`, which the content check accepts.
-
-The caption's content is walked as inline markdown into a frame on the same buffer stack a
-list item uses, so emphasis, code, a link and a `$…$` span all work inside one, and `para`
-is cleared as that frame opens — it is an offset into the frame below, and clearing it also
-stops an image inside a caption taking the standalone form. Three caption shapes are
-errors, each an `UnsupportedConstruct` naming the author's line: a marker with no text,
-which would put a bare "Figure 1:" on the page; a second caption for one figure; and a
-caption ending in a `{#name}` group, which is not yet a Typst label and which shipping as
-a silent no-op would be the drop the dialect refuses. That last test reads what the author
-typed, because the markup escape has turned its `#` into `\#` by then.
+`#figure(image(…), caption: […])` instead; the section below holds that, and the two
+other constructs a caption reaches. The inline form is never wrapped: a figure is a block
+that floats, and an image inside a clause is not one.
 
 Alt text is flattened, not emitted, because Typst's `alt` is a plain string.
 `core/src/emit.rs:AltCapture` takes every event between the image's two: text and code
@@ -276,6 +244,78 @@ the raster formats and PDF, the gzip magic for `svgz`, and a search for the SVG 
 over the first 2048 bytes. Typst's fallback to content detection is not mirrored, because
 the emitter has already refused every extension it would apply to. A file corrupt past its
 magic still fails at compile time, with the compiler's own message.
+
+## Captions
+
+A caption is one mechanism over three constructs. A standalone image, a table or a code
+block with a caption beneath it becomes `#figure(image(…), caption: […])`,
+`#figure(table(…), caption: […])` or `#figure(raw(…), caption: […])`, and Typst reads the
+kind from the body it was handed: three supplements and three independent counters —
+*Figure 1*, *Table 1*, *Listing 1* — with nothing configured and no format written here.
+Nothing else in the dialect takes one.
+
+**The caption is what makes a figure.** An uncaptioned construct is written exactly as it
+is above, because a `#figure` with no caption prints no number and still consumes the
+counter — so the next captioned one would read "Figure 2" with no Figure 1 on the page —
+and because `figure` centres its body where a bare block sits flush left. So a caption is
+not decoration on a figure; **writing one is the whole ask**, which is why no frontmatter
+key carries it: an equation has no caption to read the ask from and needs the `equations`
+key, and these three have one. A look may still decide per kind, with a
+`show figure.where(kind: …)` rule and no argument crossing the seam. Neither bundled look
+does, so all three kinds carry their numbers in both.
+
+The caption is a paragraph of its own, immediately after the construct, opening `: `.
+`: ` costs nothing here — it is Pandoc's own table-caption spelling, GFM gives it no
+meaning, and `core/src/emit.rs:options` parses such a line as an ordinary paragraph.
+`core/src/emit.rs:caption_marker` reads it, and the colon alone counts, since a line's
+trailing space does not survive the parser. A `: ` paragraph anywhere else — after prose,
+after a heading, after a list — is the ordinary paragraph it has always been, so the
+marker is one paragraph in one position and not a ban.
+
+**The blank line above it is the author's to get right, and what it costs differs by
+construct.** Above an image it is required: without it the image and the caption are one
+paragraph joined by a `SoftBreak`, so the image takes the inline form and the marker
+reaches the page as text. Above a table it is required for a reason that is GFM's rather
+than this dialect's — a non-blank line after the last row is another row, so the marker
+becomes a cell. Above a code block it is optional: a fence and an indented block each end
+at their own syntax, so what follows one is a paragraph either way.
+
+`core/src/emit.rs:write_block` writes a table and a code block and records each; the
+pending slot's flush records a standalone image. **The record is the last one written
+rather than the last one of its kind**, so a caption reaches the construct directly above
+it and no other. Both block calls arrive without their `#` —
+`core/src/emit.rs:table_call` and `core/src/emit.rs:raw_call` return one the way
+`core/src/emit.rs:image_call` does — because that bare call is what a `#figure(…)` wraps
+and a `#` inside a code context is a syntax error. And `write_block` records *after* the
+newline it pushes, because these two arms own the separators an image takes from the
+paragraph arms around it; recorded from before it, the truncate below would eat the block
+separator. One arm serves the fenced block and the indented one, so both take a caption:
+splitting them would make a `: ` line a caption after one kind of block and prose after
+another, with nothing on the page to tell an author which they had written.
+
+The attachment is a **splice at a recorded point**, not a longer hold on the pending slot:
+the flush timing is load-bearing for `core/src/emit.rs:Walk::finish`, for
+`core/src/emit.rs:collect_definitions` and for `Walk.para`'s offset, and it does not move.
+`core/src/emit.rs:Figure` records where a call was written;
+`core/src/emit.rs:splice_caption` truncates back to it and writes the wrapper, unwinding
+the two `'\n'` the paragraph arms pushed for a paragraph that is consumed rather than
+printed. `core/src/emit.rs:Figure::live` verifies the point where it is spent rather than
+clearing it from the walk's other arms — same frame depth, same recorded call, only
+separator newlines after it — which holds because every other write into a `bufs` frame is
+an append. Its `captioned` flag is the one thing those three checks cannot supply: a
+spliced region carries `#figure(…)`, which the content check accepts.
+
+The caption's content is walked as inline markdown into a frame on the same buffer stack a
+list item uses, so emphasis, code, a link and a `$…$` span all work inside one, and `para`
+is cleared as that frame opens — it is an offset into the frame below, and clearing it also
+stops an image inside a caption taking the standalone form. Three caption shapes are
+errors, each an `UnsupportedConstruct` naming the author's line: a marker with no text,
+which would put a bare "Figure 1:" on the page; a second caption for one figure; and a
+caption ending in a `{#name}` group, which is not yet a Typst label and which shipping as
+a silent no-op would be the drop the dialect refuses. All three read the same over a table
+and a code block, the second included: a captioned table *is* a Typst `figure`, so the
+message names the element the emitter writes. That last test reads what the author typed,
+because the markup escape has turned its `#` into `\#` by then.
 
 ## The frontmatter
 
@@ -357,7 +397,10 @@ formula takes no number and one `$$…$$` span takes one whatever it holds — a
 
 A caption crosses no argument at all. Each look carries `set figure.caption(…)`,
 `show figure: …` and `show figure.caption: …` of its own, reaching a Typst element the way
-both already reach `raw` and `table.cell`, so the contract stays at five. The author
+both already reach `raw` and `table.cell`, so the contract stays at five. **All three
+rules are kind-agnostic in both looks** — not one `.where(kind: …)` among them — which is
+what styled and numbered a captioned table and a captioned listing the day the emitter
+first emitted one, with no look edit at all. The author
 supplies the words and asks for the treatment by writing a caption; the look decides the
 supplement, the number, the separator, the size and the side — the article separates with a
 full stop and the press release with a dash, and both set the caption beneath. The emitter
