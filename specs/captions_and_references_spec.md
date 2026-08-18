@@ -17,7 +17,7 @@ phases:
     by: null
   - name: "Phase 2 — tables and listings take the same treatment"
     reviewed: 2026-08-17
-    shipped: null
+    shipped: 2026-08-17
     cut: null
     by: null
   - name: "Phase 3 — labels and cross-references"
@@ -241,6 +241,22 @@ through**, and the blast radius this phase is scoped to avoid. The blank-line
 form leaves that test untouched, which is what keeps gate (2)'s "an uncaptioned
 image is byte-for-byte unchanged" provable rather than hopeful. Recorded because
 the rejected spelling is the one a later reader will propose.
+
+**WIDENED 2026-08-17, on shipping Phase 2: "the blank line is required" is one
+rule about images and not one rule about the dialect.** Measured against the
+built binary for the two constructs Phase 2 added, because the sentence above
+was about to be carried into `rules/pipeline.md` over all three. Above a
+**table** the blank line is required too, but for GFM's reason rather than this
+one's: a non-blank line after the last row is one more row, so `: A caption.`
+becomes a cell and no caption attaches — a different symptom from the image's,
+which is a literal marker on the page. Above a **code block** it is not required
+at all: a fence and an indented block each end at their own syntax, so what
+follows one is a paragraph either way and the caption attaches with or without
+it. **Nothing in §2 changes** — the syntax is what it was, the standalone test
+is still untouched, and every gate held — and the rule file and the README carry
+the per-construct wording rather than the image's. Recorded because a later
+reader re-deriving the sentence above over a code block would find it false and
+have no way to tell an omission from a regression.
 
 Chosen over the two alternatives round 1 was asked to weigh. **Alt text is not
 reused**: `mpdf-002` §1.1 refused it because alt is accessibility metadata, and
