@@ -209,6 +209,51 @@ struct Caption {
     text: String,
 }
 
+/// One caption paragraph, read.
+///
+/// What a `: ` line says once its `{#name}` group has left the text: the
+/// escaped markup a `caption:` argument takes, and the name the label takes.
+/// A single construct spends this at once; a group holds one until its closer,
+/// which is the whole of why the reading is a step of its own.
+struct Words {
+    /// The line the `: ` sits on, which a refusal over the caption names.
+    line: usize,
+    /// The caption's markup, escaped, with the name group gone.
+    content: String,
+    /// The name that rode the line's end.
+    name: Option<String>,
+}
+
+/// The `:::` group the walk is inside, and what it has collected.
+///
+/// A group is a figure with more than one member, which no arrangement of the
+/// `: ` marker can express: that marker attaches to the construct immediately
+/// above it, so nothing spells "these two images are one figure, with one
+/// number and one caption".
+///
+/// It needs no second notion of what a member is. [`Figure`] already records
+/// every captionable construct's bare call, so a group takes a `body` each time
+/// a record is made while it is open, and the three member kinds are the three
+/// a caption reaches by construction.
+struct Group {
+    /// The line the opener sits on, which every refusal over the group names.
+    line: usize,
+    /// How deep the buffer stack was when the opener stood.
+    depth: usize,
+    /// Where the opener's paragraph begins in that frame, which the closer
+    /// truncates back to.
+    start: usize,
+    /// Each member's bare call, in the order the author wrote them.
+    members: Vec<String>,
+    /// The caption the group's own `: ` line carried.
+    ///
+    /// It is the last block before the closer, so a member taken while this
+    /// stands is refused: a `: ` line after a member is exactly the spelling a
+    /// subcaption will want, and letting it through as prose would ship a
+    /// meaning a later phase would have to take back.
+    caption: Option<Words>,
+}
+
 /// One name a walk declared, and what declared it.
 struct Declaration {
     name: String,
@@ -311,6 +356,14 @@ struct Walk {
     equation: Option<Equation>,
     /// The caption being collected, while its paragraph is open.
     caption: Option<Caption>,
+    /// The `:::` group the walk is inside, while it is open.
+    ///
+    /// **An opener and its closer sit in the same frame, not merely at the same
+    /// depth.** `- :::` / image / `- :::` puts the two delimiters in different
+    /// list items and both at depth 2, so a closer that compared depths alone
+    /// would truncate a frame its group never opened. The item and quote arms
+    /// retire a group whose frame has gone, which keys this to the frame itself.
+    group: Option<Group>,
     /// The link the walk is inside, while its text is collected.
     link: Option<LinkFrame>,
     /// Every figure name this walk declared, and every one it referenced.
@@ -322,6 +375,13 @@ struct Walk {
     names: Names,
     /// Where the open paragraph began in the buffer that holds it.
     para: Option<usize>,
+    /// Where the open paragraph ends in the source.
+    ///
+    /// A `:::` delimiter has to be the whole of its paragraph, and whether a
+    /// text run is the whole of one is a later event — the trap [`Figure`]
+    /// records at length. The paragraph's own span answers it now, so nothing
+    /// is held across an event to learn it.
+    para_end: Option<usize>,
     /// Whether this walk wrote any math.
     ///
     /// The prelude is imported only by a document that has one, which is what
@@ -349,10 +409,29 @@ impl Walk {
             figure: None,
             equation: None,
             caption: None,
+            group: None,
             link: None,
             names: Names::default(),
             para: None,
+            para_end: None,
             math: false,
+        }
+    }
+
+    /// The refusal a walk that ended with a group still open owes.
+    ///
+    /// Both walks end, and both reach this. `emit` runs it after its loop;
+    /// `collect_definitions` runs it at a definition's own end event, which
+    /// OQ-7's finding makes reachable — a caption inside a definition already
+    /// works, so a group inside one does too, and the document's walk skips
+    /// that region entirely.
+    fn unclosed(&self) -> Result<()> {
+        match &self.group {
+            Some(open) => Err(Error::UnsupportedConstruct {
+                construct: "figure group the document never closes".to_string(),
+                line: open.line,
+            }),
+            None => Ok(()),
         }
     }
 
@@ -548,7 +627,10 @@ fn collect_definitions(md: &str) -> Definitions {
 
         if matches!(event, Event::End(TagEnd::FootnoteDefinition)) {
             let label = open.take().expect("a region is open");
-            let body = match failure.take() {
+            // A group left open inside a definition is refused where this walk
+            // ends, which is here: the document's walk never enters the region,
+            // so nothing else would ever meet it.
+            let body = match failure.take().or_else(|| walk.unclosed().err()) {
                 Some(error) => Err(error),
                 None => {
                     let math = walk.math;
@@ -606,6 +688,7 @@ pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>, Vec<usize>)> {
         step(&mut walk, md, event, range, Mode::Document(&mut notes))?;
     }
 
+    walk.unclosed()?;
     check_references(&walk.names, walk.front.equations)?;
 
     // Taken off the walk before `finish` consumes it, the way the math flag
@@ -644,9 +727,11 @@ fn step(
         figure,
         equation,
         caption,
+        group,
         link,
         names,
         para,
+        para_end,
         math,
     } = walk;
 
@@ -730,7 +815,23 @@ fn step(
                 body: call,
                 captioned: false,
             });
+            take_member(group, figure, bufs)?;
         }
+    }
+
+    // A group holds its three member kinds and its own caption line, and
+    // nothing else. A block of any other kind between two members is content
+    // reaching a `grid` cell, which is the silent re-layout the dialect
+    // refuses, so it is named where it was written. A paragraph is decided at
+    // its end, where whether it wrote a member is known; every other block is
+    // decided here.
+    if group.is_some()
+        && matches!(
+            &event,
+            Event::Start(Tag::Heading { .. } | Tag::List(_) | Tag::BlockQuote(_)) | Event::Rule
+        )
+    {
+        return Err(uncaptionable(line_of(md, range.start)));
     }
 
     match event {
@@ -760,6 +861,9 @@ fn step(
             let out = top(bufs);
             out.push('\n');
             *para = Some(out.len());
+            // The paragraph's own span, for the one question a text run inside
+            // it cannot answer about itself: whether it is the whole of it.
+            *para_end = Some(range.end);
         }
         Event::End(TagEnd::Paragraph) => {
             // A caption's paragraph is consumed rather than printed: its
@@ -767,9 +871,26 @@ fn step(
             // pushes below closes the figure's own block.
             if let Some(open) = caption.take() {
                 let content = bufs.pop().expect("a caption end follows its start");
-                splice_caption(bufs, figure, names, &open, &content)?;
+                let words = caption_words(names, &open, &content)?;
+                match group.as_mut() {
+                    // Inside a group the caption is the group's own and waits
+                    // for the closer, which is what puts one caption and one
+                    // number over several members.
+                    Some(held) => held.caption = Some(words),
+                    None => splice_caption(bufs, figure, &words),
+                }
+            } else if let Some(held) = group.as_ref()
+                && bufs.len() == held.depth
+                && !top(bufs)[held.start..].bytes().all(|byte| byte == b'\n')
+            {
+                // Every member leaves the buffer as it is recorded, so what
+                // stands past the group's own start is what no member wrote:
+                // prose, an inline image, a display equation, two images in one
+                // paragraph. This is `Figure::live`'s content check one level up.
+                return Err(uncaptionable(line_of(md, range.start)));
             }
             *para = None;
+            *para_end = None;
             top(bufs).push('\n');
         }
 
@@ -809,6 +930,7 @@ fn step(
         Event::End(TagEnd::Item) => {
             containers.pop();
             let content = bufs.pop().expect("an item end follows its start");
+            escaped_frame(group, bufs)?;
             let frame = lists.last_mut().expect("an item sits inside a list");
             let marker = match frame.next.as_mut() {
                 Some(number) => {
@@ -831,6 +953,7 @@ fn step(
         Event::End(TagEnd::BlockQuote(_)) => {
             containers.pop();
             let content = bufs.pop().expect("a quote end follows its start");
+            escaped_frame(group, bufs)?;
             let out = top(bufs);
             out.push_str("\n#quote(block: true)[\n");
             out.push_str(&prefixed("  ", content.trim_matches('\n')));
@@ -853,6 +976,7 @@ fn step(
         Event::End(TagEnd::Table) => {
             let frame = table.take().expect("a table end follows its start");
             write_block(bufs, figure, table_call(&frame));
+            take_member(group, figure, bufs)?;
         }
 
         // The head holds its cells directly; no row event wraps them.
@@ -897,6 +1021,7 @@ fn step(
             // one kind of block and prose after another, with nothing on the
             // page to tell an author which they had written.
             write_block(bufs, figure, raw_call(lang.as_deref(), &content));
+            take_member(group, figure, bufs)?;
         }
 
         Event::Text(text) => {
@@ -908,28 +1033,98 @@ fn step(
                 meta_offset.get_or_insert(range.start);
                 meta.push_str(&text);
             } else {
-                // A paragraph that opens with `: ` immediately after a
-                // standalone image, a table or a code block is that block's
-                // caption. Everywhere else the marker is the ordinary prose it
-                // is today, which is what keeps it from being a ban on a line
-                // an author may already have written: the collision window is
-                // one paragraph in one position.
-                let marked = match *para == Some(top(bufs).len()) {
+                let opens = *para == Some(top(bufs).len());
+
+                // `:::` is reserved at the first text of a paragraph, and only
+                // there: a `:::` inside a sentence, one standing later in a
+                // paragraph, and one inside a fenced or indented code block are
+                // all untouched — which is where a document that documents this
+                // syntax puts one. The run has to be the whole paragraph, and
+                // that is what makes the tight div — one paragraph joined by
+                // soft breaks — a named error rather than an opener whose
+                // group can never close. **A paragraph that begins `:::` is a
+                // delimiter or a mistyped one and never prose**, so there is no
+                // such thing as a lone `:::` reaching the page.
+                if opens && text.trim().starts_with(":::") {
+                    let line = line_of(md, range.start);
+                    // The run has to be the whole paragraph *and* a delimiter's
+                    // own shape, and both failures are the same error, on the
+                    // sentence above.
+                    let marker = whole_paragraph(md, &range, *para_end)
+                        .then(|| group_marker(text.trim()))
+                        .flatten();
+                    let Some(marker) = marker else {
+                        return Err(Error::UnsupportedConstruct {
+                            construct:
+                                "figure group delimiter that is neither an opener nor a closer"
+                                    .to_string(),
+                            line,
+                        });
+                    };
+                    match (group.is_some(), marker) {
+                        (true, Marker::Bare) => {
+                            let open = group.take().expect("a group is open");
+                            close_group(bufs, open)?;
+                        }
+                        (true, Marker::Word) => {
+                            return Err(Error::UnsupportedConstruct {
+                                construct: "figure group inside a figure group".to_string(),
+                                line,
+                            });
+                        }
+                        (false, _) => {
+                            // The opener is a block boundary, so a record
+                            // standing before it is retired: a caption inside
+                            // the group is the group's own.
+                            *figure = None;
+                            *group = Some(Group {
+                                line,
+                                depth: bufs.len(),
+                                start: top(bufs).len(),
+                                members: Vec::new(),
+                                caption: None,
+                            });
+                        }
+                    }
+                    return Ok(());
+                }
+
+                // A paragraph that opens with `: ` captions the group it stands
+                // in, or the standalone image, table or code block it stands
+                // under. Everywhere else the marker is the ordinary prose it is
+                // today, which is what keeps it from being a ban on a line an
+                // author may already have written: the collision window is one
+                // paragraph in one position.
+                let marked = match opens {
                     true => caption_marker(&text),
                     false => None,
                 };
+                let attaches =
+                    group.is_some() || figure.as_ref().is_some_and(|recorded| recorded.live(bufs));
                 if let Some(rest) = marked
-                    && let Some(recorded) = figure.as_ref()
-                    && recorded.live(bufs)
+                    && attaches
                 {
-                    if recorded.captioned {
+                    let line = line_of(md, range.start);
+                    // One construct takes one caption, and so does one group.
+                    // Neither refusal falls out of the checks around it: a
+                    // spliced region carries `#figure(…)`, which the content
+                    // check accepts, and a group's caption is held rather than
+                    // written at all.
+                    let second = match group.as_ref() {
+                        Some(held) => held.caption.is_some().then_some("figure group"),
+                        None => figure
+                            .as_ref()
+                            .is_some_and(|recorded| recorded.captioned)
+                            .then_some("figure"),
+                    };
+                    if let Some(what) = second {
                         return Err(Error::UnsupportedConstruct {
-                            construct: "second caption for one figure".to_string(),
-                            line: line_of(md, range.start),
+                            construct: format!("second caption for one {what}"),
+                            line,
                         });
                     }
                     *caption = Some(Caption {
-                        line: line_of(md, range.start),
+                        line,
                         text: rest.to_string(),
                     });
                     // The caption is prose, so its content is walked as inline
@@ -944,7 +1139,9 @@ fn step(
                     *para = None;
                     bufs.push(String::new());
                     escape_into(top(bufs), rest);
-                } else if equation.as_ref().is_some_and(|recorded| recorded.live(bufs))
+                } else if equation
+                    .as_ref()
+                    .is_some_and(|recorded| recorded.live(bufs))
                     && let Some(name) = equation_name(&text, line_of(md, range.start))?
                 {
                     // A name riding the closing `$$`, written where the
@@ -1408,36 +1605,17 @@ fn caption_marker(text: &str) -> Option<&str> {
     }
 }
 
-/// Rewrite a recorded block into the figure its caption makes it.
+/// Read one caption paragraph: its words, and the name that rode its end.
 ///
-/// **The caption is what makes a figure**, which is why this runs only where a
-/// caption line stands. An uncaptioned `#figure` prints no number and still
-/// consumes the counter, so the next captioned one would read "Figure 2" with
-/// no Figure 1 anywhere, and `figure` centres its body where a bare block sits
-/// flush left. Wrapping unconditionally would therefore re-lay-out and
-/// mis-number every document that shows an image, a table or a code block,
-/// which is the property `mpdf-004` Phase 3 stated: no document's typeset
-/// output changes unless its author asks.
+/// Shared by the single construct and the group, because the line is the same
+/// line and its two refusals are the same two. What differs is only when the
+/// reading is spent — at once for one construct, at the closer for a group.
 ///
-/// The truncate unwinds two newlines the paragraph arms have already pushed —
-/// one closing the image's paragraph, one opening the caption's, for a
-/// paragraph that is about to be consumed. It is the one write in this file
-/// that is not an append, and it updates the record it spends.
-///
-/// The emitter writes no supplement, no separator and no number: the author
-/// supplies the words, and the look decides what a caption looks like.
-fn splice_caption(
-    bufs: &mut [String],
-    figure: &mut Option<Figure>,
-    names: &mut Names,
-    caption: &Caption,
-    content: &str,
-) -> Result<()> {
+/// The name is read from the unescaped copy the walk kept, because
+/// `escape_into` has turned `{#fig-two}` into `{\#fig\-two}` in the buffer by
+/// now — `#`, `-` and `_` are all in `SPECIAL`.
+fn caption_words(names: &mut Names, caption: &Caption, content: &str) -> Result<Words> {
     let content = content.trim();
-
-    // The name is read from the unescaped copy the walk kept, because
-    // `escape_into` has turned `{#fig-two}` into `{\#fig\-two}` in the buffer
-    // by now — `#`, `-` and `_` are all in `SPECIAL`.
     let typed = caption.text.trim_end();
     let named = caption_name(typed, caption.line)?;
 
@@ -1473,14 +1651,41 @@ fn splice_caption(
         declare(names, name, caption.line, false)?;
     }
 
+    Ok(Words {
+        line: caption.line,
+        content: content.to_string(),
+        name: named.map(|(_, name)| name.to_string()),
+    })
+}
+
+/// Rewrite a recorded block into the figure its caption makes it.
+///
+/// **The caption is what makes a figure**, which is why this runs only where a
+/// caption line stands. An uncaptioned `#figure` prints no number and still
+/// consumes the counter, so the next captioned one would read "Figure 2" with
+/// no Figure 1 anywhere, and `figure` centres its body where a bare block sits
+/// flush left. Wrapping unconditionally would therefore re-lay-out and
+/// mis-number every document that shows an image, a table or a code block,
+/// which is the property `mpdf-004` Phase 3 stated: no document's typeset
+/// output changes unless its author asks.
+///
+/// The truncate unwinds two newlines the paragraph arms have already pushed —
+/// one closing the image's paragraph, one opening the caption's, for a
+/// paragraph that is about to be consumed. It is one of the two writes in this
+/// file that are not appends — [`close_group`] is the other — and it updates
+/// the record it spends.
+///
+/// The emitter writes no supplement, no separator and no number: the author
+/// supplies the words, and the look decides what a caption looks like.
+fn splice_caption(bufs: &mut [String], figure: &mut Option<Figure>, words: &Words) {
     let recorded = figure
         .as_mut()
-        .expect("a caption opens only over a recorded figure");
-    let mut call = format!("#figure({}, caption: [{content}])", recorded.body);
+        .expect("a caption opens only over a recorded figure or a group");
+    let mut call = format!("#figure({}, caption: [{}])", recorded.body, words.content);
     // The label rides the same string the record keeps. Appended to the buffer
     // alone it would fail `Figure::live`'s content check, and Phase 1's
     // second-caption refusal would silently stop firing over a named figure.
-    if let Some((_, name)) = named {
+    if let Some(name) = &words.name {
         call.push_str(&format!(" <{name}>"));
     }
 
@@ -1490,6 +1695,159 @@ fn splice_caption(
 
     recorded.written = call;
     recorded.captioned = true;
+}
+
+// -- groups -----------------------------------------------------------------
+
+/// Which delimiter a `:::` paragraph is.
+enum Marker {
+    /// `:::` — the closer, and the opener where no group is open.
+    Bare,
+    /// `::: word` — an opener, and only ever an opener.
+    Word,
+}
+
+/// The delimiter a paragraph's whole text is, if it is one at all.
+///
+/// The word after an opener is the author's convention and **the dialect does
+/// not read it**: Typst infers a figure's kind from the `grid` it is handed, so
+/// `::: table` around two images is a Figure, exactly as `{#tab:pipeline}` on
+/// an image is. One word and no more, because `::::`, `:::x` and
+/// `::: two words` are mistypings better named than guessed at — a reserved
+/// position that is reserved for some spellings and not others is a rule no
+/// author can hold.
+fn group_marker(run: &str) -> Option<Marker> {
+    if run == ":::" {
+        return Some(Marker::Bare);
+    }
+    let word = run.strip_prefix("::: ")?;
+    (!word.is_empty() && !word.contains(char::is_whitespace)).then_some(Marker::Word)
+}
+
+/// Whether a text run is the whole of the paragraph it opens.
+///
+/// The one question a run cannot answer about itself, and the trap [`Figure`]
+/// records at length: the next event settles it, and nothing here is held
+/// across one. The paragraph's own source span answers it now, since the parser
+/// hands a `Start` event the range of the whole element — whitespace is all that
+/// may stand between the run's end and the paragraph's.
+fn whole_paragraph(md: &str, run: &Range<usize>, para_end: Option<usize>) -> bool {
+    match para_end {
+        Some(end) if run.end <= end => md[run.end..end].trim().is_empty(),
+        _ => false,
+    }
+}
+
+/// The refusal a block inside a group that is not a member takes.
+///
+/// A paragraph sitting between two members is content reaching a `grid` cell,
+/// which is a silent re-layout of what the author wrote — so it is named at its
+/// own line rather than softened into pass-through prose.
+fn uncaptionable(line: usize) -> Error {
+    Error::UnsupportedConstruct {
+        construct: "block inside a figure group that is not an image, a table or a code block"
+            .to_string(),
+        line,
+    }
+}
+
+/// Refuse a group whose own buffer frame has just been popped.
+///
+/// **An opener and its closer sit in the same frame, not merely at the same
+/// depth.** `- :::` / image / `- :::` puts the two delimiters in different list
+/// items and *both at depth 2*, so a depth-only test would accept the pair and
+/// truncate a frame the group never opened. Retiring a group where its frame
+/// goes is what keys the record to the frame itself, and a list item and a
+/// block quote are the only two frames an opener's paragraph can stand in.
+fn escaped_frame(group: &Option<Group>, bufs: &[String]) -> Result<()> {
+    match group {
+        Some(open) if bufs.len() < open.depth => Err(Error::UnsupportedConstruct {
+            construct: "figure group the document never closes".to_string(),
+            line: open.line,
+        }),
+        _ => Ok(()),
+    }
+}
+
+/// Take the block just recorded into the group it stands in.
+///
+/// A group collects a [`Figure`]'s `body` each time a record is made while it
+/// is open, so it needs no second notion of what a member is. The call leaves
+/// the buffer as it is collected and every member is written back inside one
+/// `grid` at the closer — the second write in this file that is not an append,
+/// and it spends the record it removes in the same breath.
+fn take_member(
+    group: &mut Option<Group>,
+    figure: &mut Option<Figure>,
+    bufs: &mut [String],
+) -> Result<()> {
+    let Some(open) = group.as_mut() else {
+        return Ok(());
+    };
+    if bufs.len() != open.depth {
+        return Ok(());
+    }
+
+    // The group's caption is the last block before the closer. A `: ` line with
+    // a member after it is exactly the spelling a subcaption will want, so it
+    // is refused now rather than shipped as a meaning to take back.
+    if let Some(words) = &open.caption {
+        return Err(Error::UnsupportedConstruct {
+            construct: "figure group caption with a member after it".to_string(),
+            line: words.line,
+        });
+    }
+
+    let recorded = figure
+        .take()
+        .expect("a member is taken where a record was just made");
+    open.members.push(recorded.body);
+    top(bufs).truncate(open.start);
+    Ok(())
+}
+
+/// Write the group its closer ends as one figure over a `grid`.
+///
+/// `columns` is structural and the gutter is not: the emitter writes how many
+/// members there are and never how far apart they sit, which is each look's own
+/// call, reached with a `show` rule and nothing crossing the seam. **No `kind`
+/// is written either** — Typst infers one through the `grid`, so a group of
+/// images is a Figure and a group of tables is a Table with nothing configured.
+///
+/// The truncate takes back the delimiter paragraphs' own newlines along with
+/// whatever the members left, so a group emits the `\n#figure(…)\n` a spliced
+/// caption emits and the closer's paragraph end supplies the last of them.
+fn close_group(bufs: &mut [String], open: Group) -> Result<()> {
+    // The one refusal here that would otherwise reach Typst: `grid(columns: 0)`
+    // fails the compile with `number must be positive`, naming no line and no
+    // construct the author would recognise.
+    if open.members.is_empty() {
+        return Err(Error::UnsupportedConstruct {
+            construct: "figure group with no member".to_string(),
+            line: open.line,
+        });
+    }
+    // The caption is what makes a figure, over one member or several.
+    let Some(words) = open.caption else {
+        return Err(Error::UnsupportedConstruct {
+            construct: "figure group with no caption".to_string(),
+            line: open.line,
+        });
+    };
+
+    let mut call = format!(
+        "#figure(grid(columns: {}, {}), caption: [{}])",
+        open.members.len(),
+        open.members.join(", "),
+        words.content
+    );
+    if let Some(name) = &words.name {
+        call.push_str(&format!(" <{name}>"));
+    }
+
+    let out = top(bufs);
+    out.truncate(open.start);
+    out.push_str(&call);
     Ok(())
 }
 

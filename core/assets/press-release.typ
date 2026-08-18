@@ -59,6 +59,13 @@
   show figure: set block(above: 1.2em, below: 1.2em)
   show figure.caption: set text(size: 9.5pt)
 
+  // The space between two members of one figure, answered here as everything
+  // else is. A figure with several members arrives as a `grid`, whose default
+  // gutter is zero, so two images would touch. One wide column has room to
+  // spare, so this look sets them further apart than the article's does — the
+  // seam again, not a disagreement to reconcile.
+  show figure: set grid(gutter: 1.4em)
+
   // The masthead. The dateline sits above the title, where a press release
   // carries it, and the title is set flush left rather than centred, which is
   // what separates this look from the article's on the page. A document that

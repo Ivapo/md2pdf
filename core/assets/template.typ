@@ -56,6 +56,14 @@
   show figure: set block(above: 1.4em, below: 1.4em)
   show figure.caption: set text(size: 9pt)
 
+  // The space between two members of one figure. A figure with several members
+  // reaches this look as a `grid`, and Typst's own default gutter is zero, so
+  // two images would touch. The emitter writes how many members there are and
+  // never how far apart they sit — a `show` rule over an element it emits, the
+  // way this look already reaches `raw` and `table.cell`, so nothing crosses
+  // the call contract. The other bundled look picks its own value.
+  show figure: set grid(gutter: 1em)
+
   // The title block spans every column. `scope: "parent"` is what lifts it out
   // of the column grid, and Typst supports that only together with `float`.
   // A document with none of the three keys gets no title block at all. The
