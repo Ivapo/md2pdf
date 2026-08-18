@@ -53,6 +53,8 @@ const CAPTIONS_MD: &str = include_str!("../../tests/fixtures/captions.md");
 const CAPTIONS_TYP: &str = include_str!("../../tests/golden/captions.typ");
 const CAPTIONED_BLOCKS_MD: &str = include_str!("../../tests/fixtures/captioned_blocks.md");
 const CAPTIONED_BLOCKS_TYP: &str = include_str!("../../tests/golden/captioned_blocks.typ");
+const CROSS_REFERENCES_MD: &str = include_str!("../../tests/fixtures/cross_references.md");
+const CROSS_REFERENCES_TYP: &str = include_str!("../../tests/golden/cross_references.typ");
 
 /// Every bundled look, by the name the `template` key selects it with. Four
 /// tests read these: the header-row rule, and the three Phase 9 cases that no
@@ -192,11 +194,9 @@ fn the_generated_source_carries_the_title_and_the_author() {
 #[test]
 fn absent_frontmatter_gets_every_default() {
     assert!(
-        md_to_typst(BASIC_MD)
-            .unwrap()
-            .contains(
-                "template.with(title: none, author: none, columns: 2, date: none, equations: \"plain\")"
-            ),
+        md_to_typst(BASIC_MD).unwrap().contains(
+            "template.with(title: none, author: none, columns: 2, date: none, equations: \"plain\")"
+        ),
         "the defaults did not reach the template call"
     );
 }
@@ -1802,8 +1802,11 @@ fn the_numbered_equations_golden_carries_each_form() {
 fn the_two_forms_of_the_default_compile_to_the_same_bytes() {
     let body = "\n# Heading\n\nProse.\n\n$$\n\\sqrt{x^2 + y^2}\n$$\n";
     let absent = md_to_pdf(&format!("---\ntitle: A\n---\n{body}"), &[]).unwrap();
-    let explicit =
-        md_to_pdf(&format!("---\ntitle: A\nequations: plain\n---\n{body}"), &[]).unwrap();
+    let explicit = md_to_pdf(
+        &format!("---\ntitle: A\nequations: plain\n---\n{body}"),
+        &[],
+    )
+    .unwrap();
 
     assert!(absent.starts_with(b"%PDF"), "the output is not a PDF");
     assert_eq!(
@@ -1931,9 +1934,12 @@ fn an_uncaptioned_standalone_image_is_not_wrapped() {
 /// The first would put a bare "Figure 1:" on the page. The second is the one
 /// that does not fall out of the record's own checks — a spliced region carries
 /// `#figure(…)`, which the content check accepts, so an implementer who left it
-/// to those three gets silence here instead of an error. The third is a name,
-/// which is a later phase's: shipping one that silently did nothing is the drop
-/// the dialect exists to refuse.
+/// to those three gets silence here instead of an error.
+///
+/// A third case stood here until Phase 3: a caption ending in `{#name}`, which
+/// that phase turns into a Typst label. What replaces it is
+/// `each_name_refusal_names_the_authors_line`, and the shape it protected —
+/// a name that silently does nothing — is still refused, one level down.
 #[test]
 fn each_caption_refusal_names_its_construct_and_its_line() {
     for (md, construct, line, what) in [
@@ -1948,12 +1954,6 @@ fn each_caption_refusal_names_its_construct_and_its_line() {
             "second caption for one figure",
             7,
             "a second caption for one figure",
-        ),
-        (
-            "# H\n\n![alt](dot.png)\n\n: A caption. {#fig:one}\n",
-            "caption with a name",
-            5,
-            "the name this phase does not yet write",
         ),
     ] {
         match md_to_typst(md) {
@@ -2109,13 +2109,17 @@ fn an_uncaptioned_table_and_code_block_are_not_wrapped() {
     }
 }
 
-/// Phase 1's three refusals hold over both new constructs, each naming its line.
+/// Phase 1's caption refusals hold over both new constructs, each naming its
+/// line.
 ///
 /// They run through the code Phase 1 shipped, so this is a regression net
 /// rather than new behaviour — and it is cheap, which is the argument for
 /// having it rather than assuming it. The message reads "second caption for one
 /// figure" over a table too, because a captioned table *is* a Typst `figure`
 /// and the message names the element the emitter writes.
+///
+/// There were three until Phase 3, whose label takes the `{#name}` case out of
+/// this net and into `each_name_refusal_names_the_authors_line`.
 #[test]
 fn each_caption_refusal_holds_over_a_table_and_a_code_block() {
     let table = "# H\n\n| a |\n| - |\n| 1 |\n\n";
@@ -2135,12 +2139,6 @@ fn each_caption_refusal_holds_over_a_table_and_a_code_block() {
             "the second caption after a table",
         ),
         (
-            format!("{table}: One. {{#tab:one}}\n"),
-            "caption with a name",
-            7,
-            "the name after a table",
-        ),
-        (
             format!("{block}:\n"),
             "caption with no text",
             7,
@@ -2151,12 +2149,6 @@ fn each_caption_refusal_holds_over_a_table_and_a_code_block() {
             "second caption for one figure",
             9,
             "the second caption after a code block",
-        ),
-        (
-            format!("{block}: One. {{#lst:one}}\n"),
-            "caption with a name",
-            7,
-            "the name after a code block",
         ),
     ] {
         match md_to_typst(&md) {
@@ -2186,5 +2178,323 @@ fn an_indented_code_block_takes_a_caption_too() {
     assert!(
         typst.contains(r#"#figure(raw(block: true, "x = 1"), caption: [The block above.])"#),
         "an indented block took no caption: {typst}"
+    );
+}
+
+// -- mpdf-005 Phase 3: labels and cross-references ----------------------------
+
+/// The phase's own document: three named kinds, and a reference to each.
+///
+/// A fixture of its own rather than an extension of `captions.md` or
+/// `captioned_blocks.md`, whose goldens are shipped work this phase asserts
+/// does not move — the same reason each of the two phases before it wrote one.
+///
+/// It carries the shapes the gate names and nothing it does not need: a named
+/// image, table and listing; a reference ending a sentence; a reference
+/// standing above the caption it names; two names whose prefixes say nothing
+/// about their kinds; the two link forms `[](#name)` does not touch; a name
+/// declared inside a footnote definition; and a display equation, which takes
+/// no name at all.
+#[test]
+fn the_cross_references_fixture_matches_its_golden_file() {
+    assert_eq!(
+        md_to_typst(CROSS_REFERENCES_MD).unwrap(),
+        CROSS_REFERENCES_TYP
+    );
+}
+
+#[test]
+fn the_cross_references_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(CROSS_REFERENCES_MD, &images_assets()).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each part of the fixture reaches Typst as the form the spec chose.
+///
+/// The equality test above pins the whole file, but it cannot say which line is
+/// load-bearing. These name the rules, so an edit that drops one fails with a
+/// message pointing at the rule it dropped.
+#[test]
+fn the_cross_references_golden_carries_each_form() {
+    for (form, what) in [
+        // The label rides the call it names, in the same string the record
+        // keeps, and the reference is the function form rather than `@name`.
+        (
+            "caption: [The conversion pipeline.]) <fig:pipeline>",
+            "the label, immediately after the figure it names",
+        ),
+        (
+            "As #ref(<fig:pipeline>) shows",
+            "the reference, as `ref` rather than as a link",
+        ),
+        (
+            "#ref(<tab:counters>)",
+            "the table's reference, which the table's own caption declared",
+        ),
+        (
+            "#ref(<lst:main>)",
+            "the listing's reference, declared the same way",
+        ),
+        // The caption text as an exact string. The `{#name}` group leaves the
+        // caption, and an implementation that leaves it there passes every
+        // other case here — the golden it writes itself included. Asserted
+        // positively rather than by sweeping for `{`, because this same fixture
+        // carries a named listing and a `raw` string routinely holds a brace.
+        (
+            "caption: [The constructs and their #emph[counters].]) <tab:counters>",
+            "the group gone from the caption, the emphasis beside it kept",
+        ),
+        // A reference in the shape ordinary prose puts it in: one ending a
+        // sentence, so a full stop and a space follow the call.
+        (
+            "as it does in #ref(<fig:pipeline>). The prose",
+            "a reference ending a sentence",
+        ),
+        // A reference may precede the caption that declares it, which is why
+        // the undeclared check runs after the walk rather than during it.
+        (
+            "so #ref(<fig:later>) resolves",
+            "a reference standing above its own declaration",
+        ),
+        // The prefix is not a kind. Both of these are images, and both are
+        // figures, whatever the name in front of the colon says.
+        (
+            r#"#figure(image("dot.png", alt: "The three steps again"), caption: [A figure named with no prefix at all.]) <pipeline>"#,
+            "a figure named with no prefix",
+        ),
+        (
+            r#"alt: "A check mark again"), caption: [A figure named with a table's prefix.]) <tab:pipeline>"#,
+            "a figure named with a table's prefix, still a figure",
+        ),
+        // OQ-8's scoping, both halves. Empty means empty.
+        (
+            r##"#link("#fig:pipeline")[some words]"##,
+            "a link that carries text, untouched whatever its destination",
+        ),
+        (
+            r##"#link("#fig:pipeline")[ ]"##,
+            "a link whose text is one space, which is text",
+        ),
+        // A name declared inside a definition, and the reference outside that
+        // reaches it. The document's walk skips the region, so the name travels
+        // with the body.
+        (
+            "caption: [The figure inside the note.]) <fig:note>]<fn-1>",
+            "the label inside the footnote definition, beside the generated one",
+        ),
+        (
+            "#ref(<fig:note>) reaches it from out here",
+            "the reference outside the definition that declared the name",
+        ),
+    ] {
+        assert!(
+            CROSS_REFERENCES_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+
+    // The reference is a `ref` and not a link with no content. An
+    // implementation that left the link arm alone writes `#link("#…")[]`, which
+    // compiles and puts nothing on the page — the silent drop the dialect
+    // refuses, and the shape OQ-8 measured before claiming it.
+    assert!(
+        !CROSS_REFERENCES_TYP.contains(r##"#link("#fig:pipeline")[]"##),
+        "a reference reached the page as an empty link"
+    );
+}
+
+/// **The property the phase exists for, and the one no golden can see.**
+///
+/// Two documents differing only by a captioned figure inserted above the
+/// referenced one. The emitted Typst for the reference is byte-identical in
+/// both — the number is Typst's, which is the point rather than a limitation —
+/// so what the source can show is that the emitter wrote the same thing twice.
+/// That the page then reads *Figure 1* in one and *Figure 2* in the other is
+/// read by eye, with the rest of gate (9).
+#[test]
+fn a_reference_stays_true_when_a_figure_is_inserted_above_it() {
+    let inserted = "![An earlier diagram](mark.svg)\n\n: The figure inserted above.\n\n";
+    let tail = concat!(
+        "![The three steps](dot.png)\n\n",
+        ": The conversion pipeline. {#fig:pipeline}\n\n",
+        "As [](#fig:pipeline) shows, the emitter sits in the middle.\n",
+    );
+
+    let one = format!("# H\n\n{tail}");
+    let two = format!("# H\n\n{inserted}{tail}");
+
+    let sentence = "As #ref(<fig:pipeline>) shows, the emitter sits in the middle.";
+    for (md, what) in [
+        (&one, "the document without the insertion"),
+        (&two, "with it"),
+    ] {
+        let typst = md_to_typst(md).unwrap();
+        assert!(
+            typst.contains(sentence),
+            "{what} did not carry the reference as `{sentence}`: {typst}"
+        );
+
+        let pdf = md_to_pdf(md, &images_assets()).unwrap();
+        assert!(pdf.starts_with(b"%PDF"), "{what} is not a PDF");
+    }
+}
+
+/// Each name the dialect refuses names the author's own line.
+///
+/// Every one of these is `core`'s rather than Typst's for a measured reason.
+/// An undeclared reference fails the compile with ``label `<nosuchthing>` does
+/// not exist in the document``, a repeated one with ``label `<dup>` occurs
+/// multiple times in the document``, and the reserved collision with that same
+/// message — all naming a Typst label the author never typed, none carrying a
+/// line. A name opening with `:` raises nothing at all: it is not a label, so
+/// `<:foo>` reaches the page as literal text, which is the silent drop the
+/// dialect exists to refuse.
+#[test]
+fn each_name_refusal_names_the_authors_line() {
+    let image = "# H\n\n![alt](dot.png)\n\n";
+
+    for (md, line, needle, what) in [
+        (
+            format!("{image}: A caption. {{#fig one}}\n"),
+            5,
+            "letters, digits, '-', '_', ':' and '.'",
+            "a character outside the set, the error listing the set",
+        ),
+        (
+            format!("{image}: A caption. {{#:foo}}\n"),
+            5,
+            "begins with ':' or '.'",
+            "a name Typst would not read as a name at all",
+        ),
+        (
+            format!("{image}: A caption. {{#.foo}}\n"),
+            5,
+            "begins with ':' or '.'",
+            "the same rule over a leading full stop",
+        ),
+        (
+            format!("{image}: A caption. {{#fn-1}}\n"),
+            5,
+            "reserved for footnotes",
+            "the namespace the emitter already owns",
+        ),
+        (
+            format!("{image}: A caption. {{#one}}\n\n![alt](dot.png)\n\n: Another. {{#one}}\n"),
+            9,
+            "declared twice",
+            "a name declared twice, refused where the second one stands",
+        ),
+        (
+            format!("{image}: A caption. {{#one}}\n\nA reference to [](#other).\n"),
+            7,
+            "nothing declares the name 'other'",
+            "a reference to a name the document does not declare",
+        ),
+    ] {
+        match md_to_typst(&md) {
+            Err(Error::Name {
+                line: found,
+                problem,
+            }) => {
+                assert_eq!(found, line, "for {what}");
+                assert!(
+                    problem.contains(needle),
+                    "for {what}, the problem `{problem}` does not name `{needle}`"
+                );
+            }
+            other => panic!("expected a name error for {what}, got {other:?}"),
+        }
+    }
+}
+
+/// Where two references are undeclared, the error names the earlier line.
+///
+/// Asserted rather than assumed, because the obvious container is a set and
+/// "the first" out of one varies between runs. The document is built so that
+/// document order and collection order disagree: the reference inside the
+/// footnote definition sits on the later line and is collected first, at the
+/// reference that cites it.
+#[test]
+fn the_undeclared_reference_reported_is_the_one_on_the_earliest_line() {
+    let md = "# H\n\nA note[^n] cited early.\n\nA reference [](#early) here.\n\n[^n]: The note holds [](#late).\n";
+
+    match md_to_typst(md) {
+        Err(Error::Name { line, problem }) => {
+            assert_eq!(line, 5, "the earlier of the two undeclared references");
+            assert!(problem.contains("'early'"), "problem: {problem}");
+        }
+        other => panic!("expected a name error, got {other:?}"),
+    }
+}
+
+/// Phase 1's second-caption refusal still fires when the first caption was
+/// named.
+///
+/// `Figure::live` compares the recorded region against `written`, so a label
+/// appended to the buffer without being carried into the record fails the
+/// content check — and the second `: ` paragraph prints as prose where the
+/// dialect names an error. Phase 2's cases for this refusal carry no name, so
+/// an implementation that made that mistake passes the whole suite without it.
+#[test]
+fn the_second_caption_refusal_survives_a_named_first_caption() {
+    let md = "# H\n\n![alt](dot.png)\n\n: A caption. {#fig:one}\n\n: A second one.\n";
+
+    match md_to_typst(md) {
+        Err(Error::UnsupportedConstruct { construct, line }) => {
+            assert_eq!(construct, "second caption for one figure");
+            assert_eq!(line, 7);
+        }
+        other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
+    }
+}
+
+/// A caption line carrying a name and no words is still a caption with no text.
+///
+/// The group leaves the caption before the emptiness test runs, so this reaches
+/// the same refusal a bare `: ` does. Emitting it would put a labelled, bare
+/// "Figure 1:" on the page.
+#[test]
+fn a_caption_line_carrying_only_a_name_is_refused() {
+    match md_to_typst("# H\n\n![alt](dot.png)\n\n: {#fig:one}\n") {
+        Err(Error::UnsupportedConstruct { construct, line }) => {
+            assert_eq!(construct, "caption with no text");
+            assert_eq!(line, 5);
+        }
+        other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
+    }
+}
+
+/// No equation is named and none is referenced.
+///
+/// **This is what keeps the phase off the compile failure OQ-4 measured.** Both
+/// looks set `math.equation(numbering: … else { none })` and the frontmatter
+/// default is `plain`, so an implementer who extended labels to equations makes
+/// every document that did not write `equations: numbered` fail to compile —
+/// a correctness regression rather than a typographic one. A `: ` line after a
+/// display equation is the ordinary paragraph it has always been.
+#[test]
+fn no_equation_is_named_or_referenced() {
+    assert!(
+        CROSS_REFERENCES_TYP.contains("\n: This paragraph follows a display equation,"),
+        "the `: ` line after the equation stopped being ordinary prose"
+    );
+    assert!(
+        !CROSS_REFERENCES_TYP.contains("<eq:"),
+        "an equation took a label"
+    );
+
+    // The equation itself is untouched, and so is the key that numbers it.
+    assert!(
+        CROSS_REFERENCES_TYP.contains(r#"equations: "plain""#),
+        "the fixture stopped taking the shipped default"
+    );
+
+    // A name written on a `: ` line beneath an equation is prose too, marker
+    // and all — there is no figure above it to record.
+    let typst = md_to_typst("# H\n\n$$\nx = 1\n$$\n\n: A line. {#eq:one}\n").unwrap();
+    assert!(
+        typst.contains("\n: A line. {\\#eq:one}"),
+        "a name after an equation was read as a declaration: {typst}"
     );
 }
