@@ -53,6 +53,17 @@ pub enum Error {
     #[error("math error at line {line}: {problem}")]
     Math { line: usize, problem: String },
 
+    /// A figure's name, or a reference to one, that the dialect refuses.
+    ///
+    /// This is not an `UnsupportedConstruct`, on the same argument `Math` was
+    /// added under: the construct is a caption or a link, both of which the
+    /// dialect supports, and what the error names is the name inside it — which
+    /// is what the author typed. Typst resolves a label itself and fails on one
+    /// it cannot, but its message names a label the author never wrote and
+    /// carries no line, so the check is `core`'s.
+    #[error("name error at line {line}: {problem}")]
+    Name { line: usize, problem: String },
+
     /// The document names an image file that the caller did not supply.
     #[error("no image file supplied for '{path}' at line {line}")]
     MissingImage { path: String, line: usize },

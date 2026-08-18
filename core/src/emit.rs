@@ -178,6 +178,34 @@ struct Caption {
     text: String,
 }
 
+/// The figure names one walk declared, and the names it referenced.
+///
+/// A `Vec` on both sides rather than a map and a set, and that is a decision
+/// rather than an oversight: where several references name nothing, the error
+/// is the one on the earliest line, and "the first" out of a set varies between
+/// runs. The document holds a handful of names, so the linear scans cost
+/// nothing a hash would save.
+#[derive(Default)]
+struct Names {
+    /// Each declared name and the caption line that declared it.
+    declared: Vec<(String, usize)>,
+    /// Each referenced name and the line its link sits on.
+    referenced: Vec<(String, usize)>,
+}
+
+/// The link the walk is inside, held while its text is collected.
+///
+/// Whether a link's text is empty is knowable only at its end event — the same
+/// shape as an image's form, which `pending` settles one event late. So the
+/// start arm parks the destination here and opens a frame, and the end arm
+/// writes either the reference or the link.
+struct LinkFrame {
+    /// The destination the emitter would write, scheme included.
+    url: String,
+    /// The line the link opens on, which a refusal over it names.
+    line: usize,
+}
+
 /// Everything one walk of the event stream carries from event to event.
 ///
 /// These were locals in one loop body. Grouping them is what lets that body be
@@ -233,6 +261,15 @@ struct Walk {
     figure: Option<Figure>,
     /// The caption being collected, while its paragraph is open.
     caption: Option<Caption>,
+    /// The link the walk is inside, while its text is collected.
+    link: Option<LinkFrame>,
+    /// Every figure name this walk declared, and every one it referenced.
+    ///
+    /// A definition's walk collects these and is then discarded, so they travel
+    /// with the body the way its images and its math flag do — otherwise a name
+    /// declared inside a footnote would be met only by the walk that is thrown
+    /// away, and a reference Typst resolves perfectly well would be refused.
+    names: Names,
     /// Where the open paragraph began in the buffer that holds it.
     para: Option<usize>,
     /// Whether this walk wrote any math.
@@ -261,6 +298,8 @@ impl Walk {
             pending: None,
             figure: None,
             caption: None,
+            link: None,
+            names: Names::default(),
             para: None,
             math: false,
         }
@@ -328,19 +367,28 @@ fn label_of(text: &str) -> Label {
     UniCase::new(text.to_string())
 }
 
+/// One footnote definition's translation, and everything that travels with it.
+///
+/// The three parts beside the content are here for one reason: this walk's own
+/// `Walk` is thrown away, and the document's walk never enters a definition's
+/// region. So a formula that appears only inside a footnote would reach the page
+/// with no prelude imported, a file named only there would never join the
+/// shopping list, and a figure named only there would be a name `core` never
+/// saw — refusing a reference Typst resolves perfectly well.
+struct Body {
+    content: String,
+    images: Vec<ImageRef>,
+    math: bool,
+    names: Names,
+}
+
 /// What one walk of the definitions found.
 #[derive(Default)]
 struct Definitions {
-    /// Each definition's translated content, the images inside it and whether it
-    /// carried math, or the first error its translation produced. A label
+    /// Each definition's translation, or the first error it produced. A label
     /// defined twice is held once: the second definition is refused where it
     /// stands.
-    ///
-    /// The math flag travels with the content for the same reason the images do.
-    /// This walk's own `Walk` is thrown away, and the document's walk never
-    /// enters a definition's region, so a formula that appears only inside a
-    /// footnote would otherwise reach the page with no prelude imported.
-    bodies: HashMap<Label, Result<(String, Vec<ImageRef>, bool)>>,
+    bodies: HashMap<Label, Result<Body>>,
     /// Every label that a reference outside a definition names.
     cited: HashSet<Label>,
 }
@@ -352,7 +400,7 @@ impl Definitions {
     /// document — an unresolved one produces no event at all and stays literal
     /// text — so a lookup at a reference finds one, and so does a lookup at a
     /// region the walk has just entered.
-    fn body(&self, label: &Label) -> &Result<(String, Vec<ImageRef>, bool)> {
+    fn body(&self, label: &Label) -> &Result<Body> {
         self.bodies
             .get(label)
             .expect("the parser resolves every reference against a definition")
@@ -453,8 +501,14 @@ fn collect_definitions(md: &str) -> Definitions {
                 Some(error) => Err(error),
                 None => {
                     let math = walk.math;
+                    let names = std::mem::take(&mut walk.names);
                     let (content, images) = std::mem::replace(&mut walk, Walk::new()).finish();
-                    Ok((content.trim_matches('\n').to_string(), images, math))
+                    Ok(Body {
+                        content: content.trim_matches('\n').to_string(),
+                        images,
+                        math,
+                        names,
+                    })
                 }
             };
             // The first definition of a label is the one held. A second one is
@@ -501,6 +555,8 @@ pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>, Vec<usize>)> {
         step(&mut walk, md, event, range, Mode::Document(&mut notes))?;
     }
 
+    check_references(&walk.names)?;
+
     // Taken off the walk before `finish` consumes it, the way the math flag
     // already is, so `Walk::finish` and `collect_definitions` need no change.
     let headings = std::mem::take(&mut walk.headings);
@@ -536,6 +592,8 @@ fn step(
         pending,
         figure,
         caption,
+        link,
+        names,
         para,
         math,
     } = walk;
@@ -657,7 +715,7 @@ fn step(
             // pushes below closes the figure's own block.
             if let Some(open) = caption.take() {
                 let content = bufs.pop().expect("a caption end follows its start");
-                splice_caption(bufs, figure, &open, &content)?;
+                splice_caption(bufs, figure, names, &open, &content)?;
             }
             *para = None;
             top(bufs).push('\n');
@@ -946,12 +1004,60 @@ fn step(
                 _ => dest_url.into_string(),
             };
 
-            let out = top(bufs);
-            out.push_str("#link(");
-            out.push_str(&typst_string(&url));
-            out.push_str(")[");
+            // The text goes into a frame of its own, the way a table cell's
+            // already does, because whether it is empty is a later event and
+            // that emptiness is the whole discriminator. Nothing else changes:
+            // the end arm reassembles exactly the call this arm used to write.
+            //
+            // A frame here makes `para == top(bufs).len()` newly *reachable*
+            // inside a link, so `caption_marker` can fire on a text run there.
+            // It can never attach: `Figure::live` wants the recorded frame on
+            // top, and a link frame is always one deeper than any recorded
+            // block. An image inside a link flushes into this frame for the
+            // same reason and writes the same bytes, and it is never standalone
+            // there, since `para` is never `Some(0)`.
+            *link = Some(LinkFrame {
+                url,
+                line: line_of(md, range.start),
+            });
+            bufs.push(String::new());
         }
-        Event::End(TagEnd::Link) => top(bufs).push(']'),
+        // A link with no text at all and a `#` destination is a reference to a
+        // name the document declares. Every link that carries text is the link
+        // it has always been, whatever its destination — scoping by the text
+        // rather than by declaredness is what leaves `[Introduction](#introduction)`,
+        // the ordinary anchor idiom, meaning what it always meant.
+        //
+        // **Empty means empty.** `[ ](#name)` is a link, because the
+        // discriminator has to be statable and `is_empty` is, where "text that
+        // renders to nothing" is not.
+        //
+        // `#ref(<name>)` is the function form, not Typst's `@name` marker, on
+        // the argument that put `#emph[…]` here over `_…_`: the marker swallows
+        // what follows it, so `[](#fig:one)s` would emit `@fig:ones` and fail
+        // the compile on a label the author never typed.
+        Event::End(TagEnd::Link) => {
+            let text = bufs.pop().expect("a link end follows its start");
+            let frame = link.take().expect("a link end follows its start");
+
+            match frame.url.strip_prefix('#').filter(|_| text.is_empty()) {
+                Some(name) => {
+                    names.referenced.push((name.to_string(), frame.line));
+                    let out = top(bufs);
+                    out.push_str("#ref(<");
+                    out.push_str(name);
+                    out.push_str(">)");
+                }
+                None => {
+                    let out = top(bufs);
+                    out.push_str("#link(");
+                    out.push_str(&typst_string(&frame.url));
+                    out.push_str(")[");
+                    out.push_str(&text);
+                    out.push(']');
+                }
+            }
+        }
 
         // An image is the one construct that needs a file, so this arm is
         // where the pipeline decides which files it will ever ask for.
@@ -1027,10 +1133,21 @@ fn step(
                     // at the position that error belongs to, which is what lets
                     // an error between this reference and that region be
                     // reported first.
-                    if let Ok((content, inside, inside_math)) = notes.found.body(&label) {
-                        out.push_str(content);
-                        images.extend(inside.iter().cloned());
-                        *math |= inside_math;
+                    if let Ok(body) = notes.found.body(&label) {
+                        out.push_str(&body.content);
+                        images.extend(body.images.iter().cloned());
+                        *math |= body.math;
+                        // A name inside a definition is declared where the
+                        // definition is *set*, which is here — so an uncited
+                        // definition declares nothing, and a reference to a name
+                        // only it carries is refused, which is what Typst would
+                        // do with a label that reached no page.
+                        for (name, line) in &body.names.declared {
+                            declare(names, name, *line)?;
+                        }
+                        names
+                            .referenced
+                            .extend(body.names.referenced.iter().cloned());
                     }
                     top(bufs).push_str(&format!("]<fn-{number}>"));
                 }
@@ -1230,40 +1347,60 @@ fn caption_marker(text: &str) -> Option<&str> {
 fn splice_caption(
     bufs: &mut [String],
     figure: &mut Option<Figure>,
+    names: &mut Names,
     caption: &Caption,
     content: &str,
 ) -> Result<()> {
-    let refuse = |construct: &str| {
-        Err(Error::UnsupportedConstruct {
-            construct: construct.to_string(),
-            line: caption.line,
-        })
+    let content = content.trim();
+
+    // The name is read from the unescaped copy the walk kept, because
+    // `escape_into` has turned `{#fig-two}` into `{\#fig\-two}` in the buffer
+    // by now — `#`, `-` and `_` are all in `SPECIAL`.
+    let typed = caption.text.trim_end();
+    let named = caption_name(typed, caption.line)?;
+
+    // The group leaves the caption, and that is not a substring removal of what
+    // the author typed. It is stripped from the buffer as its own escaped form,
+    // which is exact: `escape_into`'s one positional rule looks back no further
+    // than the last newline, and the group opens with `{`, so no character
+    // inside it escapes differently in place than it does alone.
+    let content = match named {
+        Some((group, _)) => {
+            let mut escaped = String::new();
+            escape_into(&mut escaped, group);
+            content
+                .strip_suffix(escaped.as_str())
+                .expect("the caption buffer ends with the group the text does")
+                .trim_end()
+        }
+        None => content,
     };
 
     // A marker with no caption after it would put a bare "Figure 1:" on the
-    // page, which is a mistake better named than emitted.
-    let content = content.trim();
+    // page, which is a mistake better named than emitted. The test runs after
+    // the group is dropped, so a line carrying a name and no words is refused
+    // here too rather than captioning a figure with nothing.
     if content.is_empty() {
-        return refuse("caption with no text");
+        return Err(Error::UnsupportedConstruct {
+            construct: "caption with no text".to_string(),
+            line: caption.line,
+        });
     }
 
-    // A name is a later phase's, and a name that silently did nothing is the
-    // drop the dialect refuses. The test reads what the author typed, because
-    // `escape_into` has turned the `#` of a name into `\#` by now. A caption
-    // that genuinely ends in a `{#…}` group is refused with it, which is
-    // honest: that is the shape a name will claim.
-    let typed = caption.text.trim_end();
-    if let Some(open) = typed.rfind('{')
-        && typed.ends_with('}')
-        && typed[open..].starts_with("{#")
-    {
-        return refuse("caption with a name");
+    if let Some((_, name)) = named {
+        declare(names, name, caption.line)?;
     }
 
     let recorded = figure
         .as_mut()
         .expect("a caption opens only over a recorded figure");
-    let call = format!("#figure({}, caption: [{content}])", recorded.body);
+    let mut call = format!("#figure({}, caption: [{content}])", recorded.body);
+    // The label rides the same string the record keeps. Appended to the buffer
+    // alone it would fail `Figure::live`'s content check, and Phase 1's
+    // second-caption refusal would silently stop firing over a named figure.
+    if let Some((_, name)) = named {
+        call.push_str(&format!(" <{name}>"));
+    }
 
     let out = top(bufs);
     out.truncate(recorded.start);
@@ -1272,6 +1409,117 @@ fn splice_caption(
     recorded.written = call;
     recorded.captioned = true;
     Ok(())
+}
+
+// -- names ------------------------------------------------------------------
+
+/// The `{#…}` group a caption line ends with, and the name inside it.
+///
+/// Returns the group as it was typed — which is what the buffer's escaped copy
+/// must be stripped of — beside the name the label takes.
+///
+/// The set is closed rather than "whatever Typst accepts", because the error has
+/// to be able to name what it accepts, and each clause is a measurement:
+///
+/// - `fig:one`, `fig-two`, `fig_three`, `fig.four` and `fig5` are all labels.
+/// - **A name opening with `:` or `.` is not a label at all.** Typst's markup
+///   enters a label only where the character after `<` continues an identifier,
+///   so `#figure(…) <:foo>` typesets the literal `<:foo>` on the page and raises
+///   nothing — the silent drop the dialect exists to refuse, reached through a
+///   name it would otherwise have accepted.
+/// - **`fn-N` is a namespace the emitter already owns**, written by the
+///   `Event::FootnoteReference` arm. Those names are generated rather than
+///   declared, so the duplicate check would never see the collision; Typst
+///   would, with a message naming a label and no line.
+///
+/// The prefix is otherwise the author's convention and the dialect neither
+/// requires nor reads it: the kind comes from the body Typst was handed, so
+/// `{#pipeline}` on an image is a figure and so is `{#tab:pipeline}`.
+fn caption_name(typed: &str, line: usize) -> Result<Option<(&str, &str)>> {
+    let Some(open) = typed.rfind('{') else {
+        return Ok(None);
+    };
+    if !typed.ends_with('}') || !typed[open..].starts_with("{#") {
+        return Ok(None);
+    }
+
+    let group = &typed[open..];
+    let name = &group[2..group.len() - 1];
+
+    let refuse = |problem: String| Err(Error::Name { line, problem });
+
+    if name.is_empty() {
+        return refuse("a name is empty".to_string());
+    }
+    if let Some(bad) = name
+        .chars()
+        .find(|ch| !(ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | ':' | '.')))
+    {
+        return refuse(format!(
+            "'{name}' holds '{bad}', and a name may hold only letters, digits, '-', '_', ':' and '.'"
+        ));
+    }
+    if name.starts_with(':') || name.starts_with('.') {
+        return refuse(format!(
+            "'{name}' begins with ':' or '.', which Typst does not read as a name at all"
+        ));
+    }
+    if let Some(digits) = name.strip_prefix("fn-")
+        && !digits.is_empty()
+        && digits.chars().all(|ch| ch.is_ascii_digit())
+    {
+        return refuse(format!("'{name}' is reserved for footnotes"));
+    }
+
+    Ok(Some((group, name)))
+}
+
+/// Record a declared name, refusing one the document has already declared.
+///
+/// Backward-looking, so the walk already knows: the error stands where the
+/// second declaration does. Typst's own message —
+/// ``label `<dup>` occurs multiple times in the document`` — names no line.
+fn declare(names: &mut Names, name: &str, line: usize) -> Result<()> {
+    if names.declared.iter().any(|(seen, _)| seen == name) {
+        return Err(Error::Name {
+            line,
+            problem: format!("'{name}' is declared twice"),
+        });
+    }
+    names.declared.push((name.to_string(), line));
+    Ok(())
+}
+
+/// Refuse a reference to a name nothing declares, naming the earliest one.
+///
+/// This runs after the walk rather than during it, because a reference may
+/// precede its declaration and the emitter needs no pre-pass to write correctly:
+/// Typst is what resolves a label. The check exists only so the error names the
+/// author's own line, where Typst's names a label the author never typed and
+/// carries none. A declaration pre-pass would keep the ordering and costs more
+/// than it is worth — a name is declared only on a caption line that *attaches*,
+/// so finding one means re-running the walk that decides attachment.
+///
+/// **This is the one error in the pipeline that does not keep its document
+/// position.** The walk aborts at the first construct error, so a document with
+/// a bad reference on line 3 and a raw HTML block on line 5 reports the HTML.
+///
+/// The earliest line is the error, which `min_by_key` over a `Vec` settles
+/// deterministically where "the first" out of a set does not.
+fn check_references(names: &Names) -> Result<()> {
+    let undeclared = names
+        .referenced
+        .iter()
+        .filter(|(name, _)| !names.declared.iter().any(|(seen, _)| seen == name))
+        .min_by_key(|(_, line)| *line);
+
+    match undeclared {
+        Some((name, line)) => Err(Error::Name {
+            line: *line,
+            problem: format!("nothing declares the name '{name}'"),
+        }),
+        None => Ok(()),
+    }
 }
 
 /// Lay a block out under a prefix: the first line takes `prefix`, and every
