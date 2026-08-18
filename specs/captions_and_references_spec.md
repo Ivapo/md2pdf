@@ -30,6 +30,11 @@ phases:
     shipped: 2026-08-18
     cut: null
     by: null
+  - name: "Phase 5 — a figure may have more than one member"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -275,6 +280,53 @@ reused**: `mpdf-002` §1.1 refused it because alt is accessibility metadata, and
 §1.2 keeps that. **A fenced-div wrapper** (`::: figure … :::`) is unambiguous and
 generalises, and it is more syntax than the job needs — a caption is one line of
 prose, and a three-line wrapper around a one-line construct reads as ceremony.
+
+**REOPENED 2026-08-18, on drafting Phase 5: the fenced-div rejection stands for
+the job it was weighed against, and that job was never the whole one.** The
+sentence above prices a wrapper around *one* construct, where it is ceremony and
+this spec still refuses it. What it does not price is a wrapper around *several*,
+and there the marker is not merely wordier — it cannot express the thing at all.
+`: ` attaches to the construct immediately above it, so no arrangement of it
+says "these two images are one figure, with one number and one caption." That is
+the gap Phase 5 fills, and the div returns as the carrier for it rather than as
+the nicer spelling of what Phase 1 shipped.
+
+**Three measurements shape the phase, and two of them cut against the
+motivation that raised it.** Taken 2026-08-18 against the pinned 0.15.1 by
+injecting probe Typst into `core/assets/template.typ` and compiling through the
+CLI, then reverting — the technique earlier phases used, since a look file is
+arbitrary Typst.
+
+- **The legibility argument does not survive contact with the parser.** A div
+  written the way a LaTeX environment is written — tight, no blank lines — is
+  **one paragraph** joined by soft breaks: `::: figure` / `![tight](dot.png)` /
+  `: A tight caption.` / `:::` emits `#box(image(…))` and a literal `: A tight
+  caption.`, because the standalone test sees a `SoftBreak` where it wants
+  `End(Paragraph)`. Inside a div the blank lines are still structural, so the
+  environment is *more* vertical space than the marker, not less. **Legibility is
+  therefore not what this phase rests on** — the capability is.
+- **A group needs no `kind:` argument, because Typst infers one through a
+  `grid`.** A `#figure(grid(image, image), caption: …)` reads *Figure 1* and a
+  `#figure(grid(table, table), caption: …)` reads *Table 1*, both with nothing
+  configured, and both reference correctly. So the emitter writes no kind, the
+  seam holds exactly where it held for one construct, and **a word on the opener
+  is the author's convention that the dialect does not read** — Phase 3's
+  "the prefix is not a kind" rule, one level up.
+- **Sub-numbering is not native and cannot be imported.** A `figure` nested in a
+  `figure` compiles, and the counters are *shared*: the group read **Figure 1**
+  while its two members read **Figure 2** and **Figure 3**, and the next plain
+  figure read **Figure 4**. There is no `1a`/`1b`. Typst's ecosystem answers this
+  with the `subpar` package, and `core/src/lib.rs:TypstWorld` "implements no
+  package resolution, so no import can reach the network on any target" — an
+  `mpdf-001` property rather than a gap. So subcaptions are look-side counters
+  built twice, which is a feature and not a wrapper. OQ-12 carries them, and
+  Phase 5 ships one caption over the group.
+
+Censused 2026-08-18 across `tests/fixtures/`, `samples/`, `README.md` and
+`rules/`, the same instrument §2 used before claiming `: `: **no line anywhere
+begins with `:::`**, and `core/src/emit.rs:options` enables no div extension, so
+the marker is an ordinary paragraph today — which a probe confirmed by printing
+it verbatim onto the page.
 
 `: ` is the marker because **it costs nothing in this dialect**. It is Pandoc's
 own table-caption spelling, so it is the closest thing to a convention; GFM gives
@@ -1014,6 +1066,47 @@ moves neither, and Phase 1's gate names them.
   Design call, and one with no consumer. **Blocks nothing** — Phase 3 pins the
   ordinary shape in gate (1a) and names these two here.
 
+- **OQ-12 — do members take subcaptions, and where do `1a` and `1b` come from?**
+  Raised by Phase 5's drafting, and priced before it was asked. §2's measurement:
+  a `figure` inside a `figure` shares the outer counter, so the group reads
+  *Figure 1* while its members read *Figure 2* and *Figure 3* — nonsense on the
+  page — and Typst offers no sub-numbering of its own. The ecosystem's answer is
+  the `subpar` package, which `core/src/lib.rs:TypstWorld` cannot reach by
+  design. So this is a sub-counter and a `(a)`/`(b)` format built in **both**
+  bundled looks, plus a reference that resolves to `1a`, which is a feature
+  rather than the wrapper Phase 5 is. Design call. **Blocks nothing** — Phase 5
+  ships one caption over the group and refuses a second `: ` line inside one,
+  which is what leaves this open rather than foreclosed.
+
+- **OQ-13 — who owns the space between two members?** The emitter writes
+  `grid(columns: N, …)`, and `columns` is structural: it is how many members the
+  author put in the group. The *gutter* is not — it is spacing, which §2's seam
+  gives to the look, and Typst's own default would set two images touching. The
+  candidate is a look-side `show figure: set grid(gutter: …)`, which would cross
+  nothing and match how both looks already reach `raw` and `table.cell`; the
+  alternative is a sixth thing on the look contract, which OQ-3 has held shut for
+  four phases. **Answerable from code during review.** Blocks Phase 5: a gate
+  that reads two images by eye cannot pass on a shape whose spacing is undecided.
+
+- **OQ-14 — should an uncaptioned group be a refusal or a bare `grid`?** Phase 5
+  refuses it, on §2's rule that the caption is what makes a figure: an
+  uncaptioned `#figure` prints no number and still consumes the counter. But a
+  group differs from a bare image in the way that rule turns on — the author
+  wrote `:::` and asked for *something*, where a bare image asks for nothing — so
+  the alternative is a `grid` with no `figure` around it, which is side-by-side
+  layout without numbering and is a real want. Not taken, because §5 refuses the
+  pre-abstraction until a consumer asks, and because a refusal can become a
+  layout later while a shipped layout cannot become a refusal. Design call.
+  Blocks nothing.
+
+- **OQ-15 — may a group nest, and may its members be arranged?** Phase 5 refuses
+  a `:::` inside a `:::`, and writes `columns: N` over one row. Nested groups,
+  unequal column widths, and a member that spans two columns are all layout, and
+  layout is a subject this spec does not own — §1.2 keeps numbering schemes out
+  on the same ground. **If this is taken up it is a spec of its own rather than a
+  phase here**, and OQ-5's test is the one to work: a shared carrier is not a
+  shared subject. Design call. Blocks nothing.
+
 
 ## 4. Implementation phases
 
@@ -1708,6 +1801,131 @@ shipped ones; both are now closed, and each closed with a measurement behind it.
   run against their wrong implementation to check they fail it by name. The gate
   is unchanged in what it demands; what is recorded is the instrument, because the
   cheaper one satisfies the words and not the sentence after them.
+
+### Phase 5 — a figure may have more than one member
+*Produces the observable: yes — a PDF with two figures side by side under one
+caption and one number, which the dialect cannot express today at all. This is
+the first phase of this spec whose observable is a shape rather than a
+treatment: Phases 1 to 4 changed how existing content was typeset, and this one
+puts an arrangement on the page that no markdown in the dialect could ask for.*
+
+**Drafted 2026-08-18**, on §2's reopened fenced-div decision and the three
+measurements recorded there.
+
+- **Scope: a group, its caption, and nothing about layout.**
+
+  **A paragraph whose whole text is `:::`, optionally followed by a word, opens a
+  group; a paragraph whose whole text is `:::` closes it.** The word is the
+  author's convention and **the dialect does not read it**, per §2's measurement
+  that Typst infers the kind through a `grid` — so `::: table` around two images
+  is a *Figure*, exactly as Phase 3's `{#tab:pipeline}` on an image is. That is
+  one rule the corpus already has, applied one level up, rather than a second
+  kind system.
+
+  **The members are the captionable constructs the group holds** — a standalone
+  image, a table, a fenced or indented code block, which are Phases 1 and 2's
+  three. **The mechanism is the one those phases shipped**:
+  `core/src/emit.rs:Figure` already records each construct's bare call in `body`,
+  so a group collects a `body` each time a record is *made* while it is open, and
+  needs no second notion of what a member is. At the closer the group writes
+
+  ```
+  #figure(grid(columns: N, <body>, <body>, …), caption: [ … ]) <name>
+  ```
+
+  where `N` is how many members the author wrote. **`columns` is structural and
+  the gutter is not** — OQ-13 carries who owns the space between two members, and
+  it blocks this phase.
+
+  **One caption, in trailing position, and `{#name}` rides it as it always has.**
+  The `: ` line must be the last block before the closer; a `: ` line anywhere
+  else inside a group is refused naming its line. That is not tidiness — it is
+  what keeps OQ-12 open, because a `: ` line after a *member* is exactly the
+  spelling a subcaption will want, and a phase that let it through as prose would
+  have to take it back later.
+
+  **Nothing about a single construct changes.** A captioned image outside a group
+  is the `: ` marker and the splice Phase 1 shipped, byte for byte; `:::` outside
+  a group is the ordinary paragraph the census found it to be; and the reference
+  spelling is Phase 3's `[](#name)` unchanged, because a group is a figure and a
+  figure is what `#ref` already resolves. **No new syntax for the name and none
+  for the reference**: if this phase needs either, §2's carrier was chosen
+  wrongly.
+
+  **Five refusals, each naming the author's line**, per §2's rule that a
+  construct outside the dialect is named where it was written: a group with no
+  caption line (OQ-14 records the alternative and why it is not taken); a second
+  `: ` line inside a group; a `:::` inside a group; a group the document never
+  closes; and a block inside a group that is not one of the three captionable
+  constructs. The last is the one an implementer will want to soften into
+  pass-through prose, and it is a refusal because a paragraph sitting between two
+  images inside a `grid` is content reaching a cell, which is the silent
+  re-layout §2 exists to refuse.
+
+  **Neither look changes for the group itself** and the look contract stays at
+  five for the fifth phase running — unless OQ-13 resolves the other way, which
+  is the one thing in this phase that could move it. `core/src/frontmatter.rs`
+  and `core/src/emit.rs:header` are untouched, and `cli/src` and `app/src` are
+  untouched, checked as a diff as every phase here has.
+
+- **Exit gate:** nine cases. The two that carry the phase are (2) and (3); (5) is
+  the one that keeps a later phase possible.
+
+  (1) **A new fixture carrying a group of two images with one caption and one
+  name, and a reference to it**, matches its golden and compiles to a PDF with
+  the `%PDF` magic bytes. The golden shows a single
+  `#figure(grid(columns: 2, image(…), image(…)), caption: [ … ]) <fig:…>` — **one
+  `#figure` and no `kind:` argument** — and `#ref(<fig:…>)` where the reference
+  stands. The absence of `kind:` is asserted, because writing one is the cheap
+  implementation that passes every other case and puts the emitter back in the
+  business of naming a kind.
+
+  (2) **Read by eye, one PDF per look — two documents: two images on one line,
+  under one caption, carrying one number.** **This is the case the phase exists
+  for and the one no golden can see**: the emitter's source is a `grid` either
+  way, and whether the two images actually sit side by side, whether the caption
+  spans both, and whether the counter advanced once or twice are all invisible
+  until a page is drawn. Both looks are read, since neither has met a `grid`
+  before.
+
+  (3) **The kind comes from the body and the opener's word is not read.** A group
+  of two tables reads *Table 1*; a group of two images opened `::: table` still
+  reads *Figure 1*; and a document holding both plus a single captioned image
+  shows the counters running independently. §2 measured the first two, and this
+  is that measurement held as a test rather than as prose.
+
+  (4) **A group's number is one number.** A captioned image, then a group of two,
+  then a captioned image: the page reads *Figure 1*, *Figure 2*, *Figure 3* —
+  not 1, 2, 4 — which is what pins that the members did not each take a count.
+  Read by eye with (2), because no golden can see a counter.
+
+  (5) **A `: ` line after a member, inside a group, is refused naming its line.**
+  **This is the case that costs nothing now and keeps OQ-12 open**: it is the
+  exact spelling a subcaption will want, so a phase that let it reach the page as
+  prose would ship a meaning it would later have to take back — which §6.1 step 1
+  says is never a phase.
+
+  (6) **The other four refusals, each naming the author's line**: a group with no
+  caption; a `:::` inside a group; a group the document never closes; and a
+  paragraph of prose between two members.
+
+  (7) **The marker is not a ban.** A `:::` paragraph outside any group reaches
+  the page as the ordinary prose the census found — unchanged, and with no error.
+  An implementer who refuses `:::` everywhere passes (6) and fails here.
+
+  (8) **Everything shipped is unchanged.** A captioned image, table and code
+  block outside a group are byte-for-byte what Phases 1 and 2 emit;
+  `cargo test --workspace` passes with **no shipped golden file changed**; and
+  `cli/src`, `app/src`, `core/src/frontmatter.rs`, `core/src/emit.rs:header` and
+  both look files are untouched, checked as a diff.
+  `core/tests/golden_test.rs:every_bundled_template_meets_the_call_contract` is
+  unchanged at five arguments — unless OQ-13 moved it, in which case that
+  movement is the phase's own and is argued where it happens.
+
+  (9) **`samples/article.md` does not move.**
+  `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`
+  passes unchanged, since the sample carries no `:::` and nothing in it is a
+  group.
 
 <!--
 The review record is a sibling file, not a section: it lives at
