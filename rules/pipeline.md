@@ -13,12 +13,13 @@ covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the two walks footnotes need, the image asset
   channel, the caption that makes an image, a table or a code block a figure and
-  the splice that attaches it, the LaTeX subset a formula may hold and the prelude
+  the splice that attaches it, the name a caption declares and the reference that
+  points at it, the LaTeX subset a formula may hold and the prelude
   it compiles against, the bundled looks and the call contract they meet, the equation numbering
   the author asks for and the look formats, the heading anchors a compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 487
-generated: 2026-08-17
+max_lines: 553
+generated: 2026-08-18
 ---
 
 # Pipeline
@@ -42,11 +43,11 @@ wanting only the PDF pays nothing for the anchors and gets byte-identical output
 
 ## The dialect
 
-Twenty things are supported: headings at levels 1–6, paragraph text, soft breaks,
+Twenty-one things are supported: headings at levels 1–6, paragraph text, soft breaks,
 emphasis, strong emphasis, strikethrough, inline code, math in both its forms, hard line
-breaks, thematic breaks, links, images, captions, bullet lists, ordered lists, code
-blocks, block quotes, pipe tables, footnotes, and a leading YAML frontmatter block. Heading
-levels map to Typst headings of the same level.
+breaks, thematic breaks, links, cross-references, images, captions, bullet lists, ordered
+lists, code blocks, block quotes, pipe tables, footnotes, and a leading YAML frontmatter
+block. Heading levels map to Typst headings of the same level.
 
 The inline constructs reach Typst as function calls, not as its own markup.
 `#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
@@ -66,6 +67,15 @@ through `typst_string`, so a `#` in a destination survives, and the text keeps t
 escape, which is what stops Typst reading an autolink's own text as a second link. An
 email autolink's destination is the bare address, because pulldown-cmark leaves the scheme
 to the renderer, so the emitter prepends `mailto:`.
+
+One link shape is not a link. `[](#name)` — **no text at all**, and a destination that is
+`#` followed by a name — is a cross-reference, and the section below holds it. Every link
+that carries text is untouched whatever its destination, `[Introduction](#introduction)`
+included, which is what keeps the ordinary anchor idiom meaning what it always meant.
+Whether a link's text is empty is knowable only at its end event, so the start arm parks
+the destination in `Walk.link` and opens a frame on the buffer stack the way a table cell
+does, and `Event::End(TagEnd::Link)` writes either the reference or the call the start arm
+used to write.
 
 An image is `#image(…)`, `#box(image(…))` or `#figure(image(…), caption: […])`; the two
 sections below hold the whole subject, the caption's own section covering a table and a
@@ -126,6 +136,12 @@ definition, which would need a recursive substitution with a cycle check. The fi
 never raises. A definition whose translation failed keeps that error, and the second walk
 reports it at the region, so the first error in document order is still the one reported
 and the frontmatter still wins over a construct error below it.
+
+**One error does not keep its document position, and it is the only one.** The undeclared
+reference below is checked after the walk, because a reference may precede its
+declaration. The walk aborts at the first construct error, so a document carrying a bad
+reference on line 3 and a raw HTML block on line 5 reports the HTML. Every other error, in
+either walk's territory, still surfaces where it stands.
 
 **Everything else is an error** — raw HTML and a task list marker.
 `core/src/emit.rs:describe` names the construct, `Error::UnsupportedConstruct` carries
@@ -245,7 +261,7 @@ over the first 2048 bytes. Typst's fallback to content detection is not mirrored
 the emitter has already refused every extension it would apply to. A file corrupt past its
 magic still fails at compile time, with the compiler's own message.
 
-## Captions
+## Captions and cross-references
 
 A caption is one mechanism over three constructs. A standalone image, a table or a code
 block with a caption beneath it becomes `#figure(image(…), caption: […])`,
@@ -308,14 +324,65 @@ spliced region carries `#figure(…)`, which the content check accepts.
 The caption's content is walked as inline markdown into a frame on the same buffer stack a
 list item uses, so emphasis, code, a link and a `$…$` span all work inside one, and `para`
 is cleared as that frame opens — it is an offset into the frame below, and clearing it also
-stops an image inside a caption taking the standalone form. Three caption shapes are
-errors, each an `UnsupportedConstruct` naming the author's line: a marker with no text,
-which would put a bare "Figure 1:" on the page; a second caption for one figure; and a
-caption ending in a `{#name}` group, which is not yet a Typst label and which shipping as
-a silent no-op would be the drop the dialect refuses. All three read the same over a table
-and a code block, the second included: a captioned table *is* a Typst `figure`, so the
-message names the element the emitter writes. That last test reads what the author typed,
-because the markup escape has turned its `#` into `\#` by then.
+stops an image inside a caption taking the standalone form. Two caption shapes are errors,
+each an `UnsupportedConstruct` naming the author's line: a marker with no text, which
+would put a bare "Figure 1:" on the page, and a second caption for one figure. Both read
+the same over a table and a code block, the second included: a captioned table *is* a
+Typst `figure`, so the message names the element the emitter writes.
+
+**A caption line may end in a `{#name}` group, which names the figure that caption makes.**
+It becomes a Typst label written into the same string the record keeps —
+`#figure(…, caption: […]) <name>` — and the label has to ride that string rather than the
+buffer alone, or `Figure::live`'s content check fails and the second-caption refusal
+silently stops firing. The group leaves the caption, and that is not a substring removal
+of what stands in the buffer: `core/src/emit.rs:escape_into` has turned `{#fig-two}` into
+`{\#fig\-two}` by then. `core/src/emit.rs:caption_name` reads the name from `Caption.text`,
+the unescaped copy the walk keeps for exactly this test, and the group is stripped from
+the buffer as its own escaped form — exact, because the escape's one positional rule looks
+back no further than the last newline and the group opens with `{`. The emptiness test
+runs after the strip, so a line carrying a name and no words is refused as a caption with
+no text.
+
+**A name is a closed character set with a position rule**, checked here rather than left
+to Typst, because Typst's own failures name a label the author never typed and carry no
+line: every character an ASCII letter, a digit, `-`, `_`, `:` or `.`; the first not `:`
+and not `.`; non-empty; and not `fn-` followed by digits. The position rule is the one a
+reader will not guess at — Typst's markup enters a label only where the character after
+`<` continues an identifier, so `#figure(…) <:foo>` typesets the literal `<:foo>` and
+raises nothing, which is a silent drop reached through a name the dialect would otherwise
+have accepted. `fn-N` is reserved because `core/src/emit.rs:step`'s
+`Event::FootnoteReference` arm generates those names rather than declaring them, so the
+duplicate check would never see the collision. The prefix is otherwise the author's
+convention and the dialect neither requires nor reads it: the kind comes from the body
+Typst was handed, so `{#pipeline}` on an image is a figure and so is `{#tab:pipeline}`.
+
+**A reference is `[](#name)` and becomes `#ref(<name>)`** — the function form, not Typst's
+`@name` marker, on the argument that put `#emph[…]` here over `_…_`. The marker is
+boundary-sensitive: `[](#fig:one)s` would emit `@fig:ones`, which this crate's own check
+passes and Typst then fails on a label the author never typed, and `@fig:` drops its
+trailing colon where `#ref(<fig:>)` does not. Empty means empty — `[ ](#name)`, whose text
+is one space, is a link — because the discriminator has to be statable and `is_empty` is.
+
+Two whole-document checks, at different times. `core/src/emit.rs:declare` refuses a
+repeated name where the second one stands, which is backward-looking and the walk already
+knows. `core/src/emit.rs:check_references` refuses a reference to a name nothing declares
+**after the walk**, because a reference may precede its declaration and the emitter needs
+no pre-pass to write correctly: Typst is what resolves a label, and this check exists only
+to name the author's line. Where several are undeclared the earliest line is the error,
+which a `Vec` settles deterministically where a set does not. Both raise `Error::Name`,
+which carries a problem string rather than a construct name — the construct is a caption
+or a link, both in the dialect, and what is wrong is the name inside it.
+
+A name declared inside a footnote definition is a declared name. `core/src/emit.rs:emit`
+skips a definition's region, so those names travel in `core/src/emit.rs:Body` the way its
+images and its math flag do and join the document's set where the definition is set, at
+its first reference. An uncited definition reaches no page, so it declares nothing and a
+reference to a name only it carries is refused — which is what Typst would do with a label
+that reached no page.
+
+No equation takes a name or a reference. An equation has no caption line to carry one, and
+a reference to an unnumbered one fails the compile, which the shipped `equations: plain`
+default makes the ordinary path.
 
 ## The frontmatter
 

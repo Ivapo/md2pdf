@@ -123,8 +123,8 @@ the one thing an unsigned bundle cannot do.
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
-constructs, links, tables, images, captions, footnotes, strikethrough, and math in both
-its forms**:
+constructs, links, cross-references, tables, images, captions, footnotes, strikethrough,
+and math in both its forms**:
 
 ````markdown
 # Introduction
@@ -165,7 +165,9 @@ fn main() {}
 
 ![A diagram of the three steps](figures/pipeline.svg)
 
-: The conversion pipeline, with the *emitter* in the middle.
+: The conversion pipeline, with the *emitter* in the middle. {#fig:pipeline}
+
+As [](#fig:pipeline) shows, the emitter sits in the middle.
 
 A claim that needs a source[^1].
 
@@ -190,6 +192,11 @@ A reference link works too, and an email autolink becomes a `mailto:` destinatio
 link shapes do not: a link with an empty destination, `[text]()`, and a link that carries
 a title, `[text](url "a title")`. Neither Typst nor the PDF can hold a title, and an empty
 destination has nothing to resolve to.
+
+One shape is not a link at all. `[](#name)` — **with nothing between the brackets** — is a
+cross-reference to a figure you have named, and the Captions section below covers it. Any
+link that has text is the link it has always been, whatever its destination, so
+`[Introduction](#introduction)` still points where it always did.
 
 Strikethrough takes one tilde on each side as well as two, so `~struck~` strikes exactly
 as `~~struck~~` does. A single tilde with a space beside it is still a tilde.
@@ -335,10 +342,48 @@ to keep than three.
 
 Only a standalone image takes a caption; an image inside a sentence is not a figure. A
 `: ` paragraph anywhere else — after prose, after a heading, after a list — is ordinary
-text, unchanged. Three things are errors, each naming the line: a `: ` with nothing after
-it, a second caption under one block, and a caption ending in `{#name}`. That last one is
-reserved: **there is no way yet to name a figure and refer to it, so "see Figure 1" is
-prose you keep true yourself**, as it is for equations.
+text, unchanged. Two things are errors, each naming the line: a `: ` with nothing after
+it, and a second caption under one block.
+
+## Naming a figure, and pointing at it
+
+End a caption with `{#name}` to name the figure it makes, then write `[](#name)` to point
+at it:
+
+```markdown
+![The three steps, drawn as boxes](figures/pipeline.svg)
+
+: The conversion pipeline. {#fig:pipeline}
+
+As [](#fig:pipeline) shows, the emitter sits in the middle.
+```
+
+That reads *"As Figure 1 shows…"* on the page, and it stays true. Insert another figure
+above it and the sentence reads *"As Figure 2 shows…"* without your touching it, which is
+the whole reason to number anything. The name never appears in the PDF; the supplement and
+the number come from the look, as the caption's own type does.
+
+**The brackets must be empty.** `[](#name)` is a reference; `[the diagram](#name)` is an
+ordinary link, and so is `[ ](#name)`, whose text is a space rather than nothing. That is
+what keeps `[Introduction](#introduction)` and every other anchor link meaning what it
+always meant.
+
+**A name may hold letters, digits, `-`, `_`, `:` and `.`**, and may not begin with `:` or
+`.`. The `fig:`, `tab:` and `lst:` prefixes are a convention and nothing more — the kind
+comes from what the caption sits under, so `{#pipeline}` on an image is a figure and so is
+`{#tab:pipeline}`. Names beginning `fn-` followed by digits are reserved for footnotes.
+
+Four things are errors, each naming the line: a reference to a name nothing declares, the
+same name declared twice, a character outside the set, and a reserved name. A name is
+checked here rather than left to the typesetter, which would otherwise report a name you
+never typed and no line at all:
+
+```console
+$ md2pdf paper.md
+error: name error at line 24: nothing declares the name 'fig:piepline'
+```
+
+Equations take no name yet — "see equation (1)" is still prose you keep true yourself.
 
 ## Footnotes
 

@@ -681,6 +681,20 @@ close-out names that gap.
   second paragraph, a list, a code block — arrives through the arms that
   serve it everywhere else.
 
+  **CORRECTED 2026-08-18, by `mpdf-005` Phase 3: "the first one in document
+  order is the one reported" now has exactly one exception, and the sentence
+  above states it without qualification.** A cross-reference to a name the
+  document does not declare is checked *after* the walk, because a reference may
+  precede its declaration and a pre-pass that found declarations would have to
+  re-run the walk that decides them. The walk still aborts at the first construct
+  error, so a document carrying a bad reference on line 3 and a raw HTML block on
+  line 5 reports the HTML. **That is the whole of it** — every other error, in
+  either pass's territory, still surfaces at its document position, and the
+  frontmatter precedence is untouched. The original is kept because the claim it
+  makes about *this* phase's two passes is unchanged and still true;
+  `rules/pipeline.md` carries the corrected wording, since that is the artifact
+  that tracks the code.
+
   The first reference to a label emits `#footnote[…]<fn-N>` and every later
   reference to that same label emits `#footnote(<fn-N>)`, which is Typst's
   own documented form for pointing at a footnote that already exists; `N`
