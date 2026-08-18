@@ -57,10 +57,10 @@ const CROSS_REFERENCES_MD: &str = include_str!("../../tests/fixtures/cross_refer
 const CROSS_REFERENCES_TYP: &str = include_str!("../../tests/golden/cross_references.typ");
 const EQUATION_NAMES_MD: &str = include_str!("../../tests/fixtures/equation_names.md");
 const EQUATION_NAMES_TYP: &str = include_str!("../../tests/golden/equation_names.typ");
-const PLAIN_EQUATION_NAMES_MD: &str =
-    include_str!("../../tests/fixtures/plain_equation_names.md");
-const PLAIN_EQUATION_NAMES_TYP: &str =
-    include_str!("../../tests/golden/plain_equation_names.typ");
+const PLAIN_EQUATION_NAMES_MD: &str = include_str!("../../tests/fixtures/plain_equation_names.md");
+const PLAIN_EQUATION_NAMES_TYP: &str = include_str!("../../tests/golden/plain_equation_names.typ");
+const GROUPS_MD: &str = include_str!("../../tests/fixtures/groups.md");
+const GROUPS_TYP: &str = include_str!("../../tests/golden/groups.typ");
 
 /// Every bundled look, by the name the `template` key selects it with. Four
 /// tests read these: the header-row rule, and the three Phase 9 cases that no
@@ -2574,7 +2574,8 @@ fn the_equation_names_golden_carries_each_form() {
 /// carrying neither the author's line nor the key they would have to set.
 #[test]
 fn an_equation_reference_without_the_key_is_refused_naming_the_key() {
-    let md = "---\nequations: plain\n---\n\n# H\n\n$$\nx = 1\n$$ {#eq:one}\n\nAs [](#eq:one) shows.\n";
+    let md =
+        "---\nequations: plain\n---\n\n# H\n\n$$\nx = 1\n$$ {#eq:one}\n\nAs [](#eq:one) shows.\n";
 
     match md_to_typst(md) {
         Err(Error::Name { line, problem }) => {
@@ -2787,7 +2788,10 @@ fn each_equation_name_refusal_names_the_authors_line() {
         ),
     ] {
         match md_to_typst(&md) {
-            Err(Error::Name { line: found, problem }) => {
+            Err(Error::Name {
+                line: found,
+                problem,
+            }) => {
                 assert_eq!(found, line, "for {what}");
                 assert!(
                     problem.contains(needle),
@@ -2811,16 +2815,23 @@ fn the_earliest_line_wins_across_both_reference_refusals() {
 
     // The equation reference stands first, so it is the error even though the
     // undeclared one below it is the older of the two classes.
-    match md_to_typst(&format!("{named}A [](#eq:one) here.\n\nAnd [](#missing).\n")) {
+    match md_to_typst(&format!(
+        "{named}A [](#eq:one) here.\n\nAnd [](#missing).\n"
+    )) {
         Err(Error::Name { line, problem }) => {
             assert_eq!(line, 11);
-            assert!(problem.contains("equations: numbered"), "problem: {problem}");
+            assert!(
+                problem.contains("equations: numbered"),
+                "problem: {problem}"
+            );
         }
         other => panic!("expected a name error, got {other:?}"),
     }
 
     // Reversed, the undeclared one wins — so neither class is preferred.
-    match md_to_typst(&format!("{named}And [](#missing).\n\nA [](#eq:one) here.\n")) {
+    match md_to_typst(&format!(
+        "{named}And [](#missing).\n\nA [](#eq:one) here.\n"
+    )) {
         Err(Error::Name { line, problem }) => {
             assert_eq!(line, 11);
             assert!(problem.contains("'missing'"), "problem: {problem}");
@@ -2853,8 +2864,276 @@ fn an_equation_named_inside_a_footnote_definition_still_needs_the_key() {
     match md_to_typst(&format!("---\nequations: plain\n---\n\n{body}")) {
         Err(Error::Name { line, problem }) => {
             assert_eq!(line, 7, "the line the reference sits on");
-            assert!(problem.contains("equations: numbered"), "problem: {problem}");
+            assert!(
+                problem.contains("equations: numbered"),
+                "problem: {problem}"
+            );
         }
         other => panic!("expected a name error, got {other:?}"),
+    }
+}
+
+// -- mpdf-005 Phase 5: a figure may have more than one member ---------------
+
+/// A group of two images under one caption and one name, byte for byte.
+///
+/// A fixture of its own rather than an addition to `captions.md` or
+/// `cross_references.md`, whose goldens are shipped work gate (8) asserts do
+/// not move.
+#[test]
+fn the_groups_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(GROUPS_MD).unwrap(), GROUPS_TYP);
+}
+
+#[test]
+fn the_groups_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(GROUPS_MD, &images_assets()).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// One `#figure` over a `grid`, and **no `kind` argument anywhere**.
+///
+/// The absence is asserted rather than assumed: Typst infers a figure's kind
+/// from the `grid` it is handed, so a group of images is a Figure and a group
+/// of tables is a Table with nothing configured. Writing a `kind` is the cheap
+/// implementation that passes every other case here and puts the emitter back
+/// in the business of naming a kind — which is the seam this spec rests on.
+#[test]
+fn the_groups_golden_carries_each_form() {
+    for (form, what) in [
+        (
+            "#figure(grid(columns: 2, image(\"dot.png\", alt: \"The first of a pair\"), \
+             image(\"dot.png\", alt: \"The second of a pair\")), \
+             caption: [Two images under one caption, side by side.]) <fig:pair>",
+            "a group of two images as one figure, named",
+        ),
+        ("#ref(<fig:pair>)", "a reference to the group"),
+        ("#figure(grid(columns: 2, table(", "a group of two tables"),
+        (
+            "#figure(grid(columns: 2, raw(block: true, lang: \"rust\", \"fn first() {}\"), \
+             raw(block: true, lang: \"rust\", \"fn second() {}\")), \
+             caption: [Two listings under one caption.])",
+            "a group of two listings",
+        ),
+    ] {
+        assert!(
+            GROUPS_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+
+    assert!(
+        !GROUPS_TYP.contains("kind:"),
+        "the emitter named a kind, which Typst infers from the grid"
+    );
+    // Four groups and no more: every other `#figure(` in the file is a single
+    // captioned construct, which is Phase 1's and Phase 2's shape unchanged.
+    assert_eq!(
+        GROUPS_TYP.matches("#figure(grid(").count(),
+        4,
+        "the golden file does not carry exactly the four groups the fixture writes"
+    );
+}
+
+/// A `: ` line with a member after it, inside a group, is refused.
+///
+/// The group's own caption is the last block before the closer, so this is a
+/// marker that is *not* last — which is what distinguishes it from the caption
+/// the fixture writes. **It costs nothing now and keeps OQ-12 open**: a `: `
+/// line after a member is the exact spelling a subcaption will want, so a phase
+/// that let it reach the page as prose would ship a meaning it would later have
+/// to take back.
+#[test]
+fn a_group_caption_with_a_member_after_it_is_refused() {
+    let md = "# H\n\n:::\n\n![a](dot.png)\n\n: A caption.\n\n![b](dot.png)\n\n:::\n";
+
+    match md_to_typst(md) {
+        Err(Error::UnsupportedConstruct { construct, line }) => {
+            assert_eq!(construct, "figure group caption with a member after it");
+            assert_eq!(line, 7, "the line the `: ` sits on");
+        }
+        other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
+    }
+}
+
+/// The other seven refusals, each naming the author's line.
+///
+/// Two carry the case. **The empty group is the one that otherwise reaches
+/// Typst**: it satisfies every other rule here and emits `grid(columns: 0)`,
+/// which fails the compile with `number must be positive`, naming no line and
+/// no construct the author would recognise. And **a group opened in one list
+/// item and closed in the next is the one a depth-only check accepts** — both
+/// delimiters land at depth 2, in different frames, so a closer that compared
+/// depths would truncate a frame its group never opened.
+#[test]
+fn each_group_refusal_names_its_construct_and_its_line() {
+    for (md, construct, line, what) in [
+        (
+            "# H\n\n:::\n\n![a](dot.png)\n\n:::\n",
+            "figure group with no caption",
+            3,
+            "a group with no caption line",
+        ),
+        (
+            "# H\n\n:::\n\n: A caption.\n\n:::\n",
+            "figure group with no member",
+            3,
+            "a group with no member, which would emit `grid(columns: 0)`",
+        ),
+        (
+            "# H\n\n:::\n\n![a](dot.png)\n\n: One.\n\n: Two.\n\n:::\n",
+            "second caption for one figure group",
+            9,
+            "a second caption line inside a group",
+        ),
+        (
+            "# H\n\n:::\n\n![a](dot.png)\n\n::: table\n\n:::\n",
+            "figure group inside a figure group",
+            7,
+            "a `:::` inside a group",
+        ),
+        (
+            "# H\n\n:::\n\n![a](dot.png)\n\n: A caption.\n",
+            "figure group the document never closes",
+            3,
+            "a group the document body never closes",
+        ),
+        (
+            "# H\n\nA note.[^1]\n\n[^1]: The note.\n\n    :::\n\n    ![a](dot.png)\n",
+            "figure group the document never closes",
+            7,
+            "a group a footnote definition never closes, which the other walk ends",
+        ),
+        (
+            "# H\n\n- :::\n\n  ![a](dot.png)\n\n:::\n",
+            "figure group the document never closes",
+            3,
+            "a group opened in a list item and left to close outside it",
+        ),
+        (
+            "# H\n\n- :::\n\n  ![a](dot.png)\n\n- :::\n",
+            "figure group the document never closes",
+            3,
+            "a group opened in one list item and closed in the next",
+        ),
+        (
+            "# H\n\n::::\n\n![a](dot.png)\n\n:::\n",
+            "figure group delimiter that is neither an opener nor a closer",
+            3,
+            "a mistyped delimiter",
+        ),
+        (
+            "# H\n\n::: two words\n\n![a](dot.png)\n\n:::\n",
+            "figure group delimiter that is neither an opener nor a closer",
+            3,
+            "an opener carrying more than one word",
+        ),
+        (
+            "# H\n\n:::\n![a](dot.png)\n:::\n",
+            "figure group delimiter that is neither an opener nor a closer",
+            3,
+            "the tight div, whose one paragraph begins `:::` and is no valid opener",
+        ),
+        (
+            "# H\n\n:::\n\n![a](dot.png)\n\nSome prose.\n\n![b](dot.png)\n\n: A caption.\n\n:::\n",
+            "block inside a figure group that is not an image, a table or a code block",
+            7,
+            "a paragraph of prose between two members",
+        ),
+        (
+            "# H\n\n:::\n\n![a](dot.png)\n\n## Nope\n\n: A caption.\n\n:::\n",
+            "block inside a figure group that is not an image, a table or a code block",
+            7,
+            "a heading inside a group",
+        ),
+    ] {
+        match md_to_typst(md) {
+            Err(Error::UnsupportedConstruct {
+                construct: found,
+                line: found_line,
+            }) => {
+                assert_eq!(found, construct, "for {what}");
+                assert_eq!(found_line, line, "for {what}");
+            }
+            other => panic!("expected `{construct}` for {what}, got {other:?}"),
+        }
+    }
+}
+
+/// The reservation reaches the first text of a paragraph and nothing else.
+///
+/// **Emitted rather than read off the golden**, per Phase 4's note: a needle
+/// over a golden constant holds only what that file says, and the file is
+/// written by the same implementation the case is meant to catch.
+///
+/// The code-block case is the load-bearing one — it is where a document that
+/// documents this syntax puts a `:::`, this repository's own README included —
+/// and both block kinds are asserted, since one arm serves the fenced block and
+/// the indented one.
+#[test]
+fn the_reservation_reaches_the_first_text_of_a_paragraph_and_nothing_else() {
+    for (md, form, what) in [
+        (
+            "# H\n\nA line reading ::: opens a group.\n",
+            "A line reading ::: opens a group.",
+            "a `:::` inside a sentence",
+        ),
+        (
+            "# H\n\nSome prose.\n::: not a group\n",
+            "Some prose.\n::: not a group",
+            "a `:::` later in a paragraph whose first text is something else",
+        ),
+        (
+            "# H\n\n```markdown\n:::\n\n![a](dot.png)\n\n: A caption.\n\n:::\n```\n",
+            "#raw(block: true, lang: \"markdown\", \":::\\n\\n![a](dot.png)\\n\\n: A caption.\\n\\n:::\")",
+            "a `:::` inside a fenced code block",
+        ),
+        (
+            "# H\n\n    :::\n    ![a](dot.png)\n    :::\n",
+            "#raw(block: true, \":::\\n![a](dot.png)\\n:::\")",
+            "a `:::` inside an indented code block",
+        ),
+    ] {
+        let typst = md_to_typst(md).unwrap();
+        assert!(
+            typst.contains(form),
+            "{what} stopped reaching the page unchanged: {typst}"
+        );
+    }
+
+    // And the same four, standing in a document that compiles.
+    for form in [
+        "A\nline reading ::: inside a sentence is prose",
+        "::: not a group.",
+        "#raw(block: true, lang: \"markdown\", \":::\\n\\n",
+        "#raw(block: true, \":::\\n![tight](dot.png)\\n:::\")",
+    ] {
+        assert!(
+            GROUPS_TYP.contains(form),
+            "the golden file does not carry `{form}`"
+        );
+    }
+}
+
+/// Both bundled looks separate one figure's members.
+///
+/// A test of its own rather than an extension of
+/// `every_bundled_template_styles_a_caption`, whose name would stop describing
+/// it — the same argument Phase 1 made when it refused to hang a caption
+/// assertion off the call-contract test.
+///
+/// **The needle is `set grid(gutter:` and not `show figure`**, because both
+/// looks already carry `show figure: set block(…)`, so a test keyed to the
+/// looser phrase would pass before the rule existed. The gutter *value* is
+/// deliberately not a needle: Typst's default is zero, so two members would
+/// touch, and how far apart they sit is each look's own call.
+#[test]
+fn every_bundled_template_separates_a_figures_members() {
+    for (file, source) in BUNDLED_TEMPLATES {
+        assert!(
+            source.contains("set grid(gutter:"),
+            "{file} does not separate a figure's members"
+        );
     }
 }
