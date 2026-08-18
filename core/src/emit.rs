@@ -116,10 +116,12 @@ struct AltCapture {
     depth: usize,
 }
 
-/// A standalone image call the walk has already written, and where it sits.
+/// A block the walk has already written that a caption can attach to, and where
+/// it sits.
 ///
-/// A caption looks *back* at this; an image is never held forward waiting for
-/// one. The flush timing in `step` is load-bearing for `Walk::finish`, for
+/// Three constructs reach this: a standalone image, a table and a code block.
+/// A caption looks *back* at one; nothing is ever held forward waiting for a
+/// caption. The flush timing in `step` is load-bearing for `Walk::finish`, for
 /// `collect_definitions`, and for `Walk.para`'s offset, so it does not move, and
 /// a rewrite of what was written costs none of them anything.
 ///
@@ -220,11 +222,14 @@ struct Walk {
     alt: Option<AltCapture>,
     /// An image call waiting for the next event to settle its form.
     pending: Option<(String, bool)>,
-    /// The last standalone image this walk wrote, and where it stands.
+    /// The last captionable block this walk wrote, and where it stands.
     ///
-    /// A caption line splices it into a `#figure(…)`. Nothing else reads it,
-    /// so a document with no caption in it carries this and writes exactly what
-    /// it always wrote.
+    /// A standalone image, a table or a code block, and **the last one written
+    /// rather than the last one of its kind** — which is what makes a caption
+    /// reach the construct directly above it and no other. A caption line
+    /// splices it into a `#figure(…)`. Nothing else reads it, so a document
+    /// with no caption in it carries this and writes exactly what it always
+    /// wrote.
     figure: Option<Figure>,
     /// The caption being collected, while its paragraph is open.
     caption: Option<Caption>,
@@ -737,10 +742,7 @@ fn step(
         }
         Event::End(TagEnd::Table) => {
             let frame = table.take().expect("a table end follows its start");
-            let out = top(bufs);
-            out.push('\n');
-            out.push_str(&table_call(&frame));
-            out.push('\n');
+            write_block(bufs, figure, table_call(&frame));
         }
 
         // The head holds its cells directly; no row event wraps them.
@@ -779,15 +781,12 @@ fn step(
             if content.ends_with('\n') {
                 content.pop();
             }
-            let out = top(bufs);
-            out.push_str("\n#raw(block: true, ");
-            if let Some(lang) = lang {
-                out.push_str("lang: ");
-                out.push_str(&typst_string(&lang));
-                out.push_str(", ");
-            }
-            out.push_str(&typst_string(&content));
-            out.push_str(")\n");
+            // One arm serves the fenced block and the indented one, differing
+            // only in whether a `lang` argument is written, so both take a
+            // caption. Splitting them would make a `: ` line a caption after
+            // one kind of block and prose after another, with nothing on the
+            // page to tell an author which they had written.
+            write_block(bufs, figure, raw_call(lang.as_deref(), &content));
         }
 
         Event::Text(text) => {
@@ -800,11 +799,11 @@ fn step(
                 meta.push_str(&text);
             } else {
                 // A paragraph that opens with `: ` immediately after a
-                // standalone image is that image's caption. Everywhere else
-                // the marker is the ordinary prose it is today, which is what
-                // keeps it from being a ban on a line an author may already
-                // have written: the collision window is one paragraph in one
-                // position.
+                // standalone image, a table or a code block is that block's
+                // caption. Everywhere else the marker is the ordinary prose it
+                // is today, which is what keeps it from being a ban on a line
+                // an author may already have written: the collision window is
+                // one paragraph in one position.
                 let marked = match *para == Some(top(bufs).len()) {
                     true => caption_marker(&text),
                     false => None,
@@ -1162,6 +1161,36 @@ fn write_image(bufs: &mut [String], call: &str, standalone: bool) {
 
 // -- captions ---------------------------------------------------------------
 
+/// Write a block-level call in a block of its own, and record where it stands.
+///
+/// A table and a code block own their separators where a standalone image does
+/// not: this pushes both the `'\n'` that opens the block and the one that
+/// closes it, where an image takes both from the paragraph arms around it. So
+/// **the record starts after the leading newline**. Recorded from before it,
+/// `splice_caption`'s truncate would eat the block separator and glue
+/// `#figure(` onto the line above.
+///
+/// The call arrives without its `#`, the way `image_call` returns one, because
+/// that bare call is what a `#figure(…)` wraps: a `#` inside a code context is
+/// a syntax error rather than a mismatch.
+fn write_block(bufs: &mut [String], figure: &mut Option<Figure>, call: String) {
+    let depth = bufs.len();
+    let out = top(bufs);
+    out.push('\n');
+    let start = out.len();
+    out.push('#');
+    out.push_str(&call);
+    out.push('\n');
+
+    *figure = Some(Figure {
+        depth,
+        start,
+        written: format!("#{call}"),
+        body: call,
+        captioned: false,
+    });
+}
+
 /// The caption a paragraph's first text run opens with, if it opens with the
 /// marker at all.
 ///
@@ -1180,16 +1209,16 @@ fn caption_marker(text: &str) -> Option<&str> {
     }
 }
 
-/// Rewrite a recorded standalone image into the figure its caption makes it.
+/// Rewrite a recorded block into the figure its caption makes it.
 ///
 /// **The caption is what makes a figure**, which is why this runs only where a
 /// caption line stands. An uncaptioned `#figure` prints no number and still
 /// consumes the counter, so the next captioned one would read "Figure 2" with
 /// no Figure 1 anywhere, and `figure` centres its body where a bare block sits
 /// flush left. Wrapping unconditionally would therefore re-lay-out and
-/// mis-number every document that shows an image, which is the property
-/// `mpdf-004` Phase 3 stated: no document's typeset output changes unless its
-/// author asks.
+/// mis-number every document that shows an image, a table or a code block,
+/// which is the property `mpdf-004` Phase 3 stated: no document's typeset
+/// output changes unless its author asks.
 ///
 /// The truncate unwinds two newlines the paragraph arms have already pushed —
 /// one closing the image's paragraph, one opening the caption's, for a
@@ -1271,7 +1300,26 @@ fn prefixed(prefix: &str, content: &str) -> String {
     out
 }
 
-/// Render one table as a Typst `table` call, one markdown row to one line.
+/// Render one code block as a Typst `raw` call, without the leading `#`.
+///
+/// An indented block has no info string and gets no `lang` argument. The
+/// content travels as a string literal rather than as markup, the way inline
+/// code already does, so nothing inside a fence is escaped and nothing needs
+/// to be.
+fn raw_call(lang: Option<&str>, content: &str) -> String {
+    let mut out = String::from("raw(block: true, ");
+    if let Some(lang) = lang {
+        out.push_str("lang: ");
+        out.push_str(&typst_string(lang));
+        out.push_str(", ");
+    }
+    out.push_str(&typst_string(content));
+    out.push(')');
+    out
+}
+
+/// Render one table as a Typst `table` call, without the leading `#`, one
+/// markdown row to one line.
 ///
 /// The column count is the alignment vector's length, and an integer `columns`
 /// gives that many auto-sized columns. The header row travels as
@@ -1279,7 +1327,7 @@ fn prefixed(prefix: &str, content: &str) -> String {
 /// accessibility tagging; `template.typ` owns how it looks. A row a cell short
 /// arrives padded, so its last cell is the empty content block `[]`.
 fn table_call(frame: &TableFrame) -> String {
-    let mut out = format!("#table(\n  columns: {},\n", frame.align.len());
+    let mut out = format!("table(\n  columns: {},\n", frame.align.len());
 
     // A delimiter row that sets no alignment at all leaves the argument out,
     // rather than naming `auto` for every column and saying nothing with it.
