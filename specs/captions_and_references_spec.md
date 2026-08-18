@@ -301,6 +301,14 @@ shipped. That is what keeps the marker from being a ban: a document
 that opens a paragraph with `: ` somewhere else is untouched, and the collision
 window is one paragraph in one position, which the census finds empty.
 
+**RESOLVED 2026-08-18, on drafting Phase 4: the equation never joins this list,
+and the marker stays a rule about three constructs.** OQ-10 chose the closing
+`$$` as the carrier — `$$…$$ {#eq:one}` — so a `: ` line after a display equation
+is the ordinary prose Phase 3's gate (7) pinned, permanently rather than for one
+phase. The two sentences above are therefore complete as they stand: the marker
+attaches after a standalone image, a table and a fenced or indented code block,
+and nowhere else in the dialect.
+
 ### Why an uncaptioned construct is not wrapped (decision, recorded)
 
 **A standalone image with no caption line stays exactly the bare `#image(…)` it
@@ -657,8 +665,9 @@ moves neither, and Phase 1's gate names them.
 
 - **OQ-4** — ~~should a reference to an equation read `(1)` or `Equation 1`?~~
   **RESOLVED for Phase 3 (2026-08-17), by taking the subject out of it rather
-  than by answering it: equations leave Phase 3 and become Phase 4. The
-  typographic half is unchanged and now blocks that phase.**
+  than by answering it: equations leave Phase 3 and become Phase 4. CLOSED
+  (2026-08-18) in both halves on drafting Phase 4 — see the note at the end of
+  this entry.**
 
   **The question turned out to carry two independent unresolved decisions, and a
   phase holding two is one a round cannot converge.** The first is the compile
@@ -725,6 +734,64 @@ moves neither, and Phase 1's gate names them.
   or scope Phase 3's labels to the three `figure` kinds and leave equations to a
   later phase. **Not Phase 2's problem** — Phase 2 ships no reference and touches
   no look.
+
+  **CLOSED 2026-08-18, on drafting Phase 4, in both its halves.**
+
+  **The compile prerequisite: a reference to an equation is refused in `core`
+  when the document did not set `equations: numbered`, and the error names the
+  key.** That is the first of the three shapes above, taken after the second and
+  third were measured out — and it is the one `mpdf-004` had already very nearly
+  decided. That key exists for exactly this consumer: `mpdf-004` Phase 3 shipped
+  it so that "a document that refers to its own formulas can number them", which
+  the README states in those words. Requiring it is that sentence read back
+  rather than a new tax.
+
+  **What the shape costs is stated rather than waved past**: an author who wants
+  to point at one equation numbers all of them. That is a real cost and it is
+  bounded — the alternative was to number all of them *anyway*, which is what the
+  second shape does to every document rather than to the ones that ask.
+
+  **The seam-preserving alternative was built and measured before it was
+  rejected, and it fails on a property of Typst rather than on taste.** The
+  attractive shape was OQ-2's resolution applied one construct further along:
+  the emitter writes only the label, and each look numbers a named equation with
+  a `show math.equation` rule of its own, so nothing crosses the seam and no
+  frontmatter key is consulted. Measured 2026-08-18 against the pinned 0.15.1, in
+  four steps, because each one narrows the next:
+
+  - `it.label` inside a `show math.equation` rule **fails the compile** with
+    `equation does not have field "label"`.
+  - `it.at("label", default: none)` **works**, and reads `<eq:a>`, `none`,
+    `<eq:b>` over three equations. So a look *can* tell a named equation from an
+    unnamed one.
+  - A rule that re-emits the named one as
+    `math.equation(block: true, numbering: "(1)", it.body)` **numbers it on the
+    page**, and counts only the named ones.
+  - **And the reference still fails**, with `cannot reference equation without
+    numbering`. A `show` rule changes what is *drawn*; `ref` resolves against the
+    element the label was attached to, whose own `numbering` is still `none`.
+
+  **That last line is the whole finding**, and it disposes of every shape in
+  which a look rescues a reference. The only mechanisms left that make `ref`
+  work are the frontmatter key, which exists, and an element constructed with a
+  `numbering` argument — which means either a format string in the emitter, which
+  §2's seam refuses, or a sixth thing crossing the look contract, which OQ-3 has
+  held shut for three phases. A look export was measured working
+  (`#let equation(body) = math.equation(block: true, numbering: "(1)", body)`,
+  under which the page numbers and the reference reads *Equation 1*) and is not
+  taken: it buys one convenience at the price of a contract every third look
+  would have to meet.
+
+  **The typographic half, which is what this question originally asked, is
+  resolved by the seam rather than by a rule.** Re-measured 2026-08-18 with the
+  function form: under `equations: numbered` a labelled `$ x = 1 $` needs no
+  other change at all — the page reads `(1)`, `(2)`, `(3)` and the references
+  read *Equation 1* and *Equation 3*. **The disagreement is real, visible on one
+  page, and it is each look's own call**, exactly as a caption's supplement and
+  separator are: the page format is `math.equation`'s `numbering` and the prose
+  supplement is `ref`'s, both look-side, and both bundled looks currently take
+  Typst's defaults for the second. A look that wants them to agree sets `ref`'s
+  `supplement`. Nothing here is `core`'s, so nothing here blocks a phase.
 
 - **OQ-5** — ~~is "referencing" a framework with two kinds, or two subjects?~~
   **RESOLVED (2026-08-15), at convergence rather than in a round: two subjects.
@@ -886,15 +953,48 @@ moves neither, and Phase 1's gate names them.
   consumer yet. Blocks nothing — Phase 2 suppresses nothing and Phase 3 needs no
   answer to work.
 
-- **OQ-10 — how is an equation named, given that it has no caption line to carry
-  one?** Split out of OQ-4 on 2026-08-17, and it is the half that is a *syntax*
-  question rather than a numbering one. A name rides the end of a caption line;
-  an equation has no caption, and a bare `: {#eq:one}` line is a marker with no
-  text, which §2 refuses. Three shapes, none chosen: a name-only `: ` line,
-  carved out of that refusal for this one construct; a name written on the `$$`
-  fence itself; or the `figure` wrapper, which OQ-4's measurement disqualifies —
-  it double-numbers under `equations: numbered` and mis-supplements the reference
-  under both settings. Design call. **Blocks Phase 4.**
+- **OQ-10** — ~~how is an equation named, given that it has no caption line to
+  carry one?~~ **RESOLVED (2026-08-18), on drafting Phase 4: the name rides the
+  closing `$$`.**
+
+  ```markdown
+  $$
+  a^2 + b^2 = c^2
+  $$ {#eq:one}
+  ```
+
+  becomes `$ a^2 + b^2 = c^2 $ <eq:one>`, and the reference is Phase 3's
+  `[](#eq:one)` unchanged.
+
+  **The carrier was chosen by measurement rather than by taste, and the
+  measurement is that it needs no mechanism at all.** Taken 2026-08-18 against
+  the pinned 0.15.1 and the shipped Phase 3 binary: `$$…$$ {#eq:one}` reaches the
+  walk as an `Event::DisplayMath` followed by an `Event::Text` of `" {#eq:one}"`,
+  **in the same paragraph and as the very next event**. So the label is appended
+  where the equation was just written — no recorded point, no truncate, no splice.
+  That is strictly less machinery than Phase 1 needed for a caption, and the
+  reason is structural: a caption is a *later paragraph* and a name on a fence is
+  the *next event*.
+
+  **The name-only `: ` line is rejected, and Phase 3 is what rejects it.** That
+  shape was the draft's first candidate, and shipping Phase 3 made it expensive
+  rather than merely inelegant: `: {#eq:one}` is a marker carrying a name and no
+  words, which Phase 3 refuses as a caption with no text — a refusal with a test
+  behind it. Carving an exception out of it for one construct would make the same
+  three characters an error after an image and a declaration after an equation,
+  with nothing on the page to tell an author which they had written. It would
+  also reverse what Phase 3's gate (7) pinned four commits ago.
+
+  **The `figure` wrapper stays disqualified**, on OQ-4's own measurement: it
+  double-numbers under `equations: numbered` and mis-supplements the reference
+  under both settings.
+
+  Two narrowings the sketch cannot show, both of them Phase 4's scope to state.
+  **The group must be the whole of the text run**, so `$$…$$ {#eq:one} and more`
+  is the prose it is today — the same discipline that keeps `: ` a marker in one
+  position rather than a ban. And **an inline `$…$` takes no name**, because
+  Typst numbers the block form alone and a name on a thing that cannot number is
+  a name that cannot be pointed at.
 
 - **OQ-11 — should the two adjacency shapes `#ref(<name>)` still has be closed,
   and how?** Raised by Phase 3's round 2, which measured the function form rather
@@ -1399,25 +1499,115 @@ anything.*
 
 ### Phase 4 — equations join
 *Produces the observable: yes — a PDF whose "as equation (1) shows" is still true
-after an equation is inserted above it.*
+after an equation is inserted above it, which is the same promise Phase 3 made
+for the three `figure` kinds and the one construct it could not keep it for.*
 
-**Deferred, and what unblocks it is two questions rather than a dependency.**
-OQ-10 must choose how an equation is named, since it has no caption line to carry
-one and the `figure` wrapper is measured out. OQ-4's remaining half must choose
-what a document that never asked for numbers does with an equation reference:
-refuse it, naming the key the author would set; or number always and let a look
-hide the number typographically, which contradicts `mpdf-004` Phase 3's shipped
-default. Neither is answerable from code — both are design calls — so this phase
-is drafted when they are taken and not before.
+**Drafted 2026-08-18, on OQ-10 and OQ-4 being taken.** Both were design calls
+rather than code questions, which is why this phase sat deferred through three
+shipped ones; both are now closed, and each closed with a measurement behind it.
 
-- **Scope:** to be drafted with those two answers. It touches `core/src/emit.rs`'s
-  display-math arm and nothing else that Phase 3 did not already build: the
-  declaration set, the reference check and the refusals are Phase 3's, and an
-  equation joins them as a fourth declaring construct.
-- **Exit gate:** to be written. It must include **a document with
-  `equations: plain` and an equation reference in it**, because that is the path
-  that does not compile today and the one a phase built against
-  `equations: numbered` alone would ship broken.
+- **Scope:** the display equation becomes a fourth declaring construct, and
+  **nothing else in Phase 3's machinery changes**. The name set, the position
+  rule, the reserved `fn-` prefix, `core/src/emit.rs:declare`'s duplicate check,
+  `core/src/emit.rs:check_references` and the reference spelling `[](#name)` are
+  all Phase 3's and are reused rather than extended.
+
+  **A name rides the closing `$$`**, per OQ-10: `$$…$$ {#eq:one}` becomes
+  `$ … $ <eq:one>`. `core/src/emit.rs:step`'s `Event::DisplayMath` arm records
+  that it has just written one, and if the **very next event** is an
+  `Event::Text` that is **entirely** a `{#name}` group, the arm writes ` <name>`
+  and consumes that run. Measured 2026-08-18: the parser delivers exactly those
+  two events, adjacent and in one paragraph.
+
+  **This is less machinery than Phase 1 built, not more**, and the asymmetry is
+  worth stating because a reader arriving from Phases 1–3 will expect a splice.
+  A caption is a *later paragraph*, which is why it needed a recorded point, a
+  truncate and the three liveness checks. A name on a fence is the *next event*,
+  written where the equation was just written — so **no `Figure` record is made,
+  `core/src/emit.rs:splice_caption` is untouched, and the append-only property
+  the whole design rests on is not spent a second time.** An implementer who
+  reaches for the caption machinery here has built the harder thing.
+
+  **The group must be the whole of the text run.** `$$…$$ {#eq:one} and more` is
+  the prose it is today, which is the same discipline that keeps `: ` a marker in
+  one position rather than a ban on a line an author may already have written.
+  **An inline `$…$` takes no name**, because Typst numbers the block form alone
+  and a name on a thing that cannot number can never be pointed at — the inline
+  arm is untouched, exactly as the inline image is.
+
+  **A reference to an equation is refused where the document did not set
+  `equations: numbered`**, per OQ-4, naming the line and naming the key. This is
+  the phase's one genuinely new refusal and the one it exists to get right:
+  under the shipped default both looks set `math.equation(numbering: none)`, and
+  Typst then fails the whole compile with `cannot reference equation without
+  numbering` — a message naming neither line nor key. So `core/src/emit.rs:Names`
+  records, beside each declared name, whether the construct that declared it was
+  an equation, and the after-the-walk check reads `Walk.front` to decide. The
+  check stays a single pass over declared names.
+
+  **Naming is not refused there, only referencing.** Measured 2026-08-18: a
+  labelled, unnumbered equation compiles perfectly well as long as nothing points
+  at it. Refusing the name would break a document that names an equation before
+  it points at one, which is the direction §2's rule does not run in.
+
+  **Neither look changes and the look contract stays at five for the fourth phase
+  running.** `core/src/frontmatter.rs` is untouched — `equations` is read, not
+  extended — and so is `core/src/emit.rs:header`. `cli/src` and `app/src` are
+  untouched, as they have been throughout, and each phase checks it as a diff.
+- **Exit gate:** nine cases. Six are Phase 3's shape over a fourth construct and
+  are cheap; the two that carry this phase are (2) and (3).
+
+  (1) **A new fixture carrying `equations: numbered`, a named equation and a
+  reference to it**, matching its golden and compiling to a PDF with the `%PDF`
+  magic bytes. The golden shows `$ … $ <eq:one>` — **the label immediately after
+  the closing `$`, with the name group gone from the page** — and
+  `#ref(<eq:one>)` where the reference stands.
+
+  (2) **A document with `equations: plain` and an equation reference in it is
+  refused, naming the line and naming the key.** **This is the case the phase
+  exists for**, and the one a phase built against `equations: numbered` alone
+  would ship broken: it is the *default* path, so the failure it prevents is what
+  every author who did not read the frontmatter documentation would hit first.
+  Measured 2026-08-18 as `cannot reference equation without numbering`, carrying
+  no line and no key.
+
+  (3) **A name on an equation in a `plain` document is not refused**, and its
+  golden shows the label. The pair (2) and (3) is what pins that the refusal is
+  on the reference and not on the name; an implementer who refuses both passes
+  (2) and fails here.
+
+  (4) **An unnamed display equation is byte-for-byte unchanged.**
+  `tests/golden/display_math.typ` and `tests/golden/numbered_equations.typ` gain
+  no label, which is `mpdf-004` Phase 3's property inherited whole: no document's
+  typeset output changes unless its author asks. The blast radius is those two
+  goldens and no others.
+
+  (5) **The group must be the whole run, and an inline span takes no name.**
+  `$$…$$ {#eq:one} and more` reaches the page as prose with its marker intact,
+  and `$x$ {#eq:one}` does the same. Both are the cases that stop the rule
+  becoming a ban on a brace after a formula.
+
+  (6) **A `: ` line after a display equation is still ordinary prose**, which is
+  Phase 3's gate (7) held rather than reversed — and the case that fails for an
+  implementer who reached for the caption line as the carrier after all.
+
+  (7) **Phase 3's name rules hold over the fourth construct**, each naming the
+  author's line: a character outside the set, a name opening with `:` or `.`, the
+  reserved `fn-N`, a name declared twice — once across an equation and a figure,
+  since the two share one namespace and a document has one set of names.
+
+  (8) `cargo test --workspace` passes with **no shipped golden file changed**,
+  and `cli/src`, `app/src`, `core/src/frontmatter.rs`, `core/src/emit.rs:header`
+  and both look files untouched, checked as a diff.
+  `core/tests/golden_test.rs:every_bundled_template_meets_the_call_contract` is
+  unchanged at five arguments.
+
+  (9) **Read by eye, one PDF per look — two documents.** The page reads `(1)` and
+  the reference reads *Equation 1*, which is the asymmetry OQ-4 originally asked
+  about, seen where it is visible and left to the looks by §2's seam. And the
+  property the phase exists for, on a pair as Phase 3 read its own: two documents
+  differing only by an equation inserted above the referenced one, where the same
+  source line reads *Equation 1* in one and *Equation 2* in the other.
 
 <!--
 The review record is a sibling file, not a section: it lives at
