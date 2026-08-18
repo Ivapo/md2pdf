@@ -24,7 +24,7 @@ use pulldown_cmark::{Alignment, CodeBlockKind, Event, LinkType, Options, Parser,
 use typst::syntax::VirtualPath;
 use unicase::UniCase;
 
-use crate::frontmatter::{self, Frontmatter};
+use crate::frontmatter::{self, Equations, Frontmatter};
 use crate::math;
 use crate::{Error, ImageRef, Result};
 
@@ -167,6 +167,37 @@ impl Figure {
     }
 }
 
+/// A display equation the walk has already written, and where it sits.
+///
+/// The same argument as [`Figure`] with the trailing-separator allowance
+/// dropped, because a label is *adjacent* where a caption is a paragraph away:
+/// the name rides the closing `$$`, so the parser hands the walk the equation
+/// and then the group as the very next event, in the same paragraph. A record
+/// is spent only where it still stands at the end of the frame it was written
+/// in, so a `SoftBreak`'s newline between them is enough to leave the group the
+/// prose it is.
+///
+/// Nothing is held forward waiting for a name, for the reason `Figure` records
+/// at length: rounds 2 to 4 of Phase 1 each measured a different construct
+/// broken by holding a call across an event, and nothing here needs a hold,
+/// since the equation is already written when the name arrives.
+struct Equation {
+    /// How deep the buffer stack was when the equation was written.
+    depth: usize,
+    /// Where it begins in that frame.
+    start: usize,
+    /// Exactly what stands there, checked before the point is spent.
+    written: String,
+}
+
+impl Equation {
+    /// Whether the recorded span is still the last thing in its own frame.
+    fn live(&self, bufs: &[String]) -> bool {
+        bufs.len() == self.depth
+            && bufs[self.depth - 1].get(self.start..) == Some(self.written.as_str())
+    }
+}
+
 /// The caption paragraph being collected, over the figure it will attach to.
 struct Caption {
     /// The line the `: ` sits on, which every refusal here names.
@@ -178,17 +209,30 @@ struct Caption {
     text: String,
 }
 
-/// The figure names one walk declared, and the names it referenced.
+/// One name a walk declared, and what declared it.
+struct Declaration {
+    name: String,
+    /// The line the caption or the closing `$$` sits on.
+    line: usize,
+    /// Whether a display equation declared it, rather than a caption.
+    ///
+    /// A reference to an equation fails the compile unless the document numbers
+    /// its equations, and Typst's message names neither line nor key. This is
+    /// what lets `check_references` name both.
+    equation: bool,
+}
+
+/// The names one walk declared, and the names it referenced.
 ///
 /// A `Vec` on both sides rather than a map and a set, and that is a decision
-/// rather than an oversight: where several references name nothing, the error
+/// rather than an oversight: where several references are refused, the error
 /// is the one on the earliest line, and "the first" out of a set varies between
 /// runs. The document holds a handful of names, so the linear scans cost
 /// nothing a hash would save.
 #[derive(Default)]
 struct Names {
-    /// Each declared name and the caption line that declared it.
-    declared: Vec<(String, usize)>,
+    /// Each declared name, the line that declared it, and what did.
+    declared: Vec<Declaration>,
     /// Each referenced name and the line its link sits on.
     referenced: Vec<(String, usize)>,
 }
@@ -259,6 +303,12 @@ struct Walk {
     /// with no caption in it carries this and writes exactly what it always
     /// wrote.
     figure: Option<Figure>,
+    /// The display equation this walk last wrote, and where it stands.
+    ///
+    /// A name written immediately after it becomes its Typst label. Nothing
+    /// else reads it, so a document that names no equation carries this and
+    /// writes exactly what it always wrote.
+    equation: Option<Equation>,
     /// The caption being collected, while its paragraph is open.
     caption: Option<Caption>,
     /// The link the walk is inside, while its text is collected.
@@ -297,6 +347,7 @@ impl Walk {
             alt: None,
             pending: None,
             figure: None,
+            equation: None,
             caption: None,
             link: None,
             names: Names::default(),
@@ -555,7 +606,7 @@ pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>, Vec<usize>)> {
         step(&mut walk, md, event, range, Mode::Document(&mut notes))?;
     }
 
-    check_references(&walk.names)?;
+    check_references(&walk.names, walk.front.equations)?;
 
     // Taken off the walk before `finish` consumes it, the way the math flag
     // already is, so `Walk::finish` and `collect_definitions` need no change.
@@ -591,6 +642,7 @@ fn step(
         alt,
         pending,
         figure,
+        equation,
         caption,
         link,
         names,
@@ -892,6 +944,17 @@ fn step(
                     *para = None;
                     bufs.push(String::new());
                     escape_into(top(bufs), rest);
+                } else if equation.as_ref().is_some_and(|recorded| recorded.live(bufs))
+                    && let Some(name) = equation_name(&text, line_of(md, range.start))?
+                {
+                    // A name riding the closing `$$`, written where the
+                    // equation was just written. Liveness is tested first, so a
+                    // run after a dead record is the prose it has always been
+                    // and raises nothing; the run itself is consumed rather
+                    // than escaped, which is what takes the group off the page.
+                    declare(names, name, line_of(md, range.start), true)?;
+                    top(bufs).push_str(&format!(" <{name}>"));
+                    *equation = None;
                 } else {
                     if let Some(open) = caption.as_mut() {
                         open.text.push_str(&text);
@@ -961,11 +1024,30 @@ fn step(
         // which is what the author's own `$$` asked for.
         Event::DisplayMath(latex) => {
             let markup = math::convert(&latex, line_of(md, range.start))?;
+            let written = format!("$ {markup} $");
+            let depth = bufs.len();
             let out = top(bufs);
-            out.push_str("$ ");
-            out.push_str(&markup);
-            out.push_str(" $");
+            let start = out.len();
+            out.push_str(&written);
             *math = true;
+
+            // The record a `{#name}` group looks back at. **Nothing is recorded
+            // while a caption is open**, and that guard is the whole of what
+            // stops a display span inside a caption stealing the caption's own
+            // name: `: See $$x = 1$$ {#fig:one}` names the *figure*, as it has
+            // since Phase 3. The record's liveness test does not refuse it — the
+            // marker arm pushes the caption's frame before anything later in
+            // that paragraph is written, so the span records at that deeper
+            // frame and would be spent at the same one, with nothing in between
+            // to fail the content check.
+            //
+            // A `Walk` field rather than a frame-depth test, because a display
+            // span nested inside a link inside a caption sits deeper still.
+            *equation = caption.is_none().then_some(Equation {
+                depth,
+                start,
+                written,
+            });
         }
 
         // A URL reaches Typst as a string literal, never as markup, so
@@ -1142,8 +1224,8 @@ fn step(
                         // definition declares nothing, and a reference to a name
                         // only it carries is refused, which is what Typst would
                         // do with a label that reached no page.
-                        for (name, line) in &body.names.declared {
-                            declare(names, name, *line)?;
+                        for seen in &body.names.declared {
+                            declare(names, &seen.name, seen.line, seen.equation)?;
                         }
                         names
                             .referenced
@@ -1388,7 +1470,7 @@ fn splice_caption(
     }
 
     if let Some((_, name)) = named {
-        declare(names, name, caption.line)?;
+        declare(names, name, caption.line, false)?;
     }
 
     let recorded = figure
@@ -1413,10 +1495,7 @@ fn splice_caption(
 
 // -- names ------------------------------------------------------------------
 
-/// The `{#…}` group a caption line ends with, and the name inside it.
-///
-/// Returns the group as it was typed — which is what the buffer's escaped copy
-/// must be stripped of — beside the name the label takes.
+/// What a name may be, whatever construct declared it.
 ///
 /// The set is closed rather than "whatever Typst accepts", because the error has
 /// to be able to name what it accepts, and each clause is a measurement:
@@ -1432,20 +1511,9 @@ fn splice_caption(
 ///   declared, so the duplicate check would never see the collision; Typst
 ///   would, with a message naming a label and no line.
 ///
-/// The prefix is otherwise the author's convention and the dialect neither
-/// requires nor reads it: the kind comes from the body Typst was handed, so
-/// `{#pipeline}` on an image is a figure and so is `{#tab:pipeline}`.
-fn caption_name(typed: &str, line: usize) -> Result<Option<(&str, &str)>> {
-    let Some(open) = typed.rfind('{') else {
-        return Ok(None);
-    };
-    if !typed.ends_with('}') || !typed[open..].starts_with("{#") {
-        return Ok(None);
-    }
-
-    let group = &typed[open..];
-    let name = &group[2..group.len() - 1];
-
+/// These clauses are shared and the *finding* rule is not: a caption's group
+/// sits at the end of a line, where an equation's is the whole of a text run.
+fn check_name(name: &str, line: usize) -> Result<()> {
     let refuse = |problem: String| Err(Error::Name { line, problem });
 
     if name.is_empty() {
@@ -1471,7 +1539,54 @@ fn caption_name(typed: &str, line: usize) -> Result<Option<(&str, &str)>> {
         return refuse(format!("'{name}' is reserved for footnotes"));
     }
 
+    Ok(())
+}
+
+/// The `{#…}` group a caption line ends with, and the name inside it.
+///
+/// Returns the group as it was typed — which is what the buffer's escaped copy
+/// must be stripped of — beside the name the label takes.
+///
+/// The prefix is the author's convention and the dialect neither requires nor
+/// reads it: the kind comes from the body Typst was handed, so `{#pipeline}` on
+/// an image is a figure and so is `{#tab:pipeline}`.
+fn caption_name(typed: &str, line: usize) -> Result<Option<(&str, &str)>> {
+    let Some(open) = typed.rfind('{') else {
+        return Ok(None);
+    };
+    if !typed.ends_with('}') || !typed[open..].starts_with("{#") {
+        return Ok(None);
+    }
+
+    let group = &typed[open..];
+    let name = &group[2..group.len() - 1];
+    check_name(name, line)?;
+
     Ok(Some((group, name)))
+}
+
+/// The name a text run is entirely, where that run follows a display equation.
+///
+/// **The group must be the whole of the run**, which is the same discipline that
+/// keeps `: ` a marker in one position rather than a ban: `$$…$$ {#eq:one} and
+/// more` and `$$…$$ see {#eq:one}` are both the prose they have always been. The
+/// run is trimmed at both ends because the parser hands the group over with the
+/// space the author typed before it, so `{#eq:one}`, ` {#eq:one}` and
+/// `$$…$${#eq:one}` all name.
+///
+/// A finding rule of its own rather than [`caption_name`]'s: that one takes the
+/// *last* group on a line, so reusing it would label the leading-text shape.
+fn equation_name(run: &str, line: usize) -> Result<Option<&str>> {
+    let Some(name) = run
+        .trim()
+        .strip_prefix("{#")
+        .and_then(|rest| rest.strip_suffix('}'))
+    else {
+        return Ok(None);
+    };
+    check_name(name, line)?;
+
+    Ok(Some(name))
 }
 
 /// Record a declared name, refusing one the document has already declared.
@@ -1479,45 +1594,67 @@ fn caption_name(typed: &str, line: usize) -> Result<Option<(&str, &str)>> {
 /// Backward-looking, so the walk already knows: the error stands where the
 /// second declaration does. Typst's own message —
 /// ``label `<dup>` occurs multiple times in the document`` — names no line.
-fn declare(names: &mut Names, name: &str, line: usize) -> Result<()> {
-    if names.declared.iter().any(|(seen, _)| seen == name) {
+fn declare(names: &mut Names, name: &str, line: usize, equation: bool) -> Result<()> {
+    if names.declared.iter().any(|seen| seen.name == name) {
         return Err(Error::Name {
             line,
             problem: format!("'{name}' is declared twice"),
         });
     }
-    names.declared.push((name.to_string(), line));
+    names.declared.push(Declaration {
+        name: name.to_string(),
+        line,
+        equation,
+    });
     Ok(())
 }
 
-/// Refuse a reference to a name nothing declares, naming the earliest one.
+/// Refuse a reference the document cannot honour, naming the earliest one.
 ///
-/// This runs after the walk rather than during it, because a reference may
+/// Two refusals, one pass. A reference to a name nothing declares is the first.
+/// The second is a reference to an *equation* in a document that did not write
+/// `equations: numbered`: both looks answer that key with
+/// `set math.equation(numbering: … else { none })`, and Typst then fails the
+/// whole compile with `cannot reference equation without numbering`, a message
+/// naming neither the line nor the key. **Naming an equation is not refused
+/// there, only pointing at one** — a labelled unnumbered equation compiles
+/// perfectly well, and refusing the name would break a document that names one
+/// before it points at it.
+///
+/// Both run after the walk rather than during it, because a reference may
 /// precede its declaration and the emitter needs no pre-pass to write correctly:
 /// Typst is what resolves a label. The check exists only so the error names the
-/// author's own line, where Typst's names a label the author never typed and
-/// carries none. A declaration pre-pass would keep the ordering and costs more
-/// than it is worth — a name is declared only on a caption line that *attaches*,
-/// so finding one means re-running the walk that decides attachment.
+/// author's own line. A declaration pre-pass would keep the ordering and costs
+/// more than it is worth — a name is declared only on a caption line that
+/// *attaches*, so finding one means re-running the walk that decides attachment.
 ///
 /// **This is the one error in the pipeline that does not keep its document
 /// position.** The walk aborts at the first construct error, so a document with
 /// a bad reference on line 3 and a raw HTML block on line 5 reports the HTML.
 ///
-/// The earliest line is the error, which `min_by_key` over a `Vec` settles
-/// deterministically where "the first" out of a set does not.
-fn check_references(names: &Names) -> Result<()> {
-    let undeclared = names
+/// The earliest line is the error, across both classes together, which
+/// `min_by_key` over a `Vec` settles deterministically where "the first" out of
+/// a set does not.
+fn check_references(names: &Names, equations: Equations) -> Result<()> {
+    let refusal = names
         .referenced
         .iter()
-        .filter(|(name, _)| !names.declared.iter().any(|(seen, _)| seen == name))
-        .min_by_key(|(_, line)| *line);
+        .filter_map(
+            |(name, line)| match names.declared.iter().find(|seen| &seen.name == name) {
+                None => Some((*line, format!("nothing declares the name '{name}'"))),
+                Some(seen) if seen.equation && equations != Equations::Numbered => Some((
+                    *line,
+                    format!(
+                        "'{name}' names an equation, and a document that points at one must set 'equations: numbered'"
+                    ),
+                )),
+                Some(_) => None,
+            },
+        )
+        .min_by_key(|(line, _)| *line);
 
-    match undeclared {
-        Some((name, line)) => Err(Error::Name {
-            line: *line,
-            problem: format!("nothing declares the name '{name}'"),
-        }),
+    match refusal {
+        Some((line, problem)) => Err(Error::Name { line, problem }),
         None => Ok(()),
     }
 }
