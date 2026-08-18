@@ -32,7 +32,7 @@ phases:
     by: null
   - name: "Phase 5 — a figure may have more than one member"
     reviewed: 2026-08-18
-    shipped: null
+    shipped: 2026-08-18
     cut: null
     by: null
 
@@ -305,6 +305,20 @@ arbitrary Typst.
   `End(Paragraph)`. Inside a div the blank lines are still structural, so the
   environment is *more* vertical space than the marker, not less. **Legibility is
   therefore not what this phase rests on** — the capability is.
+
+  **CORRECTED 2026-08-18, on shipping Phase 5: the emission recorded above is
+  the emitter this bullet was measured against, and not the one the phase
+  ships.** The tight div is now a named error — `:::` is reserved at the first
+  text of a paragraph, and that paragraph's first text *is* `:::`, so it is
+  refused as a delimiter that is neither an opener nor a closer rather than
+  emitting `#box(image(…))` and a literal caption line. The measurement above
+  is left standing because it is the argument this phase was taken on, and
+  because the thing it establishes is unchanged: the tight form is one
+  paragraph, so the environment buys no legibility over the marker. What the
+  reservation buys instead is that the spelling an author reaches for first
+  stops failing silently and starts naming its own line. Recorded because a
+  later reader re-deriving the emission would find it false with no way to tell
+  an omission from a regression.
 - **A group needs no `kind:` argument, because Typst infers one through a
   `grid`.** A `#figure(grid(image, image), caption: …)` reads *Figure 1* and a
   `#figure(grid(table, table), caption: …)` reads *Table 1*, both with nothing
