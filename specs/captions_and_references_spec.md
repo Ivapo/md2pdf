@@ -25,6 +25,11 @@ phases:
     shipped: null
     cut: null
     by: null
+  - name: "Phase 4 — equations join"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -76,6 +81,13 @@ image, both renumbered by Typst whenever anything moves.
 `[](#fig:pipeline)`, is not**: it is the one spelling that reinterprets a
 construct `mpdf-001` shipped, and OQ-8 carries it. Phase 1 needs only the
 caption, so nothing downstream of that question blocks it.
+
+**Closed 2026-08-17, on drafting Phase 3: OQ-8 resolved it, and the sketch above
+is the spelling — with one narrowing the sketch cannot show.** The *empty text*
+is what makes it a reference. `[](#fig:pipeline)` becomes `@fig:pipeline`;
+`[the diagram](#fig:pipeline)`, or any link that carries text, stays exactly the
+link it is today. That is what keeps this a phase rather than a supersession,
+and OQ-8 works §6.1 step 1 in full.
 
 ### 1.1 Why this is a new spec and not a phase of an existing one
 
@@ -275,7 +287,17 @@ before claiming a marker.
 **A `: ` line is a caption only where a caption can attach**, which is
 immediately after a standalone image (Phase 1), a table, a fenced code block
 (Phase 2) or a display equation (Phase 3). Everywhere else it stays the ordinary
-paragraph it is today. That is what keeps the marker from being a ban: a document
+paragraph it is today.
+
+**CORRECTED 2026-08-17, on drafting Phase 3: the display equation is Phase 4's,
+and whether it takes a `: ` line at all is now an open question rather than an
+assumption.** The sentence above reads as though an equation's name would ride a
+caption line like the other three. It cannot as written: an equation has no
+caption, so the line would carry a name and no text, which is the first of §2's
+own two refusals. OQ-10 carries the syntax and OQ-4 records why the phase split.
+The rest of the sentence stands — the marker is still one paragraph in one
+position, and the three constructs it attaches to are the three Phases 1 and 2
+shipped. That is what keeps the marker from being a ban: a document
 that opens a paragraph with `: ` somewhere else is untouched, and the collision
 window is one paragraph in one position, which the census finds empty.
 
@@ -602,7 +624,46 @@ moves neither, and Phase 1's gate names them.
   standing because it was true when written; this note is what stops a
   consistency sweep reading it as live.
 
-- **OQ-4 — should a reference to an equation read `(1)` or `Equation 1`?** §2
+- **OQ-4** — ~~should a reference to an equation read `(1)` or `Equation 1`?~~
+  **RESOLVED for Phase 3 (2026-08-17), by taking the subject out of it rather
+  than by answering it: equations leave Phase 3 and become Phase 4. The
+  typographic half is unchanged and now blocks that phase.**
+
+  **The question turned out to carry two independent unresolved decisions, and a
+  phase holding two is one a round cannot converge.** The first is the compile
+  prerequisite the widening below found. The second the draft did not notice it
+  was missing: **a name rides the end of a caption line, and an equation has no
+  caption line to ride.** A bare `: {#eq:one}` is a marker with no text, which is
+  §2's own first refusal, so naming an equation needs syntax Phase 1 did not
+  choose — and Phase 2's rule, "no new syntax: if this phase needs any, Phase 1
+  chose wrongly", applies to Phase 3 unchanged. OQ-10 carries that half.
+
+  **The obvious shortcut is disqualified by measurement rather than by taste.**
+  Wrapping the equation in a `figure` so it takes the caption machinery was
+  measured 2026-08-17 against the pinned 0.15.1:
+  `#figure($ y = 2 $, caption: [A wrapped equation]) <eq:two>` under
+  `equations: numbered` puts **two numbers on the page** — the equation's own
+  `(2)` at the margin and a `Figure 1.` caption beneath it — and `@eq:two` reads
+  **"Figure 1"**, because `figure` infers no math kind from an equation body.
+  Under `plain` the same source shows one number and still the wrong supplement.
+  So the wrap is wrong in one setting or the other depending on a key the author
+  set for an unrelated reason, and it is out before Phase 4 starts.
+
+  Re-measured the same day, confirming Phase 2's round: a labelled `$ x = 1 $`
+  with `@eq:one` fails `equations: plain` with ``cannot reference equation
+  without numbering`` and compiles under `equations: numbered`, where the page
+  reads `(1)` and the reference reads `Equation 1`. **So the disagreement this
+  question was originally about is real and visible on one page**, and it is
+  Phase 4's to settle along with the shape that makes the default compile.
+
+  What Phase 3 takes from this is a boundary rather than an answer: it labels the
+  three `figure` kinds, and a display equation stays exactly what it is today.
+  **That is the third of the three shapes Phase 2's round named below**, taken
+  for a reason that round did not have: the carrier is missing, not just the
+  numbering.
+
+  The original question, kept as the record — its classification and the phase it
+  names are both superseded by the resolution above. §2
   measured that the page and the reference disagree today, because the format
   lives in `math.equation` and the supplement lives in `ref`. Typst's
   `set ref(supplement: none)` is one candidate and a `show ref` rule keyed to the
@@ -674,8 +735,40 @@ moves neither, and Phase 1's gate names them.
   both did. Recorded as a measurement rather than a claim, because the number
   moves the moment a fixture gains a caption.
 
-- **OQ-7 — what does a caption or a name inside a footnote definition do?**
-  **The draft's grounding for this was wrong and round 1 corrected it**, which
+- **OQ-7** — ~~what does a caption or a name inside a footnote definition do?~~
+  **RESOLVED (2026-08-17), by three measurements: a caption inside a definition
+  already works, a name declared inside one is visible to a reference anywhere in
+  the document, and a figure inside one takes its number at the *reference* site
+  rather than the definition's. Nothing is refused — the hazard is not Typst's,
+  it is that `core` would not see the name.**
+
+  Measured against the shipped Phase 2 binary and the pinned 0.15.1:
+
+  - **The emitter, already.** A definition whose next block is a standalone image
+    with a `: ` line beneath it emits
+    `#footnote[A note.\n\n#figure(image(…), caption: […])]<fn-1>`. Phase 1's
+    splice runs inside `collect_definitions` because that walk is the same
+    `core/src/emit.rs:step`, so a caption in a definition needed nothing and got
+    nothing.
+  - **Typst.** A `<fig:note>` written inside `#footnote[…]` resolves to a
+    `@fig:note` in the body: it compiles, and it reads "Figure 2".
+  - **The number.** With one figure before the note, one inside it and one after,
+    the page reads Figure 1, Figure 2 — the one in the note, set at the foot of
+    the column — and Figure 3. **The counter follows the reference site**, which
+    is where the emitter splices the content and where the reader meets it, so
+    document order is the order a reader sees.
+
+  **So the answer is an implementation constraint, not a refusal.**
+  `core/src/emit.rs:emit` skips a definition's region, so a name declared inside
+  one is met only by the walk that is thrown away. A collection that ran on the
+  document walk alone would find no such name and would refuse a reference Typst
+  resolves perfectly well — a false error over valid input, which is worse than
+  the labelless message it was built to replace. The names travel with the body
+  the way `core/src/emit.rs:Definitions` already carries its images and its math
+  flag, and Phase 3's gate has a case for it.
+
+  The original question, kept as the record.
+  **The draft's grounding for it was wrong and round 1 corrected it**, which
   matters because the wrong version names the wrong hazard.
   `core/src/emit.rs:collect_definitions` walks a footnote body **once** and keeps
   the translated body; the document walk then *skips* that region. What is
@@ -685,16 +778,61 @@ moves neither, and Phase 1's gate names them.
   it, and whether a figure inside one takes a number in document order.
   Answerable from code during review. Blocks Phase 3.
 
-- **OQ-8 — how is a reference spelled?** Split out of OQ-1, which resolved its
-  caption half. `[](#fig:pipeline)` invents nothing, and that is exactly its
-  problem: `mpdf-001` shipped links that keep a `#` fragment intact in a
-  destination — `tests/golden/links.typ` pins one — so this **reinterprets shipped
-  behaviour** and needs §6.1 step 1 worked before it can be a phase rather than a
-  supersession. It may survive that test scoped to a fragment matching a name the
-  same document declares, since a document with no names would then behave exactly
-  as it does today; that is a judgement for Phase 3's round, not an assumption
-  here. The alternative is a spelling of its own, which invents dialect and owes
-  nothing to shipped work. Design call. **Blocks Phase 3.**
+- **OQ-8** — ~~how is a reference spelled?~~ **RESOLVED (2026-08-17):
+  `[](#name)` — a link with *no text* whose destination is `#` followed by a name
+  the document declares. It becomes `@name`. A link that has text is untouched,
+  whatever its destination.** §6.1 step 1 is worked below and `supersedes` stays
+  `null`.
+
+  **Step 1 — does it remove or contradict shipped work? No, and the empty text is
+  the whole reason.** Measured 2026-08-17: `[](#fig:one)` emits today
+  `#link("#fig:one")[]` — a link with no content, which compiles and **puts
+  nothing on the page**. That is the shape this claims, and a shape whose shipped
+  behaviour is content reaching no page is the silent drop `mpdf-001` §2 exists to
+  refuse, not a behaviour a document can be relying on. Every *visible* link is
+  untouched: `[some words](#fig:one)` still emits
+  `#link("#fig:one")[some words]`, and `tests/golden/links.typ`'s hostile URL
+  keeps its `#frag` for two independent reasons — its text is non-empty and its
+  destination is absolute. Censused the same day across `tests/fixtures/`,
+  `samples/` and the README: **no link in the corpus has empty text, and none has
+  a `#` destination at all**; the two `[](` hits are `![](dot.png)`, an image with
+  empty alt that the image arm serves.
+
+  **The draft's own suggested scoping is rejected, and this is the part worth
+  recording.** Scoping by *declaredness* — a `#` destination is a reference only
+  where the document declares that name — fails twice. It returns `[](#typo)` to
+  being an invisible link, which is the drop again, and it makes
+  `[Introduction](#introduction)`, the ordinary markdown anchor idiom, change
+  meaning in a document that happens to declare a name. Scoping by the empty text
+  changes only the degenerate shape and leaves every anchor idiom exactly as it is.
+
+  **A spelling of its own is rejected on the escape rule.** A bare `@name` in
+  prose would need a scan inside `core/src/emit.rs:escape_into`'s territory —
+  `@` is in `SPECIAL` and every one in body text is escaped today — and it would
+  collide with every handle and address an author writes as prose. `[](…)` needs
+  no scan at all: pulldown-cmark already resolves it into one `Tag::Link` with the
+  destination in hand, which is the same argument `mpdf-001` used for links.
+
+  **And it pays the debt §2 named.** A citation spec, if one is ever written,
+  extends this carrier — `[](@key)`, `[](#cite:key)` — rather than inventing a
+  second way to point at something.
+
+  **Deliberately not in it: the author's own words over a reference.**
+  `#link(<name>)[the pipeline diagram]` was measured working on the same day and
+  would be one arm, and §5's scope discipline refuses it until a consumer asks.
+  The seam this spec rests on is that the author supplies the caption's words and
+  the look supplies the supplement and the number, and §1's promise is exactly
+  "As [](#fig:pipeline) shows" reading "As Figure 1 shows".
+
+- **OQ-10 — how is an equation named, given that it has no caption line to carry
+  one?** Split out of OQ-4 on 2026-08-17, and it is the half that is a *syntax*
+  question rather than a numbering one. A name rides the end of a caption line;
+  an equation has no caption, and a bare `: {#eq:one}` line is a marker with no
+  text, which §2 refuses. Three shapes, none chosen: a name-only `: ` line,
+  carved out of that refusal for this one construct; a name written on the `$$`
+  fence itself; or the `figure` wrapper, which OQ-4's measurement disqualifies —
+  it double-numbers under `equations: numbered` and mis-supplements the reference
+  under both settings. Design call. **Blocks Phase 4.**
 
 - **OQ-9 — should a look ever suppress a kind's numbering, given what it costs?**
   Raised by Phase 2's round 1, which found the question live in the gate with
@@ -725,6 +863,12 @@ Strictly sequential; each is one plan-mode pass. All three produce the
 observable. **The order follows §2's measurement** — a caption and a number
 arrive together for these constructs, so they are not split into separate phases
 the way a reader coming from `mpdf-004` Phase 3 would expect.
+
+**A fourth was appended 2026-08-17**, on drafting Phase 3 and per §6.1 step 2:
+the equation left Phase 3 for one of its own, because it needs a naming syntax
+the caption line cannot carry and a numbering answer the shipped default fails.
+All four produce the observable, and the sentence above still describes the
+three that carry a caption.
 
 ### Phase 1 — a captioned figure
 *Produces the observable: yes — a PDF with a captioned, numbered figure under an
@@ -987,14 +1131,137 @@ captions and their own counters.*
 after a figure is inserted above it, which is the whole reason to number
 anything.*
 
-- **Scope:** Names become Typst labels on all four kinds, equations included, and
-  a reference becomes `@name`. `core` collects declared names in a pre-pass so a
-  reference to an undeclared one is refused with the author's line rather than
-  Typst's labelless message. OQ-4's equation-supplement answer lands here, and
-  OQ-7's footnote hazard is settled before, not during.
-- **Exit gate:** to be written. It must include a document whose reference stays
-  correct across an insertion — the property the phase exists for, and one no
-  golden file can see.
+- **Scope:** **Narrowed 2026-08-17, on drafting: the three `figure` kinds, not
+  four.** The draft said "all four kinds, equations included", and OQ-4's
+  resolution takes the equation out — naming one needs a syntax that does not
+  exist and referencing one fails the compile under the shipped default, which
+  are two unresolved decisions, and a phase that holds two is one a round cannot
+  converge. Phase 4 carries it.
+
+  **A caption line's trailing `{#name}` becomes a Typst label on the figure that
+  caption makes**: `#figure(…, caption: [ … ]) <name>`, written into the markup
+  buffer the call already sits in. Phase 1 refuses that group with "caption with
+  a name" and `core/src/emit.rs:splice_caption` is where the refusal lives, so it
+  is where the implementation replaces it — the name is already parsed out of
+  what the author typed, because the markup escape has turned its `#` into `\#`
+  by then.
+
+  **The name is a closed character set, checked in `core`**: ASCII letters and
+  digits, `-`, `_`, `:` and `.`, and non-empty. All five shapes were measured
+  legal as Typst labels on 2026-08-17 — `fig:one`, `fig-two`, `fig_three`,
+  `fig.four`, `fig5` — and the set is closed rather than "whatever Typst accepts"
+  because §2 requires the error to name what it accepts. **The prefix is the
+  author's convention and the dialect neither requires nor reads it:** the kind
+  comes from the body Typst was handed, so `{#pipeline}` on an image is a figure
+  and so is `{#tab:pipeline}` on one.
+
+  A reference is `[](#name)`, per OQ-8, and becomes `@name` in
+  `core/src/emit.rs:step`'s link arm — which keeps every other link exactly as it
+  writes one today.
+
+  **Two whole-document checks, and they run at different times for a reason.** A
+  repeated name is refused where the second one stands, because that is
+  backward-looking and the walk already knows. A reference to an undeclared name
+  is refused **after the walk**, because a reference may precede its declaration
+  and no pre-pass is needed to emit correctly — the emitter can always write
+  `@name`, since Typst is what resolves it, and `core`'s check exists only to name
+  the author's line instead of Typst's labelless message. **The cost is recorded
+  rather than waved past**: an undeclared reference is then reported after a
+  construct error later in the file, so it is the one error in the dialect not
+  reported in document order.
+
+  **A name declared inside a footnote definition is a declared name**, per OQ-7.
+  `core/src/emit.rs:emit` skips a definition's region, so those names are met only
+  by `core/src/emit.rs:collect_definitions`, and they travel with the body the way
+  `core/src/emit.rs:Definitions` already carries its images and its math flag. A
+  reference written inside a definition travels the same way.
+
+  **Neither look changes and the look contract stays at five for the third phase
+  running.** `ref` supplies its own supplement, and both looks already reach
+  `figure` and `figure.caption` with `show` rules of their own. Neither
+  `core/src/frontmatter.rs` nor `core/src/emit.rs:header` changes, and nothing
+  about `equations` is touched.
+- **Exit gate:** nine cases.
+
+  (1) **A new fixture carrying a named image, a named table and a named listing,
+  and a reference to each**, matches its golden and compiles to a PDF with the
+  `%PDF` magic bytes. The golden shows `<fig:pipeline>` immediately after the
+  `#figure(…)` call it names, `@fig:pipeline` where the reference stands, and
+  **no `#link(` for that reference at all**.
+
+  (2) **The property the phase exists for, and the one no golden can see: a
+  reference that stays true across an insertion.** Two documents differing only by
+  a captioned figure inserted above the referenced one; the same source line reads
+  *"Figure 1"* in one and *"Figure 2"* in the other. The emitted Typst for that
+  line is **byte-identical in both**, which is the point rather than a limitation
+  — the number is Typst's — and is why this is read by eye with (9).
+
+  (3) **Three refusals, each naming the author's line**: a reference to a name the
+  document does not declare; a name declared twice, refused where the second
+  stands; and a name carrying a character outside the set, the error listing the
+  set. Each is `core`'s rather than Typst's for a measured reason — on 2026-08-17
+  an undeclared reference failed with ``label `<nosuchthing>` does not exist in
+  the document`` and a repeat with ``label `<dup>` occurs multiple times in the
+  document``, both naming a Typst label the author never typed and neither
+  carrying a line.
+
+  (4) **The prefix is not a kind.** `{#pipeline}` on an image and
+  `{#tab:pipeline}` on an image both work, and both produce a figure. This is the
+  case that stops an implementer inventing a prefix rule the dialect does not
+  have, and it costs one fixture paragraph.
+
+  (5) **Every shipped link shape is unchanged**, asserted over the shipped
+  golden: `tests/golden/links.typ` does not move and
+  `core/tests/golden_test.rs:the_links_golden_carries_each_form` passes unchanged.
+  And the case that holds OQ-8's scoping: **`[some words](#fig:pipeline)` is still
+  `#link("#fig:pipeline")[some words]` in a document that declares
+  `fig:pipeline`.** An implementer who reinterprets every `#` destination passes
+  (1) and fails only here.
+
+  (6) **A name declared inside a footnote definition is visible to a reference
+  outside it** — OQ-7's measurement held as a test. An implementation that
+  collects names on the document walk alone passes every case above and refuses
+  this one, because that walk skips the region.
+
+  (7) **No equation is named and none is referenced.** A `: ` line after a display
+  equation is the ordinary paragraph it is today, and the `equations` key is
+  untouched. **This is what keeps the phase off OQ-4's compile failure**: an
+  implementer who extends labels to equations makes every document that did not
+  write `equations: numbered` fail to compile, which is a correctness regression
+  rather than a typographic one.
+
+  (8) `cargo test --workspace` passes with **no shipped golden file changed**, and
+  `cli/src`, `app/src`, `core/src/frontmatter.rs`, `core/src/emit.rs:header` and
+  both look files untouched, checked as a diff.
+  `core/tests/golden_test.rs:every_bundled_template_meets_the_call_contract` is
+  unchanged at five arguments.
+
+  (9) **Read by eye, one PDF per look, plus (2)'s pair.** Each reference reads its
+  supplement and its number — *Figure 1*, *Table 1*, *Listing 1* — in running
+  prose rather than as a bare number or a gap, and (2)'s pair shows the same
+  source line reading 1 in one document and 2 in the other.
+
+### Phase 4 — equations join
+*Produces the observable: yes — a PDF whose "as equation (1) shows" is still true
+after an equation is inserted above it.*
+
+**Deferred, and what unblocks it is two questions rather than a dependency.**
+OQ-10 must choose how an equation is named, since it has no caption line to carry
+one and the `figure` wrapper is measured out. OQ-4's remaining half must choose
+what a document that never asked for numbers does with an equation reference:
+refuse it, naming the key the author would set; or number always and let a look
+hide the number typographically, which contradicts `mpdf-004` Phase 3's shipped
+default. Neither is answerable from code — both are design calls — so this phase
+is drafted when they are taken and not before.
+
+- **Scope:** to be drafted with those two answers. It touches `core/src/emit.rs`'s
+  display-math arm and nothing else that Phase 3 did not already build: the
+  declaration set, the reference check and the refusals are Phase 3's, and an
+  equation joins them as a fourth declaring construct.
+- **Exit gate:** to be written. It must include **a document with
+  `equations: plain` and an equation reference in it**, because that is the path
+  that does not compile today and the one a phase built against
+  `equations: numbered` alone would ship broken.
 
 <!--
 The review record is a sibling file, not a section: it lives at
