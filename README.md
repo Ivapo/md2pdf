@@ -194,7 +194,8 @@ a title, `[text](url "a title")`. Neither Typst nor the PDF can hold a title, an
 destination has nothing to resolve to.
 
 One shape is not a link at all. `[](#name)` — **with nothing between the brackets** — is a
-cross-reference to a figure you have named, and the Captions section below covers it. Any
+cross-reference to a figure or an equation you have named, and the naming section below
+covers it. Any
 link that has text is the link it has always been, whatever its destination, so
 `[Introduction](#introduction)` still points where it always did.
 
@@ -225,8 +226,8 @@ A document that refers to its own formulas can number them, with `equations: num
 the frontmatter. The numbers run `(1)`, `(2)` down the page and land on the display form
 only, so an inline `$…$` never takes one. One `$$…$$` span is one equation whatever it
 holds: a multi-line `aligned` derivation is numbered once, against its lines, rather than
-once per line. There is no way to *label* an equation and refer to it by name — "see
-equation (1)" is prose you keep true yourself.
+once per line. Put `{#eq:name}` after the closing `$$` and you can point at that formula
+by name, the way you point at a figure — see the section below.
 
 A formula is **LaTeX**, and the dialect accepts a bounded subset of it — the Greek
 letters, the relations and operators, sums, products and integrals, `\frac`, `\sqrt`,
@@ -345,7 +346,7 @@ Only a standalone image takes a caption; an image inside a sentence is not a fig
 text, unchanged. Two things are errors, each naming the line: a `: ` with nothing after
 it, and a second caption under one block.
 
-## Naming a figure, and pointing at it
+## Naming a figure or an equation, and pointing at it
 
 End a caption with `{#name}` to name the figure it makes, then write `[](#name)` to point
 at it:
@@ -373,17 +374,43 @@ always meant.
 comes from what the caption sits under, so `{#pipeline}` on an image is a figure and so is
 `{#tab:pipeline}`. Names beginning `fn-` followed by digits are reserved for footnotes.
 
-Four things are errors, each naming the line: a reference to a name nothing declares, the
-same name declared twice, a character outside the set, and a reserved name. A name is
-checked here rather than left to the typesetter, which would otherwise report a name you
-never typed and no line at all:
+Five things are errors, each naming the line: a reference to a name nothing declares, the
+same name declared twice, a character outside the set, a reserved name, and a reference to
+an equation in a document that did not number its equations. A name is checked here rather
+than left to the typesetter, which would otherwise report a name you never typed and no
+line at all:
 
 ```console
 $ md2pdf paper.md
 error: name error at line 24: nothing declares the name 'fig:piepline'
 ```
 
-Equations take no name yet — "see equation (1)" is still prose you keep true yourself.
+**A display equation is named on its closing fence**, since it has no caption line to carry
+a name:
+
+```markdown
+$$
+a^2 + b^2 = c^2
+$$ {#eq:pythagoras}
+
+As [](#eq:pythagoras) shows, the two shorter sides settle the longest one.
+```
+
+That reads *"As Equation 1 shows…"*. The group has to be the whole of what follows the
+closing `$$` — `$$…$$ {#eq:one} and more` is the prose it looks like — and an inline `$…$`
+takes no name, because only the block form is ever numbered.
+
+**Pointing at an equation needs `equations: numbered` in the frontmatter**, and `md2pdf`
+says so with your line if you forget:
+
+```console
+$ md2pdf paper.md
+error: name error at line 24: 'eq:pythagoras' names an equation, and a document that
+points at one must set 'equations: numbered'
+```
+
+Naming one is always fine — it is only the reference that needs the key, because an
+unnumbered equation has no number for the sentence to say.
 
 ## Footnotes
 
@@ -436,9 +463,10 @@ saying so. A `columns` key of your own beats it.
 makes the same PDF on every machine and on any day.
 
 `equations: numbered` numbers the document's display formulas, `(1)`, `(2)`, down the
-page. `plain` is the default, so a file that says nothing gets no numbers and reads
-exactly as it did before. You say *whether*; the look says *how* — the format, and where
-on the line it sits. Both bundled looks write `(1)`.
+page, and is what lets a sentence point at one by name. `plain` is the default, so a file
+that says nothing gets no numbers and reads exactly as it did before. You say *whether*;
+the look says *how* — the format, and where on the line it sits. Both bundled looks write
+`(1)`.
 
 Without `title`, `author` and `date` together, the PDF gets no title block. Without the
 frontmatter altogether, it gets every default.

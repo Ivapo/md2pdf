@@ -695,6 +695,16 @@ close-out names that gap.
   `rules/pipeline.md` carries the corrected wording, since that is the artifact
   that tracks the code.
 
+  **WIDENED 2026-08-18, by `mpdf-005` Phase 4: the exception is still one check
+  and it now refuses two things.** That same after-the-walk pass also refuses a
+  reference to a *display equation* in a document that did not set
+  `equations: numbered`, because Typst fails the whole compile on one and its
+  message names neither line nor key. The exception the note above records is
+  unchanged in kind — one check, run late, over references — and the earliest
+  line is the error across both classes together. Recorded because the note
+  enumerates its one class by name, and a later reader meeting the second in the
+  code would have no way to tell an omission from a regression.
+
   The first reference to a label emits `#footnote[…]<fn-N>` and every later
   reference to that same label emits `#footnote(<fn-N>)`, which is Typst's
   own documented form for pointing at a footnote that already exists; `N`

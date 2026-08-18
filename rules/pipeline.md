@@ -13,12 +13,12 @@ covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the two walks footnotes need, the image asset
   channel, the caption that makes an image, a table or a code block a figure and
-  the splice that attaches it, the name a caption declares and the reference that
-  points at it, the LaTeX subset a formula may hold and the prelude
+  the splice that attaches it, the name a caption or a display equation declares and
+  the reference that points at it, the LaTeX subset a formula may hold and the prelude
   it compiles against, the bundled looks and the call contract they meet, the equation numbering
   the author asks for and the look formats, the heading anchors a compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 553
+max_lines: 580
 generated: 2026-08-18
 ---
 
@@ -137,8 +137,8 @@ never raises. A definition whose translation failed keeps that error, and the se
 reports it at the region, so the first error in document order is still the one reported
 and the frontmatter still wins over a construct error below it.
 
-**One error does not keep its document position, and it is the only one.** The undeclared
-reference below is checked after the walk, because a reference may precede its
+**One error does not keep its document position, and it is the only one.** The two
+reference refusals below are checked after the walk, because a reference may precede its
 declaration. The walk aborts at the first construct error, so a document carrying a bad
 reference on line 3 and a raw HTML block on line 5 reports the HTML. Every other error, in
 either walk's territory, still surfaces where it stands.
@@ -268,7 +268,7 @@ block with a caption beneath it becomes `#figure(image(…), caption: […])`,
 `#figure(table(…), caption: […])` or `#figure(raw(…), caption: […])`, and Typst reads the
 kind from the body it was handed: three supplements and three independent counters —
 *Figure 1*, *Table 1*, *Listing 1* — with nothing configured and no format written here.
-Nothing else in the dialect takes one.
+Nothing else in the dialect takes a caption; a display equation takes a name without one.
 
 **The caption is what makes a figure.** An uncaptioned construct is written exactly as it
 is above, because a `#figure` with no caption prints no number and still consumes the
@@ -363,15 +363,18 @@ passes and Typst then fails on a label the author never typed, and `@fig:` drops
 trailing colon where `#ref(<fig:>)` does not. Empty means empty — `[ ](#name)`, whose text
 is one space, is a link — because the discriminator has to be statable and `is_empty` is.
 
-Two whole-document checks, at different times. `core/src/emit.rs:declare` refuses a
+Whole-document checks, at two different times. `core/src/emit.rs:declare` refuses a
 repeated name where the second one stands, which is backward-looking and the walk already
-knows. `core/src/emit.rs:check_references` refuses a reference to a name nothing declares
-**after the walk**, because a reference may precede its declaration and the emitter needs
-no pre-pass to write correctly: Typst is what resolves a label, and this check exists only
-to name the author's line. Where several are undeclared the earliest line is the error,
-which a `Vec` settles deterministically where a set does not. Both raise `Error::Name`,
-which carries a problem string rather than a construct name — the construct is a caption
-or a link, both in the dialect, and what is wrong is the name inside it.
+knows. `core/src/emit.rs:check_references` runs **after the walk**, because a reference may
+precede its declaration and the emitter needs no pre-pass to write correctly: Typst is what
+resolves a label, and this check exists only to name the author's line. It refuses two
+things in one pass — a reference to a name nothing declares, and a reference to an
+*equation* in a document that did not write `equations: numbered`, which Typst would fail
+the whole compile over with `cannot reference equation without numbering`, naming neither
+line nor key. The earliest line is the error across both classes together, which a `Vec`
+settles deterministically where a set does not. Every one of these raises `Error::Name`,
+which carries a problem string rather than a construct name — the construct is a caption,
+an equation or a link, all in the dialect, and what is wrong is the name inside it.
 
 A name declared inside a footnote definition is a declared name. `core/src/emit.rs:emit`
 skips a definition's region, so those names travel in `core/src/emit.rs:Body` the way its
@@ -380,9 +383,33 @@ its first reference. An uncited definition reaches no page, so it declares nothi
 reference to a name only it carries is refused — which is what Typst would do with a label
 that reached no page.
 
-No equation takes a name or a reference. An equation has no caption line to carry one, and
-a reference to an unnumbered one fails the compile, which the shipped `equations: plain`
-default makes the ordinary path.
+**A display equation takes a name too, and it rides the closing `$$`.** `$$…$$ {#eq:one}`
+becomes `$ … $ <eq:one>`, and the reference is `[](#eq:one)` unchanged. It needs no splice:
+the parser delivers the equation and then the group as the very next event, in one
+paragraph, so `core/src/emit.rs:Equation` records where the equation was written and the
+text arm writes the label there. Its liveness test is `Figure::live`'s with the
+trailing-separator allowance dropped, since a label is adjacent where a caption is a
+paragraph away — a soft break between the fence and the group is enough to leave it prose.
+
+**The group must be the whole of the run**, so `$$…$$ {#eq:one} and more` and
+`$$…$$ see {#eq:one}` are both the prose they were, and an inline `$…$` takes no name at
+all, because Typst numbers the block form alone and a name on a thing that cannot number
+can never be pointed at. `core/src/emit.rs:equation_name` is that finding rule;
+`core/src/emit.rs:check_name` holds the clauses it shares with a caption's name, where
+`core/src/emit.rs:caption_name` keeps its own rule of taking the *last* group on a line.
+
+**Nothing is recorded while a caption is open**, which is what leaves a display span inside
+a caption unable to claim the caption's own name: `: See $$x = 1$$ {#fig:one}` names the
+figure. The liveness test does not refuse that on its own — the marker arm pushes the
+caption's frame before anything later in that paragraph is written, so the span records at
+that frame and would be spent at the same one.
+
+**Naming an equation is refused nowhere a caption's name is not.** A labelled, unnumbered
+equation compiles; only *pointing* at one needs `equations: numbered`, so a document that
+names an equation before it points at one is never broken by a key it has not set yet. And
+a `: ` line after a display equation stays the ordinary paragraph it has always been: the
+caption marker attaches after a standalone image, a table and a code block, and nowhere
+else.
 
 ## The frontmatter
 

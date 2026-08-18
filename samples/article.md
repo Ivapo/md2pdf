@@ -165,8 +165,8 @@ $$
 $$
 
 The inline integral above carries no number, because only the block form is
-numbered. There is no way to label a formula and refer to it by name, so a
-sentence that says see equation (1) is prose you keep true yourself.
+numbered. A formula can be labelled by putting a name after its closing fence,
+and pointed at from a sentence, so a reference stays true when anything moves.
 
 The dialect accepts a bounded subset of LaTeX — the Greek letters $\alpha$,
 $\beta$ and $\pi$, the relations $\leq$ and $\neq$, the operators, the large
