@@ -27,7 +27,7 @@ phases:
     by: null
   - name: "Phase 4 — equations join"
     reviewed: 2026-08-18
-    shipped: null
+    shipped: 2026-08-18
     cut: null
     by: null
 
@@ -1696,6 +1696,18 @@ shipped ones; both are now closed, and each closed with a measurement behind it.
   property the phase exists for, on a pair as Phase 3 read its own: two documents
   differing only by an equation inserted above the referenced one, where the same
   source line reads *Equation 1* in one and *Equation 2* in the other.
+
+  **WIDENED 2026-08-18, on shipping: (5) and (5a) state a literal and not a
+  method, and the obvious method makes both pass for the wrong reason.** Each
+  case names bytes that stand in a golden file, and a needle over a golden holds
+  only what that file says — while the file is written by the very implementation
+  the case exists to catch. Measured: under a `caption_name` reuse the golden's
+  own needle still passed and only the fixture's equality test failed, which names
+  no shape; under the missing caption guard, (5a)'s needle passed outright. **So
+  both cases emit their own document and assert the emitted bytes**, and both were
+  run against their wrong implementation to check they fail it by name. The gate
+  is unchanged in what it demands; what is recorded is the instrument, because the
+  cheaper one satisfies the words and not the sentence after them.
 
 <!--
 The review record is a sibling file, not a section: it lives at
