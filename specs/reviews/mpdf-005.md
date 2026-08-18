@@ -2,6 +2,125 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 3 only — 2026-08-18 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking. Run because §7.4 makes folding *any* change a
+trigger, and two of round 2's three folds touched the gate — the loop's own
+warning is that a fix can introduce a blocker.
+
+Both gate literals were re-derived against the shipped binary rather than read.
+A fixture line `: The conversion pipeline.` already emits
+`caption: [The conversion pipeline.]` verbatim today — the trailing `.` is
+unescaped because `line_is_all_digits` is false, and `splice_caption` trims — so
+once the phase drops the `{#name}` group the gate's exact string is what the
+stated method produces. **Gate (1a) was confirmed to be a real assertion rather
+than a restatement of (1)'s compile**: the failure it catches is the fixture
+never carrying a sentence-final reference at all.
+
+OQ-11's classification was re-derived and holds, including that both its shapes
+are genuinely reachable from markdown — `[](#fig:pipeline)(top)` emits `…[](top)`
+today, which becomes the chained call.
+
+One non-blocking prose note, accepted and folded: OQ-11 had claimed its two
+survivors are "loud where the marker form's plural was silent", which does not
+hold — the plural failed at the compile too. What actually distinguishes them is
+that they need an adjacency ordinary prose does not produce, and that is what the
+entry now says. The two reasons carrying the argument, both measured, are
+unchanged.
+
+**Converged.** Phase 3's `reviewed` is set to 2026-08-18; `status` was already
+`accepted`.
+
+### Round 2 — Phase 3 only — 2026-08-18 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, at round two. Round 1's blocker was verified
+resolved in the files rather than in the changelog, and the reviewer **strengthened
+the fix rather than merely confirming it**: reading `typst-syntax-0.15.1`'s lexer,
+entry to a label is gated on `is_id_continue` in *markup* and in *code* alike, so
+within the declared set "first character not `:` and not `.`" leaves
+`{letters, digits, -, _}` — every one `is_id_continue`. The rule is not merely
+sufficient, it is **exactly equivalent to what both lexers require**.
+
+**The round's best catch is what it checked about the `#ref` switch rather than
+what it found wrong with it.** `typst-eval-0.15.1` evaluates `ast::Ref` to
+`RefElem::new(target)` — the same element `ref()` constructs — so §2's measurement
+table, OQ-7's footnote measurement and OQ-4's and OQ-9's compile failures, every
+one of them taken with `@`, still underwrite the phase after the spelling changed.
+A switch that had quietly invalidated three earlier measurements would have been
+the expensive kind of correct.
+
+It also closed the reserved-name question completely: `core/src/emit.rs` writes
+labels in exactly two places, both `fn-{number}`, and neither look emits one at
+all — so `fn-` and digits is the whole reservation rather than a guess at it.
+
+Three non-blocking, all accepted and folded. The scope claimed the function form
+is not boundary-sensitive, and two shapes survive it — `#ref(<x>)(a)` parses as a
+chained call and `#ref(<x>).Then` as a field access — so the claim is now "very
+nearly not" and **OQ-11** carries the residue with its price. Gate (1)'s "no `{`
+in any caption" needle was unwritable in this repo's negative-needle idiom,
+because the same fixture carries a named listing whose `raw` string holds braces;
+it is now a positive assertion of the exact caption string. And two literals in
+the newly folded text did not reproduce: a Typst message quoted from a stand-in
+probe, and a citation of `mpdf-001` §2 where the sentence actually lives in that
+spec's §4 Phase 7 — checked at `specs/md_to_pdf_pipeline_spec.md` line 676, inside
+the block opening at 627.
+
+### Round 1 — Phase 3 only — 2026-08-17 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode — one phase, per §7.0).** *Does this phase produce the
+observable, and is it the right one?* Yes, and this is the phase whose observable
+is the *motivating* one: §1's whole argument is that "the diagram above" goes
+quietly wrong when something is inserted, and a reference Typst renumbers is the
+fix — Phases 1 and 2 built the carrier. **The risk recorded rather than
+dismissed:** the narrowing takes equations out of what §1 promised, which is a
+real reduction; §1's own sketch is a figure reference, and Phase 4 carries the
+remainder with named blockers rather than dropping it.
+
+Verdict: `NOT READY`. One blocking, eight non-blocking; all nine accepted, none
+rejected.
+
+**The blocker was that the declared name character set is not closed under the
+label→reference round-trip, and the author's re-measurement changed the shape of
+the fix.** The reviewer named two halves. The first reproduced exactly: a name
+opening with `:` or `.` is **not a label at all**, and `#figure(…) <:foo>`
+typesets the literal text `<:foo>` on the page raising nothing — the silent drop
+§2 exists to refuse, reached through a name the dialect would have accepted. The
+second — that a trailing `.` or `:` is silently dropped from a reference — was
+measured to be a property of the **`@name` marker only**, not of labels. So
+instead of the trailing rule the reviewer proposed, the phase now writes
+**`#ref(<name>)`, the function form**, on `mpdf-001`'s own argument for `#emph[…]`
+over `_…_`: every shape that is a label at all round-trips through `#ref(<…>)`
+onto the right figure, `fig:`, `fig.` and `fig..one` included. That single change
+also closed the reviewer's adjacency finding outright — `@figAs` fails with
+``label `<figAs>` does not exist in the document``, where a call cannot swallow
+what follows it.
+
+One correction to the round's own report, recorded so a later reader does not
+re-derive it: `_foo` **is** a valid label. The author's first probe failed on it
+because the probe's caption `[_foo]` opened emphasis — a defect in the instrument,
+not in Typst.
+
+The eight non-blocking, all folded: emptiness is not knowable at
+`Event::Start(Tag::Link)`, so a reference opens a `bufs` frame and settles at the
+`End` arm, with the Start arm's two existing refusals untouched; the `{#name}`
+group must leave the caption and is not a substring removal, since `escape_into`
+has made it `{\#fig\-two}`; a named splice must carry the label into
+`Figure.written` or Phase 1's second-caption refusal silently stops firing, which
+Phase 2's unnamed cases cannot catch — now gate (3a); `fn-N` is a namespace the
+emitter already owns, now a reserved name; the post-walk check falsifies a
+document-order property two other artifacts state without qualification, now
+stated as the one exception with both artifacts named for reconciliation and §2's
+"pre-pass" sentence corrected in place; the undeclared reference reported is the
+one on the earliest line, because the obvious container is a set; and
+`[ ](#name)` is decided — empty means empty, `is_empty()` and not `trim()`.
+
+Grounding confirmed rather than corrected, so a later round need not re-verify:
+every `file:symbol` the phase cites is real and says what the phase says, both
+looks leave `ref` and `figure(numbering:)` alone, and **OQ-8's §6.1 step-1 working
+survives** — the census holds, no consumer of `#`-fragment links exists in `app/`,
+`cli/` or `web/`, and `[](#fig:one)` really does emit `#link("#fig:one")[]` and
+put nothing on the page.
+
 ### Round 2 — Phase 2 only — 2026-08-17 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, at round two. **Converged**, and Phase 2's
