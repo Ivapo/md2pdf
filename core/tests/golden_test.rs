@@ -51,6 +51,8 @@ const NUMBERED_EQUATIONS_MD: &str = include_str!("../../tests/fixtures/numbered_
 const NUMBERED_EQUATIONS_TYP: &str = include_str!("../../tests/golden/numbered_equations.typ");
 const CAPTIONS_MD: &str = include_str!("../../tests/fixtures/captions.md");
 const CAPTIONS_TYP: &str = include_str!("../../tests/golden/captions.typ");
+const CAPTIONED_BLOCKS_MD: &str = include_str!("../../tests/fixtures/captioned_blocks.md");
+const CAPTIONED_BLOCKS_TYP: &str = include_str!("../../tests/golden/captioned_blocks.typ");
 
 /// Every bundled look, by the name the `template` key selects it with. Four
 /// tests read these: the header-row rule, and the three Phase 9 cases that no
@@ -1986,4 +1988,203 @@ fn every_bundled_template_styles_a_caption() {
             assert!(source.contains(needle), "{file} does not carry `{needle}`");
         }
     }
+}
+
+// -- mpdf-005 Phase 2: tables and listings take the same treatment ------------
+
+/// The phase's own document, and one document rather than three.
+///
+/// **The property this phase exists for is that the three counters do not
+/// share**, and only one document can show that — so this fixture carries a
+/// captioned image beside the captioned table and the captioned code block,
+/// rather than a fixture per construct. It then carries an uncaptioned table
+/// followed by a captioned listing, which is the case Phase 1 had only one
+/// recordable construct to express.
+///
+/// It is a fixture of its own rather than an extension of
+/// `tests/fixtures/captions.md`, whose golden is shipped work this phase
+/// asserts does not move — the same reason Phase 1 wrote one rather than
+/// extending `tests/fixtures/images.md`.
+#[test]
+fn the_captioned_blocks_fixture_matches_its_golden_file() {
+    assert_eq!(
+        md_to_typst(CAPTIONED_BLOCKS_MD).unwrap(),
+        CAPTIONED_BLOCKS_TYP
+    );
+}
+
+/// The compile is what catches the inner `#`.
+///
+/// `table_call` wrote `#table(` where `image_call` writes `image(` without one,
+/// and a `#` inside a code context is a **syntax error** rather than a
+/// mismatch. So an implementer who leaves it in fails here rather than in the
+/// comparison above, with a message about generated source the author never
+/// wrote — which is why this case exists as well as the golden.
+#[test]
+fn the_captioned_blocks_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(CAPTIONED_BLOCKS_MD, &[asset("dot.png", DOT_PNG)]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each part of the fixture reaches Typst as the form the spec chose.
+///
+/// The equality test above pins the whole file, but it cannot say which line is
+/// load-bearing. These name the rules, so an edit that drops one fails with a
+/// message pointing at the rule it dropped.
+#[test]
+fn the_captioned_blocks_golden_carries_each_form() {
+    for (form, what) in [
+        // The two calls this phase exists to write, each wrapping a bare call
+        // rather than one carrying its own `#`.
+        (
+            "#figure(table(\n  columns: 2,",
+            "the captioned table, wrapped",
+        ),
+        (
+            r#"#figure(raw(block: true, lang: "rust", "fn main("#,
+            "the captioned code block, wrapped",
+        ),
+        // The third kind, unchanged from Phase 1, in the same document — which
+        // is what makes the three counters readable apart on the page.
+        (
+            r#"#figure(image("dot.png", alt: "The three steps, drawn as boxes"), caption: ["#,
+            "the captioned image beside them",
+        ),
+        // Phase 1's "walked as inline markdown", held over the constructs it
+        // did not cover.
+        (
+            "caption: [The constructs and the #emph[counters] they keep.]",
+            "the table caption's emphasis, as Typst markup",
+        ),
+        (
+            r#"#raw("raw") span in its caption"#,
+            "the listing caption's code span, walked the same way",
+        ),
+        // A caption reaches the construct above it and no other: the record is
+        // the last one written rather than the last one of its kind. Phase 1
+        // had one recordable construct and could not express this.
+        (
+            "#table(\n  columns: 2,\n  table.header([Uncaptioned], [Table]),\n  [stays], [bare],\n)\n\n#figure(raw(block: true, lang: \"rust\", \"fn second() {}\")",
+            "the uncaptioned table left bare beneath a captioned listing",
+        ),
+    ] {
+        assert!(
+            CAPTIONED_BLOCKS_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+
+    // The inner `#` again, this time as a property of the whole file rather
+    // than of the two calls above: nothing a `#figure(…)` wraps carries one.
+    assert!(
+        !CAPTIONED_BLOCKS_TYP.contains("#figure(#"),
+        "a wrapped call kept its own `#`, which is a Typst syntax error"
+    );
+}
+
+/// An uncaptioned table and an uncaptioned code block are the bare blocks they
+/// always were.
+///
+/// **This is Phase 1's central decision applied to two more constructs** — the
+/// caption is what makes a figure — and the case an implementer who wraps
+/// unconditionally fails while passing everything above. An uncaptioned
+/// `#figure` prints no number and still consumes the counter, so the next
+/// captioned one reads "Table 2" with no Table 1 on the page, and `figure`
+/// centres its body where a bare block sits flush left.
+///
+/// The blast radius is one golden each: `tests/golden/table.typ` carries the
+/// only `#table(` in the corpus and `tests/golden/blocks.typ` the only
+/// `#raw(block: true`.
+#[test]
+fn an_uncaptioned_table_and_code_block_are_not_wrapped() {
+    assert_eq!(md_to_typst(TABLE_MD).unwrap(), TABLE_TYP);
+    assert_eq!(md_to_typst(BLOCKS_MD).unwrap(), BLOCKS_TYP);
+
+    for (golden, what) in [(TABLE_TYP, "table"), (BLOCKS_TYP, "blocks")] {
+        assert!(
+            !golden.contains("figure"),
+            "the {what} golden gained a figure"
+        );
+    }
+}
+
+/// Phase 1's three refusals hold over both new constructs, each naming its line.
+///
+/// They run through the code Phase 1 shipped, so this is a regression net
+/// rather than new behaviour — and it is cheap, which is the argument for
+/// having it rather than assuming it. The message reads "second caption for one
+/// figure" over a table too, because a captioned table *is* a Typst `figure`
+/// and the message names the element the emitter writes.
+#[test]
+fn each_caption_refusal_holds_over_a_table_and_a_code_block() {
+    let table = "# H\n\n| a |\n| - |\n| 1 |\n\n";
+    let block = "# H\n\n```\nx = 1\n```\n\n";
+
+    for (md, construct, line, what) in [
+        (
+            format!("{table}:\n"),
+            "caption with no text",
+            7,
+            "the empty marker after a table",
+        ),
+        (
+            format!("{table}: One.\n\n: Two.\n"),
+            "second caption for one figure",
+            9,
+            "the second caption after a table",
+        ),
+        (
+            format!("{table}: One. {{#tab:one}}\n"),
+            "caption with a name",
+            7,
+            "the name after a table",
+        ),
+        (
+            format!("{block}:\n"),
+            "caption with no text",
+            7,
+            "the empty marker after a code block",
+        ),
+        (
+            format!("{block}: One.\n\n: Two.\n"),
+            "second caption for one figure",
+            9,
+            "the second caption after a code block",
+        ),
+        (
+            format!("{block}: One. {{#lst:one}}\n"),
+            "caption with a name",
+            7,
+            "the name after a code block",
+        ),
+    ] {
+        match md_to_typst(&md) {
+            Err(Error::UnsupportedConstruct {
+                construct: found,
+                line: found_line,
+            }) => {
+                assert_eq!(found, construct, "for {what}");
+                assert_eq!(found_line, line, "for {what}");
+            }
+            other => panic!("expected `{construct}` for {what}, got {other:?}"),
+        }
+    }
+}
+
+/// An indented code block takes a caption exactly as a fenced one does.
+///
+/// **The code-block arm is one arm**: the two differ only in whether a `lang`
+/// argument is written, and both reach Typst as `raw(block: true, …)`.
+/// Splitting them would make a `: ` line a caption after one kind of block and
+/// prose after another, with nothing on the page to tell an author which they
+/// had written. The fixture carries fenced blocks alone, so this is the case
+/// that holds the other half.
+#[test]
+fn an_indented_code_block_takes_a_caption_too() {
+    let typst = md_to_typst("# H\n\n    x = 1\n\n: The block above.\n").unwrap();
+    assert!(
+        typst.contains(r#"#figure(raw(block: true, "x = 1"), caption: [The block above.])"#),
+        "an indented block took no caption: {typst}"
+    );
 }
