@@ -2,6 +2,135 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 4 only — 2026-08-18 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking. Converged at the cap, which is worth noting: this
+episode used all three rounds, and the round that would have escalated is the one
+that cleared.
+
+Round 2's blocker confirmed resolved, and the reviewer answered the two questions
+the changelog asked it. **`caption.is_some()` is sufficient, for a stronger reason
+than the author gave.** `core/src/emit.rs:caption_name` has exactly one caller,
+`core/src/emit.rs:splice_caption`, so a `{#…}` group has meaning in exactly one
+place in the dialect — and a display span plus a group was run through all five
+frame pushes (item, block quote, table cell, caption, link) and through alt text.
+All are prose today except the caption, so the new rule reassigns nothing
+anywhere else; alt text never reaches the display arm at all, because the alt
+capture sits above the main match and handles `DisplayMath` itself. **And the
+guard being a `Walk` field rather than a depth test is what covers the one shape
+a depth test would miss: a display span nested inside a link inside a caption.**
+
+**Gate (5a) pins its property rather than passing for free**, which is the failure
+gate (5) had in round 1. The no-guard implementation genuinely diverges — it emits
+`caption: [See $ x = 1 $ <fig:one>]` with nothing after the closing paren, where
+the shipped binary emits `#figure(…, caption: [See $ x = 1 $]) <fig:one>`, and
+`[](#fig:one)` then resolves to the equation rather than the figure. The case
+fails a wrong implementation on the bytes and on the reference.
+
+Two non-blocking trivia, both folded rather than deferred, because §7's own bar is
+that a gate keyed to a literal no stated method reproduces passes for the wrong
+reason. The scope printed `: See $$x$$ {#fig:one}` beside the literal
+`caption: [See $ x = 1 $]`, which came from a probe using `$$x = 1$$`; the source
+line is corrected in both places and the literal re-derived against the built
+binary. And the gate preamble's arithmetic was off by one — it said "six" of ten
+plus three named — so it no longer counts.
+
+### Round 2 — Phase 4 only — 2026-08-18 — same reviewer, resumed — **NOT READY**
+
+Verdict: `NOT READY`, one blocking finding — **newly introduced by round 1's own
+fold**, which is the pattern the loop warns about and the first time this corpus
+has recorded it happening.
+
+Round 1's blocker confirmed resolved: gate (4) names all three goldens, the
+reviewer re-swept and found those three and no others, and gates (4) and (6) now
+agree. The reviewer also confirmed the dropped trailing-separator allowance does
+real work — `$$\nw = 4\n$$\n{#eq:nextline}` emits `$ w = 4 $\n{\#eq:nextline}`,
+so the `SoftBreak`'s newline puts the recorded span off the end of the frame and
+the group stays prose. Adjacency is enforced without a "next event" flag.
+
+**The blocker: the scope claimed a display span inside a caption was refused by
+the record's own liveness test, and it is not.** The caption's marker arm pushes
+its `bufs` frame *before* anything later in that paragraph is written, so the
+span records at that deeper frame and is spent at the same deeper frame — the
+depth check passes — and nothing stands between the span and the adjacent text,
+so the content check passes too. Both hold, the label is spent on the equation,
+and the figure loses the name it has today while the run never reaches
+`Caption.text`. Measured against the shipped Phase 3 binary:
+`: See $$x = 1$$ {#fig:one}` beneath an image emits
+`#figure(image(…), caption: [See $ x = 1 $]) <fig:one>` today, so **the name is
+the figure's** and the phase as scoped would have moved it silently. The reviewer
+noted this is unlike Phase 3's link-frame argument, which holds only because the
+`Figure` record is made one frame *shallower* than where a marker can fire.
+
+Resolved by naming an actual guard — the display arm records nothing while a
+caption is open — by correcting the false claim in place rather than deleting it,
+since it is the reasoning a later reader will repeat, and by adding gate (5a).
+
+### Round 1 — Phase 4 only — 2026-08-18 — fresh clean-room reviewer with repo access — **NOT READY**
+
+Round 0, asked once for this episode and answered by the author against §1:
+**yes.** Phase 4 produces the observable — a PDF whose "as Equation 1 shows" stays
+true after an equation is inserted above it — which is §1's promise for everything
+a document shows, over the one construct Phase 3 could not keep it for. It is the
+right one because `mpdf-004` Phase 3 already tells authors they may number their
+formulas so a document can refer to them, while leaving them no way to point at
+one; this closes the spec's own stated goal rather than opening a new want.
+
+Verdict: `NOT READY`, one blocking and nine non-blocking. All ten adjudicated,
+nine accepted, one remedy rejected, one recorded as a limit.
+
+**The blocker: gate (4)'s blast radius was wrong, and the file it omitted was the
+load-bearing one.** The draft said two shipped goldens carry an unnamed display
+equation. Three do — `tests/golden/display_math.typ`,
+`tests/golden/numbered_equations.typ` and `tests/golden/cross_references.typ` —
+and the third is the one Phase 3 shipped four commits earlier, which is **the only
+shipped golden where a display equation stands next to a `: ` marker paragraph**,
+the exact interaction this phase touches. It is therefore what the phase's own
+gate (6) rests on, so the gate excluded the file its neighbour depended on.
+`samples/article.md` carries two further display equations and no golden; it is
+protected by `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`.
+
+Non-blocking, all accepted and folded: gate (5) tested only trailing text, which
+anything shaped like `core/src/emit.rs:caption_name` refuses anyway, so the case
+passed for the wrong reason — the leading-text shape `$$…$$ see {#eq:lead}` was
+measured emitting prose today and would take a label under that reuse, and gate
+(5) now carries both sides. The scope's blanket "nothing else in Phase 3's
+machinery changes" contradicted its own later sentence and is replaced by explicit
+reused/extended lists. "Entirely a `{#name}` group" was falsified by the phase's
+own measured literal, which carries a leading space. `core/src/emit.rs:caption_name`
+was never cited despite being the symbol an implementer must reach for, and its
+contract — group at the *end* — is not this phase's. The ordering between the two
+after-the-walk refusals was unstated. Reconciliation was unnamed, and one of its
+three artifacts is not free: `samples/article.md` says in its own prose that there
+is no way to label a formula, and that sample's pagination is pinned by a test.
+
+**One remedy rejected.** The reviewer proposed the `pending` slot for the
+adjacency problem. Not taken: rounds 2 to 4 of Phase 1 each measured a different
+construct broken by holding a call across an event, and nothing here needs a hold,
+because the equation is already written when the name arrives. The accepted shape
+is a record the display arm leaves and the Text arm spends where it is live —
+`core/src/emit.rs:Figure::live`'s argument with the trailing-separator allowance
+dropped.
+
+**One limit recorded rather than resolved.** The reviewer could not independently
+re-derive three Typst-side literals: no `typst` binary is installed and the
+dialect admits no raw-Typst injection. The author measured them by temporarily
+injecting probe Typst into `core/assets/template.typ` and compiling through the
+CLI, then reverting — the technique earlier phases used, since a look file is
+arbitrary Typst. Under `equations: numbered` a labelled `$ x = 1 $` needs no other
+change: the page read `(1)`, `(2)`, `(3)` over three equations and the references
+read *Equation 1* and *Equation 3*. Under the `plain` default the same source
+failed with `cannot reference equation without numbering` verbatim. `it.label` in
+a `show math.equation` rule failed with `equation does not have field "label"`,
+while `it.at("label", default: none)` returned `<eq:a>`, `none`, `<eq:b>` — which
+is what let OQ-4 measure, and reject, the seam-preserving alternative.
+
+The reviewer independently confirmed both looks answer the key with a **`set`**
+rule (`core/assets/template.typ` and `core/assets/press-release.typ`), which is
+the code-side premise that makes OQ-4's rejection of the `show`-rule shape sound,
+and re-derived OQ-10's parser measurement and the empty collision census for `{`
+after a `$$`.
+
 ### Round 3 — Phase 3 only — 2026-08-18 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking. Run because §7.4 makes folding *any* change a

@@ -26,7 +26,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 4 — equations join"
-    reviewed: null
+    reviewed: 2026-08-18
     shipped: null
     cut: null
     by: null
@@ -1506,56 +1506,124 @@ for the three `figure` kinds and the one construct it could not keep it for.*
 rather than code questions, which is why this phase sat deferred through three
 shipped ones; both are now closed, and each closed with a measurement behind it.
 
-- **Scope:** the display equation becomes a fourth declaring construct, and
-  **nothing else in Phase 3's machinery changes**. The name set, the position
-  rule, the reserved `fn-` prefix, `core/src/emit.rs:declare`'s duplicate check,
-  `core/src/emit.rs:check_references` and the reference spelling `[](#name)` are
-  all Phase 3's and are reused rather than extended.
+- **Scope:** the display equation becomes a fourth declaring construct. **Phase
+  3's name rules and its reference are reused unchanged; two of its structures
+  are extended, and the scope says which** — round 1 was right that a blanket
+  "nothing changes" reads as a do-not-touch instruction over the two things this
+  phase must in fact widen.
+
+  Reused as they stand: the reference spelling `[](#name)`, both link arms,
+  `core/src/emit.rs:splice_caption`, and the four name clauses — the character
+  set, the position rule, the non-empty test and the reserved `fn-` prefix —
+  which today live inside `core/src/emit.rs:caption_name`. **That symbol is named
+  here because it is the one an implementer must reach for and its contract is
+  not this phase's**: it finds a group at the *end* of a string, where this phase
+  needs one that is the *whole* of a text run. So its four clauses move to a
+  checker of their own that both callers share, and `caption_name` keeps the
+  finding rule it has. A phase that reuses `caption_name` whole passes every gate
+  case below except (5) and ships a rule the dialect does not have.
+
+  Extended, and only these two: `core/src/emit.rs:Names` records beside each
+  declared name whether an equation declared it, which the replay loop in
+  `core/src/emit.rs:step`'s `Event::FootnoteReference` arm carries with the rest;
+  and `core/src/emit.rs:check_references` gains that second refusal and the
+  frontmatter it reads to decide.
 
   **A name rides the closing `$$`**, per OQ-10: `$$…$$ {#eq:one}` becomes
-  `$ … $ <eq:one>`. `core/src/emit.rs:step`'s `Event::DisplayMath` arm records
-  that it has just written one, and if the **very next event** is an
-  `Event::Text` that is **entirely** a `{#name}` group, the arm writes ` <name>`
-  and consumes that run. Measured 2026-08-18: the parser delivers exactly those
-  two events, adjacent and in one paragraph.
+  `$ … $ <eq:one>`. Measured 2026-08-18 and re-derived by round 1: the parser
+  delivers an `Event::DisplayMath` and then an `Event::Text` of `" {#eq:one}"` —
+  **adjacent, in one paragraph, and with a leading space**. So the run is
+  trimmed at both ends and the group must be all that remains: `{#eq:one}`,
+  ` {#eq:one}` and `$$…$${#eq:one}` all name, while **`$$…$$ see {#eq:one}` and
+  `$$…$$ {#eq:one} and more` are both the prose they are today**. Round 1 caught
+  the leading-text half and measured that a `caption_name`-shaped rule would
+  label it, which is why (5) now carries both sides.
 
-  **This is less machinery than Phase 1 built, not more**, and the asymmetry is
-  worth stating because a reader arriving from Phases 1–3 will expect a splice.
-  A caption is a *later paragraph*, which is why it needed a recorded point, a
-  truncate and the three liveness checks. A name on a fence is the *next event*,
-  written where the equation was just written — so **no `Figure` record is made,
-  `core/src/emit.rs:splice_caption` is untouched, and the append-only property
-  the whole design rests on is not spent a second time.** An implementer who
-  reaches for the caption machinery here has built the harder thing.
+  **The Text arm writes the label, looking back at a point the display arm
+  recorded.** Round 1 was right that the display arm cannot do it — it cannot see
+  the next event, which is the trap §2 records at length for `write_image`. It is
+  right for the same reason the caption looks back rather than being held forward,
+  **and the remedy is not the `pending` slot**: rounds 2 to 4 of Phase 1 each
+  measured a different construct broken by holding a call across an event, and
+  nothing here needs a hold, because the equation is already written when the
+  name arrives. The display arm records the frame depth and the offset it wrote
+  at; the Text arm spends that record only where it is live — same frame, and the
+  recorded span still standing at the very end of it — so nothing is invalidated
+  at a distance and no clearing is scattered through the emitter. That is
+  `core/src/emit.rs:Figure::live`'s argument with the trailing-separator
+  allowance dropped, because a label is adjacent where a caption is a paragraph
+  away.
 
-  **The group must be the whole of the text run.** `$$…$$ {#eq:one} and more` is
-  the prose it is today, which is the same discipline that keeps `: ` a marker in
-  one position rather than a ban on a line an author may already have written.
   **An inline `$…$` takes no name**, because Typst numbers the block form alone
   and a name on a thing that cannot number can never be pointed at — the inline
   arm is untouched, exactly as the inline image is.
 
+  **And a display span inside a caption takes none either — which needs a guard
+  of its own, and round 2 is why this says so.** A caption's own name rides the
+  end of its line, so `: See $$x = 1$$ {#fig:one}` is a line where two constructs
+  could claim one group. Measured against the shipped Phase 3 binary, that line
+  emits `#figure(image(…), caption: [See $ x = 1 $]) <fig:one>` today: **the name
+  is the figure's**, and `#ref(<fig:one>)` resolves to the figure.
+
+  **A draft of this section claimed the liveness test refused it for free. It
+  does not, and the error is recorded rather than deleted because it is the
+  reasoning a later reader will repeat.** The caption's marker arm pushes a
+  `bufs` frame *before* anything later in that paragraph is written, so a display
+  span inside a caption records at that deeper frame and is spent at that same
+  deeper frame — the depth check passes — and nothing stands between the span and
+  the adjacent text, so the content check passes too. Both conditions hold, the
+  label is spent on the equation, and the figure loses the name it has today
+  while the run never reaches `Caption.text`. That is a silent reassignment of a
+  shipped meaning, which is what §2 exists to refuse. It is unlike Phase 3's
+  link-frame argument, which holds only because the `Figure` record is made one
+  frame *shallower* than where a marker can fire.
+
+  **So the display arm records nothing while a caption is open**, which is
+  `caption.is_some()` and is exactly the sentence "a caption's own name rides the
+  end of its line" written as a condition. Nothing else needs excluding: a
+  display span inside a list item, a block quote or a table cell has no competing
+  name, and one inside a footnote definition travels with its body the way Phase
+  3's names already do. Gate (5a) is the case, because nothing else would catch
+  it.
+
   **A reference to an equation is refused where the document did not set
   `equations: numbered`**, per OQ-4, naming the line and naming the key. This is
   the phase's one genuinely new refusal and the one it exists to get right:
-  under the shipped default both looks set `math.equation(numbering: none)`, and
-  Typst then fails the whole compile with `cannot reference equation without
-  numbering` — a message naming neither line nor key. So `core/src/emit.rs:Names`
-  records, beside each declared name, whether the construct that declared it was
-  an equation, and the after-the-walk check reads `Walk.front` to decide. The
-  check stays a single pass over declared names.
+  under the shipped default both looks answer the key with
+  `set math.equation(numbering: … else { none })` — round 1 confirmed both are
+  `set` rules, which is why OQ-4's `show`-rule alternative cannot rescue `ref` —
+  and Typst then fails the whole compile with `cannot reference equation without
+  numbering`, a message naming neither line nor key.
 
   **Naming is not refused there, only referencing.** Measured 2026-08-18: a
   labelled, unnumbered equation compiles perfectly well as long as nothing points
   at it. Refusing the name would break a document that names an equation before
   it points at one, which is the direction §2's rule does not run in.
 
+  **Both after-the-walk refusals are one pass and the earliest line wins.** A
+  document may hold an undeclared reference on one line and an equation reference
+  in a `plain` document on another, and which is reported is a choice rather than
+  an accident — so it is made here, on Phase 3's own ground: the container is a
+  `Vec` and `min_by_key` over both classes together is what keeps two runs over
+  one document agreeing.
+
   **Neither look changes and the look contract stays at five for the fourth phase
   running.** `core/src/frontmatter.rs` is untouched — `equations` is read, not
   extended — and so is `core/src/emit.rs:header`. `cli/src` and `app/src` are
   untouched, as they have been throughout, and each phase checks it as a diff.
-- **Exit gate:** nine cases. Six are Phase 3's shape over a fourth construct and
-  are cheap; the two that carry this phase are (2) and (3).
+
+  **Reconciliation is named here because one of the three artifacts is not
+  free.** `rules/pipeline.md`'s "No equation takes a name or a reference" and
+  `README.md`'s "Equations take no name yet" are both corrected outright. But
+  `samples/article.md` says in its own prose that there is no way to label a
+  formula and refer to it by name, and that sample is **pinned by
+  `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`**
+  — so correcting it edits a document whose pagination a test asserts, and the
+  correction has to be re-run against that test rather than assumed. Round 1
+  found this; it is recorded so the phase does not discover it at the gate.
+- **Exit gate:** ten cases. Most are Phase 3's shape over a fourth construct and
+  are cheap; the two that carry this phase are (2) and (3), and (5a) is the one
+  a round had to find.
 
   (1) **A new fixture carrying `equations: numbered`, a named equation and a
   reference to it**, matching its golden and compiling to a PDF with the `%PDF`
@@ -1576,20 +1644,40 @@ shipped ones; both are now closed, and each closed with a measurement behind it.
   on the reference and not on the name; an implementer who refuses both passes
   (2) and fails here.
 
-  (4) **An unnamed display equation is byte-for-byte unchanged.**
-  `tests/golden/display_math.typ` and `tests/golden/numbered_equations.typ` gain
-  no label, which is `mpdf-004` Phase 3's property inherited whole: no document's
-  typeset output changes unless its author asks. The blast radius is those two
-  goldens and no others.
+  (4) **An unnamed display equation is byte-for-byte unchanged.** **Three shipped
+  goldens carry one and all three are named, because round 1 measured that the
+  draft's count of two was wrong and that the missing one was the load-bearing
+  one**: `tests/golden/display_math.typ`, `tests/golden/numbered_equations.typ`
+  and `tests/golden/cross_references.typ`, which Phase 3 shipped four commits
+  before this was drafted. That third file is **the only shipped golden where a
+  display equation stands next to a `: ` marker paragraph** — the exact
+  interaction this phase touches — so it is the one gate (6) rests on rather than
+  a file outside the radius. `samples/article.md` carries two more display
+  equations and no golden; it is protected instead by
+  `the_articles_last_heading_is_not_on_the_first_page`, which passes unchanged
+  because neither carries a name.
 
-  (5) **The group must be the whole run, and an inline span takes no name.**
-  `$$…$$ {#eq:one} and more` reaches the page as prose with its marker intact,
-  and `$x$ {#eq:one}` does the same. Both are the cases that stop the rule
-  becoming a ban on a brace after a formula.
+  (5) **The group must be the whole run, on both sides, and an inline span takes
+  no name.** `$$…$$ {#eq:one} and more` **and `$$…$$ see {#eq:one}`** both reach
+  the page as the prose they are today, with their markers intact, and
+  `$x$ {#eq:one}` does the same. **The leading-text case is the one that matters
+  and it is new in round 1**: the trailing one is refused by any rule shaped like
+  `core/src/emit.rs:caption_name`, so an implementer who reuses that symbol whole
+  passes it and fails only here — measured, since `$$…$$ see {#eq:lead}` emits
+  prose today and would take a label under that reuse.
+
+  (5a) **A caption line holding a display span keeps its own name.**
+  `: See $$x = 1$$ {#fig:one}` beneath an image still names the *figure*, and
+  `[](#fig:one)` still resolves to it — byte-for-byte what Phase 3 shipped.
+  **This is the case round 2 found and the one no other case covers**: an
+  implementer who takes the liveness test as sufficient passes (1) through (9)
+  and ships a silent reassignment of a name that means something else today.
 
   (6) **A `: ` line after a display equation is still ordinary prose**, which is
   Phase 3's gate (7) held rather than reversed — and the case that fails for an
-  implementer who reached for the caption line as the carrier after all.
+  implementer who reached for the caption line as the carrier after all. It is
+  already shipped in `tests/fixtures/cross_references.md`, so this case is that
+  golden not moving, which is (4)'s third file read from the other side.
 
   (7) **Phase 3's name rules hold over the fourth construct**, each naming the
   author's line: a character outside the set, a name opening with `:` or `.`, the
