@@ -2828,3 +2828,33 @@ fn the_earliest_line_wins_across_both_reference_refusals() {
         other => panic!("expected a name error, got {other:?}"),
     }
 }
+
+/// A name declared on an equation inside a footnote definition keeps its kind.
+///
+/// Those names are met only by the walk of the definitions and travel with the
+/// body to the reference that sets it, the way its images and its math flag do.
+/// An implementation that carried the name without carrying *what declared it*
+/// passes every case above and then lets a `plain` document reach Typst with a
+/// reference Typst fails the whole compile over.
+#[test]
+fn an_equation_named_inside_a_footnote_definition_still_needs_the_key() {
+    let body = "# H\n\nA note[^n], and [](#eq:inside) reaches it.\n\n[^n]: The note holds a formula.\n\n    $$\n    x = 1\n    $$ {#eq:inside}\n";
+
+    let typst = md_to_typst(&format!("---\nequations: numbered\n---\n\n{body}")).unwrap();
+    assert!(
+        typst.contains("$ x = 1 $ <eq:inside>]<fn-1>"),
+        "the label did not travel with the definition's body: {typst}"
+    );
+    assert!(
+        typst.contains("#ref(<eq:inside>)"),
+        "the reference outside the definition did not resolve: {typst}"
+    );
+
+    match md_to_typst(&format!("---\nequations: plain\n---\n\n{body}")) {
+        Err(Error::Name { line, problem }) => {
+            assert_eq!(line, 7, "the line the reference sits on");
+            assert!(problem.contains("equations: numbered"), "problem: {problem}");
+        }
+        other => panic!("expected a name error, got {other:?}"),
+    }
+}
