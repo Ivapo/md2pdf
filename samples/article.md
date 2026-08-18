@@ -147,11 +147,12 @@ in the running text, so the Gaussian integral
 $\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}$ sits in this sentence at
 the size of the words around it.
 
-Two pairs set it as a block of its own:
+Two pairs set it as a block of its own, and a name after the closing fence
+makes it something a sentence can point at:
 
 $$
 \sum_{i=1}^{n} i = \frac{n(n+1)}{2}
-$$
+$$ {#eq:sum}
 
 This file asked for numbered equations, so that one carries a number and so
 does the next. A derivation set over several lines is still one formula, and
@@ -165,8 +166,11 @@ $$
 $$
 
 The inline integral above carries no number, because only the block form is
-numbered. A formula can be labelled by putting a name after its closing fence,
-and pointed at from a sentence, so a reference stays true when anything moves.
+numbered — and only a numbered formula can be pointed at, which is what this
+sentence does when it names [](#eq:sum). Insert another display formula above
+that one and the reference follows it, without your touching this line. That is
+why pointing at a formula needs the numbered key: an unnumbered one has no
+number for the sentence to say.
 
 The dialect accepts a bounded subset of LaTeX — the Greek letters $\alpha$,
 $\beta$ and $\pi$, the relations $\leq$ and $\neq$, the operators, the large
@@ -201,10 +205,15 @@ Name a file that sits beside this one, and it reaches the page:
 
 ![The three steps, drawn as boxes](pipeline.svg)
 
+: The conversion pipeline, with the *emitter* in the middle. {#fig:pipeline}
+
 That image sits alone in its paragraph, so it is set as a block of its own and
-it scales down to the column. An image with text beside it stays in the line
-instead, the way this check mark ![a check mark](check.svg) sits in this
-sentence.
+it scales down to the column. The `: ` line beneath it is a caption, and writing
+one is what turns the image into a numbered figure — so [](#fig:pipeline) points
+at it from here. A table and a code block take a caption the same way, and each
+kind counts on its own. An image with text beside it stays in the line instead,
+the way this check mark ![a check mark](check.svg) sits in this sentence, and an
+image inside a sentence is not a figure, so it takes no caption at all.
 
 The path is relative to this file, and it stays inside this file's directory.
 A URL is an error rather than a download, because nothing is fetched over the
@@ -212,8 +221,8 @@ network. So are an absolute path and a path that climbs out with a `..`
 segment, because a document and its figures travel as one folder.
 
 The text in the square brackets is alt text. It reaches the accessibility layer
-of the PDF rather than the page, so it is not a caption and nothing numbers it.
-Leave it empty and the image carries none.
+of the PDF rather than the page, so it is never the caption and nothing numbers
+it. Leave it empty and the image carries none.
 
 Eight formats work: png, jpg, jpeg, gif, webp, svg, svgz, and pdf. The
 extension decides which one a file holds, so bytes that disagree with the name
