@@ -123,8 +123,8 @@ the one thing an unsigned bundle cannot do.
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
-constructs, links, cross-references, tables, images, captions, footnotes, strikethrough,
-and math in both its forms**:
+constructs, links, cross-references, tables, images, captions, figure groups, footnotes,
+strikethrough, and math in both its forms**:
 
 ````markdown
 # Introduction
@@ -346,6 +346,48 @@ Only a standalone image takes a caption; an image inside a sentence is not a fig
 text, unchanged. Two things are errors, each naming the line: a `: ` with nothing after
 it, and a second caption under one block.
 
+## Figures with more than one member
+
+Two images side by side, under one caption and one number, are a **group**. Wrap them in
+a pair of `:::` lines and put the caption last, just above the closing one:
+
+```markdown
+:::
+
+![The first step](figures/one.svg)
+
+![The second step](figures/two.svg)
+
+: The two halves of the pipeline. {#fig:halves}
+
+:::
+```
+
+That is *Figure 1* once, not twice — the members share the caption, the number and the
+name, so `[](#fig:halves)` points at the pair. A group takes the three things a caption
+takes: a standalone image, a table and a code block. Write as many as you like; they
+sit in one row, and how far apart is the look's business.
+
+**A word after the opener is yours, and `md2pdf` does not read it.** `::: figure` and
+`::: table` are both fine and both mean the same thing, because the kind comes from what
+the members are — two tables are a *Table* whatever you opened them with.
+
+**`:::` at the start of a paragraph is reserved.** Everywhere else it is ordinary text:
+inside a sentence, on the second line of a paragraph, and inside a code block, which is
+how the example above is written. Leave the blank lines in — a `:::` and the image under
+it with no blank line between them are one paragraph, not a group, and `md2pdf` says so
+rather than guessing.
+
+Eight things are errors, each naming the line: a group with no caption, one with no
+member, a second `: ` line, a `: ` line with a member after it, a `:::` inside a group, a
+group you never close, a paragraph starting `:::` that is neither an opener nor a closer,
+and anything between the members that is not one of the three:
+
+```console
+$ md2pdf paper.md
+error: unsupported markdown construct 'figure group with no caption' at line 12
+```
+
 ## Naming a figure or an equation, and pointing at it
 
 End a caption with `{#name}` to name the figure it makes, then write `[](#name)` to point
@@ -499,8 +541,9 @@ contract to meet: export `template` and `divider`, and let `template` take `titl
 `md2pdf` names all five on every call.
 
 Everything else a look decides, it decides over Typst's own elements with `show` and `set`
-rules, taking no argument at all. A table's header row, a code block's font and a figure's
-caption all reach a look that way — which is why a caption added no sixth argument.
+rules, taking no argument at all. A table's header row, a code block's font, a figure's
+caption and the space between a group's members all reach a look that way — which is why
+neither a caption nor a group added a sixth argument.
 
 ## Licence
 

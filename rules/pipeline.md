@@ -13,12 +13,13 @@ covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the two walks footnotes need, the image asset
   channel, the caption that makes an image, a table or a code block a figure and
-  the splice that attaches it, the name a caption or a display equation declares and
+  the splice that attaches it, the `:::` group that makes several of them one figure,
+  the name a caption or a display equation declares and
   the reference that points at it, the LaTeX subset a formula may hold and the prelude
   it compiles against, the bundled looks and the call contract they meet, the equation numbering
   the author asks for and the look formats, the heading anchors a compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 580
+max_lines: 625
 generated: 2026-08-18
 ---
 
@@ -43,11 +44,11 @@ wanting only the PDF pays nothing for the anchors and gets byte-identical output
 
 ## The dialect
 
-Twenty-one things are supported: headings at levels 1–6, paragraph text, soft breaks,
+Twenty-two things are supported: headings at levels 1–6, paragraph text, soft breaks,
 emphasis, strong emphasis, strikethrough, inline code, math in both its forms, hard line
-breaks, thematic breaks, links, cross-references, images, captions, bullet lists, ordered
-lists, code blocks, block quotes, pipe tables, footnotes, and a leading YAML frontmatter
-block. Heading levels map to Typst headings of the same level.
+breaks, thematic breaks, links, cross-references, images, captions, figure groups, bullet
+lists, ordered lists, code blocks, block quotes, pipe tables, footnotes, and a leading
+YAML frontmatter block. Heading levels map to Typst headings of the same level.
 
 The inline constructs reach Typst as function calls, not as its own markup.
 `#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
@@ -146,7 +147,9 @@ either walk's territory, still surfaces where it stands.
 **Everything else is an error** — raw HTML and a task list marker.
 `core/src/emit.rs:describe` names the construct, `Error::UnsupportedConstruct` carries
 that name with the 1-based line, and the CLI prints it to stderr and exits 1. Nothing is
-dropped or flattened silently.
+dropped or flattened silently. The caption, group and link refusals below carry the same
+error with a name built where they stand rather than through `describe`, which names only
+what the walk rejects wholesale.
 
 Every arm of `describe` is reachable, which is a property rather than an accident: a name
 refuses nothing until a parser option produces the event it names, and
@@ -268,6 +271,7 @@ block with a caption beneath it becomes `#figure(image(…), caption: […])`,
 `#figure(table(…), caption: […])` or `#figure(raw(…), caption: […])`, and Typst reads the
 kind from the body it was handed: three supplements and three independent counters —
 *Figure 1*, *Table 1*, *Listing 1* — with nothing configured and no format written here.
+A `:::` group is the fourth place a caption attaches, and the section below holds it.
 Nothing else in the dialect takes a caption; a display equation takes a name without one.
 
 **The caption is what makes a figure.** An uncaptioned construct is written exactly as it
@@ -317,8 +321,9 @@ the flush timing is load-bearing for `core/src/emit.rs:Walk::finish`, for
 the two `'\n'` the paragraph arms pushed for a paragraph that is consumed rather than
 printed. `core/src/emit.rs:Figure::live` verifies the point where it is spent rather than
 clearing it from the walk's other arms — same frame depth, same recorded call, only
-separator newlines after it — which holds because every other write into a `bufs` frame is
-an append. Its `captioned` flag is the one thing those three checks cannot supply: a
+separator newlines after it — which holds because every write into a `bufs` frame that is
+not one of this file's two truncates is an append; `core/src/emit.rs:close_group` is the
+other one. Its `captioned` flag is the one thing those three checks cannot supply: a
 spliced region carries `#figure(…)`, which the content check accepts.
 
 The caption's content is walked as inline markdown into a frame on the same buffer stack a
@@ -329,6 +334,44 @@ each an `UnsupportedConstruct` naming the author's line: a marker with no text, 
 would put a bare "Figure 1:" on the page, and a second caption for one figure. Both read
 the same over a table and a code block, the second included: a captioned table *is* a
 Typst `figure`, so the message names the element the emitter writes.
+
+**A figure may have more than one member, and a pair of `:::` paragraphs is what says so.**
+A caption attaches to the construct directly above it, so no arrangement of the marker
+spells "these two images are one figure". A paragraph whose whole text is `:::`, optionally
+followed by one word, opens a group; one whose whole text is `:::` closes it; and the
+closer writes `#figure(grid(columns: N, …), caption: […]) <name>` over the members, with
+`N` their count. **The word on the opener is the author's convention and the dialect does
+not read it**, because Typst infers the kind through the `grid` — two images opened
+`::: table` are a Figure. The members are the three constructs a caption reaches, and
+`core/src/emit.rs:take_member` needs no second notion of what one is: it takes a
+`core/src/emit.rs:Figure` record's `body` each time one is made while a group is open,
+and removes the call from the buffer as it does. One caption, in trailing position, and
+`{#name}` rides it as it always has.
+
+**`:::` is reserved at the first text of a paragraph and nowhere else**, on a census that
+found no line in the fixtures, samples, README or rules beginning with one. A `:::` inside
+a sentence, one later in a paragraph, and one inside a fenced or indented code block are
+untouched — the last is where a document that documents this syntax puts one. The run must
+be the whole paragraph, which `core/src/emit.rs:whole_paragraph` answers from the
+paragraph's own source span rather than by holding anything across an event. So the tight
+div — `:::` and the image under it with no blank line, which is one paragraph — is a named
+error, and **a paragraph beginning `:::` is a delimiter or a mistyped one, never prose.**
+
+**An opener and its closer sit in the same frame, not merely at the same depth.** `- :::` /
+image / `- :::` puts them in different list items and both at depth 2, so a closer that
+compared depths would truncate a frame its group never opened.
+`core/src/emit.rs:escaped_frame` retires a group where its frame is popped, at the item and
+quote arms — the only two an opener's paragraph can stand in — and
+`core/src/emit.rs:Walk::unclosed` refuses one left open where either walk ends, a footnote
+definition's included, since a caption inside one already works.
+
+Eight group shapes are errors, each an `UnsupportedConstruct` naming the author's line: no
+caption, no member, a second `: ` line, a `: ` line with a member after it, a `:::` inside
+a group, a group never closed, a paragraph beginning `:::` that is neither delimiter, and a
+block between the members that is not one of the three. The empty group is the one that
+would otherwise reach Typst, as `grid(columns: 0)`, and fail the compile with `number must
+be positive`, naming nothing the author would recognise. The `: `-line rule is what keeps
+subcaptions open: a marker after a member is the spelling one will want.
 
 **A caption line may end in a `{#name}` group, which names the figure that caption makes.**
 It becomes a Typst label written into the same string the record keeps —
@@ -489,18 +532,20 @@ emitter writes no format string anywhere. Typst numbers the block form alone, so
 formula takes no number and one `$$…$$` span takes one whatever it holds — a multi-line
 `aligned` derivation is numbered once, against its lines, not once per line.
 
-A caption crosses no argument at all. Each look carries `set figure.caption(…)`,
-`show figure: …` and `show figure.caption: …` of its own, reaching a Typst element the way
-both already reach `raw` and `table.cell`, so the contract stays at five. **All three
-rules are kind-agnostic in both looks** — not one `.where(kind: …)` among them — which is
-what styled and numbered a captioned table and a captioned listing the day the emitter
-first emitted one, with no look edit at all. The author
-supplies the words and asks for the treatment by writing a caption; the look decides the
-supplement, the number, the separator, the size and the side — the article separates with a
-full stop and the press release with a dash, and both set the caption beneath. The emitter
-writes no `"Figure"`, no `":"` and no `"1"` anywhere. A second test in
-`core/tests/golden_test.rs` asserts two needles per look, `show figure` and
-`figure.caption`; the position is deliberately not one of them.
+A caption crosses no argument at all, and neither does a group. Each look carries
+`set figure.caption(…)`, `show figure: set block(…)`, `show figure.caption: …` and
+`show figure: set grid(gutter: …)` of its own, reaching Typst elements the way both already
+reach `raw` and `table.cell`, so the contract stays at five. **All four rules are
+kind-agnostic in both looks** — not one `.where(kind: …)` among them — which is what styled
+and numbered a captioned table, a captioned listing and a group the day the emitter first
+emitted one, with no look edit at all. Each look answers for itself: the article separates
+the number from the words with a full stop and the press release with a dash, both set the
+caption beneath, and the two gutters differ. The gutter rule is not optional — Typst's own
+default is zero, so two members would touch. Two tests in `core/tests/golden_test.rs` hold
+these, by needles over each look's source: `show figure` and `figure.caption` for the
+caption, and `set grid(gutter:` for the gutter, which is keyed to the exact phrase because
+both looks already carry `show figure: set block(…)`. The caption's position and the
+gutter's value are deliberately not needles.
 
 The article's title block uses `place(scope: "parent", float: true)`, which lifts it out of
 the column grid so it spans the page; Typst supports that scope only together with `float`.
