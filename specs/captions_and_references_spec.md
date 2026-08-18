@@ -22,7 +22,7 @@ phases:
     by: null
   - name: "Phase 3 — labels and cross-references"
     reviewed: 2026-08-18
-    shipped: null
+    shipped: 2026-08-18
     cut: null
     by: null
   - name: "Phase 4 — equations join"
@@ -498,6 +498,27 @@ Two rules follow, and both exist because of the measurement above.
   claim this section makes is unchanged and is the one that mattered: the check
   is `core`'s, it is a single pass over declared names, and it exists so the error
   names the author's line. Phase 3's scope carries the ordering consequence.
+
+**WIDENED 2026-08-18, on shipping Phase 3: the refusals here take an error type
+of their own, and this section named none.** Every refusal in this spec until now
+was an `Error::UnsupportedConstruct`, which reads *"unsupported markdown construct
+'…' at line N"* and carries no room for a problem string. Phase 3's five cannot
+all fit it — this section requires the character-set refusal to name what it
+accepts, and "unsupported markdown construct 'name with a character outside …'"
+is that requirement met by cramming. So `core/src/lib.rs:Error` gains a `Name`
+variant carrying a line and a problem, on the argument `mpdf-004` added `Math`
+under: **the construct is a caption or a link, both of which the dialect
+supports, and what the error names is the name inside it.** Nothing about the
+seam or the checks changes, and no wrapper does either — `cli`, `app` and `web`
+all reach `Error` through `Display` alone.
+
+**And one refusal falls out of two rules that had not met.** §2 refuses a `: `
+line carrying no text; Phase 3 makes `{#name}` leave the caption. A line reading
+`: {#fig:one}` is therefore both, and the implementation tests emptiness *after*
+the group is dropped, so it is refused as a caption with no text rather than
+labelling a bare *"Figure 1:"*. That is the older rule reached through the newer
+syntax rather than a rule of its own; recorded because the gate did not name it
+and a later reader would find the case in the tests with nothing behind it.
 
 ### Why citations are not in this spec (decision, recorded)
 
