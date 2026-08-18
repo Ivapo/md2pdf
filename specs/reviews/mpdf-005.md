@@ -2,6 +2,132 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 5 only — 2026-08-18 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking. Converged **at the cap** for the second time in
+this spec's record, and for the same structural reason Phase 4 did: the round that
+would have escalated is the one that cleared.
+
+Round 2's blocker confirmed resolved — the two clauses that assigned the tight div
+opposite outcomes are gone, and the reviewer found nothing else in the phase
+reading on it either way. It also answered both questions the changelog asked, and
+one answer removed a doubt the author had planted about their own gate: **`- :::` /
+image / `:::` at column zero is a shape the parser really produces**, the closer
+landing one frame shallower than the opener, so gate (6)'s third placement has
+something to fire on rather than being a case over an impossible input.
+
+Four non-blocking, all folded, and **one of them is the sharpest finding of the
+episode even though it was not classified blocking.** `core/src/emit.rs:Figure::live`
+tests `bufs.len() == self.depth`, and depth is not frame identity: `- :::` / image /
+`- :::` puts both delimiters at **depth 2 in different frames**, so a depth-only
+implementation accepts the pair and truncates a frame it never opened — and all
+three of gate (6)'s stated placements pass under exactly that bug. `Figure` is safe
+from it only because its content check catches the rest, which a group has no
+equivalent of. The scope now says "the same frame, not merely the same depth" with
+the measurement behind it, and gate (6) carries a fourth placement whose whole job
+is to fail that implementation.
+
+The other three: the backslash escape does not reach the reservation — `\:::` arrives
+with first text `:::` because pulldown-cmark folds the escape into the same run, so
+an author escaping the marker is refused on their own line, which is recorded as the
+safe direction rather than fixed; §2's REOPENED bullet needs a dated clause at
+close-out, since it records what the tight div emits *today* and this phase changes
+it, which is the situation §2's own 2026-08-17 note was written for; and the gate
+preamble was still crediting round 1 with two cases the later rounds rewrote again.
+
+### Round 2 — Phase 5 only — 2026-08-18 — same reviewer, resumed — **NOT READY**
+
+Verdict: `NOT READY`, one blocking — **newly introduced by round 1's own fix**, the
+second time this corpus has recorded the loop doing that to itself, and this time it
+was predicted in the changelog and happened anyway.
+
+The three round-1 blockers all confirmed resolved, one of them under test: the
+reviewer injected the OQ-13 rule into both looks and ran `cargo test --workspace` —
+129 passing, `every_bundled_template_meets_the_call_contract` still at five, the
+article's pagination unmoved — then compiled a two-image group through the
+press-release look and read *"Figure 1 — Two images"* with that look's own separator.
+So "the looks move and the contract does not" is measured rather than argued.
+
+**The blocker: the reservation's carve-out and its new refusal assigned the tight div
+opposite outcomes.** `:::` / image / `:::` with no blank lines is **one paragraph**, so
+it both begins `:::` while being no valid opener (an error) and stands as a `:::`
+"among other text in a paragraph" (untouched) — and the two guesses differ on exactly
+the spelling §2 records an author reaching for first. Resolved by stating the position
+exactly — the reservation reaches a `:::` that is **the first text of its paragraph**
+and nothing else — and by taking the consequence rather than leaving it implicit: the
+tight div becomes a **named error**, which is the strongest thing the reservation buys,
+since that shape fails silently today.
+
+Five non-blocking, all accepted: a sentence round 1's fix was supposed to have killed
+was still standing four paragraphs from the paragraph that disowned it; the `columns`
+paragraph still announced OQ-13 as blocking the phase five paragraphs above OQ-13's
+resolution; **gate (8)'s needle was unnamed and the obvious one passes vacuously** —
+both looks already carry `show figure: set block(…)`, so the gate now names
+`set grid(gutter:` and says it is a test of its own rather than an extension of one
+whose name would stop describing it; the reserved position left one guess, a group
+opened inside a list item, which the scope now closes; and gate (7) said "fenced code
+block" where `core/src/emit.rs:step` serves both block kinds from one arm.
+
+### Round 1 — Phase 5 only — 2026-08-18 — fresh clean-room reviewer with repo access — **NOT READY**
+
+Round 0, asked once for this episode and answered by the author against §1: **yes.**
+The phase produces the observable, and produces a page the dialect cannot express at
+all — two figures side by side under one caption and one number, where `: ` attaches
+only to the construct immediately above it. It is the right one because the group
+takes one caption, one number and one name, which makes it a captioning want with
+arrangement as the means, and because it has a stated consumer. **Recorded rather than
+glossed: the justification shifted during drafting.** The motivation that raised it —
+source legibility — was falsified by measurement, since a div written tight is one
+paragraph and blank lines stay structural inside it, so the environment is *more*
+vertical space than the marker. The phase now rests on the capability the requester
+had listed as a "later we could even", and that is the kind of shift round 0 exists to
+notice.
+
+Verdict: `NOT READY`, three blocking and seven non-blocking. All ten adjudicated, all
+ten accepted, none rejected or deferred.
+
+**Blocker 1: the marker rule contradicted itself.** The scope opened a group on the
+first `:::` met and refused an unclosed one, while the same scope and gate (7) demanded
+a lone `:::` reach the page as prose — under the opener rule there is no such thing,
+so gates (6) and (7) could not both pass. The reviewer was right that the `: ` analogy
+does not carry: `: ` has an inert position and a group can begin anywhere. Resolved by
+making the rule honest rather than patching the gate — `:::` at the start of a
+paragraph is **reserved**, the first marker in this dialect that is, licensed by the
+census and bounded by being positional.
+
+**Blocker 2: OQ-13 was code-answerable, said it blocked the phase, and the scope and
+gate asserted the opposite of its only viable answer.** The reviewer measured both
+halves: Typst's default grid gutter is **0**, so two members touch, and a look-side
+`show figure: set grid(gutter: …)` separates them while crossing nothing. So both look
+files change and the contract stays at five — OQ-3's answer one construct further along
+— and the phase stopped hedging its own scope and gate on an open question.
+
+**Blocker 3: an empty group reached Typst.** `:::` / `: A caption.` / `:::` satisfies
+every stated rule and emits `grid(columns: 0)`, measured failing with `number must be
+positive`, naming no line and no construct the author would recognise — the labelless
+failure §2's check-what-the-author-wrote decision exists to prevent, reached from
+markdown every other rule accepts. A sixth refusal, taking the list from five to seven
+with round 2's addition.
+
+Seven non-blocking, all folded. The `Figure`/`body` reuse claim was **confirmed sound**
+— `body` holds the bare call for all three constructs and is stale only after
+`captioned`, which members never are — but the reviewer measured that the group shape
+*already works today* and splices the caption onto the **second image**, so the closer
+must suppress a shipped path rather than extend one; that, the caption being held past
+`End(TagEnd::Paragraph)`, and the buffer removal are now in the scope. §2's append-only
+claim gains its second exception and its "nowhere else in the dialect" gains one
+position, both as dated notes. §4's preamble was stale at four phases. Near-miss
+markers (`::::`, `::: two words`) were undecided and are now errors. And the
+unclosed-group check had no stated home, with groups inside footnote definitions
+unaddressed — it now fires where either walk ends.
+
+The reviewer also re-derived every Typst measurement §2 keys the phase to, against the
+pinned 0.15.1: a `grid` of images reads **Figure 1**, of tables **Table 1**, of `raw`
+**Listing 1**, all with no `kind:` argument; the group takes **one** count; the
+reference resolves to the group; two full-size images in `grid(columns: 2)` scale to
+fit rather than overflow. The `:::` census and the tight-div measurement both reproduce
+exactly, and `Walk.para` and the standalone test are genuinely untouched inside a group.
+
 ### Round 3 — Phase 4 only — 2026-08-18 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking. Converged at the cap, which is worth noting: this

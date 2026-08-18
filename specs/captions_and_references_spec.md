@@ -31,7 +31,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 5 — a figure may have more than one member"
-    reviewed: null
+    reviewed: 2026-08-18
     shipped: null
     cut: null
     by: null
@@ -352,6 +352,22 @@ position, and the three constructs it attaches to are the three Phases 1 and 2
 shipped. That is what keeps the marker from being a ban: a document
 that opens a paragraph with `: ` somewhere else is untouched, and the collision
 window is one paragraph in one position, which the census finds empty.
+
+**WIDENED 2026-08-18, by Phase 5's round 1: "nowhere else in the dialect" is a
+rule about where a caption *attaches*, and a group is a fourth place it can.**
+Inside a `:::` group the trailing `: ` line captions the **group**, and a `: `
+line with a member after it is an error rather than prose — so the marker's
+meaning is unchanged everywhere the census looked, and gains one position the
+census found empty. No shipped document moves, which is why this is a note and
+not §6.1 step 1 work.
+
+**And the append-only claim takes its second exception, for the same reason it
+took its first.** §2's correction above records `splice_caption`'s truncate as
+"the one write in this file that is not an append". Closing a group is a second:
+it truncates back over the members and the opener, and writes the `#figure(grid(…))`
+that replaces them. The argument is unchanged and this is again what it was for
+— the non-append writes are the ones that *spend* a record, and each updates the
+record in the same breath. `rules/pipeline.md` carries the corrected wording.
 
 **RESOLVED 2026-08-18, on drafting Phase 4: the equation never joins this list,
 and the marker stays a rule about three constructs.** OQ-10 chose the closing
@@ -1078,15 +1094,25 @@ moves neither, and Phase 1's gate names them.
   ships one caption over the group and refuses a second `: ` line inside one,
   which is what leaves this open rather than foreclosed.
 
-- **OQ-13 — who owns the space between two members?** The emitter writes
-  `grid(columns: N, …)`, and `columns` is structural: it is how many members the
-  author put in the group. The *gutter* is not — it is spacing, which §2's seam
-  gives to the look, and Typst's own default would set two images touching. The
-  candidate is a look-side `show figure: set grid(gutter: …)`, which would cross
-  nothing and match how both looks already reach `raw` and `table.cell`; the
-  alternative is a sixth thing on the look contract, which OQ-3 has held shut for
-  four phases. **Answerable from code during review.** Blocks Phase 5: a gate
-  that reads two images by eye cannot pass on a shape whose spacing is undecided.
+- **OQ-13** — ~~who owns the space between two members?~~ **RESOLVED
+  (2026-08-18), in Phase 5's round 1 and by measurement: the look owns it, with a
+  `show` rule and no argument crossing the seam — so both look files change, and
+  the contract still does not.** The round measured both halves against the
+  pinned 0.15.1: Typst's default grid gutter is **0**, so two images, two tables
+  and two `raw` blocks all *touch*; and a look-side
+  `show figure: set grid(gutter: …)` separates them, reaching a Typst element the
+  way both looks already reach `raw` and `table.cell`.
+
+  **So the contract stays at five for the fifth phase running** — OQ-3's answer
+  applied one construct further along, exactly as OQ-2's was — **but "neither
+  look changes" does not survive, and Phase 5's scope and gate are corrected
+  rather than left conditional.** A phase whose scope and exit gate both hedge on
+  an open question is not self-contained, which is what round 1 called blocking:
+  the gate reads two images by eye, and it cannot be adjudicated while the
+  spacing between them is undecided.
+
+  Each look picks its own value, as each already picks its own caption separator
+  — that is the seam, not a defect, and the two may disagree.
 
 - **OQ-14 — should an uncaptioned group be a refusal or a bare `grid`?** Phase 5
   refuses it, on §2's rule that the caption is what makes a figure: an
@@ -1120,6 +1146,11 @@ the equation left Phase 3 for one of its own, because it needs a naming syntax
 the caption line cannot carry and a numbering answer the shipped default fails.
 All four produce the observable, and the sentence above still describes the
 three that carry a caption.
+
+**A fifth was appended 2026-08-18**, on §2's reopened fenced-div decision and
+per §6.1 step 2. It is the first here whose observable is a *shape* rather than a
+treatment: the four above changed how existing content was typeset, and this one
+puts an arrangement on the page that no markdown in the dialect could ask for.
 
 ### Phase 1 — a captioned figure
 *Produces the observable: yes — a PDF with a captioned, numbered figure under an
@@ -1822,6 +1853,55 @@ measurements recorded there.
   one rule the corpus already has, applied one level up, rather than a second
   kind system.
 
+  **`:::` at the start of a paragraph is therefore reserved, and this marker is
+  the first in the dialect that is.** Round 1 was right that the `: ` analogy
+  does not carry and that a draft of this phase tried to have both: `: ` fires
+  only *after* a captionable construct, so it has an inert position the corpus
+  can be pinned on, and Phase 1 gate (4) pins it. A group can begin anywhere, so
+  `:::` has no such position — the first one met opens a group, a group the
+  document never closes is an error, and there is consequently **no such thing as
+  a lone `:::` paragraph reaching the page as prose.** A draft said there was,
+  and its gate demanded it; the two could not both hold and an implementer would
+  have had to guess which won.
+
+  **What licenses reserving it is the census and nothing else** — no line in
+  `tests/fixtures/`, `samples/`, `README.md` or `rules/` begins with `:::` — and
+  what bounds the cost is that the reservation is **positional in one exact
+  sense: it reaches a `:::` that is the first text of its paragraph, and nothing
+  else.** A `:::` later in a paragraph, a `:::` inside a sentence, and a `:::`
+  inside a fenced or indented code block are all untouched, which is where a
+  document that *documents this syntax* puts one — this repository's own README
+  included. Gate (7) is those cases rather than the impossible one.
+
+  **Stating the position that precisely is round 2's catch, and it decides the
+  one shape §2 says an author reaches for.** A div written tight —
+  `:::` / `![alt](x.png)` / `:::` with no blank lines — is **one paragraph**, so
+  a looser carve-out phrased as "a `:::` among other text in a paragraph" would
+  have called it untouched while the refusal below called it an error, and an
+  implementer would have had to guess. Its first text *is* `:::`, so the
+  reservation reaches it, and **the tight div becomes a named error** rather than
+  the `#box(image(…))` plus literal caption line §2's REOPENED bullet records it
+  emitting today. That is the strongest thing the reservation buys: the spelling
+  an author reaches for first stops failing silently and starts naming its own
+  line.
+
+  **A paragraph that begins `:::` and is neither a valid opener nor a valid
+  closer is an error naming its line** — `::::`, `::: two words`, `:::x`. Left as
+  prose they would print a mistyped delimiter onto the page and silently drop the
+  group the author meant, which is the drop §2 exists to refuse; and a reserved
+  position that is reserved for some spellings and not others is a rule no author
+  can hold.
+
+  **The backslash escape does not reach this, and that is recorded rather than
+  fixed.** Round 3 measured it against the marker that already behaves this way:
+  `\: A caption.` beneath an image emits exactly what the unescaped line emits,
+  because pulldown-cmark folds the escape into the same text run. So `\:::` at
+  the start of a paragraph arrives with first text `:::` and is refused, and an
+  author escaping the marker to mean it literally is told so on their own line.
+  That is the safe direction — a named error rather than a silent drop — and the
+  code-block hatch gate (7) rests on is untouched, which is where a document that
+  documents this syntax puts one.
+
   **The members are the captionable constructs the group holds** — a standalone
   image, a table, a fenced or indented code block, which are Phases 1 and 2's
   three. **The mechanism is the one those phases shipped**:
@@ -1834,8 +1914,9 @@ measurements recorded there.
   ```
 
   where `N` is how many members the author wrote. **`columns` is structural and
-  the gutter is not** — OQ-13 carries who owns the space between two members, and
-  it blocks this phase.
+  the gutter is not** — the emitter writes the first and never the second, and
+  OQ-13 resolved who owns the space between two members: the look does, with a
+  `show` rule and nothing crossing the seam.
 
   **One caption, in trailing position, and `{#name}` rides it as it always has.**
   The `: ` line must be the last block before the closer; a `: ` line anywhere
@@ -1845,31 +1926,87 @@ measurements recorded there.
   have to take it back later.
 
   **Nothing about a single construct changes.** A captioned image outside a group
-  is the `: ` marker and the splice Phase 1 shipped, byte for byte; `:::` outside
-  a group is the ordinary paragraph the census found it to be; and the reference
-  spelling is Phase 3's `[](#name)` unchanged, because a group is a figure and a
-  figure is what `#ref` already resolves. **No new syntax for the name and none
+  is the `: ` marker and the splice Phase 1 shipped, byte for byte, and the
+  reference spelling is Phase 3's `[](#name)` unchanged, because a group is a
+  figure and a figure is what `#ref` already resolves. **No new syntax for the name and none
   for the reference**: if this phase needs either, §2's carrier was chosen
   wrongly.
 
-  **Five refusals, each naming the author's line**, per §2's rule that a
+  **Seven refusals, each naming the author's line**, per §2's rule that a
   construct outside the dialect is named where it was written: a group with no
-  caption line (OQ-14 records the alternative and why it is not taken); a second
-  `: ` line inside a group; a `:::` inside a group; a group the document never
-  closes; and a block inside a group that is not one of the three captionable
-  constructs. The last is the one an implementer will want to soften into
-  pass-through prose, and it is a refusal because a paragraph sitting between two
-  images inside a `grid` is content reaching a cell, which is the silent
-  re-layout §2 exists to refuse.
+  caption line (OQ-14 records the alternative and why it is not taken); **a group
+  with no member**; a second `: ` line inside a group; a `:::` inside a group; a
+  group the document never closes; a paragraph that begins `:::` and is neither a
+  valid opener nor a valid closer; and a block inside a group that is not one of
+  the three captionable constructs. The last is the one an implementer will want
+  to soften into pass-through prose, and it is a refusal because a paragraph
+  sitting between two images inside a `grid` is content reaching a cell, which is
+  the silent re-layout §2 exists to refuse.
 
-  **Neither look changes for the group itself** and the look contract stays at
-  five for the fifth phase running — unless OQ-13 resolves the other way, which
-  is the one thing in this phase that could move it. `core/src/frontmatter.rs`
-  and `core/src/emit.rs:header` are untouched, and `cli/src` and `app/src` are
-  untouched, checked as a diff as every phase here has.
+  **The empty group is round 1's catch and it is recorded because it is the one
+  that reaches Typst.** `:::` / `: A caption.` / `:::` satisfies every other rule
+  here — it closes, it has one caption, no second marker, no nesting, no
+  uncaptionable block — and emits `grid(columns: 0)`, which the round measured
+  failing the compile with `number must be positive`, naming no line and no
+  construct the author would recognise. That is the labelless failure §2's
+  check-what-the-author-wrote decision exists to prevent, reached from markdown
+  every other rule accepts.
+
+  **An opener and its closer sit in the same buffer frame — the same frame, not
+  merely the same depth.** A `:::` paragraph inside a list item or a block quote
+  opens a group, and a group not closed in the frame it opened is the
+  unclosed-group refusal rather than a closer reaching across. **Round 3 measured
+  why the distinction has to be written down**: `core/src/emit.rs:Figure::live`
+  is the model for this check and it tests `bufs.len() == self.depth`, so
+  `- :::` / image / `- :::` puts the opener in the first item's frame and the
+  closer in the second's, **both at depth 2** — a depth-only implementation
+  accepts the pair and truncates a frame it never opened. `Figure` is safe from
+  that only because its content check catches the rest, and a group has no
+  equivalent, so the frame itself is what a group's record must be keyed to.
+
+  **The unclosed check runs where a walk ends, which is both walks.**
+  `core/src/emit.rs:emit` runs `check_references` after its loop and
+  `core/src/emit.rs:collect_definitions` ends a definition's region at
+  `Event::End(TagEnd::FootnoteDefinition)` through `core/src/emit.rs:Walk::finish`
+  — so a group left open in a footnote definition is reachable, per OQ-7's
+  finding that a caption inside one already works, and the refusal has to fire in
+  both places rather than only after the document walk.
+
+  **The closer suppresses a shipped path rather than extending one, and round 1
+  measured what happens if it does not.** Today `:::` / image / image /
+  `: A caption. {#fig:pair}` / `:::` already emits both `:::` lines verbatim and
+  splices the caption onto the **second image** — the delimiters are ordinary
+  paragraphs and the member is the last recorded construct. So the group must
+  hold its caption past `Event::End(TagEnd::Paragraph)` instead of letting it
+  reach `core/src/emit.rs:splice_caption`, and must remove from the buffer both
+  the delimiter paragraphs and the member calls already written into it. That
+  removal is the second non-append write in the file, which §2 now records.
+
+  **Reconciliation is named here because one of its three artifacts is a
+  decision statement rather than a description.** `rules/pipeline.md` and
+  `README.md` are corrected outright, as every phase here has corrected them. But
+  §2's own REOPENED bullet records the tight div emitting `#box(image(…))` plus a
+  literal caption line, which is true of the emitter this phase is argued from
+  and false of the one it ships — so it takes a dated clause pointing here, on
+  the same ground §2's WIDENED note of 2026-08-17 took one: a later reader
+  re-deriving the measurement would find it false with no way to tell an omission
+  from a regression.
+
+  **Both looks gain exactly one rule and the contract still stays at five**, per
+  OQ-13's resolution: Typst's default grid gutter is `0`, so two members would
+  touch, and each look separates them with a `show figure: set grid(gutter: …)`
+  of its own — a `show` rule over an element the emitter emits, which is how both
+  already reach `raw` and `table.cell`. Each picks its own value, as each already
+  picks its own caption separator. `core/src/frontmatter.rs` and
+  `core/src/emit.rs:header` are untouched, so nothing crosses the seam, and
+  `cli/src` and `app/src` are untouched, checked as a diff as every phase here
+  has.
 
 - **Exit gate:** nine cases. The two that carry the phase are (2) and (3); (5) is
-  the one that keeps a later phase possible.
+  the one that keeps a later phase possible, and (6) and (7) are the two the
+  rounds rewrote twice over — one for a refusal that reached Typst, one for a
+  case that could not have passed, and both again for the tight div they had
+  landed on opposite sides of.
 
   (1) **A new fixture carrying a group of two images with one caption and one
   name, and a reference to it**, matches its golden and compiles to a PDF with
@@ -1899,28 +2036,65 @@ measurements recorded there.
   not 1, 2, 4 — which is what pins that the members did not each take a count.
   Read by eye with (2), because no golden can see a counter.
 
-  (5) **A `: ` line after a member, inside a group, is refused naming its line.**
+  (5) **A `: ` line with a member after it, inside a group, is refused naming its
+  line** — the group's own caption is the last block before the closer, so the
+  case is a marker that is *not* last, which is what distinguishes it from (1).
   **This is the case that costs nothing now and keeps OQ-12 open**: it is the
   exact spelling a subcaption will want, so a phase that let it reach the page as
   prose would ship a meaning it would later have to take back — which §6.1 step 1
   says is never a phase.
 
-  (6) **The other four refusals, each naming the author's line**: a group with no
-  caption; a `:::` inside a group; a group the document never closes; and a
-  paragraph of prose between two members.
+  (6) **The other six refusals, each naming the author's line**: a group with no
+  caption; **a group with no member**, which is the one that otherwise reaches
+  Typst as `grid(columns: 0)` and fails the compile with `number must be
+  positive`, naming nothing; a `:::` inside a group; a group the document never
+  closes, asserted **in the document body, inside a footnote definition, and
+  opened inside a list item and left to close outside it, and opened in one list
+  item and closed in the next** — the first two because the two walks end
+  separately, the third because a closer that reached across frames would
+  truncate a frame it did not open, and **the fourth because it is the one a
+  depth-only check accepts**: round 3 measured both delimiters landing at depth 2
+  in different frames, so the other three placements all pass under an
+  implementation that compares depths and this one does not; a paragraph beginning
+  `:::` that is neither a valid opener nor a valid closer — `::::`,
+  `::: two words`, **and the tight div**, whose one paragraph begins `:::` and
+  is no valid opener; and a paragraph of prose between two members.
 
-  (7) **The marker is not a ban.** A `:::` paragraph outside any group reaches
-  the page as the ordinary prose the census found — unchanged, and with no error.
-  An implementer who refuses `:::` everywhere passes (6) and fails here.
+  (7) **The reservation reaches the first text of a paragraph and nothing else,
+  and these are the positions it does not reach.** A `:::` inside a sentence, a
+  `:::` standing later in a paragraph whose first text is something else, and a
+  `:::` inside a **fenced or indented** code block all reach the page unchanged
+  and raise nothing — both block kinds, since `core/src/emit.rs:step` serves them
+  from one arm, which is the argument Phase 2's scope made about captions. The
+  code-block case is the load-bearing one: it is where a document that documents
+  this syntax puts a `:::`, and this repository's own README will.
 
-  (8) **Everything shipped is unchanged.** A captioned image, table and code
-  block outside a group are byte-for-byte what Phases 1 and 2 emit;
-  `cargo test --workspace` passes with **no shipped golden file changed**; and
-  `cli/src`, `app/src`, `core/src/frontmatter.rs`, `core/src/emit.rs:header` and
-  both look files are untouched, checked as a diff.
-  `core/tests/golden_test.rs:every_bundled_template_meets_the_call_contract` is
-  unchanged at five arguments — unless OQ-13 moved it, in which case that
-  movement is the phase's own and is argued where it happens.
+  **This gate replaces a case a draft of this phase could not have passed** — it
+  demanded a lone `:::` paragraph reach the page as prose, which the opener rule
+  makes impossible, since the first one met opens a group and an unclosed group
+  is (6)'s error. **And the tight div is on the other side of it**: `:::` /
+  image / `:::` with no blank lines is one paragraph whose first text is `:::`,
+  so it is (6)'s error and not this case, which is the pair round 2 found a draft
+  assigning both ways at once.
+
+  (8) **Everything shipped is unchanged, and the two looks change by exactly one
+  rule each.** A captioned image, table and code block outside a group are
+  byte-for-byte what Phases 1 and 2 emit; `cargo test --workspace` passes with
+  **no shipped golden file changed**; and `cli/src`, `app/src`,
+  `core/src/frontmatter.rs` and `core/src/emit.rs:header` are untouched, checked
+  as a diff. `core/tests/golden_test.rs:every_bundled_template_meets_the_call_contract`
+  is unchanged at five arguments, which is OQ-13's resolution held as a test: the
+  looks move and the contract does not. **Both looks carry the new rule**,
+  asserted over their sources by a needle test walking
+  `core/tests/golden_test.rs:BUNDLED_TEMPLATES`, the instrument Phase 1 gate (6)
+  used. **The needle is `set grid(gutter:` and not `show figure`** — round 2
+  measured that both looks already carry `show figure: set block(…)`, so a test
+  keyed to the looser phrase passes today, before the rule exists. **A test of
+  its own, not an extension of
+  `core/tests/golden_test.rs:every_bundled_template_styles_a_caption`**, whose
+  name would stop describing it — the same argument Phase 1 gate (6) made when it
+  refused to hang a caption assertion off the call-contract test. The gutter
+  *value* is deliberately not a needle, because it is each look's own call.
 
   (9) **`samples/article.md` does not move.**
   `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`
