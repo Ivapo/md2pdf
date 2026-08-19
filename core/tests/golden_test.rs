@@ -3137,3 +3137,28 @@ fn every_bundled_template_separates_a_figures_members() {
         );
     }
 }
+
+// -- mpdf-005 Phase 6: a listing sits where its code sits ---------------------
+
+/// Both bundled looks decide where a captioned listing sits.
+///
+/// A test of its own rather than an extension of
+/// `every_bundled_template_styles_a_caption` or of
+/// `every_bundled_template_separates_a_figures_members` — each is named for
+/// what it asserts, which is the argument Phase 1 gate (6) and Phase 5 gate (8)
+/// both made.
+///
+/// **The needle is `figure.where(kind: raw)`**, the first `.where(kind: …)`
+/// rule either look carries. The alignment's *direction* is deliberately not
+/// part of it, on the same ground the caption's position and the gutter's value
+/// are not: what a needle can hold is that each look answers the question, and
+/// where the block landed is what the by-eye read on one PDF per look is for.
+#[test]
+fn every_bundled_template_places_a_listing() {
+    for (file, source) in BUNDLED_TEMPLATES {
+        assert!(
+            source.contains("figure.where(kind: raw)"),
+            "{file} does not decide where a listing sits"
+        );
+    }
+}
