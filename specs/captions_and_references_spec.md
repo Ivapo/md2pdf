@@ -35,6 +35,11 @@ phases:
     shipped: 2026-08-18
     cut: null
     by: null
+  - name: "Phase 6 — a listing sits where its code sits"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -557,6 +562,43 @@ OQ-2's answer rather than on captions.
 no frontmatter key, so nothing crosses in Phase 2 either, and the two bundled
 looks reach a table and a listing with the rules they already carry. The sentence
 above is left standing because it was true when written.
+
+### Where a figure sits is the look's, and a listing sits flush left (decision, recorded)
+
+**APPENDED 2026-08-18, on drafting Phase 6.** The seam above says the look decides
+what a caption looks like. It says nothing about where the *body* sits, because
+until now nothing had to: `figure` centres its body, all three kinds took that,
+and Phase 2 read the consequence at its gate and let it stand.
+
+**Measured 2026-08-18 against the shipped Phase 5 binary, and the measurement is
+what reopens it.** A one-line `fn` in a fenced block sits flush left uncaptioned
+and **centred captioned** — the same code in two places in one document,
+depending only on whether it carries a number. Multi-line is worse: the block is
+centred as a unit, so its left edge lands wherever its longest line puts it,
+relating to nothing. An image and a table lose nothing to centring, which is why
+this is a rule about one kind and not about `figure`.
+
+**The rule is a look's, per kind, and needs no mechanism this spec does not
+have.** `show figure.where(kind: raw): set align(left)` returns the block to the
+position its uncaptioned twin has, and carries the caption's own alignment with
+it — one consequence rather than a second rule. Measured the same day, and two
+further facts came with it. **A group of listings takes it**, because Typst
+infers `raw` through the `grid` exactly as §2 measured for a Figure and a Table.
+**A group of mixed members does not**: an image beside a listing reads *Figure*,
+so it stays centred — which is right rather than a gap, since the argument here
+is about code's left edge and a mixed group is not code.
+
+**This is the first `.where(kind: …)` rule either bundled look carries**, and
+that is the cost worth naming: `rules/pipeline.md` states kind-agnosticism as a
+property of the looks, and Phase 6 corrects it rather than quietly falsifying it.
+OQ-2 already put per-kind decisions in the look, and OQ-9 already priced one; this
+is the first to be taken.
+
+**Both looks take it, and that is not the seam collapsing.** Each still decides
+for itself, and here they agree — as they already agree on `(1)` for an equation's
+number and disagree on a caption's separator. The argument is about how code is
+read, not about house style, so a third look that centred its listings would be
+choosing something rather than inheriting it.
 
 ### Why the check is on what the author wrote (decision, recorded)
 
@@ -1166,6 +1208,13 @@ per §6.1 step 2. It is the first here whose observable is a *shape* rather than
 treatment: the four above changed how existing content was typeset, and this one
 puts an arrangement on the page that no markdown in the dialect could ask for.
 
+**A sixth was appended 2026-08-18**, after Phase 5 shipped, on §2's alignment
+decision and per §6.1 step 2. It is the first here that changes **no markdown at
+all**: the five above each widened what a document could say, and this one leaves
+the dialect exactly where it stood and moves a look. It is also the first to
+reverse something a shipped gate read and accepted, which its own step-1 argument
+and Phase 2's dated note between them account for.
+
 ### Phase 1 — a captioned figure
 *Produces the observable: yes — a PDF with a captioned, numbered figure under an
 image, which is what a document that shows something needs in order to talk
@@ -1413,6 +1462,15 @@ captions and their own counters.*
     rather than a regression — gate (2) protects every uncaptioned block — but it
     is the most visible thing this phase does to a page and it would otherwise
     ship unremarked;
+
+    **CORRECTED 2026-08-18, on drafting Phase 6: this read the page correctly and
+    accepted the wrong thing, and Phase 6 reverses it.** A captioned listing is
+    set flush left in both bundled looks from that phase on, so the sentence above
+    is true of the looks Phase 2 shipped and false of the ones that stand. What it
+    got right is why it is quoted rather than deleted — it is the only place in
+    the spec that noticed the move at all, and noticing it unremarked is what made
+    the reversal cheap. Recorded here because a later reader re-deriving this
+    would find it false with no way to tell an omission from a regression.
   - **the caption reads under the block it names**, not under the one after it,
     and each block keeps the space around it that an uncaptioned one has. Round 2
     was right that this is *not* the separator asymmetry seen from the page —
@@ -2114,6 +2172,92 @@ measurements recorded there.
   `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`
   passes unchanged, since the sample carries no `:::` and nothing in it is a
   group.
+
+### Phase 6 — a listing sits where its code sits
+*Produces the observable: yes — a PDF whose captioned code block stands where its
+uncaptioned twin stands, which is the position code has to be read in. It is the
+smallest observable this spec has produced and the only one that takes something
+off the page rather than putting something on it.*
+
+**Drafted 2026-08-18**, on §2's alignment decision above, and appended per §6.1
+step 2. **Step 1 is worked rather than assumed, because this phase reverses
+something a shipped gate accepted.** It removes no phase and un-builds no
+capability: a captioned code block is still `#figure(raw(…), caption: […])` and
+still a numbered *Listing*, the emitter is untouched, and what moves is a look —
+which §2's seam has assigned to the look since Phase 1, which OQ-2 confirmed for
+per-kind decisions, and which OQ-9 already priced one instance of. A change no
+look could ever make would make the seam a fiction. What step 1 *does* owe is the
+dated note on Phase 2's gate (8), written above, since that prose becomes
+misleading.
+
+- **Scope: one rule per look, and nothing else anywhere.**
+
+  `core/assets/template.typ` and `core/assets/press-release.typ` each gain
+
+  ```
+  show figure.where(kind: raw): set align(left)
+  ```
+
+  **Nothing in `core/src` changes at all** — not `core/src/emit.rs`, not
+  `core/src/frontmatter.rs`, not `core/src/emit.rs:header`. The emitter has never
+  written an alignment and does not start; this phase is the seam being used, not
+  widened, and the look contract stays at five for the sixth phase running.
+
+  **An image and a table keep Typst's centring**, which is what a figure and a
+  table want and what nothing on the page argues with. The rule is scoped to one
+  kind because the argument is about one kind.
+
+  **The caption follows the body**, left-aligned by the same rule. That is a
+  consequence recorded rather than a second rule, and it is what a left-aligned
+  block wants under it.
+
+  **A group of listings takes the rule and a mixed group does not**, both
+  measured in §2. Typst infers `raw` through a `grid` of `raw` blocks, so Phase
+  5's shape is covered by the same rule with nothing added; an image beside a
+  listing reads *Figure* and stays centred, which this phase does not chase.
+
+  **This is the first `.where(kind: …)` rule in either look**, and
+  `rules/pipeline.md` states the opposite as a property of them — "not one
+  `.where(kind: …)` among them". Reconciliation is named here because that
+  sentence is a claim rather than a citation: it is corrected outright, along with
+  the README's `## Styling` close, which says a caption reaches a look with no
+  argument and is the natural place to say a listing's alignment does too.
+  `samples/` needs nothing — neither carries a captioned code block, measured.
+- **Exit gate:** six cases, and the first is the phase. Most of it is a diff being
+  empty, which is the strongest thing a look-only phase can assert.
+
+  (1) **Read by eye, one PDF per look — two documents**, each carrying an
+  uncaptioned listing and *the same code* captioned beneath it, multi-line so the
+  left edge is visible. Both blocks stand at the same left edge as the prose, and
+  the captioned one reads *Listing 1* under it. **This is the case the phase
+  exists for and the one no golden can see**: the emitter's bytes are identical
+  before and after, so a golden cannot tell the two apart at all.
+
+  (2) **An image and a table are still centred**, in both looks, in the same two
+  documents. An implementer who drops the `.where(kind: raw)` and left-aligns
+  `figure` passes (1) and fails here.
+
+  (3) **A group of two listings is left-aligned and a group of two images is
+  centred**, read with (1). This is §2's grid measurement held on a page, and it
+  is what shows the rule reaching Phase 5's shape with nothing added for it.
+
+  (4) **Both looks carry the rule**, asserted over their sources by a needle test
+  of its own walking `core/tests/golden_test.rs:BUNDLED_TEMPLATES`, with the
+  needle `figure.where(kind: raw)`. **A test of its own**, not an extension of
+  `core/tests/golden_test.rs:every_bundled_template_separates_a_figures_members`
+  or of `every_bundled_template_styles_a_caption` — each is named for what it
+  asserts, which is the argument Phase 1 gate (6) and Phase 5 gate (8) both made.
+
+  (5) `cargo test --workspace` passes with **no shipped golden file changed and
+  `core/src` untouched entirely**, checked as a diff, alongside `cli/src` and
+  `app/src` as every phase here has. **That is the whole claim of the phase**: an
+  alignment that reached any of those files would be the emitter deciding
+  typography, which §2 refuses.
+
+  (6) `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`
+  passes unchanged. Measured 2026-08-18: no document under `samples/` carries a
+  captioned code block, so no sample's pagination can move — which is what makes
+  this phase's blast radius exactly "documents that caption a listing".
 
 <!--
 The review record is a sibling file, not a section: it lives at
