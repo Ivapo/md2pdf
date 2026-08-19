@@ -36,7 +36,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 6 — a listing sits where its code sits"
-    reviewed: null
+    reviewed: 2026-08-18
     shipped: null
     cut: null
     by: null
@@ -584,9 +584,14 @@ position its uncaptioned twin has, and carries the caption's own alignment with
 it — one consequence rather than a second rule. Measured the same day, and two
 further facts came with it. **A group of listings takes it**, because Typst
 infers `raw` through the `grid` exactly as §2 measured for a Figure and a Table.
-**A group of mixed members does not**: an image beside a listing reads *Figure*,
-so it stays centred — which is right rather than a gap, since the argument here
-is about code's left edge and a mixed group is not code.
+**A mixed group takes the kind of its first member**, which a draft of this
+section got wrong by measuring one order and generalising: an image before a
+listing reads *Figure* and stays centred, and a listing before an image reads
+*Listing* and is left-aligned, image and all. Re-measured 2026-08-18 in both
+orders after round 1 caught it. Nothing in this phase turns on it — the rule is
+one line and no gate covers a mixed group — but it is recorded because "a mixed
+group stays centred" is the sentence a later reader would otherwise carry away,
+and it is false half the time.
 
 **This is the first `.where(kind: …)` rule either bundled look carries**, and
 that is the cost worth naming: `rules/pipeline.md` states kind-agnosticism as a
@@ -2186,9 +2191,34 @@ capability: a captioned code block is still `#figure(raw(…), caption: […])` 
 still a numbered *Listing*, the emitter is untouched, and what moves is a look —
 which §2's seam has assigned to the look since Phase 1, which OQ-2 confirmed for
 per-kind decisions, and which OQ-9 already priced one instance of. A change no
-look could ever make would make the seam a fiction. What step 1 *does* owe is the
-dated note on Phase 2's gate (8), written above, since that prose becomes
-misleading.
+look could ever make would make the seam a fiction.
+
+  **One inherited property is bent, and round 1 was right that it should be named
+  beside the argument rather than left for a reader to find.** §2 inherits
+  `mpdf-004` Phase 3's "no document's typeset output changes unless its author
+  asks" whole, and this phase moves the page of every already-written document
+  that captions a listing, without its author asking. Three things bound it and
+  none of them is a denial.
+
+  **The first bound is narrower than a draft of this paragraph claimed, and round
+  2 is why.** That draft said the property was written against the emitter. It was
+  not: `mpdf-004` Phase 3 states it as "no document's typeset output changes unless
+  its author asks, **because the default name is the one that numbers nothing**",
+  and that phase changed `core/assets/template.typ` and
+  `core/assets/press-release.typ` too. So a look *has* moved under this property
+  before — and kept it by having a key to condition on, which made its new rule
+  inert until an author set `equations: numbered`. **This phase has no such key,
+  and cannot get one**: OQ-2 refused a frontmatter key for the three `figure`
+  kinds, and OQ-9 priced the look-side per-kind alternative. That is the real
+  bound — not that looks are exempt, but that the one mechanism which kept the
+  property is unavailable here by two decisions this spec already took.
+
+  The blast radius is exactly "documents that caption a listing",
+  measured at gate (6) as no sample and no golden. And what moves is a *defect* —
+  the same code standing in two places in one document — so the author who did not
+  ask for the move did not ask for the centring either. **What step 1 owes on top
+  of this is the dated note on Phase 2's gate (8), written above**, since that
+  prose becomes misleading.
 
 - **Scope: one rule per look, and nothing else anywhere.**
 
@@ -2199,9 +2229,13 @@ misleading.
   ```
 
   **Nothing in `core/src` changes at all** — not `core/src/emit.rs`, not
-  `core/src/frontmatter.rs`, not `core/src/emit.rs:header`. The emitter has never
-  written an alignment and does not start; this phase is the seam being used, not
-  widened, and the look contract stays at five for the sixth phase running.
+  `core/src/frontmatter.rs`, not `core/src/emit.rs:header`. **The emitter writes
+  no *page* alignment for any block and does not start here**, which is the claim
+  the seam needs; it does write `align:` inside a `table` call, from the GFM
+  delimiter row, and round 1 was right that the looser phrasing overreached —
+  that argument is the author's column alignment travelling structurally, not the
+  emitter deciding where a block sits. This phase is the seam being used rather
+  than widened, and the look contract stays at five for the sixth phase running.
 
   **An image and a table keep Typst's centring**, which is what a figure and a
   table want and what nothing on the page argues with. The rule is scoped to one
@@ -2211,35 +2245,52 @@ misleading.
   consequence recorded rather than a second rule, and it is what a left-aligned
   block wants under it.
 
-  **A group of listings takes the rule and a mixed group does not**, both
-  measured in §2. Typst infers `raw` through a `grid` of `raw` blocks, so Phase
-  5's shape is covered by the same rule with nothing added; an image beside a
-  listing reads *Figure* and stays centred, which this phase does not chase.
+  **A group of listings takes the rule**, because Typst infers `raw` through a
+  `grid` of `raw` blocks — so Phase 5's shape is covered with nothing added for
+  it. **A mixed group takes its first member's kind**, per §2's re-measurement, so
+  a listing-first one is left-aligned and an image-first one is not. This phase
+  does not chase that: no gate covers a mixed group, and both outcomes are a
+  `grid` doing what its first member asks.
 
   **This is the first `.where(kind: …)` rule in either look**, and
-  `rules/pipeline.md` states the opposite as a property of them — "not one
-  `.where(kind: …)` among them". Reconciliation is named here because that
-  sentence is a claim rather than a citation: it is corrected outright, along with
-  the README's `## Styling` close, which says a caption reaches a look with no
-  argument and is the natural place to say a listing's alignment does too.
-  `samples/` needs nothing — neither carries a captioned code block, measured.
+  `rules/pipeline.md` says so three times over, which round 1 counted where the
+  draft named one. All three are claims rather than citations, so all three are
+  corrected outright: "not one `.where(kind: …)` among them"; "A look may still
+  decide per kind … **Neither bundled look does**"; and the uncaptioned-wrap
+  argument's "`figure` centres its body where a bare block sits flush left",
+  which after this phase is false for `raw` in both bundled looks — that one is
+  **qualified rather than dropped**, since the counter half of the argument
+  carries it on its own and is why an uncaptioned block is still not wrapped.
+  `README.md`'s `## Styling` close takes a clause on the same ground it took one
+  for the gutter. `samples/` needs nothing — neither carries a captioned code
+  block, measured.
 - **Exit gate:** six cases, and the first is the phase. Most of it is a diff being
   empty, which is the strongest thing a look-only phase can assert.
 
-  (1) **Read by eye, one PDF per look — two documents**, each carrying an
+  (1) **Read by eye, one PDF per look — two documents, and the gate names them
+  because round 1 was right that a by-eye read a second person cannot reproduce
+  is not a gate.** No shipped fixture carries the pair this needs:
+  `tests/fixtures/captioned_blocks.md` has a multi-line captioned listing and no
+  uncaptioned twin. So the read is over a **scratch document** carrying an
   uncaptioned listing and *the same code* captioned beneath it, multi-line so the
-  left edge is visible. Both blocks stand at the same left edge as the prose, and
+  left edge is visible, rendered once in the default look and once in a copy
+  carrying `template: press-release` — which is how Phase 2 gate (8) and Phase 5
+  gate (2) each read their two. Both blocks stand at the prose's left edge, and
   the captioned one reads *Listing 1* under it. **This is the case the phase
   exists for and the one no golden can see**: the emitter's bytes are identical
   before and after, so a golden cannot tell the two apart at all.
 
-  (2) **An image and a table are still centred**, in both looks, in the same two
-  documents. An implementer who drops the `.where(kind: raw)` and left-aligns
-  `figure` passes (1) and fails here.
+  (2) **An image and a table are still centred**, in both looks. The same scratch
+  document carries one of each, since it costs two blocks and holds the rule to
+  the one kind it is scoped to: an implementer who drops the `.where(kind: raw)`
+  and left-aligns `figure` passes (1) and fails here.
 
   (3) **A group of two listings is left-aligned and a group of two images is
-  centred**, read with (1). This is §2's grid measurement held on a page, and it
-  is what shows the rule reaching Phase 5's shape with nothing added for it.
+  centred**, read over **`tests/fixtures/groups.md`**, which Phase 5 shipped
+  carrying both — so this case needs no new **content**, though reading the second
+  look still wants the `template: press-release` copy gate (1) describes. It is
+  §2's grid measurement held on a page, and what shows the rule reaching Phase 5's
+  shape with nothing added for it.
 
   (4) **Both looks carry the rule**, asserted over their sources by a needle test
   of its own walking `core/tests/golden_test.rs:BUNDLED_TEMPLATES`, with the

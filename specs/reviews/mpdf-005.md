@@ -2,6 +2,85 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 6 only — 2026-08-18 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, nothing newly found. Converged **inside the cap**,
+which is the first time in this spec's record that a phase has — Phases 4 and 5
+each converged on the third round because the round that would have escalated was
+the one that cleared, and this one had zero blocking findings from round 1 onward.
+
+Both round-2 points confirmed in the files. The reviewer also declined the one
+thing the changelog offered to escalate: a first-member clause in `README.md` and
+`rules/pipeline.md` "would add information, not repair a falsehood", since neither
+document asserts anything about a mixed group, so §6.1's rule that a phase corrects
+the prose it makes misleading does not reach them. Recorded because the author
+raised it as a possible blocker and the answer is a boundary worth keeping.
+
+### Round 2 — Phase 6 only — 2026-08-18 — same reviewer, resumed — **READY**
+
+Verdict: `READY`, zero blocking, one non-blocking — and **the non-blocking one
+falsified a claim the author had just written into the spec**, which is the round's
+whole value.
+
+Fix 5 of round 1 had bounded the inherited-property argument with "the property was
+written against the emitter". It was not. `mpdf-004` Phase 3 states it as "no
+document's typeset output changes unless its author asks, **because the default name
+is the one that numbers nothing**", and that phase's own scope changes
+`core/assets/template.typ` and `core/assets/press-release.typ` as well as the
+emitter. So a look **has** moved under this property before, and kept it by having a
+key to condition on that left its new rule inert until the author set
+`equations: numbered`. The bound is now the narrower true one: this phase has no such
+key and cannot get one, because OQ-2 refused a frontmatter key for the three `figure`
+kinds and OQ-9 priced the look-side per-kind alternative. Folded in as a correction
+with the falsified draft quoted, rather than swapped silently.
+
+Also folded: gate (3) said `tests/fixtures/groups.md` needs "no new document at all,
+in either look", where reading the second look still wants gate (1)'s
+`template: press-release` copy — now "no new **content**".
+
+The round verified the other four round-1 fixes in the files and endorsed the one
+judgement call among them: qualifying rather than dropping `rules/pipeline.md`'s
+"`figure` centres its body where a bare block sits flush left" preserves two readings
+a deletion would lose — the clause stays true for `image` and `table` in every look,
+and for `raw` in any look without the new rule.
+
+### Round 1 — Phase 6 only — 2026-08-18 — fresh clean-room reviewer with repo access — **READY**
+
+Verdict: `READY`, zero blocking, five non-blocking — all five accepted and folded,
+none rejected, none deferred.
+
+**Round 0 — is this the right thing to build at all? Yes.** It produces the
+observable directly: a PDF whose captioned code block stands flush left, where today
+the same code sits in two places depending only on whether it carries a number. It is
+the right one because the defect was found by reading a real page rather than
+inferred, and the fix takes something off the page rather than adding a capability
+nobody asked for.
+
+**The round reproduced the phase end to end rather than trusting its measurements** —
+copied the tree, added the rule to both looks, rebuilt, and rendered before/after in
+both looks plus a two-column variant. Every load-bearing claim reproduced: the
+captioned/uncaptioned split before, the return to the prose's left edge after, image
+and table still centred, a listings group left and an images group centred, the suite
+green with no golden and no `core/src` file moving.
+
+The sharpest finding was a measurement the author had generalised from one order:
+**a mixed group takes its first member's kind**, not "Figure". Image-then-listing
+reads *Figure* and stays centred; listing-then-image reads *Listing* and goes left,
+dragging its image with it. Re-measured by the author in both orders before folding.
+Nothing in the build turns on it — no gate covers a mixed group — but "a mixed group
+stays centred" is false half the time and was about to become the sentence a later
+reader carried away.
+
+The other four, all folded: "the emitter has never written an alignment" overreached,
+since `core/src/emit.rs:table_call` writes `align:` from the GFM delimiter row — the
+claim the seam needs is that it writes no *page* alignment for a block; the
+reconciliation named one stale sentence in `rules/pipeline.md` where three go stale;
+gates (1)–(3) named no documents, where Phase 2 gate (8) had named its, and
+`tests/fixtures/captioned_blocks.md` has a captioned listing with no uncaptioned twin
+so a scratch document is needed either way, while `tests/fixtures/groups.md` already
+carries gate (3) whole; and §6.1's step-1 argument did not name the inherited
+`mpdf-004` property it bends, which round 2 then corrected again.
+
 ### Round 3 — Phase 5 only — 2026-08-18 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking. Converged **at the cap** for the second time in
