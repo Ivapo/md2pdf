@@ -66,6 +66,16 @@
   // seam again, not a disagreement to reconcile.
   show figure: set grid(gutter: 1.4em)
 
+  // Where a listing sits, decided here as everything else is. `figure` centres
+  // its body; an image and a table lose nothing to that and code loses its
+  // left edge, so a captioned block would stand where its uncaptioned twin
+  // does not. This look reaches the same answer the article look reaches, and
+  // that is not the seam collapsing: the two disagree on a caption's separator
+  // because house style is a look's to pick, and they agree here because how
+  // code is read is not. A look that centred its listings would be choosing
+  // something rather than inheriting it.
+  show figure.where(kind: raw): set align(left)
+
   // The masthead. The dateline sits above the title, where a press release
   // carries it, and the title is set flush left rather than centred, which is
   // what separates this look from the article's on the page. A document that

@@ -64,6 +64,18 @@
   // the call contract. The other bundled look picks its own value.
   show figure: set grid(gutter: 1em)
 
+  // Where a listing sits. `figure` centres its body, which is what an image
+  // and a table want and what code cannot have: the same `fn` would stand
+  // centred with a caption and flush left without one, in one document, and a
+  // multi-line block centres as a unit so its left edge lands wherever its
+  // longest line puts it. This rule returns a captioned listing to the
+  // position its uncaptioned twin holds, and the caption follows the body
+  // left with it — one consequence rather than a second rule. Scoped to `raw`
+  // because the argument is about how code is read and about nothing else; a
+  // group of listings takes it too, since Typst infers the kind through the
+  // `grid`.
+  show figure.where(kind: raw): set align(left)
+
   // The title block spans every column. `scope: "parent"` is what lifts it out
   // of the column grid, and Typst supports that only together with `float`.
   // A document with none of the three keys gets no title block at all. The
