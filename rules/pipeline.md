@@ -277,12 +277,13 @@ Nothing else in the dialect takes a caption; a display equation takes a name wit
 **The caption is what makes a figure.** An uncaptioned construct is written exactly as it
 is above, because a `#figure` with no caption prints no number and still consumes the
 counter — so the next captioned one would read "Figure 2" with no Figure 1 on the page —
-and because `figure` centres its body where a bare block sits flush left. So a caption is
-not decoration on a figure; **writing one is the whole ask**, which is why no frontmatter
-key carries it: an equation has no caption to read the ask from and needs the `equations`
-key, and these three have one. A look may still decide per kind, with a
-`show figure.where(kind: …)` rule and no argument crossing the seam. Neither bundled look
-does, so all three kinds carry their numbers in both.
+and because `figure` centres its body where a bare block sits flush left, which holds for an
+image and a table in every look and for a listing in any look that does not send one back. So
+a caption is not decoration on a figure; **writing one is the whole ask**, which is why no
+frontmatter key carries it: an equation has no caption to read the ask from and needs the
+`equations` key, and these three have one. A look may still decide per kind, with a
+`show figure.where(kind: …)` rule and no argument crossing the seam. Both bundled looks do
+so exactly once, over a listing's alignment; all three kinds carry their numbers in both.
 
 The caption is a paragraph of its own, immediately after the construct, opening `: `.
 `: ` costs nothing here — it is Pandoc's own table-caption spelling, GFM gives it no
@@ -533,19 +534,24 @@ formula takes no number and one `$$…$$` span takes one whatever it holds — a
 `aligned` derivation is numbered once, against its lines, not once per line.
 
 A caption crosses no argument at all, and neither does a group. Each look carries
-`set figure.caption(…)`, `show figure: set block(…)`, `show figure.caption: …` and
-`show figure: set grid(gutter: …)` of its own, reaching Typst elements the way both already
-reach `raw` and `table.cell`, so the contract stays at five. **All four rules are
-kind-agnostic in both looks** — not one `.where(kind: …)` among them — which is what styled
-and numbered a captioned table, a captioned listing and a group the day the emitter first
-emitted one, with no look edit at all. Each look answers for itself: the article separates
-the number from the words with a full stop and the press release with a dash, both set the
-caption beneath, and the two gutters differ. The gutter rule is not optional — Typst's own
-default is zero, so two members would touch. Two tests in `core/tests/golden_test.rs` hold
-these, by needles over each look's source: `show figure` and `figure.caption` for the
-caption, and `set grid(gutter:` for the gutter, which is keyed to the exact phrase because
-both looks already carry `show figure: set block(…)`. The caption's position and the
-gutter's value are deliberately not needles.
+`set figure.caption(…)`, `show figure: set block(…)`, `show figure.caption: …`,
+`show figure: set grid(gutter: …)` and `show figure.where(kind: raw): set align(left)` of its
+own, reaching Typst elements the way both already reach `raw` and `table.cell`, so the
+contract stays at five. **The first four are kind-agnostic in both looks**, which is what
+styled and numbered a captioned table, a captioned listing and a group the day the emitter
+first emitted one, with no look edit at all. **The fifth is the only `.where(kind: …)` rule
+in either look**: `figure` centres its body, which an image and a table want and code cannot
+have — a captioned listing would otherwise stand where its uncaptioned twin does not — so
+both looks send one back to the left edge, caption and all, and a group of listings with it.
+Each look answers for itself: the article separates the number from the words with a full
+stop and the press release with a dash, both set the caption beneath, the two gutters differ,
+and the two agree on the alignment because how code is read is not house style. The gutter
+rule is not optional — Typst's own default is zero, so two members would touch. Three tests
+in `core/tests/golden_test.rs` hold these, by needles over each look's source: `show figure`
+and `figure.caption` for the caption, `set grid(gutter:` for the gutter, which is keyed to
+the exact phrase because both looks already carry `show figure: set block(…)`, and
+`figure.where(kind: raw)` for the alignment. The caption's position, the gutter's value and
+the alignment's direction are deliberately not needles.
 
 The article's title block uses `place(scope: "parent", float: true)`, which lifts it out of
 the column grid so it spans the page; Typst supports that scope only together with `float`.

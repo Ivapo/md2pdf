@@ -542,8 +542,9 @@ contract to meet: export `template` and `divider`, and let `template` take `titl
 
 Everything else a look decides, it decides over Typst's own elements with `show` and `set`
 rules, taking no argument at all. A table's header row, a code block's font, a figure's
-caption and the space between a group's members all reach a look that way — which is why
-neither a caption nor a group added a sixth argument.
+caption, the space between a group's members and the left edge a captioned code block sits
+on all reach a look that way — which is why neither a caption nor a group added a sixth
+argument.
 
 ## Licence
 
