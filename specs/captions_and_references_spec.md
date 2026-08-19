@@ -37,7 +37,7 @@ phases:
     by: null
   - name: "Phase 6 — a listing sits where its code sits"
     reviewed: 2026-08-18
-    shipped: null
+    shipped: 2026-08-18
     cut: null
     by: null
 
