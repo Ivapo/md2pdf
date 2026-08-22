@@ -32,7 +32,12 @@ does not have.
 
 ## Try it
 
-`samples/article.md` is a ready-made document that exercises everything the tool
+**With nothing installed: [ivapo.github.io/md2pdf](https://ivapo.github.io/md2pdf/).** The
+same crate compiled to WebAssembly, converting in the page — it sets out what this dialect
+adds to markdown, and every example on it is one this repository's tests compile. Nothing
+is sent anywhere, and there is no server to send it to.
+
+Locally, `samples/article.md` is a ready-made document that exercises everything the tool
 supports. Convert it and open the result:
 
 ```console

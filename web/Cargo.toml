@@ -1,8 +1,13 @@
-# A spike, not a front end. It exists to answer three questions a browser can
-# answer and this machine cannot: whether `md2pdf-core` runs as WebAssembly at
-# all, what the module costs over the wire, and whether Safari agrees with
-# Chromium about both. It makes no design claim — the browser front end is a
-# spec nobody has written, and `mpdf-001` §1.1 parked it.
+# The browser front end, owned by `mpdf-006`. It began as a spike answering
+# three questions a browser can answer and this machine cannot — whether
+# `md2pdf-core` runs as WebAssembly at all, what the module costs over the wire,
+# and whether Safari agrees with Chromium about both — and all three still hold.
+# What changed is what it is for: `mpdf-006` promoted it to the project's front
+# door, the first place a reader meets the tool without installing anything.
+#
+# The crate keeps the name the spike gave it. `web/index.html` imports
+# `./pkg/md2pdf_web_spike.js` and the Pages workflow copies that directory
+# wholesale, so renaming it would break the published page to no end.
 #
 # **Deliberately not a workspace member.** The empty `[workspace]` table below
 # detaches it from the root workspace, so `cargo build --workspace` and

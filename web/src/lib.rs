@@ -1,8 +1,11 @@
 //! `md2pdf-core`, compiled to `wasm32-unknown-unknown` and called from a page.
 //!
 //! The crate holds no OS access by design, which `mpdf-001` §1.1 said would
-//! buy a browser build without a rewrite. This is the first thing to test that
-//! claim, and it needed no change to `core` at all.
+//! buy a browser build without a rewrite. This tested that claim and needed no
+//! change to `core` at all — and `mpdf-006` then made the page a front door
+//! rather than an experiment. **The PDF a visitor sees is the PDF the CLI
+//! writes**: `render` below calls the same `md2pdf_core::md_to_pdf`, from the
+//! same crate, byte for byte.
 //!
 //! **No image assets cross this boundary**, and that is the honest limit of the
 //! spike rather than an oversight. A browser has no filesystem, so
