@@ -8,12 +8,13 @@ covers: >
   the published browser demo: the one page and what it costs, the two exports
   that cross into WebAssembly, the list of what the dialect adds and the marked
   examples that carry it, the byte rule those examples obey and the test that
-  enforces it, the CSS that renders a script element, the button every row
-  carries and the readiness it holds, the status line the compile owns, the
+  enforces it, the CSS that renders a script element, the other column generated
+  from the same parse and the markers and substitution that carry it, the button
+  every row carries and the readiness it holds, the status line the compile owns, the
   height model and the panes beneath the list, the one image the page carries
   and the limit that remains, the engines the page has been run in, and the
   build and deploy that publish it
-max_lines: 155
+max_lines: 195
 generated: 2026-08-22
 ---
 
@@ -132,10 +133,49 @@ file is not membership.
 **A `<script>` is `display: none` in every UA stylesheet**, and the source column of every
 row is one. `script[data-example] { display: block; white-space: pre; overflow-x: auto }`
 renders it. A visible `<pre>` duplicate was refused deliberately: two copies of an example
-can differ, which is the failure the whole arrangement prevents. The comparison column
-beside it is **written by hand, never rendered** — a second markdown renderer on the one
-page claiming a single module does the work would be an unaudited dependency, and no
-implementation is entitled to be called *ordinary*.
+can differ, which is the failure the whole arrangement prevents.
+
+## The other column, and where its markup comes from
+
+**The column beside each example is generated, not written.** It is
+`core/src/lib.rs:md_to_html` over that row's own source — the same parser and the same
+`core/src/emit.rs:options`, written out by pulldown-cmark's own HTML backend instead of by
+the emitter, so it is not a second renderer but the one the page's whole claim is already
+about. It shows what this parse looks like when something other than the emitter sets it
+down: the caption marker is lost because nothing but the emitter is looking for it. The
+eleven labels read `the same parse, as HTML`. **The bytes are inlined rather than produced
+at load**, so no column sits behind the 7.8 MB and a reader with scripting off meets both
+halves of every row.
+
+**The blocks sit between `<!--html:NAME-->` and `<!--/html:NAME-->`**, keyed to the row's
+own `data-example` value. This is the one region in the page that cannot end at a closing
+tag — the `raw-html` block ends `</div>`, the `footnote` block carries a
+`<div class="footnote-definition">` — and counting opens against closes is an HTML parser
+under another name; a comment cannot nest and `push_html` emits none. **What lies between a
+pair is exactly what the generator returned**, nothing trimmed at either end, so the page
+and the test compare the same bytes by construction; `raw-html` ends without a trailing
+newline. A `div.rendered` wrapper sits outside the markers, uncompared, carrying the type
+scale four real tables, two real checkboxes, a heading, a listing and a real `<div>` need.
+
+**One substitution, and exactly one**: an image destination equal to the page's
+`data-asset` name becomes a `data:` URI over those same bytes, **percent-encoded over an
+explicit set — every byte outside ASCII letters, digits and `-._~`**. The set is named
+because the reflex is broken and the break is invisible to an equality check —
+`pulldown_cmark`'s `escape_href` leaves `#` unencoded and the SVG carries
+`stroke="#1e3c82"`, so a raw URI truncates at the fragment and renders nothing while both
+sides agree about the broken bytes. Measured 2026-08-22: 509 bytes to a 954-byte URI that
+round-trips exactly, the diagram loading at its declared `320×72`.
+
+**The generator is the test** — `core/tests/page_examples_test.rs:generated` produces a
+block, `every_generated_block_is_the_parsers_own_html` compares all eleven against the page,
+and `bless_the_generated_blocks`, `#[ignore]`d so `cargo test --workspace` skips it, writes
+them in; a generator of its own would implement the substitution twice. Three assertions
+guard it: the marker counts, that the image is named once across the eleven outputs and
+survives nowhere after substitution, and that no block holds `<script`, `data-example="`,
+`data-asset="` or `<!--` — the first three handing the file's own scans a phantom element,
+the fourth ending the delimiter early. Checked 2026-08-22 in headless Chromium **with
+JavaScript disabled**: every column rendered, the diagram visible rather than a
+broken-image box, the frontmatter row showing no keys at all.
 
 ## The one image, and the files that stay out
 
