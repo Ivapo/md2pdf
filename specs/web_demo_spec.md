@@ -11,7 +11,7 @@ last_updated: 2026-08-19
 phases:
   - name: "Phase 1 — the page says what the dialect adds"
     reviewed: 2026-08-19
-    shipped: null
+    shipped: 2026-08-21
     cut: null
     by: null
   - name: "Phase 2 — every example is one click from a PDF"
