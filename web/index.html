@@ -3,12 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>md2pdf — wasm spike</title>
+<title>md2pdf — markdown in, a typeset PDF out</title>
 <style>
-  :root { color-scheme: light dark; --line: color-mix(in srgb, currentColor 18%, transparent); }
+  :root {
+    color-scheme: light dark;
+    --line: color-mix(in srgb, currentColor 18%, transparent);
+    --dim: color-mix(in srgb, currentColor 62%, transparent);
+    --soft: color-mix(in srgb, currentColor 5%, transparent);
+  }
   * { box-sizing: border-box; }
   body {
-    margin: 0; height: 100dvh; display: grid; grid-template-rows: auto auto 1fr;
+    margin: 0;
     font: 14px/1.5 system-ui, -apple-system, sans-serif;
   }
   header { padding: 10px 14px; border-bottom: 1px solid var(--line); }
@@ -21,8 +26,73 @@
   }
   #status.bad { color: #b00020; }
   @media (prefers-color-scheme: dark) { #status.bad { color: #ff8a8a; } }
-  main { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
-  @media (max-width: 720px) { main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
+
+  /*
+    The list of what the dialect adds. It is first in the document and needs
+    nothing from the module, so a reader reads it while the 7.8 MB lands.
+  */
+  #adds { max-width: 62rem; margin: 0 auto; padding: 26px 14px 34px; }
+  #adds > h1 { font-size: 13px; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; margin: 0 0 6px; }
+  #adds > p.lede { margin: 0 0 26px; color: var(--dim); max-width: 46rem; }
+  #adds > p.lede a, .group > p a, .row p a { color: inherit; }
+
+  .group { border-top: 1px solid var(--line); padding-top: 18px; margin-top: 26px; }
+  .group > h2 { font-size: 15px; font-weight: 650; margin: 0 0 4px; }
+  .group > p { margin: 0 0 20px; color: var(--dim); max-width: 46rem; }
+
+  .row { margin: 0 0 26px; }
+  .row > h3 { font-size: 14px; font-weight: 650; margin: 0 0 3px; }
+  .row > p.says { margin: 0 0 10px; color: var(--dim); max-width: 46rem; }
+  .row > p.does { margin: 10px 0 0; }
+  .row > p.does::before { content: "→ "; color: var(--dim); }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+  .col > .cap {
+    display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--dim); margin: 0 0 4px;
+  }
+
+  /*
+    A `script` element is `display: none` in every UA stylesheet, and the left
+    half of every row below is one. This override is what renders it, so the
+    source a reader reads, the source the page will load and the source
+    `core/tests/page_examples_test.rs` compiles are one copy of one thing. A
+    visible duplicate beside it would be two copies that can differ, which is
+    the whole failure this page is built to avoid.
+  */
+  script[data-example] {
+    display: block; white-space: pre; overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+    background: var(--soft); border: 1px solid var(--line); border-radius: 4px;
+    padding: 10px 12px; margin: 0;
+  }
+  .col > .written {
+    margin: 0; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 4px;
+    color: var(--dim);
+  }
+  .col code, .row p code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  code[data-error-for] {
+    display: inline-block; white-space: pre; overflow-x: auto; max-width: 100%;
+    vertical-align: bottom; color: #b00020;
+  }
+  @media (prefers-color-scheme: dark) { code[data-error-for] { color: #ff8a8a; } }
+
+  /*
+    The panes sit beneath the list, so the page scrolls and they take a slice of
+    the viewport rather than all of it. `svh` rather than `dvh`: mobile browser
+    chrome hiding mid-scroll would otherwise resize the frame and lose the
+    reader's place in the PDF.
+  */
+  main {
+    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr);
+    height: clamp(360px, 70svh, 720px);
+    border-top: 1px solid var(--line);
+  }
+  @media (max-width: 720px) {
+    main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; height: 100svh; }
+    textarea { border-right: 0; border-bottom: 1px solid var(--line); }
+  }
   textarea {
     border: 0; border-right: 1px solid var(--line); resize: none; padding: 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
@@ -30,15 +100,282 @@
   }
   textarea:focus { outline: none; }
   iframe { border: 0; width: 100%; height: 100%; min-height: 0; }
+  noscript p { margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--line); color: var(--dim); }
 </style>
+<noscript><style>#status { display: none }</style></noscript>
 </head>
 <body>
 
 <header>
-  <b>md2pdf</b> <span>— <code>md2pdf-core</code> compiled to wasm32, converting in this page. No server.</span>
+  <b>md2pdf</b> <span>— one markdown file in, one typeset PDF out. Everything below compiles in this page. No server.</span>
 </header>
 
 <div id="status">booting…</div>
+
+<noscript><p>The two panes at the foot of this page need JavaScript. Everything above them does not.</p></noscript>
+
+<section id="adds">
+
+<h1>What this adds to markdown</h1>
+<p class="lede">Twenty-two constructs are supported and ten are shown here — the ones a
+reader cannot get from an ordinary markdown renderer. The
+<a href="https://github.com/Ivapo/md2pdf#what-the-markdown-may-contain">README</a> is the
+complete reference. Each row is the same source read two ways: what <code>md2pdf</code>
+makes of it, and what a renderer with no notion of the construct makes of it.</p>
+
+<!--
+  Every `data-example` element below is compiled by `core/tests/page_examples_test.rs`,
+  which reads this file and holds the page to the compiler. Its content is load-bearing
+  bytes: flush left, no leading or trailing newline, and no line starting with a space or
+  a tab. An indented example is a different document — and one that still compiles, so
+  nothing but that test would catch it. Do not reformat.
+-->
+
+<div class="group">
+<h2>1 · Syntax an ordinary renderer passes through as text</h2>
+<p>The marker means something here and nothing anywhere else, so the difference is on the
+page without a PDF: the other column prints it.
+<a href="https://github.com/Ivapo/md2pdf#captions">Captions</a> ·
+<a href="https://github.com/Ivapo/md2pdf#figures-with-more-than-one-member">Groups</a> ·
+<a href="https://github.com/Ivapo/md2pdf#naming-a-figure-or-an-equation-and-pointing-at-it">Names</a></p>
+
+<div class="row">
+<h3>A caption makes a figure, and numbers it</h3>
+<p class="says">A paragraph opening <code>: </code> beneath a table, an image or a code
+block is that block's caption.</p>
+<div class="cols">
+  <div class="col"><span class="cap">md2pdf</span>
+<script type="text/markdown" data-example="caption-table" data-expect="ok">| a | b |
+|---|---|
+| 1 | 2 |
+
+: The measurements.</script>
+  </div>
+  <div class="col"><span class="cap">an ordinary renderer</span>
+    <p class="written">A table, and then a separate paragraph reading
+    <code>: The measurements.</code> — the marker is ordinary text, so it prints.</p>
+  </div>
+</div>
+<p class="does"><b>Table 1</b>, set beneath the table, on a counter tables keep to
+themselves.</p>
+</div>
+
+<div class="row">
+<h3>The same marker under a code block</h3>
+<p class="says">One mechanism over three constructs, each counting on its own — so
+inserting a table above a listing does not renumber the listing.</p>
+<div class="cols">
+  <div class="col"><span class="cap">md2pdf</span>
+<script type="text/markdown" data-example="caption-listing" data-expect="ok">```rust
+fn main() {}
+```
+
+: The entry point.</script>
+  </div>
+  <div class="col"><span class="cap">an ordinary renderer</span>
+    <p class="written">A code block, and then a paragraph reading
+    <code>: The entry point.</code> beneath it.</p>
+  </div>
+</div>
+<p class="does"><b>Listing 1</b>, captioned beneath and set to the left edge, because
+code is read from where its lines begin.</p>
+</div>
+
+<div class="row">
+<h3>A pair of <code>:::</code> lines makes several blocks one figure</h3>
+<p class="says">The members share one caption, one number and one name. No arrangement of
+the <code>: </code> marker alone can say that.</p>
+<div class="cols">
+  <div class="col"><span class="cap">md2pdf</span>
+<script type="text/markdown" data-example="figure-group" data-expect="ok">:::
+
+| step | what |
+|------|------|
+| 1    | parse |
+
+| step | what |
+|------|-------|
+| 2    | typeset |
+
+: The two halves of the pipeline.
+
+:::</script>
+  </div>
+  <div class="col"><span class="cap">an ordinary renderer</span>
+    <p class="written">Two separate tables, with <code>:::</code> printed as a paragraph
+    above and below them, and the caption line as a third paragraph.</p>
+  </div>
+</div>
+<p class="does">One <b>Table 1</b> with both members side by side, taking a single number
+between them.</p>
+</div>
+
+<div class="row">
+<h3>Name a figure, and point at it</h3>
+<p class="says">End a caption with <code>{#name}</code>, then write <code>[](#name)</code>
+— a link with nothing between the brackets — to refer to it.</p>
+<div class="cols">
+  <div class="col"><span class="cap">md2pdf</span>
+<script type="text/markdown" data-example="name-and-reference" data-expect="ok">| a | b |
+|---|---|
+| 1 | 2 |
+
+: The measurements. {#tab:m}
+
+As [](#tab:m) shows, the two columns agree.</script>
+  </div>
+  <div class="col"><span class="cap">an ordinary renderer</span>
+    <p class="written">The <code>{#tab:m}</code> printed at the end of the caption
+    paragraph, and a sentence with a gap in it: <code>[](#tab:m)</code> is a link whose
+    text is empty, so there is nothing to show.</p>
+  </div>
+</div>
+<p class="does">“As <b>Table 1</b> shows…”, and it stays true — insert another table above
+it and the sentence reads <i>Table 2</i> without your touching it.</p>
+</div>
+
+<div class="row">
+<h3>Math is LaTeX, and it is checked before it is set</h3>
+<p class="says"><code>$…$</code> sets in the running text and <code>$$…$$</code> as a
+block of its own, converted in this page rather than by a service.</p>
+<div class="cols">
+  <div class="col"><span class="cap">md2pdf</span>
+<script type="text/markdown" data-example="display-math" data-expect="ok">$$
+\sqrt{x^2 + y^2} \leq |x| + |y|
+$$</script>
+  </div>
+  <div class="col"><span class="cap">an ordinary renderer</span>
+    <p class="written">Three lines of literal text — the dollars and the LaTeX between
+    them. CommonMark has no notion of math at all.</p>
+  </div>
+</div>
+<p class="does">The formula typeset as a display block, with the radical, the relation
+and the bars set as math rather than as characters that resemble it.</p>
+</div>
+</div>
+
+<div class="group">
+<h2>2 · Things markdown has no way to say</h2>
+<p>These are not markers a renderer misses. They are decisions about a printed page, and
+a page is what markdown has never had.
+<a href="https://github.com/Ivapo/md2pdf#frontmatter">Frontmatter</a> ·
+<a href="https://github.com/Ivapo/md2pdf#footnotes">Footnotes</a></p>
+
+<div class="row">
+<h3>Six frontmatter keys decide the look</h3>
+<p class="says">A leading <code>---</code> block picks one of two looks, one or two
+columns, and whether display formulas are numbered. <code>date</code> is your text and
+nothing else — <code>md2pdf</code> never reads a clock.</p>
+<div class="cols">
+  <div class="col"><span class="cap">md2pdf</span>
+<script type="text/markdown" data-example="frontmatter" data-expect="ok">---
+title: A Minimal Example
+author: Iva Po
+date: 10 August 2026
+template: article
+columns: 1
+equations: numbered
+---
+
+# Introduction
+
+Body text under a title block the markdown itself asked for.</script>
+  </div>
+  <div class="col"><span class="cap">an ordinary renderer</span>
+    <p class="written">The six lines printed as text, or — where the renderer knows the
+    convention — hidden. Neither typesets a title block, a column count or a numbering
+    scheme, because HTML has no page for them to land on.</p>
+  </div>
+</div>
+<p class="does">A centred title block, the body in one column, and every
+<code>$$…$$</code> numbered <code>(1)</code>, <code>(2)</code> down the page.</p>
+</div>
+
+<div class="row">
+<h3>A footnote lands at the foot of its column</h3>
+<p class="says">The definition may sit anywhere in the file, above or below the reference
+that cites it.</p>
+<div class="cols">
+  <div class="col"><span class="cap">md2pdf</span>
+<script type="text/markdown" data-example="footnote" data-expect="ok">A claim that needs a source[^src].
+
+[^src]: The note itself, which may hold *emphasis* and `code`.</script>
+  </div>
+  <div class="col"><span class="cap">an ordinary renderer</span>
+    <p class="written">A numbered note collected at the <i>end of the document</i>, under
+    a rule. HTML is one unbroken flow, so there is no foot of anything to put it at.</p>
+  </div>
+</div>
+<p class="does">The note at the foot of the column that carries the reference, where a
+reader's eye already is.</p>
+</div>
+</div>
+
+<div class="group">
+<h2>3 · What it refuses, on purpose</h2>
+<p>A showcase that hides its refusals is selling something. Dropping or flattening content
+would ship a PDF that lies about its source, so the compiler names what it cannot handle
+and its line — and these are the sentences it prints, checked against the compiler by the
+same test that compiles every example above.</p>
+
+<div class="row">
+<h3>Raw HTML</h3>
+<p class="says">A PDF has no <code>&lt;div&gt;</code>, and guessing what one should become
+is how a converter starts lying.</p>
+<div class="cols">
+  <div class="col"><span class="cap">md2pdf</span>
+<script type="text/markdown" data-example="raw-html" data-expect="error">A paragraph the emitter accepts.
+
+<div>a raw HTML block</div></script>
+  </div>
+  <div class="col"><span class="cap">an ordinary renderer</span>
+    <p class="written">The <code>&lt;div&gt;</code> passed straight through into the
+    output, because the output is HTML.</p>
+  </div>
+</div>
+<p class="does"><code data-error-for="raw-html">unsupported markdown construct 'raw HTML block' at line 3</code></p>
+</div>
+
+<div class="row">
+<h3>A task list</h3>
+<p class="says">Not refused forever — refused until there is a decision about what a
+checkbox looks like in print. Support arrives construct by construct.</p>
+<div class="cols">
+  <div class="col"><span class="cap">md2pdf</span>
+<script type="text/markdown" data-example="task-list" data-expect="error">- [ ] an unchecked task
+- [x] a checked task</script>
+  </div>
+  <div class="col"><span class="cap">an ordinary renderer</span>
+    <p class="written">Two checkboxes, one ticked, where the renderer knows GFM — and two
+    list items opening <code>[ ]</code> and <code>[x]</code> where it does not.</p>
+  </div>
+</div>
+<p class="does"><code data-error-for="task-list">unsupported markdown construct 'task list marker' at line 1</code></p>
+</div>
+
+<div class="row">
+<h3>A LaTeX command outside the accepted subset</h3>
+<p class="says">The dialect accepts a bounded list — the Greek letters, the relations,
+sums and integrals, <code>\frac</code>, <code>\sqrt</code>, the accents, the matrix and
+<code>aligned</code> environments. A command off it is named rather than dropped.</p>
+<div class="cols">
+  <div class="col"><span class="cap">md2pdf</span>
+<script type="text/markdown" data-example="math-refusal" data-expect="error">A formula $\includegraphics{fig.png}$ names a command outside the dialect.</script>
+  </div>
+  <div class="col"><span class="cap">an ordinary renderer</span>
+    <p class="written">The command printed as text between the dollars — or handed to a
+    math engine that quietly drops the part it does not know.</p>
+  </div>
+</div>
+<p class="does"><code data-error-for="math-refusal">math error at line 1: unsupported command '\includegraphics'</code></p>
+</div>
+</div>
+
+<p class="lede">Every sentence in red above is the sentence the command-line tool prints
+at a terminal, because it is the same <code>Display</code> over the same error, from the
+same crate compiled to WebAssembly.</p>
+
+</section>
 
 <main>
   <textarea id="text" spellcheck="false" aria-label="markdown source"></textarea>
@@ -47,10 +384,13 @@
 
 <script type="module">
 /*
-  A spike, not a front end. It answers what this machine cannot: whether the
-  crate runs as WebAssembly, what the module costs over the wire, and whether
-  Safari agrees with Chromium. It carries no images — a browser has no
-  filesystem, and that file story belongs to a spec nobody has written.
+  The browser front end, owned by `mpdf-006`. It is the first place a reader
+  meets the tool without installing anything: `render` below calls the same
+  `md2pdf_core::md_to_pdf` the CLI calls, so the PDF in the pane is the PDF the
+  command writes, byte for byte.
+
+  It carries no images — a browser has no filesystem, and that file story is
+  `mpdf-006` Phase 3's.
 */
 const text = document.getElementById('text')
 const pane = document.getElementById('pane')
