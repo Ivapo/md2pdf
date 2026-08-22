@@ -1,5 +1,6 @@
-//! The exit gate for `mpdf-006` Phase 1, grown by Phase 3: the demo page
-//! cannot claim markdown the compiler refuses.
+//! The exit gate for `mpdf-006` Phase 1, grown by Phases 3 and 4: the demo page
+//! cannot claim markdown the compiler refuses, and its other column cannot claim
+//! markup the parser does not write.
 //!
 //! `web/index.html` argues that this dialect is worth writing, and every claim
 //! it makes is an example a reader can see. **The failure this file exists to
@@ -18,13 +19,25 @@
 //! one that does. Excluding that row from the gate was refused deliberately: a
 //! row no test compiles is exactly the claim this file exists to prevent.
 //!
+//! **The column beside each example is generated here, and checked here.** Every
+//! `md2pdf` column has been compiled by this file since Phase 1; the column
+//! opposite was prose nothing checked, and three of the eleven had drifted off
+//! the baseline the page declares. Phase 4 replaced it with
+//! `md2pdf_core::md_to_html` over the same source — one parse, one set of
+//! options, pulldown-cmark's own writer instead of the emitter — stored in the
+//! page between `<!--html:NAME-->` markers. **The generator is this test**:
+//! `generated` below produces a row's block, `every_generated_block_is_the_parsers_own_html`
+//! compares it against what the page holds, and `bless_the_generated_blocks`
+//! writes it. A generator program of its own would implement the substitution
+//! twice, which is the drift the whole arrangement exists to prevent.
+//!
 //! **`web/` is deliberately not a workspace member** — its `Cargo.toml` carries
 //! an empty `[workspace]` table so `cargo test --workspace` never acquires a
 //! five-minute wasm build. Reading a file is not membership: `include_str!`
 //! compiles the bytes in, the directory stays out of the build graph, and the
 //! gate every phase already runs is what catches a page that lies.
 
-use md2pdf_core::{Asset, md_to_pdf};
+use md2pdf_core::{Asset, md_to_html, md_to_pdf};
 
 const PAGE: &str = include_str!("../../web/index.html");
 
@@ -48,6 +61,15 @@ const OPEN: &str = "<script type=\"text/markdown\"";
 /// `script[data-example] { display: block }` override, which would otherwise
 /// show a reader several lines of raw SVG.
 const ASSET_OPEN: &str = "<script type=\"image/svg+xml\"";
+
+/// What a generated block may never contain.
+///
+/// The first three would hand this file's own scans a phantom element to find —
+/// a second `<script type="text/markdown"`, a twelfth `data-example="`, a second
+/// `data-asset="` — and `<script` would also be executable content reaching the
+/// page out of an example. The fourth would break the delimiter the block is
+/// found by: an HTML comment cannot nest, so a `<!--` inside one ends it early.
+const REFUSED: [&str; 4] = ["<script", "data-example=\"", "data-asset=\"", "<!--"];
 
 struct Example<'a> {
     name: &'a str,
@@ -100,6 +122,20 @@ fn examples() -> Vec<Example<'static>> {
 /// needs to: a row naming a different file comes back `MissingImage` from
 /// `core/src/lib.rs:collect` and fails `every_ok_example_compiles`.
 fn asset() -> Asset {
+    let (attributes, content) = asset_element();
+
+    Asset {
+        path: attribute(attributes, "data-asset").to_string(),
+        bytes: content.as_bytes().to_vec(),
+    }
+}
+
+/// The asset element, as its attribute region and its content.
+///
+/// Two readers want different halves of the same element — the compiler wants
+/// the path and the bytes, the generated `data:` URI wants the media type — and
+/// one scan serves both rather than each finding the element for itself.
+fn asset_element() -> (&'static str, &'static str) {
     let start = PAGE
         .find(ASSET_OPEN)
         .expect("the page carries no asset element");
@@ -111,10 +147,16 @@ fn asset() -> Asset {
         .find("</script")
         .expect("an asset element the page never closes");
 
-    Asset {
-        path: attribute(&element[..open_end], "data-asset").to_string(),
-        bytes: element[open_end + 1..close].as_bytes().to_vec(),
-    }
+    (&element[..open_end], &element[open_end + 1..close])
+}
+
+/// The media type the page declares for its one asset.
+///
+/// Read off the element rather than spelled a second time here: it is what the
+/// `data:` URI below announces, and a URI announcing a type the page does not
+/// carry would be this file asserting something the page never said.
+fn asset_media() -> &'static str {
+    attribute(asset_element().0, "type")
 }
 
 /// One double-quoted attribute value out of a tag's attribute region.
@@ -154,6 +196,98 @@ fn expected_message(name: &str) -> &'static str {
         .expect("a `data-error-for` element the page never closes");
 
     &element[open_end + 1..close]
+}
+
+/// The bytes the page stores as one row's generated column.
+///
+/// **This region is the one place in this file that cannot end at a closing
+/// tag**, and every other scan above rests on that convention. The `raw-html`
+/// block ends `<div>a raw HTML block</div>` and the `footnote` block carries a
+/// `<div class="footnote-definition">`, so a wrapper closed by `</div>` is
+/// mis-delimited by the very rule that bought the plain string scan — and
+/// counting opens against closes is an HTML parser under another name, which the
+/// same paragraph refuses.
+///
+/// So the block sits between a pair of comments keyed to the row's own
+/// `data-example` value: a comment cannot nest, `push_html` never emits one, and
+/// the name is not written a third time. **What lies between them is exactly
+/// what `generated` returned** — nothing trimmed at either end, which is what
+/// lets the page and this file compare the same bytes by construction. A wrapper
+/// element for styling may sit outside the markers, where it is not compared.
+fn stored_html(name: &str) -> &'static str {
+    let open = open_marker(name);
+    let close = close_marker(name);
+
+    let start = PAGE
+        .find(&open)
+        .unwrap_or_else(|| panic!("no generated block for the '{name}' example"))
+        + open.len();
+    let end = PAGE[start..]
+        .find(&close)
+        .unwrap_or_else(|| panic!("the '{name}' generated block is never closed"))
+        + start;
+
+    &PAGE[start..end]
+}
+
+fn open_marker(name: &str) -> String {
+    format!("<!--html:{name}-->")
+}
+
+fn close_marker(name: &str) -> String {
+    format!("<!--/html:{name}-->")
+}
+
+/// One row's other column: the parser's own HTML over that row's source.
+///
+/// **The generator is this test.** One function produces a block, the assertion
+/// below compares it against the page, and the blessing mode writes it — because
+/// a generator program of its own would implement the substitution twice, and two
+/// implementations of one rule are the drift this whole arrangement prevents.
+///
+/// **One substitution, and exactly one.** An image destination equal to the
+/// page's asset name becomes a `data:` URI over those same bytes. The file is
+/// carried inline in the page rather than published beside it — `pages.yml`
+/// assembles the site from `web/index.html` and `web/pkg/` alone — so a verbatim
+/// destination would render a broken image on the published page while every
+/// local server showed it working: the comparison column lying about what
+/// markdown can do. Everything else is `md_to_html`'s output, byte for byte.
+fn generated(source: &str, asset: &Asset) -> String {
+    md_to_html(source).replace(
+        &destination(asset),
+        &format!(
+            "src=\"data:{},{}\"",
+            asset_media(),
+            percent_encode(&asset.bytes)
+        ),
+    )
+}
+
+/// The `src` attribute `md_to_html` writes for the page's own image.
+fn destination(asset: &Asset) -> String {
+    format!("src=\"{}\"", asset.path)
+}
+
+/// Percent-encode over an explicit set: every byte outside ASCII letters, digits
+/// and `-._~`.
+///
+/// **The set is named because the reflex is broken and the break is invisible to
+/// the assertion below.** Measured 2026-08-22: `pulldown_cmark`'s own
+/// `escape_href` leaves `#` unencoded, and the page's SVG carries
+/// `stroke="#1e3c82"` — so a raw `data:image/svg+xml,<svg…>` truncates at the
+/// fragment and renders nothing, while an equality check agrees with itself
+/// about the broken bytes. Only the browser half of the gate can see that, which
+/// is why it is told to look for the diagram rather than for a block.
+fn percent_encode(bytes: &[u8]) -> String {
+    let mut encoded = String::with_capacity(bytes.len());
+    for &byte in bytes {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(byte as char);
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    encoded
 }
 
 /// The page carries exactly the examples the phase says it does.
@@ -383,3 +517,149 @@ fn no_expected_message_needs_escaping() {
         }
     }
 }
+
+/// Every example carries one generated block, delimited by its own name.
+///
+/// The counts are asserted the way the example count is: a marker that stops
+/// matching — a renamed row, a mangled comment — fails the suite rather than
+/// silently leaving a column nothing checks, which is the state Phase 4 found the
+/// page in.
+#[test]
+fn every_example_carries_one_generated_block() {
+    assert_eq!(
+        PAGE.matches("<!--html:").count(),
+        EXPECTED,
+        "the page opens a number of generated blocks other than {EXPECTED}"
+    );
+    assert_eq!(
+        PAGE.matches("<!--/html:").count(),
+        EXPECTED,
+        "the page closes a number of generated blocks other than {EXPECTED}"
+    );
+
+    for example in examples() {
+        // A name reaching an HTML comment must hold no `--`, which closes one.
+        assert!(
+            !example.name.contains("--"),
+            "the '{}' example's name cannot key an HTML comment",
+            example.name
+        );
+        // Panics with the row named if either marker is missing.
+        stored_html(example.name);
+    }
+}
+
+/// The other column is what the parser writes for that row's own source.
+///
+/// **This is the assertion the column never had.** Every `md2pdf` column has been
+/// compiled since Phase 1 and the one beside it was prose — and measured through
+/// `md_to_html`, three of the eleven asserted behaviour these options contradict:
+/// two described the dollars printing as literal text, which `ENABLE_MATH`
+/// refuses, and one promised a rule this backend draws no `<hr>` for.
+#[test]
+fn every_generated_block_is_the_parsers_own_html() {
+    let asset = asset();
+    for example in examples() {
+        assert_eq!(
+            stored_html(example.name),
+            generated(example.content, &asset),
+            "the '{}' row's other column is not what the parser writes for its source \u{2014} \
+             regenerate with `cargo test -p md2pdf-core --test page_examples_test -- \
+             --ignored bless`",
+            example.name
+        );
+    }
+}
+
+/// The page's image is named once across the eleven outputs, and inlined there.
+///
+/// **The assertion above cannot fail on this.** A `data:` URI encoded wrongly
+/// leaves the page and the generator agreeing about bytes that render nothing, so
+/// what is checkable here is the other half: that the substitution has exactly one
+/// site, and that no raw destination survives it. A row that stopped naming the
+/// page's file, or a second that started, is caught here rather than by a reader
+/// meeting a broken image on the published page.
+#[test]
+fn the_assets_destination_is_inlined_exactly_once() {
+    let asset = asset();
+    let raw: usize = examples()
+        .iter()
+        .map(|example| {
+            md_to_html(example.content)
+                .matches(&destination(&asset))
+                .count()
+        })
+        .sum();
+    assert_eq!(
+        raw, 1,
+        "the page's image is named {raw} times across the generated columns, not once"
+    );
+
+    for example in examples() {
+        assert!(
+            !generated(example.content, &asset).contains(&destination(&asset)),
+            "the '{}' row's column still names the image file rather than carrying it",
+            example.name
+        );
+    }
+}
+
+/// No generated block carries a marker this file or the page scans for.
+#[test]
+fn no_generated_block_carries_a_marker_of_its_own() {
+    let asset = asset();
+    for example in examples() {
+        let block = generated(example.content, &asset);
+        for refused in REFUSED {
+            assert!(
+                !block.contains(refused),
+                "the '{}' row's generated column contains {refused:?}",
+                example.name
+            );
+        }
+    }
+}
+
+/// Write the eleven generated blocks into the page.
+///
+/// **Not part of the gate** — `#[ignore]` keeps it out of the
+/// `cargo test --workspace` every phase runs — and the constraint it satisfies is
+/// that a human must be able to produce the blocks without hand-writing them. It
+/// fills the region between each row's markers, which are what the page carries
+/// before there is anything to put between them.
+///
+/// Run it, then run the suite: `include_str!` compiled the old page in, so the
+/// assertion above reads the new one only after a rebuild, which changing the
+/// file is what triggers.
+///
+/// ```console
+/// $ cargo test -p md2pdf-core --test page_examples_test -- --ignored bless
+/// $ cargo test --workspace
+/// ```
+#[test]
+#[ignore = "rewrites web/index.html; run it deliberately, then run the suite"]
+fn bless_the_generated_blocks() {
+    let asset = asset();
+    let mut page = PAGE.to_string();
+
+    for example in examples() {
+        let open = open_marker(example.name);
+        let close = close_marker(example.name);
+
+        let start = page
+            .find(&open)
+            .unwrap_or_else(|| panic!("no generated block for the '{}' example", example.name))
+            + open.len();
+        let end = page[start..]
+            .find(&close)
+            .unwrap_or_else(|| panic!("the '{}' generated block is never closed", example.name))
+            + start;
+
+        page.replace_range(start..end, &generated(example.content, &asset));
+    }
+
+    std::fs::write(SOURCE, page).expect("could not write the page");
+}
+
+/// The page on disk, which `PAGE` above is a compiled-in copy of.
+const SOURCE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../web/index.html");
