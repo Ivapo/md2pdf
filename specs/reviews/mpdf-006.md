@@ -2,6 +2,95 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 3 only — 2026-08-22 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, two non-blocking. Converged inside the cap, on the
+episode's second round. All three blockers confirmed resolved **against the files**, not
+the changelog, and the reviewer checked the mechanisms rather than granting them: that a
+`<script>` of a non-JavaScript type is a data block never executed and that `pipeline.svg`
+contains no `</script`; that the asset element carries no `data-example`, so both the test's
+count assertion and Phase 1's `script[data-example] { display: block }` override ignore it
+and the reader is never shown raw SVG; and that `core/src/lib.rs:collect` iterates the
+*document's* image list, so an asset the document never names is never touched.
+
+Every literal the fixed gate is keyed to was re-derived: 10 → **11** for both `EXPECTED`
+and the `data-example="` count, **8 + 3** for the split, and 510 / 231 bytes for the two
+sample images. The reviewer also ran the built CLI over `![alt](pipeline.svg)` plus a
+caption — `#figure(image("pipeline.svg", alt: …), caption: […])`, a 7,940-byte PDF — which
+confirms **Figure 1** is the right literal for the browser half of the gate and that the
+result clears the existing `pdf.len() > 1000` assertion.
+
+**One rejection was offered and declined.** The author's argument for Chromium alone was
+put up to be rejected and the reviewer accepted it instead: reading `textContent` off a data
+block, encoding it and passing a byte array across the existing `wasm-bindgen` boundary are
+universally implemented, and Typst embeds the figure inside the module, so both engines are
+handed identical bytes. Phase 2 established the two-engine result and this phase touches no
+surface where they could diverge.
+
+Both non-blocking findings were folded rather than deferred: the older §2 block's "a new
+`web/src/lib.rs` entry point beside `render`" now says in place that the block below
+overrides it, and Phase 3's prose edit names the **opening** `#adds > p.lede`, that selector
+matching two elements.
+
+**OQ-3 is untouched and stays open.** It asks whether the phase happens at all and is
+`needs-input`; the phase gate turns on `reviewed`, so it did not affect this verdict, and
+the phase remains written to be cut with `cut` + `by: mpdf-006` losing nothing shipped.
+
+### Round 1 — Phase 3 only — 2026-08-22 — fresh clean-context reviewer with repo access — **NOT READY**
+
+**Round 0 — is this the right thing to build at all?** Yes. Phase 3 produces the observable
+and produces the one instance of it the front door cannot currently show: `md_to_pdf`
+already takes assets, so a caption over an *image* — the README's own flagship, and the only
+caption construct the page has to substitute around — reaches the pane, alongside a sentence
+that explains `Error::MissingImage` before a reader hits it rather than after. Recorded with
+the caveat the spec itself carries: OQ-3 is the human's and this loop cannot close it.
+
+Verdict: `NOT READY`, three blocking, seven non-blocking. One generalist reviewer, matching
+the two prior episodes. **No finding was rejected.**
+
+The three blockers, and what each one really was:
+
+1. **The phase named an image and never said how its bytes reach the page — and the only
+   deploy path publishes two things.** Measured: `.github/workflows/pages.yml` assembles
+   `_site` from `cp web/index.html` and `cp -r web/pkg` and nothing else, so a file dropped
+   in `web/` beside them is a 404 on the published page **while a locally-served directory
+   shows the row working**. That is a gate passing for the wrong reason, on the one claim
+   this spec exists to protect, and it would have been found by a visitor rather than by the
+   suite. Resolved with a new §2 block: the bytes go **inline in `web/index.html`** in one
+   `<script type="image/svg+xml" data-asset="pipeline.svg">`, which is also what keeps the
+   neighbouring "`pages.yml` needs no correction" claim true.
+2. **The phase did not say which caller uses the new export, and the minimal wiring breaks
+   its own flagship on the next keystroke.** The page has one compile path reached from two
+   places — the 300 ms `input` debounce and Phase 2's buttons. A second export wired into
+   the button alone would draw Figure 1 on click and answer the reader's next keystroke with
+   `no image file supplied for 'pipeline.svg' at line 1`; wired into `compile`
+   unconditionally it leaves `render` an export nothing calls. **The gate discriminated
+   between neither.** Resolved by deleting the ambiguity rather than choosing a side:
+   **there is no second export — `web/src/lib.rs:render` takes the asset.** One export, one
+   call site, both acts covered, every existing citation still true, and
+   `core/src/lib.rs:md_to_pdf`'s own contract makes it free, an asset the document never
+   names being ignored.
+3. **The gate authorised a branch that leaves the new row's claim compiled by nothing.** It
+   had offered "the test grows an asset channel of its own **or** the row is excluded by
+   name", and the two are not equal: an excluded row is a claim on the page that no test
+   compiles — §2's whole failure mode, and the frontmatter's own promise broken in the phase
+   that adds the row. Resolved by refusing the exclusion **by name**.
+
+Of the seven non-blocking findings, four are worth the record. **OQ-4 was keyed to a
+measurement that could not discriminate**: re-measured, `samples/pipeline.svg` is 510 bytes
+and `check.svg` is 231, four orders of magnitude below the module, and no threshold was
+ever going to separate them — so OQ-4 is now resolved inline on suitability instead, and the
+measurement lives in the spec rather than in a future close-out. **The "fixed name" was a
+third copy of a string**; `data-asset`'s value is now *the* path, and its agreement with the
+row's `![…](pipeline.svg)` is checked by construction, a mismatch returning `MissingImage`
+and failing `every_ok_example_compiles`. **An eleventh row makes a visible sentence false** —
+"ten are shown here" — which the test does not cover, so the prose edit is named in scope,
+with a recorded decision *not* to assert it: the count is spelled in English and a check
+would need a number-word table to say what the structural count already says. And **the gate
+had dropped Phase 2's build recipe**, though this is the first phase since the spike to
+change `web/src/lib.rs` and therefore the one where a stale `web/pkg/` shows a second person
+the old export.
+
 ### Round 2 — Phase 2 only — 2026-08-21 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, three non-blocking. Converged inside the cap, on the

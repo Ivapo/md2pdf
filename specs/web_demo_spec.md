@@ -20,7 +20,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 3 — a page-owned image, so the figure examples show one"
-    reviewed: null
+    reviewed: 2026-08-22
     shipped: null
     cut: null
     by: null
@@ -388,12 +388,56 @@ caption story goes unshown except the image itself.
 
 Phase 3 then closes it with the narrowest possible opening: **one image, owned by the
 page, not by the reader.** The page carries the bytes it already can — `samples/` holds
-`pipeline.svg` and `check.svg` — and passes them under a fixed name through a new
-`web/src/lib.rs` entry point beside `render`. **The line this does not cross is the one
+`pipeline.svg` and `check.svg` — and passes them under a fixed name. *(How, and through
+which export, was written here before anyone asked which caller would use it; the block
+below settles both and overrides this sentence.)* **The line this does not cross is the one
 `mpdf-001` §1.1 parked:** a *user's own* files reaching the compiler needs a picker, a
 persistence story and a shopping list read from `core/src/lib.rs:image_paths`, and none of
 that is here. A reader who types their own `![…]` still gets `Error::MissingImage`, and
 after Phase 3 the page says so beside the box rather than letting them find out.
+
+### How the one image reaches the page, and where its name must agree (decision, recorded)
+
+Phase 3's round 1 found that the phase named an image and never said how its bytes get to
+the reader, and the answer is not free: **`.github/workflows/pages.yml` assembles `_site`
+from `web/index.html` and `web/pkg/` only.** A file dropped in `web/` beside them is a 404
+on the published page while a locally-served directory shows the row working — a gate
+passing for the wrong reason, on the one claim this spec exists to protect.
+
+**So the bytes are inline in `web/index.html`, in one element, exactly as the examples
+are:** `<script type="image/svg+xml" data-asset="pipeline.svg">` holding the SVG source.
+Three properties follow, and each is the reason for the choice rather than a consequence.
+
+- **`pages.yml` still needs no correction**, which is what the block above claims and this
+  keeps true: the page carries everything the page needs.
+- **The name is read, not duplicated.** `data-asset`'s value *is* the path handed to
+  `core/src/lib.rs:Asset`, and the row's own `![…](pipeline.svg)` must equal it. Nothing
+  asserts that equality and nothing needs to — an `ok` row naming a different file comes
+  back `Error::MissingImage` from `core/src/lib.rs:collect` and fails
+  `every_ok_example_compiles`. One copy of one thing, checked by construction, which is
+  §2's arrangement for the examples arriving at the asset.
+- **The element obeys one half of the examples' byte rule and not the other.** No leading
+  and no trailing newline, so `textContent` in the page and the `include_str!` slice in
+  the test are the same bytes; internal indentation is unconstrained, because these bytes
+  reach Typst's image loader rather than a markdown parser whose parse depends on them.
+
+**`web/src/lib.rs:render` takes the asset, rather than a second export landing beside it.**
+The phase said "a new entry point beside `render`", written before anyone asked which
+caller would use it — and the page has one compile path reached from two places, the typing
+debounce and Phase 2's buttons. A second export wired into the button alone would draw
+Figure 1 on click and refuse it on the reader's next keystroke: the page contradicting
+itself about its own flagship. One export and one call site instead, which
+`core/src/lib.rs:md_to_pdf`'s own contract makes free — **an asset the document never names
+is ignored** — so every compile passes the page's one asset and only the row that names it
+gets an image. Every existing citation of `render` stays true and no export is left
+uncalled.
+
+**The test grows the asset channel, and excluding the row is refused by name.** The gate
+had offered either, and they are not equal: a row excluded by name is a claim on the page
+that no test compiles, which is the frontmatter's own promise broken in the phase that adds
+it. The `include_str!` that already reads the page reads the asset element too, and one
+`Asset` is passed to every example — ignored by the ten naming no image, load-bearing for
+the one that does.
 
 ### The spike's disclaimers come down, and the one property that stays (decision, recorded)
 
@@ -424,10 +468,12 @@ is for, not what it costs the suite.
   a story two specs parked, and Phases 1 and 2 stand without it — the caption rows work
   over a table and a listing. Left open deliberately: the phase is written so it can be
   cut with `cut` + `by: mpdf-006` and lose nothing already shipped.
-- **OQ-4 — which sample image, if Phase 3 runs?** *(deferred by evidence)* `pipeline.svg`
-  is the README's own flagship and an SVG costs bytes measured in kilobytes against a
-  7.8 MB module, but neither file has been measured in the page. Phase 3 measures before
-  choosing.
+- **OQ-4 — which sample image, if Phase 3 runs?** *(deferred by evidence)* **RESOLVED
+  2026-08-22: `samples/pipeline.svg`.** Both were measured — 510 bytes against
+  `check.svg`'s 231, four orders of magnitude below the module — so **the byte question
+  does not discriminate and no threshold was ever going to**; the criterion is suitability.
+  `pipeline.svg` is the README's own flagship and reads as a figure at figure size;
+  `check.svg` is a 16×16 tick.
 - **OQ-5 — does the page state browser support?** *(design call, open)* The spike exists
   partly to answer whether Safari agrees with Chromium, and the answer is not written
   down anywhere this spec can cite. Phase 1 makes no claim on the page; whoever runs the
@@ -538,16 +584,31 @@ existing pipeline compiles it to a PDF in the pane — `web/src/lib.rs:render` o
 flagship — reaches the pane for the first time. **This phase is cuttable** (OQ-3): nothing
 in Phases 1 or 2 depends on it.
 
-- **Scope:** a new entry point in `web/src/lib.rs` beside `render`, taking the page's
-  fixed asset bytes and calling `md_to_pdf` with a one-element slice instead of `&[]`;
-  the page carries one image from `samples/`, measured first (OQ-4); one new row using it;
-  and a sentence beside the textarea saying a reader's own `![…]` cannot be read here, so
-  the `Error::MissingImage` a visitor may hit is explained before they hit it. `core` is
-  not touched — `md_to_pdf` already takes assets.
+- **Scope:** three files, and §2's block above settles how they fit together.
+  `web/src/lib.rs:render` gains the page's one asset and calls `md_to_pdf` with a
+  one-element slice instead of `&[]` — **`core/src` is untouched**, since `md_to_pdf`
+  already takes assets. `web/index.html` carries the `data-asset` element, one new row
+  using it, and a sentence beside the textarea naming **the one file the page can read**,
+  so the `Error::MissingImage` a visitor's own `![…]` returns is explained before they hit
+  it. `core/tests/page_examples_test.rs` grows the asset channel — it is a `core` test and
+  not `core/src`, and naming it here is what keeps the scope honest about the files it
+  edits.
+  - **The image is `samples/pipeline.svg`** and OQ-4 is resolved rather than re-measured.
+  - **The page's own prose carries a count**, and an eleventh row makes it false: "ten are
+    shown here" becomes eleven — in the **opening** `#adds > p.lede`, which is one of two
+    elements that selector matches — and that lede is the phase's to re-read whole. **No assertion is added for it** — the count is spelled in English, so a check
+    would need a number-word table to say what the structural count already says.
 - **Exit gate:** `cargo test --workspace` passes with the new row under the Phase 1 test,
-  which needs the asset to reach `md_to_pdf` there too — so the test grows an asset
-  channel of its own or the row is excluded by name, and the phase picks one deliberately
-  rather than by accident. In a browser, the row produces a PDF with the image and its
-  numbered caption.
-- **Close-out:** `rules/web-demo.md` regenerated; `web/src/lib.rs`'s module doc corrected
-  in place, since this is the phase that answers the question it parks. One push.
+  which now hands every example the page's asset. Three literals move together and each is
+  derived from the page rather than asserted from memory: `EXPECTED` becomes **11**, the
+  `data-example="` count becomes **11**, and the accepted/refused split becomes **eight and
+  three** — which, as in Phase 2, is re-derived from the page and pinned by no test. In a
+  browser: **the module must be rebuilt**, this being the first phase since the spike to
+  change `web/src/lib.rs` — `wasm-pack build --target web --release` in `web/`, served over
+  HTTP, since `web/pkg/` is gitignored and an ES-module import fails from `file://` — and
+  the new row draws a PDF carrying the image above the literal caption **Figure 1**.
+  **Chromium alone is enough**: Phase 2 answered the two-engine question, and passing bytes
+  through an existing call path touches no browser API the two could disagree about.
+- **Close-out:** `rules/web-demo.md` regenerated, carrying the asset channel and the one
+  file the page can read; `web/src/lib.rs`'s module doc corrected in place, since this is
+  the phase that answers the question it parks. One push.
