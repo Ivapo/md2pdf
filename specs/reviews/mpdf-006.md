@@ -2,6 +2,92 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 2 only — 2026-08-21 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, three non-blocking. Converged inside the cap, on the
+episode's second round. Both blockers confirmed resolved **against the files**, not the
+changelog.
+
+The reviewer re-derived every literal the fixed gate is keyed to and confirmed each has a
+stated method that reproduces it: 10 `class="row"`, 10 `data-example="`, 7 `ok`, 3 `error`,
+and 3 `<code data-error-for="…">` naming `raw-html`, `task-list` and `math-refusal`. It
+also verified by diff that **the only change Phase 1 made to the module script was its
+comment block** — `compile`, `draw`, `boot` and both status writes are byte-identical to
+the spike — which is what makes the two blockers below land on Phase 2 rather than on work
+already shipped.
+
+One correction the author made to their own fix is recorded because the next round should
+be able to trust it: folding the findings in keyed the gate to *seven and three*, and the
+first draft claimed `core/tests/page_examples_test.rs` "holds that split". **It does not.**
+Read test by test, it pins the total at ten (`EXPECTED`), asserts each `data-expect` is
+`ok` or `error`, and asserts set equality between the refusals and the `<code
+data-error-for>` elements — no test asserts a cardinality of either subset. The gate now
+says so and marks the split as re-derived from the page rather than asserted anywhere.
+This is §3's "a fix can introduce a blocker" arriving on schedule.
+
+All three non-blocking findings were folded rather than deferred: `last_updated` bumped to
+2026-08-21; the Safari/Chromium result moved out of the review record and into
+`rules/web-demo.md`, on the argument that a fact about how the published page behaves is a
+`rules/` fact while the review record answers what a review found; and the two loose ends
+of the status line's new job named in scope — an empty `#status` still paints its padding
+and rule, and the page stops calling `web/src/lib.rs:anchors`, which is `mpdf-003` Phase
+6's export and **stays** whatever the page does with it.
+
+### Round 1 — Phase 2 only — 2026-08-21 — fresh clean-context reviewer with repo access — **NOT READY**
+
+**Round 0 — is this the right thing to build at all?** Yes, and it is the phase that
+redeems the one before it. Phase 2 produces the observable — a click compiles the row's own
+source through `web/src/lib.rs:render` over `core/src/lib.rs:md_to_pdf`, the same bytes the
+CLI writes — and Phase 1's own round 0 recorded that its value was *conditional on Phase 2
+following*, since a static list is something a README could carry. This is that phase.
+
+Verdict: `NOT READY`, two blocking, nine non-blocking. One generalist reviewer.
+
+**Both blockers are one class of problem: the phase was written before Phase 1 existed, and
+two of its sentences describe a page that was never built.** Phase 1 shipped the same day
+this round ran, and its scope deliberately kept the module script's behaviour — so the
+prose Phase 2 rested on had been overtaken without anyone editing it. This is the failure
+mode a scoped round on a spec with a freshly shipped phase exists to catch, and it is worth
+recording as a pattern rather than as two findings.
+
+1. **"The same place `#status` stops reporting the boot" names a code site that does not
+   exist, and §2's status-line decision was claimed by no phase.** Measured: `compile`
+   appends the `boot` string to *both* status writes, success and failure, so the line
+   never stops reporting the boot. §2 had recorded that the line "becomes the compile's own
+   line… with readiness carried by the buttons instead" but named no phase, so under one
+   reading a recorded decision shipped in no phase at all, and under the other an
+   implementer had to guess whether the instrument panel survived. Resolved with a new §2
+   block assigning it to Phase 2 and saying what becomes of the telemetry: the line carries
+   the compile alone, and **the wire measurement moves to `console.log` rather than being
+   deleted**, because it is the live answer to one of the three questions the spike exists
+   to ask.
+2. **"The refusal rows … show the error where a PDF would be — that path already works"
+   contradicts the code.** Measured: the catch branch writes `#status`, which sits *above*
+   the panes, and never calls `draw` — so the previous example's PDF stays in the pane. A
+   reader clicking the raw-HTML row would have got a refusal's sentence over a rendered page
+   from the row before it: **a page asserting something false about its own output, which is
+   the failure this spec exists to prevent, reached from the other direction.** Resolved
+   without deleting the shipped behaviour, because the argument for it is sound and is about
+   a different act: **typing and clicking are different acts and get different answers.** An
+   author mid-edit keeps the last good page — that is `mpdf-003`'s behaviour and Phase 2
+   does not touch it. A reader who clicks *load it* on a row captioned "what it refuses, on
+   purpose" has asked to be shown a refusal, so the button clears the pane before it
+   compiles. **The button owns that, not `compile`**, which keeps the two acts apart in the
+   code as well as in the argument.
+
+The nine non-blocking findings were all accepted and none rejected. The three worth
+recording: the gate said "each row's button … produces a PDF" of ten rows when three of
+them are refusals; **a button carrying a `data-example` attribute of its own would fail
+`core/tests/page_examples_test.rs`**, which asserts the page holds exactly ten of that
+attribute, so the trap is named in scope with its reason; and writing `textarea.value`
+fires no `input` event, so the handler must call `compile` itself rather than rely on the
+300 ms debounce the typing path uses. The gate also gained the build recipe a second person
+needs — `wasm-pack build --target web --release` and serving over HTTP, since `web/pkg/` is
+gitignored and an ES-module import fails from `file://` — which Phase 1's no-JS check did
+not need. **OQ-5 was narrowed rather than closed**: running the check in two browsers
+produces the evidence and does not settle whether the page states support, and a support
+row is explicitly out of Phase 2's scope.
+
 ### Round 2 — Phase 1 only — 2026-08-19 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, two non-blocking. Converged inside the cap, on the

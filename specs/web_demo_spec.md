@@ -6,7 +6,7 @@ note: >
   dialect adds to markdown, every claim it makes is a snippet the workspace suite
   compiles, and one click sets that snippet as a PDF in the reader's own browser.
 status: accepted
-last_updated: 2026-08-19
+last_updated: 2026-08-21
 
 phases:
   - name: "Phase 1 — the page says what the dialect adds"
@@ -15,7 +15,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 2 — every example is one click from a PDF"
-    reviewed: null
+    reviewed: 2026-08-21
     shipped: null
     cut: null
     by: null
@@ -179,7 +179,9 @@ they will spend reading it.
 **The status line changes job.** Today it is the spike's instrument panel and reports the
 boot. It becomes the compile's own line — the error a refusal names, and nothing when the
 compile succeeded — with readiness carried by the buttons instead, which is where a
-reader will look for it.
+reader will look for it. *(Which phase owns that, and what becomes of the measurement it
+stops printing, is settled below under "A refusal clicked is not a refusal typed": it is
+Phase 2's, and Phase 1 left the line alone.)*
 
 ### What the page claims is what the compiler does, and one test holds them together (decision, recorded)
 
@@ -331,6 +333,45 @@ rows are chosen for what a reader cannot get elsewhere; ordinary emphasis, lists
 links appear only inside other examples. The README is the complete reference and every
 group links to it.
 
+### A refusal clicked is not a refusal typed, and the status line is Phase 2's (decision, recorded)
+
+Two of the sentences above were written before Phase 1 existed and describe a page that
+was never built. Phase 1 shipped on 2026-08-21 and changed neither, deliberately — its
+scope kept the module script's behaviour — so both land on **Phase 2**, which is the phase
+that adds the buttons and therefore the phase §2's readiness argument was always about.
+This section settles them, and Phase 2's scope and gate below carry them.
+
+**The status line's job change is Phase 2's, and the boot measurement is not deleted with
+it.** "It becomes the compile's own line… with readiness carried by the buttons instead"
+above names no phase, and today `web/index.html`'s `compile` appends the `boot` string to
+*every* status write, success and failure alike — so **there is no place where `#status`
+stops reporting the boot**, and a phase keyed to that place is keyed to nothing. Phase 2
+makes it true: the line carries the compile alone — the sentence a refusal names, and
+nothing at all when the compile succeeded — and readiness moves to the buttons, which are
+inert until the module resolves. The instrument panel is the spike's, and a visitor has no
+use for `anchors 7:1 14:1 22:1`; but the wire measurement is the live answer to one of the
+three questions the spike exists to ask, so **it moves to `console.log` rather than being
+removed** — the person asking that question opens a console and the reader does not.
+
+**A refusal shows where the PDF would be, and only when it was asked for.** The claim that
+"that path already works" is false as shipped: `compile`'s catch branch writes `#status` —
+which sits *above* the panes — and never calls `draw`, so **the previous example's PDF
+stays in the pane**. A reader who clicks the raw-HTML row would get the refusal's sentence
+above a rendered page from the row before it, which is a page asserting something false
+about its own output: the exact failure §2 exists to prevent, arrived at from the other
+direction.
+
+The fix is not to delete the shipped behaviour, because the argument for it is sound and
+is about a different act. **Typing and clicking are different acts and get different
+answers.** An author mid-edit passes through broken states constantly and wants the last
+good page kept — that is `mpdf-003`'s behaviour, it is why the comment in `compile` is
+there, and Phase 2 does not touch it. A reader who clicks *load it* on a row captioned
+"what it refuses, on purpose" has asked to be shown a refusal, and answering with the
+previous row's PDF answers a question nobody asked. So a click clears the pane before it
+compiles, and a refusal reached that way leaves it clear with the sentence standing where
+the PDF would be. **The button owns that, not `compile`** — which is what keeps the two
+acts apart in the code as well as in the argument.
+
 ### No image crosses the boundary yet, and what that costs the examples (decision, recorded)
 
 `web/src/lib.rs:render` calls `md_to_pdf(markdown, &[])` — **an empty asset slice**, so an
@@ -444,17 +485,52 @@ refuses. Phase 2 is what makes the page produce the observable, and it is one ph
 existing pipeline compiles it to a PDF in the pane — `web/src/lib.rs:render` over
 `core/src/lib.rs:md_to_pdf`, the same bytes the CLI writes.
 
-- **Scope:** `web/index.html` only, and no Rust. A "load it" button per row, reading its
-  own row's `data-example` element and writing the textarea; buttons disabled until the
-  module resolves and enabled in the same place `#status` stops reporting the boot; the
-  pane scrolled to on click, since the rows sit above it. The refusal rows take the same
-  button and show the error where a PDF would be — that path already works, because
-  `render` maps the error through the CLI's own `Display`.
-- **Exit gate:** `cargo test --workspace` still passes. In a browser, each row's button
-  loads its source and produces a PDF, and each refusal row produces the exact sentence
-  printed beside it. Verified in Chromium and Safari — which also answers the spike's
-  third question and OQ-5.
-- **Close-out:** `rules/web-demo.md` regenerated. One push.
+- **Scope:** `web/index.html` only, and no Rust. Ten rows, so ten buttons. Each reads its
+  own row's element — `row.querySelector('script[data-example]')`, and **the button must
+  not carry a `data-example` attribute of its own**: `core/tests/page_examples_test.rs`
+  asserts the page holds exactly ten of that attribute, so a button spelled that way fails
+  the suite. Writing `textarea.value` **fires no `input` event**, so the handler calls
+  `compile` itself rather than relying on the 300 ms debounce the typing path uses. The
+  pane is scrolled to on click, since the rows sit above it.
+  - **Readiness is the buttons'.** They carry `disabled` in the markup and are enabled
+    once `await mod.default()` resolves — which is also where `#status` takes up its new
+    job, per §2: the compile's line alone, nothing on success, and the boot measurement
+    moved to `console.log`.
+  - **A click clears the pane before it compiles**, so a refusal leaves it clear with the
+    sentence standing where the PDF would be. `compile`'s own catch branch keeps the last
+    good page and is not touched — §2 records why the two acts differ.
+  - Phase 1's `<noscript>` line — "The two panes at the foot of this page need JavaScript.
+    Everything above them does not" — stops being true when the buttons land, and is
+    corrected in the same phase.
+  - Button placement and label are the phase's call; §1's sketch shows `[ load it ▸ ]` on
+    the row's heading line, and `.row > h3` has no slot for one today.
+  - Two consequences of the status line's new job, both the implementer's to settle and
+    neither needing Rust: an empty `#status` still paints its padding and its bottom rule,
+    and the page stops calling `web/src/lib.rs:anchors` — which is `mpdf-003` Phase 6's
+    export answered in a browser, so **the export stays** whatever the page does with it.
+- **Exit gate:** `cargo test --workspace` still passes — including
+  `core/tests/page_examples_test.rs`, which the button markup can break and which is the
+  cheapest signal that it did. In a browser: **before the module resolves every button is
+  inert, and after it resolves every button is live** — the one new stateful behaviour, and
+  the one a screenshot cannot show. Then each of the **seven** `ok` rows loads its source
+  and draws a PDF, and each of the **three** refusal rows empties the pane and prints the
+  exact sentence beside it. (Ten rows; `data-expect` is what says which is which, and
+  `core/tests/page_examples_test.rs` pins the total at ten and ties every refusal to the
+  sentence printed beside it — it does not pin the seven-and-three split, so that count is
+  re-derived from the page rather than asserted anywhere.)
+  - **The gate needs a build, and the recipe is not in the repo's prose.** `web/pkg/` is
+    gitignored and the module is never committed, so a second person runs
+    `wasm-pack build --target web --release` in `web/` and serves the directory over HTTP —
+    an ES-module import fails from `file://`, which is why Phase 1's no-JS check needed no
+    module and this one does.
+  - Run in Chromium **and** Safari. That produces the evidence OQ-5 wants and does not
+    settle it: whether the *page states* browser support is a design call, and adding a row
+    for it is **out of this phase's scope**.
+- **Close-out:** `rules/web-demo.md` regenerated, and **the Safari/Chromium result lands
+  in it** — Phase 2's gate is the only thing that produces that fact, and a measurement
+  nothing records is one the next phase re-runs. It goes there rather than in the review
+  record because it is a fact about how the published page behaves, which is what a
+  `rules/` file is for; the review record answers what a review found. One push.
 
 ### Phase 3 — a page-owned image, so the figure examples show one
 
