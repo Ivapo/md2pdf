@@ -129,6 +129,13 @@
   textarea:focus { outline: none; }
   iframe { border: 0; width: 100%; height: 100%; min-height: 0; }
   noscript p { margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--line); color: var(--dim); }
+
+  /*
+    The one limit a visitor meets by typing rather than by clicking, said before
+    they meet it. Above `main` rather than inside it, so it costs the PDF none of
+    the clamped height below.
+  */
+  .filenote { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--dim); }
 </style>
 </head>
 <body>
@@ -144,7 +151,7 @@ foot of the page stay empty.</p></noscript>
 <section id="adds">
 
 <h1>What this adds to markdown</h1>
-<p class="lede">Twenty-two constructs are supported and ten are shown here — the ones a
+<p class="lede">Twenty-two constructs are supported and eleven are shown here — the ones a
 reader cannot get from an ordinary markdown renderer. The
 <a href="https://github.com/Ivapo/md2pdf#what-the-markdown-may-contain">README</a> is the
 complete reference. Each row is the same source read two ways: what <code>md2pdf</code>
@@ -215,6 +222,52 @@ fn main() {}
 <p class="does"><b>Listing 1</b>, captioned beneath and set to the left edge, because
 code is read from where its lines begin.</p>
 </div>
+
+<div class="row">
+<div class="head">
+<h3>The same marker over an image</h3>
+<button type="button" class="load" disabled>load it ▸</button>
+</div>
+<p class="says">The third construct a caption reaches, and the only one that needs a file —
+so the page carries one: <code>pipeline.svg</code> travels inside this page itself.</p>
+<div class="cols">
+  <div class="col"><span class="cap">md2pdf</span>
+<script type="text/markdown" data-example="caption-image" data-expect="ok">![The three steps, drawn as boxes](pipeline.svg)
+
+: The conversion pipeline, with the *emitter* in the middle.</script>
+  </div>
+  <div class="col"><span class="cap">an ordinary renderer</span>
+    <p class="written">The image, and beneath it a paragraph reading
+    <code>: The conversion pipeline…</code> — the same pass-through, leaving the alt
+    text to do all the describing there is.</p>
+  </div>
+</div>
+<p class="does"><b>Figure 1</b>, the caption set beneath the image, on a counter the tables
+and the listings above do not touch.</p>
+</div>
+
+<!--
+  The one image this page can read, carried inline. The Pages workflow assembles the
+  published site from this file and the module directory alone, so a file dropped beside
+  them would be a 404 on the published page while a locally served directory showed the
+  row above working. The attribute's value IS the path the compiler is handed, and the
+  row names the same one — a mismatch comes back `no image file supplied for …` and fails
+  `core/tests/page_examples_test.rs`. No leading and no trailing newline, so the page and
+  that test read the same bytes; the indentation inside is free, these bytes reaching
+  Typst's image loader rather than a markdown parser whose parse depends on them.
+-->
+<script type="image/svg+xml" data-asset="pipeline.svg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" width="320" height="72">
+  <g fill="none" stroke="#1e3c82" stroke-width="3"
+     stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="16" width="88" height="40" rx="6"/>
+    <rect x="116" y="16" width="88" height="40" rx="6"/>
+    <rect x="228" y="16" width="88" height="40" rx="6"/>
+    <path d="M96 36 H112"/>
+    <path d="M104 30 L112 36 L104 42"/>
+    <path d="M208 36 H224"/>
+    <path d="M216 30 L224 36 L216 42"/>
+  </g>
+</svg></script>
 
 <div class="row">
 <div class="head">
@@ -436,6 +489,12 @@ same crate compiled to WebAssembly.</p>
 
 </section>
 
+<p class="filenote">The box below reads one image file and no other:
+<code>pipeline.svg</code>, carried inside this page. A browser has no filesystem, so an
+<code>![…](your-figure.svg)</code> of your own comes back <code>no image file supplied for
+'your-figure.svg' at line 1</code> — your own figures are what the desktop app and the
+command line are for.</p>
+
 <main>
   <div id="status" role="status"></div>
   <textarea id="text" spellcheck="false" aria-label="markdown source"></textarea>
@@ -449,8 +508,10 @@ same crate compiled to WebAssembly.</p>
   `md2pdf_core::md_to_pdf` the CLI calls, so the PDF in the pane is the PDF the
   command writes, byte for byte.
 
-  It carries no images — a browser has no filesystem, and that file story is
-  `mpdf-006` Phase 3's.
+  It carries one image and only one: the page's own, inline beside the caption
+  row that names it and handed to every compile. A reader's own files still have
+  nowhere to come from — a browser has no filesystem — and that story stays
+  parked.
 
   **Two acts reach `compile`, and they get different answers.** Typing passes
   through broken states constantly, so a failed compile keeps the last good
@@ -468,6 +529,15 @@ const status = document.getElementById('status')
 const panes = document.querySelector('main')
 const buttons = document.querySelectorAll('button.load')
 const still = matchMedia('(prefers-reduced-motion: reduce)')
+
+/*
+  The page's one image, read from the element that carries it rather than named
+  a second time here. Both acts get it: `compile` is the single call site, so
+  the figure a click draws is the figure the reader's next keystroke keeps.
+*/
+const svg = document.querySelector('script[data-asset]')
+const ASSET = svg.dataset.asset
+const BYTES = new TextEncoder().encode(svg.textContent)
 
 const SAMPLE = `---
 title: Compiled in your browser
@@ -492,9 +562,9 @@ synthesises nothing.
 
 # Where this stops
 
-Images need a file, and a browser has no filesystem. That is the one thing the
-desktop app does which this page cannot, and it is a design question rather than
-a missing line of code.
+Images need a file, and a browser has no filesystem. This page carries exactly one
+inside itself — the diagram the caption row above the box loads — and can read no
+other. Your own figures are what the desktop app and the command line are for.
 `
 
 const MB = (n) => (n / 1048576).toFixed(1) + ' MB'
@@ -544,7 +614,7 @@ function clear() {
 
 function compile() {
   try {
-    const bytes = wasm.render(text.value)
+    const bytes = wasm.render(text.value, ASSET, BYTES)
     status.className = ''
     status.textContent = ''
     draw(bytes)
