@@ -6,7 +6,7 @@ note: >
   dialect adds to markdown, every claim it makes is a snippet the workspace suite
   compiles, and one click sets that snippet as a PDF in the reader's own browser.
 status: accepted
-last_updated: 2026-08-21
+last_updated: 2026-08-22
 
 phases:
   - name: "Phase 1 — the page says what the dialect adds"
@@ -16,7 +16,7 @@ phases:
     by: null
   - name: "Phase 2 — every example is one click from a PDF"
     reviewed: 2026-08-21
-    shipped: null
+    shipped: 2026-08-22
     cut: null
     by: null
   - name: "Phase 3 — a page-owned image, so the figure examples show one"
