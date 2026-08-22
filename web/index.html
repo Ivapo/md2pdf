@@ -19,14 +19,6 @@
   header { padding: 10px 14px; border-bottom: 1px solid var(--line); }
   header b { font-weight: 650; }
   header span { opacity: .65; }
-  #status {
-    padding: 6px 14px; border-bottom: 1px solid var(--line);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
-    white-space: pre-wrap; overflow-x: auto;
-  }
-  #status.bad { color: #b00020; }
-  @media (prefers-color-scheme: dark) { #status.bad { color: #ff8a8a; } }
-
   /*
     The list of what the dialect adds. It is first in the document and needs
     nothing from the module, so a reader reads it while the 7.8 MB lands.
@@ -41,10 +33,28 @@
   .group > p { margin: 0 0 20px; color: var(--dim); max-width: 46rem; }
 
   .row { margin: 0 0 26px; }
-  .row > h3 { font-size: 14px; font-weight: 650; margin: 0 0 3px; }
+  .row > .head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 14px; margin: 0 0 3px;
+  }
+  .head > h3 { font-size: 14px; font-weight: 650; margin: 0; }
   .row > p.says { margin: 0 0 10px; color: var(--dim); max-width: 46rem; }
   .row > p.does { margin: 10px 0 0; }
   .row > p.does::before { content: "→ "; color: var(--dim); }
+
+  /*
+    Readiness is the buttons'. They carry `disabled` in the markup, so with
+    scripting off they are honestly inert rather than promising a compile the
+    page cannot run, and the module resolving is what enables them. A reader
+    looks at the thing they are about to click to know whether they may.
+  */
+  .load {
+    flex: none; font: inherit; font-size: 12px; font-weight: 600; color: inherit;
+    background: var(--soft); border: 1px solid var(--line); border-radius: 4px;
+    padding: 3px 10px; white-space: nowrap; cursor: pointer;
+  }
+  .load:hover:not(:disabled) { background: color-mix(in srgb, currentColor 12%, transparent); }
+  .load:disabled { opacity: .4; cursor: default; }
 
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
   @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
@@ -85,14 +95,32 @@
     reader's place in the PDF.
   */
   main {
-    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr);
+    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto minmax(0, 1fr);
     height: clamp(360px, 70svh, 720px);
     border-top: 1px solid var(--line);
   }
   @media (max-width: 720px) {
-    main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; height: 100svh; }
+    main { grid-template-columns: 1fr; grid-template-rows: auto 1fr 1fr; height: 100svh; }
     textarea { border-right: 0; border-bottom: 1px solid var(--line); }
   }
+
+  /*
+    The compile's own line and nothing else: the sentence a refusal names, and
+    nothing at all when the compile succeeded. It sits inside `main` because a
+    click scrolls the reader here — a message about the pane, above the pane,
+    rather than one at the head of a page they have left. Empty it paints
+    nothing, so a page that compiles shows no strip where a message would go.
+  */
+  #status {
+    grid-column: 1 / -1;
+    padding: 6px 14px; border-bottom: 1px solid var(--line);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    white-space: pre-wrap; overflow-x: auto;
+  }
+  #status:empty { display: none; }
+  #status.bad { color: #b00020; }
+  @media (prefers-color-scheme: dark) { #status.bad { color: #ff8a8a; } }
+
   textarea {
     border: 0; border-right: 1px solid var(--line); resize: none; padding: 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
@@ -102,7 +130,6 @@
   iframe { border: 0; width: 100%; height: 100%; min-height: 0; }
   noscript p { margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--line); color: var(--dim); }
 </style>
-<noscript><style>#status { display: none }</style></noscript>
 </head>
 <body>
 
@@ -110,9 +137,9 @@
   <b>md2pdf</b> <span>— one markdown file in, one typeset PDF out. Everything below compiles in this page. No server.</span>
 </header>
 
-<div id="status">booting…</div>
-
-<noscript><p>The two panes at the foot of this page need JavaScript. Everything above them does not.</p></noscript>
+<noscript><p>Every example below is on this page either way. Compiling one is what needs
+JavaScript, so with it off the <b>load it</b> buttons stay grey and the two panes at the
+foot of the page stay empty.</p></noscript>
 
 <section id="adds">
 
@@ -121,7 +148,9 @@
 reader cannot get from an ordinary markdown renderer. The
 <a href="https://github.com/Ivapo/md2pdf#what-the-markdown-may-contain">README</a> is the
 complete reference. Each row is the same source read two ways: what <code>md2pdf</code>
-makes of it, and what a renderer with no notion of the construct makes of it.</p>
+makes of it, and what a renderer with no notion of the construct makes of it — and
+<b>load it</b> puts that source in the box at the foot of the page and compiles it here,
+the three refusals included.</p>
 
 <!--
   Every `data-example` element below is compiled by `core/tests/page_examples_test.rs`,
@@ -140,7 +169,10 @@ page without a PDF: the other column prints it.
 <a href="https://github.com/Ivapo/md2pdf#naming-a-figure-or-an-equation-and-pointing-at-it">Names</a></p>
 
 <div class="row">
+<div class="head">
 <h3>A caption makes a figure, and numbers it</h3>
+<button type="button" class="load" disabled>load it ▸</button>
+</div>
 <p class="says">A paragraph opening <code>: </code> beneath a table, an image or a code
 block is that block's caption.</p>
 <div class="cols">
@@ -161,7 +193,10 @@ themselves.</p>
 </div>
 
 <div class="row">
+<div class="head">
 <h3>The same marker under a code block</h3>
+<button type="button" class="load" disabled>load it ▸</button>
+</div>
 <p class="says">One mechanism over three constructs, each counting on its own — so
 inserting a table above a listing does not renumber the listing.</p>
 <div class="cols">
@@ -182,7 +217,10 @@ code is read from where its lines begin.</p>
 </div>
 
 <div class="row">
+<div class="head">
 <h3>A pair of <code>:::</code> lines makes several blocks one figure</h3>
+<button type="button" class="load" disabled>load it ▸</button>
+</div>
 <p class="says">The members share one caption, one number and one name. No arrangement of
 the <code>: </code> marker alone can say that.</p>
 <div class="cols">
@@ -211,7 +249,10 @@ between them.</p>
 </div>
 
 <div class="row">
+<div class="head">
 <h3>Name a figure, and point at it</h3>
+<button type="button" class="load" disabled>load it ▸</button>
+</div>
 <p class="says">End a caption with <code>{#name}</code>, then write <code>[](#name)</code>
 — a link with nothing between the brackets — to refer to it.</p>
 <div class="cols">
@@ -235,7 +276,10 @@ it and the sentence reads <i>Table 2</i> without your touching it.</p>
 </div>
 
 <div class="row">
+<div class="head">
 <h3>Math is LaTeX, and it is checked before it is set</h3>
+<button type="button" class="load" disabled>load it ▸</button>
+</div>
 <p class="says"><code>$…$</code> sets in the running text and <code>$$…$$</code> as a
 block of its own, converted in this page rather than by a service.</p>
 <div class="cols">
@@ -262,7 +306,10 @@ a page is what markdown has never had.
 <a href="https://github.com/Ivapo/md2pdf#footnotes">Footnotes</a></p>
 
 <div class="row">
+<div class="head">
 <h3>Six frontmatter keys decide the look</h3>
+<button type="button" class="load" disabled>load it ▸</button>
+</div>
 <p class="says">A leading <code>---</code> block picks one of two looks, one or two
 columns, and whether display formulas are numbered. <code>date</code> is your text and
 nothing else — <code>md2pdf</code> never reads a clock.</p>
@@ -292,7 +339,10 @@ Body text under a title block the markdown itself asked for.</script>
 </div>
 
 <div class="row">
+<div class="head">
 <h3>A footnote lands at the foot of its column</h3>
+<button type="button" class="load" disabled>load it ▸</button>
+</div>
 <p class="says">The definition may sit anywhere in the file, above or below the reference
 that cites it.</p>
 <div class="cols">
@@ -319,7 +369,10 @@ and its line — and these are the sentences it prints, checked against the comp
 same test that compiles every example above.</p>
 
 <div class="row">
+<div class="head">
 <h3>Raw HTML</h3>
+<button type="button" class="load" disabled>load it ▸</button>
+</div>
 <p class="says">A PDF has no <code>&lt;div&gt;</code>, and guessing what one should become
 is how a converter starts lying.</p>
 <div class="cols">
@@ -337,7 +390,10 @@ is how a converter starts lying.</p>
 </div>
 
 <div class="row">
+<div class="head">
 <h3>A task list</h3>
+<button type="button" class="load" disabled>load it ▸</button>
+</div>
 <p class="says">Not refused forever — refused until there is a decision about what a
 checkbox looks like in print. Support arrives construct by construct.</p>
 <div class="cols">
@@ -354,7 +410,10 @@ checkbox looks like in print. Support arrives construct by construct.</p>
 </div>
 
 <div class="row">
+<div class="head">
 <h3>A LaTeX command outside the accepted subset</h3>
+<button type="button" class="load" disabled>load it ▸</button>
+</div>
 <p class="says">The dialect accepts a bounded list — the Greek letters, the relations,
 sums and integrals, <code>\frac</code>, <code>\sqrt</code>, the accents, the matrix and
 <code>aligned</code> environments. A command off it is named rather than dropped.</p>
@@ -378,6 +437,7 @@ same crate compiled to WebAssembly.</p>
 </section>
 
 <main>
+  <div id="status" role="status"></div>
   <textarea id="text" spellcheck="false" aria-label="markdown source"></textarea>
   <iframe id="pane" title="the compiled PDF"></iframe>
 </main>
@@ -391,10 +451,23 @@ same crate compiled to WebAssembly.</p>
 
   It carries no images — a browser has no filesystem, and that file story is
   `mpdf-006` Phase 3's.
+
+  **Two acts reach `compile`, and they get different answers.** Typing passes
+  through broken states constantly, so a failed compile keeps the last good
+  page — that is the desktop app's behaviour and the catch branch below is
+  where it lives. Clicking a row's `load it` is a reader asking to be shown
+  that row, and on one captioned "what it refuses, on purpose" the honest
+  answer is the refusal rather than the previous row's PDF. So `load` empties
+  the pane before it compiles, and **the button owns that clearing, not
+  `compile`** — which keeps the two acts apart in the code as well as in the
+  argument.
 */
 const text = document.getElementById('text')
 const pane = document.getElementById('pane')
 const status = document.getElementById('status')
+const panes = document.querySelector('main')
+const buttons = document.querySelectorAll('button.load')
+const still = matchMedia('(prefers-reduced-motion: reduce)')
 
 const SAMPLE = `---
 title: Compiled in your browser
@@ -424,7 +497,6 @@ desktop app does which this page cannot, and it is a design question rather than
 a missing line of code.
 `
 
-const KB = (n) => (n / 1024).toFixed(0) + ' KB'
 const MB = (n) => (n / 1048576).toFixed(1) + ' MB'
 
 /*
@@ -452,39 +524,75 @@ let wasm = null
 
 function draw(bytes) {
   const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
+  pane.hidden = false
   pane.src = url
   if (drawn) URL.revokeObjectURL(drawn)
   drawn = url
 }
 
-function compile() {
-  const md = text.value
-  try {
-    const t0 = performance.now()
-    const bytes = wasm.render(md)
-    const ms = performance.now() - t0
+/*
+  Empty the pane and leave it empty. Hidden rather than merely pointed at
+  `about:blank`, which paints a white rectangle a dark page has no use for; the
+  blob is revoked, so the PDF is gone rather than hidden.
+*/
+function clear() {
+  pane.hidden = true
+  pane.src = 'about:blank'
+  if (drawn) URL.revokeObjectURL(drawn)
+  drawn = null
+}
 
+function compile() {
+  try {
+    const bytes = wasm.render(text.value)
     status.className = ''
-    status.textContent =
-      `current · ${ms.toFixed(0)} ms · ${KB(bytes.length)} PDF · anchors ${wasm.anchors(md) || '(none)'}\n` +
-      boot
+    status.textContent = ''
     draw(bytes)
   } catch (e) {
     // The last good page stays, as it does in the desktop app: an author
-    // mid-edit passes through broken states constantly.
+    // mid-edit passes through broken states constantly. A click has already
+    // emptied the pane by the time it reaches here, so a refusal that was
+    // asked for is a refusal shown.
     status.className = 'bad'
-    status.textContent = String(e.message ?? e) + '\n' + boot
+    status.textContent = String(e.message ?? e)
   }
 }
 
-let boot = ''
+/*
+  One row's own source, into the box, compiled. Writing `value` fires no
+  `input` event, so this calls `compile` itself rather than waiting on the
+  typing path's 300 ms debounce — and the rows sit above the panes, so it
+  scrolls to them.
+*/
+function load(button) {
+  const source = button.closest('.row').querySelector('script[data-example]')
+  text.value = source.textContent
+  clear()
+  compile()
+  panes.scrollIntoView({ behavior: still.matches ? 'auto' : 'smooth', block: 'start' })
+}
 
 try {
   const t0 = performance.now()
   const mod = await import('./pkg/md2pdf_web_spike.js')
   await mod.default()
   wasm = mod
-  boot = `${transfer()} · instantiated in ${(performance.now() - t0).toFixed(0)} ms · ${navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome') ? 'WebKit' : 'Blink'}`
+
+  /*
+    The instrument panel was the spike's, and a visitor has no use for a list
+    of anchors. What the module cost over the wire is different: it is the live
+    answer to one of the three questions the spike exists to ask, so it moves
+    here rather than being deleted. The person asking it opens a console; the
+    reader does not.
+  */
+  const engine = navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome') ? 'WebKit' : 'Blink'
+  console.log(`${transfer()} · instantiated in ${(performance.now() - t0).toFixed(0)} ms · ${engine}`)
+
+  // Readiness, carried by the thing a reader is about to click.
+  for (const button of buttons) {
+    button.addEventListener('click', () => load(button))
+    button.disabled = false
+  }
 
   text.value = SAMPLE
   compile()
