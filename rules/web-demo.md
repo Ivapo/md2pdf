@@ -88,8 +88,10 @@ resolved and live after, each accepted row drawing a PDF, each refusal emptying 
 and printing its exact sentence, and a typed refusal keeping the last good page. The asset
 channel was checked the same day in **Chromium alone**, a byte array crossing an existing
 `wasm-bindgen` boundary being nothing two engines can disagree about; the image row's PDF
-came back byte-identical to the one the CLI writes for the same source and file. Whether
-the page *states* browser support is still open (`mpdf-006` OQ-5); it makes no such claim.
+came back byte-identical to the one the CLI writes for the same source and file. **The page
+states no browser support and carries no row for it** (`mpdf-006` OQ-5, resolved
+2026-08-22): a browser that cannot run the module already says so itself, the module
+script's `catch` writing `failed to start: …` into `#status`.
 
 ## What the page claims, and the test that holds it to the compiler
 

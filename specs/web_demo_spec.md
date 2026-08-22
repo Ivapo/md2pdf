@@ -598,10 +598,28 @@ is for, not what it costs the suite.
   does not discriminate and no threshold was ever going to**; the criterion is suitability.
   `pipeline.svg` is the README's own flagship and reads as a figure at figure size;
   `check.svg` is a 16×16 tick.
-- **OQ-5 — does the page state browser support?** *(design call, open)* The spike exists
-  partly to answer whether Safari agrees with Chromium, and the answer is not written
-  down anywhere this spec can cite. Phase 1 makes no claim on the page; whoever runs the
-  check records it and a row may follow.
+- **OQ-5 — does the page state browser support?** *(design call)* **RESOLVED 2026-08-22:
+  no. The page carries no such row, and the question's own premise is what expired.** It
+  was asked because "the answer is not written down anywhere this spec can cite"; Phase
+  2's close-out wrote it into `rules/web-demo.md` — Chromium 151.0.7922.34 and WebKit
+  26.5, identical results, 2026-08-22 — which is that place. What was left is only whether
+  the *page* repeats it, and three things say no.
+
+  **The evidence does not support the claim a row would make.** Two engines on one day,
+  with Gecko never run. "Works in Chrome and Safari" is narrower than the truth — nothing
+  here is engine-specific, being ES modules, WebAssembly, a blob URL and an iframe — and
+  it dates the moment a version moves.
+
+  **The failure already speaks, in the browser's own words.** `web/index.html`'s module
+  script ends in a `catch` that writes `failed to start: <message>` into `#status`, in red,
+  inside `main` where a reader is looking. A browser that cannot run the module says so
+  itself, which is better than a table the page guessed at.
+
+  **And a row would be the one claim on this page nothing checks.** Every other sentence
+  is either an example `core/tests/page_examples_test.rs` compiles or a column its
+  generator writes. A browser-support row is unverifiable by construction — it would sit
+  there as the single unchecked assertion on a page Phase 4 had just finished removing the
+  last of, which is the argument this spec has made against itself four times.
 
 ## 4. Implementation phases
 
