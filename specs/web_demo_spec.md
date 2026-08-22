@@ -21,7 +21,7 @@ phases:
     by: null
   - name: "Phase 3 — a page-owned image, so the figure examples show one"
     reviewed: 2026-08-22
-    shipped: null
+    shipped: 2026-08-22
     cut: null
     by: null
 
@@ -464,10 +464,11 @@ is for, not what it costs the suite.
 - **OQ-2 — one page or a landing page plus a `/play`?** *(design call)* **RESOLVED
   2026-08-19: one page, text first, module async.** Two URLs turn the click that settles
   the argument into a navigation that re-pays 7.8 MB.
-- **OQ-3 — does Phase 3 happen at all?** *(needs-input)* It opens the narrowest slice of
-  a story two specs parked, and Phases 1 and 2 stand without it — the caption rows work
-  over a table and a listing. Left open deliberately: the phase is written so it can be
-  cut with `cut` + `by: mpdf-006` and lose nothing already shipped.
+- **OQ-3 — does Phase 3 happen at all?** *(needs-input)* **RESOLVED 2026-08-22: yes.**
+  The phase was asked for and built, which is the only place the answer could come from —
+  the loop that reviewed it recorded that it could not close this one. It opened the
+  narrowest slice of a story two specs parked, and Phases 1 and 2 would have stood without
+  it: the caption rows work over a table and a listing.
 - **OQ-4 — which sample image, if Phase 3 runs?** *(deferred by evidence)* **RESOLVED
   2026-08-22: `samples/pipeline.svg`.** Both were measured — 510 bytes against
   `check.svg`'s 231, four orders of magnitude below the module — so **the byte question

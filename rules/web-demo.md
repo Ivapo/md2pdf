@@ -10,10 +10,10 @@ covers: >
   examples that carry it, the byte rule those examples obey and the test that
   enforces it, the CSS that renders a script element, the button every row
   carries and the readiness it holds, the status line the compile owns, the
-  height model and the panes beneath the list, the image limit the page still
-  has, the engines the page has been run in, and the build and deploy that
-  publish it
-max_lines: 140
+  height model and the panes beneath the list, the one image the page carries
+  and the limit that remains, the engines the page has been run in, and the
+  build and deploy that publish it
+max_lines: 155
 generated: 2026-08-22
 ---
 
@@ -26,9 +26,10 @@ else. `mpdf-006` owns the directory; `mpdf-003` §1.1 named this a later spec ra
 phase of its own, and it is that spec.
 
 **The PDF a visitor sees is the PDF the CLI writes.** `web/src/lib.rs:render` calls
-`md2pdf_core::md_to_pdf` and maps a failure through `JsError` over the error's own
-`Display` — the same sentence `cli/src/main.rs` prints after its `error: ` prefix, so a
-construct outside the dialect is refused here in the words it is refused at the terminal.
+`md2pdf_core::md_to_pdf` with the page's one image in hand, and maps a failure through
+`JsError` over the error's own `Display` — the same sentence `cli/src/main.rs` prints after
+its `error: ` prefix, so a construct outside the dialect is refused in the words it is
+refused at the terminal.
 `web/src/lib.rs:anchors` is the second export, `mpdf-003` Phase 6's `line:page` pairs
 answered in a browser; **the page no longer calls it**, and it stays because it is that
 phase's export rather than this page's. `web/src/lib.rs:start` routes a panic to the console.
@@ -53,11 +54,11 @@ needs scripting: every example is on the page either way, compiling one is not.
 
 ## One click, one PDF
 
-**Every row carries a `load it` button, and the button is where readiness lives.** All ten
-carry `disabled` in the markup — inert with scripting off rather than promising a compile
-the page cannot run — and `await mod.default()` resolving enables them. Nothing else
-reports readiness. The button carries no `data-example` attribute of its own:
-`core/tests/page_examples_test.rs` asserts the page holds exactly ten of those.
+**Every row carries a `load it` button, and the button is where readiness lives.** All
+eleven carry `disabled` in the markup — inert with scripting off rather than promising a
+compile the page cannot run — and `await mod.default()` resolving enables them. Nothing
+else reports readiness. The button carries no `data-example` attribute of its own:
+`core/tests/page_examples_test.rs` asserts the page holds exactly eleven of those.
 
 A click reads its own row's element — `button.closest('.row')`, then
 `querySelector('script[data-example]')` — writes that source into the textarea and calls
@@ -80,17 +81,19 @@ read from `performance.getEntriesByType` rather than asserted, **moved to `conso
 it answers one of the three questions the spike exists to ask, and the person asking that
 question opens a console where a reader does not.
 
-**Run in two engines on 2026-08-22**, headless over `http://127.0.0.1` against that day's
-build: **Chromium 151.0.7922.34 and WebKit 26.5**, identical results — ten buttons inert
-before the module resolved and live after, the seven accepted rows each drawing a PDF, the
-three refusals each emptying the pane and printing their exact sentence, and a typed
-refusal keeping the last good page. Whether the page *states* browser support is still
-open (`mpdf-006` OQ-5); it makes no such claim.
+**Run in two engines on 2026-08-22**, headless over `http://127.0.0.1`: **Chromium
+151.0.7922.34 and WebKit 26.5**, identical results — every button inert before the module
+resolved and live after, each accepted row drawing a PDF, each refusal emptying the pane
+and printing its exact sentence, and a typed refusal keeping the last good page. The asset
+channel was checked the same day in **Chromium alone**, a byte array crossing an existing
+`wasm-bindgen` boundary being nothing two engines can disagree about; the image row's PDF
+came back byte-identical to the one the CLI writes for the same source and file. Whether
+the page *states* browser support is still open (`mpdf-006` OQ-5); it makes no such claim.
 
 ## What the page claims, and the test that holds it to the compiler
 
-The page carries three groups and **ten examples**: syntax an ordinary renderer passes
-through as text (a caption over a table, a caption over a listing, a `:::` group, a
+The page carries three groups and **eleven examples**: syntax an ordinary renderer passes
+through as text (a caption over a table, over a listing and over an image, a `:::` group, a
 `{#name}` and the `[](#name)` that points at it, display math), things markdown has no way
 to say (the six frontmatter keys, a footnote), and three refusals — raw HTML, a task list,
 and a LaTeX command off the accepted list. Twenty-two constructs are supported, so the page
@@ -110,14 +113,16 @@ both. A leading newline is the same hazard one line on, moving every refusal's `
 by one. The rule needs no stripping step in any consumer, so they cannot drift apart by
 normalising differently.
 
-`core/tests/page_examples_test.rs` asserts that rule, a count of exactly ten, a mark of
-`ok` or `error` on each, unique names, and message elements matching the refusals; then
-that each `ok` example compiles and each `error` example's `to_string()` equals its row's
-visible `<code data-error-for="…">` text, character for character. **The checked sentence
-is the one the reader sees** — an attribute copy would prove agreement with a string nobody
-reads. The `<code>` scan is weaker than the `<script>` scan, parsed markup equalling its
-raw slice only while the sentence needs no character reference, so a separate assertion
-refuses a message carrying `<`, `&` or a newline. It does **not** assert the 7/3 split.
+`core/tests/page_examples_test.rs` asserts that rule, a count of exactly eleven, a mark of
+`ok` or `error` on each, unique names, one asset element, and message elements matching the
+refusals; then that each `ok` example compiles — **each handed the page's image**, as the
+page hands it to every compile — and that each `error` example's `to_string()` equals its
+row's visible `<code data-error-for="…">` text, character for character. **The checked
+sentence is the one the reader sees** — an attribute copy would prove agreement with a
+string nobody reads. The `<code>` scan is weaker than the `<script>` scan, parsed markup
+equalling its raw slice only while the sentence needs no character reference, so a separate
+assertion refuses a message carrying `<`, `&` or a newline. It does **not** assert the 8/3
+split.
 
 **That test is a workspace test over a file outside the workspace, and that is the point.**
 `web/Cargo.toml`'s empty `[workspace]` table detaches the directory, so `cargo build
@@ -132,23 +137,32 @@ beside it is **written by hand, never rendered** — a second markdown renderer 
 page claiming a single module does the work would be an unaudited dependency, and no
 implementation is entitled to be called *ordinary*.
 
-## What the page cannot do
+## The one image, and the files that stay out
 
-**No image assets cross the boundary.** `web/src/lib.rs:render` passes `&[]`, so an
-`![…](path)` a visitor types reaches `core/src/lib.rs:collect` and comes back
-`Error::MissingImage`. A browser has no filesystem, so `core/src/lib.rs:image_paths`'
-shopping list has nowhere to be read from. The caption examples use a table and a code
-block for that reason — same mechanism, same counter behaviour; only the image goes
-unshown. The page is not an editor and never gains accounts, persistence or a share link:
-`mpdf-001` §1.1 refuses servers permanently, and Pages serves static files.
+**The page owns one image file and the reader owns none.** `samples/pipeline.svg` is
+carried inline in `web/index.html`, in a `<script type="image/svg+xml" data-asset="…">`
+whose attribute value *is* the path `md2pdf_core::Asset` is given — one copy of one name,
+which the caption row must write identically or fail the suite. `render` hands it to
+**every** compile, typed and clicked alike: `md_to_pdf` ignores an asset the document never
+names, and a channel open to the button alone would draw Figure 1 on a click and refuse it
+on the next keystroke.
+
+**A reader's own files stay parked.** A browser has no filesystem, so
+`core/src/lib.rs:image_paths`' shopping list has nowhere to be read from and an
+`![…](their-file.svg)` comes back `Error::MissingImage` from `core/src/lib.rs:collect` — a
+line above the textarea names the one readable file and that sentence, so a visitor meets
+it before the compiler says it. The page is not an editor and never gains accounts,
+persistence or a share link: `mpdf-001` §1.1 refuses servers permanently, and Pages serves
+static files.
 
 ## The build and the deploy
 
 `.github/workflows/pages.yml` builds `web/` alone with `wasm-pack build --target web
 --release`, on a push to `main` touching `web/**`, `core/**` or the workflow. It assembles
 `_site` from **`web/index.html` and `web/pkg/` only**, so anything the page needs must be
-inline in that file or added to that step. `wasm-pack`'s own `.gitignore` inside `pkg/` is
-deleted before upload, or the artifact would skip the module.
+inline in that file or added to that step — which is why the one image is. `wasm-pack`'s
+own `.gitignore` inside `pkg/` is deleted before upload, or the artifact would skip the
+module.
 
 **The module is never committed** — ten times the size of this repository, and git history
 is permanent, so it is built in the job and handed straight to the Pages artifact. The
