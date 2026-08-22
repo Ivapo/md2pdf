@@ -26,7 +26,7 @@ phases:
     by: null
   - name: "Phase 4 — the other column stops describing and starts showing"
     reviewed: 2026-08-22
-    shipped: null
+    shipped: 2026-08-22
     cut: null
     by: null
 
