@@ -24,6 +24,11 @@ phases:
     shipped: 2026-08-22
     cut: null
     by: null
+  - name: "Phase 4 — the other column stops describing and starts showing"
+    reviewed: 2026-08-22
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -35,6 +40,10 @@ reference: >
   and projects, and `mpdf-001` §1.1 refuses servers permanently. The comparison this
   page draws — the same source under an ordinary markdown renderer — is the argument
   rather than a borrowing, and no part of such a renderer is adopted.
+  **CORRECTED 2026-08-22:** the comparison is no longer drawn against *an ordinary
+  renderer*. It is drawn against this repository's own parser with an HTML backend, so
+  the second half of the sentence is now true by construction rather than by promise —
+  nothing is adopted because nothing is added. §2 and OQ-1 carry it.
 ---
 
 # web-demo
@@ -95,7 +104,10 @@ argument is a button:
 **The argument the page makes is that the difference is visible in one click**, which is
 why the comparison is not left at two code blocks: the right-hand column of every row is
 what an ordinary renderer does with the identical source, and the button is what settles
-it. A reader who does not click still gets the whole list; §4's Phase 1 ships exactly
+it. *(**CORRECTED 2026-08-22:** that column stopped being a description of "an ordinary
+renderer" in Phase 4 and became rendered output from `pulldown_cmark::html` over this
+crate's own options. The sketch above still reads as it shipped; §2's block below is the
+decision, and it is sharper than the sentence it replaces.)* A reader who does not click still gets the whole list; §4's Phase 1 ships exactly
 that, and Phase 2 makes it live.
 
 ### 1.1 Why this is a new spec and not a phase of an existing one
@@ -153,6 +165,12 @@ and the prose is the easy half.
 - **No new dialect, and no change to `core`'s behaviour.** Every example is markdown the
   shipped compiler already accepts. Phase 1 adds one Rust *test* and edits one Rust *doc
   comment*, and neither changes what the compiler does; no phase here touches `core/src`.
+  **CORRECTED 2026-08-22 — Phase 4 touches `core/src`.** It adds one export, `md_to_html`,
+  beside the `md_to_typst` this crate already publishes for inspection. The sentence's
+  substance survives: no phase here changes what the compiler does, what the dialect
+  accepts, or what `md_to_pdf` returns. What changed is that the page's *other* column
+  turned out to need the same parse the first one gets, and the only place that can be
+  guaranteed is inside the crate that owns it. §4's Phase 4 carries the argument.
 - **Not a second look.** How the demo's PDF is styled is `template.typ`'s, unchanged.
 
 ## 2. Design
@@ -306,6 +324,107 @@ The column therefore describes rather than renders — *"a table, then a paragra
 contested, the row narrows it to CommonMark plus GFM, which is the dialect's own baseline
 through `core/src/emit.rs:options`.
 
+**CORRECTED 2026-08-22 — the column renders after all, and the block below is the
+decision.** Both reasons above are arguments against *a second renderer*, and both still
+hold against one. What they do not survive is there being no second renderer to ship: the
+parser this page already depends on writes HTML itself. The original is kept because the
+reasoning is what the next block is built on, and because a reader who finds the old
+answer quoted somewhere should be able to see why it stopped applying.
+
+### The column renders after all, from this repository's own parser (decision, recorded)
+
+**`core/Cargo.toml` pins `pulldown-cmark 0.13.4`, and `pulldown_cmark::html` ships inside
+it.** So the second column is not a second renderer. It is the same parser, over the same
+`core/src/emit.rs:options`, with the other backend attached: one event stream, written out
+by pulldown-cmark's HTML writer instead of by `core/src/emit.rs`. Nothing new enters the
+tree — the dependency is the one the page's whole claim is already about.
+
+That disposes of both objections above rather than overriding them. The fatal one was an
+unaudited dependency, and there is none. The other was that no implementation is entitled
+to be called *ordinary*, and this one stops trying: it does not claim to be what GitHub
+does, it shows **what this parse looks like when something other than the emitter writes
+it out** — which is the sharper claim and the one the page actually wants. The marker is
+not lost because a renderer is careless; it is lost because nothing but the emitter is
+looking for it.
+
+**Measured 2026-08-22 over all eleven examples**, and the output argues for itself: the
+caption rows come back `<p>: The measurements.</p>`, the group row prints `<p>:::</p>`
+above and below its two tables, the reference row renders `<a href="#tab:m"></a>` — an
+anchor with no text, so the sentence has a literal gap in it — the footnote lands under a
+`<div class="footnote-definition">` at the end of the document, and the task list comes
+back as two real disabled checkboxes. The frontmatter row is the one that improves most:
+the written column hedged *"printed as text, or — where the renderer knows the convention
+— hidden"*, and under these options the six keys are simply **gone**, with nothing on the
+page where they were.
+
+**And the measurement found a written claim that does not hold, which is this phase's
+argument for existing.** The display-math row says *"Three lines of literal text — the
+dollars and the LaTeX between them. CommonMark has no notion of math at all."* That is
+true of CommonMark and false of the baseline this very section says the rows narrow to:
+`options()` inserts `ENABLE_MATH`, so the parser does have a notion of math and the HTML
+backend writes `<span class="math math-display">` around the LaTeX. It is also not what
+GitHub does, which typesets it. **A hand-written column is a claim no test can check**, and
+three of the eleven had drifted before anyone read them twice: `display-math` and
+`math-refusal` both describe the dollars printing as literal text, which `ENABLE_MATH`
+contradicts in the same way on both rows, and the footnote row promises the notes land
+*"under a rule"*, which this backend draws no `<hr>` for. The rest of the page has been under
+test since Phase 1; this is the half that never was.
+
+**Each block sits between two comment markers, because this region cannot end at a
+closing tag.** §2's earlier scan is justified above by every marker being a fixed literal
+and *each region ending at the next closing tag* — true of a `<script>`, true of a
+`<code>`, and **false here**: the `raw-html` block ends `<div>a raw HTML block</div>` and
+the `footnote` block carries a `<div class="footnote-definition">`, so a wrapper closed by
+`</div>` is mis-delimited by the very convention that bought the plain string scan.
+Counting opens against closes is an HTML parser under another name, which the same
+paragraph refuses. So the generated bytes sit between `<!--html:NAME-->` and
+`<!--/html:NAME-->`, where `NAME` is that row's own `data-example` value: a comment cannot
+nest, `push_html` never emits one, and the pair keys the block to its example without
+writing the name a third time. **The region between the markers is exactly the string the
+generator returned** — nothing trimmed at either end — so the page and the test compare the
+same bytes by construction, which is the arrangement the examples have had since Phase 1.
+A wrapper element for styling may sit outside the markers, where it is not part of what is
+compared.
+
+Two consequences follow, and neither is free.
+
+- **The image row's `<img src="pipeline.svg">` has no file to fetch.** Phase 3 put the SVG
+  inline in a `data-asset` element rather than beside the page, so a verbatim `push_html`
+  output would render a broken image on the published page — the comparison column lying
+  about what markdown can do, which is this spec's own failure mode reached from a third
+  direction. So the generation carries **one substitution and exactly one**: an image
+  destination equal to the page's asset name becomes a `data:` URI over those same bytes,
+  **percent-encoded over an explicit set — every byte outside ASCII letters, digits and
+  `-._~`**. The encoding is named because the reflex is broken and the break is invisible
+  to the check: measured 2026-08-22, `pulldown_cmark`'s own `escape_href` leaves `#`
+  unencoded and `samples/pipeline.svg` carries `stroke="#1e3c82"`, so a raw
+  `data:image/svg+xml,<svg…>` truncates at the fragment and renders nothing — and an
+  equality assertion would agree with itself about the broken bytes. **Publishing the SVG
+  beside the page instead is refused on Phase 3's own argument**: `.github/workflows/pages.yml`
+  copies two things, and a third that someone forgets is a 404 in production and a working
+  image on every local server, which is the failure that phase's round 1 called blocking.
+  The page carries what the page needs.
+- **The generated HTML is markup inside the page's own markup.** A real `<table>`, real
+  `<input type="checkbox">`, and on the raw-HTML row a real `<div>` — which is the whole
+  point of showing rather than describing. The gate refuses any generated block holding
+  `<script`, `data-example="` or `data-asset="`: the first would be executable content
+  reaching the page from an example, and the other two would hand
+  `core/tests/page_examples_test.rs`'s own scans a phantom element to find.
+
+**The generator is the test, and that is what makes "one rule in one place" true.** One
+function produces a row's block — `md_to_html` over its source, then the substitution — and
+`core/tests/page_examples_test.rs` compares it against what the page stores; a blessing
+mode on that same test is what writes the eleven blocks into the page. A separate generator
+program would implement the substitution twice, which is the drift this whole arrangement
+exists to prevent, and it is also what would push the phase past the files it names.
+
+**The HTML is generated and inlined, not rendered at load**, and §2's first decision is not
+being reversed with this one. A column produced in the browser would put half of every row
+behind the 7.8 MB the page is built to read past, and Phase 1's no-JS gate would meet a
+page with one column missing. Generated bytes in the file keep both properties, and the
+test is what keeps them honest — the same arrangement the examples have had since Phase 1,
+extended to the column beside them.
+
 ### Three kinds of difference, and the refusals are one of them (decision, recorded)
 
 The list is grouped, because the differences are not all the same *sort* of difference
@@ -457,10 +576,14 @@ is for, not what it costs the suite.
 
 ## 3. Open questions
 
-- **OQ-1 — does the comparison column render live?** *(design call)* **RESOLVED
+- **OQ-1 — does the comparison column render live?** *(design call)* ~~**RESOLVED
   2026-08-19: no, written by hand.** The argument is above: a second renderer on the one
   page claiming a single module does the work, and no implementation entitled to be
-  called *ordinary*.
+  called *ordinary*.~~ — **REOPENED AND RE-RESOLVED 2026-08-22: it renders, from
+  `pulldown_cmark::html` over `core/src/emit.rs:options`, generated into the page rather
+  than produced at load.** Neither 2026-08-19 argument was wrong; both were about a
+  *second* renderer, and the parser already in the tree is not one. §2's block records it,
+  and §4's Phase 4 builds it.
 - **OQ-2 — one page or a landing page plus a `/play`?** *(design call)* **RESOLVED
   2026-08-19: one page, text first, module async.** Two URLs turn the click that settles
   the argument into a navigation that re-pays 7.8 MB.
@@ -613,3 +736,80 @@ in Phases 1 or 2 depends on it.
 - **Close-out:** `rules/web-demo.md` regenerated, carrying the asset channel and the one
   file the page can read; `web/src/lib.rs`'s module doc corrected in place, since this is
   the phase that answers the question it parks. One push.
+
+### Phase 4 — the other column stops describing and starts showing
+
+*Produces the observable: **no**, and it is argued rather than assumed.* The pane, the
+buttons and the compile path are untouched; what changes is the column beside the source.
+**It earns its place as the phase that puts the last unchecked claim on the page under
+test.** Every `md2pdf` column has been compiled by `core/tests/page_examples_test.rs` since
+Phase 1 and every column beside it has been prose nothing checks — and §2 records three of
+the eleven that had already drifted off the baseline the section itself declares. This is
+the half of the page that never had a gate.
+
+- **Scope:** three files, and two `rules/` files in close-out. It stays at three because
+  the generator is the test (§2) rather than a program of its own — with one conditional
+  fourth, `web/Cargo.toml`, which is edited **only if** the module grew, per the gate below.
+  The expected result is that it is not touched.
+  - **`core/src/lib.rs` gains `pub fn md_to_html(md: &str) -> String`** —
+    `Parser::new_ext(md, emit::options())` handed to `pulldown_cmark::html::push_html`,
+    sitting beside the `md_to_typst` this crate already publishes for inspection. **It is
+    not a second pipeline**: it reads no assets, returns no `Result` because the parse it
+    runs cannot fail, and nothing on `md_to_pdf`'s path calls it. It is here rather than in
+    the test or in `web/` because the comparison is only true if both columns come out of
+    one parse with one set of options, and `options()` is `pub(crate)` — every other home
+    for this function is a second copy of it.
+  - **`web/index.html`** swaps each row's `<p class="written">` for that row's generated
+    HTML between the `<!--html:NAME-->` markers §2 names, inside a wrapper the page styles
+    so a rendered table does not inherit the list's own type. **The page's "Do not reformat"
+    comment grows to cover them**: the blocks are exactly as byte-fragile as the examples it
+    already warns about — one of the eleven ends without a trailing newline — and a reader
+    who meets generated HTML in a hand-edited file has no way to know that from the file. **The prose that framed the
+    column as a universal goes with it**, and it is not only the eleven
+    `<span class="cap">an ordinary renderer</span>` labels: the opening `#adds > p.lede`
+    calls the rows "the ones a reader cannot get from an ordinary markdown renderer … what
+    a renderer with no notion of the construct makes of it", and group 1's `<h2>` and its
+    paragraph say the same and add "the other column prints it" — which the display-math
+    row in that very group now visibly contradicts. Each becomes a claim about what
+    produced the block. The `.says` and `.does` sentences are `md2pdf`'s own and need no
+    edit; §2's refutations land on the `.written` elements, which this phase deletes.
+  - **`core/tests/page_examples_test.rs`** grows one assertion per example — the bytes
+    between that example's markers equal the generator's output for its source — plus a
+    blessing mode that writes those bytes into the page, and the refused-substring check.
+    The count, the byte rule and the compile assertions are untouched.
+- **The substitution is one rule in one function**, and §2 fixes both the rule and its
+  encoding: an image destination equal to the page's `data-asset` name becomes a
+  percent-encoded `data:` URI over those bytes. Everything else in the output is verbatim.
+- **The refused substrings are four**: a generated block holding `<script`,
+  `data-example="`, `data-asset="` or `<!--` fails the suite. The first three would hand
+  the file's own scans a phantom element; the fourth would break the delimiter the block
+  is found by.
+- **Regeneration is the blessing mode**, and the constraint it satisfies is that a human
+  must be able to produce the eleven blocks without hand-writing them. How it is switched
+  on — an environment variable, an ignored test — is the implementer's call; that it exists
+  is not.
+- **Exit gate:** `cargo test --workspace` passes, with the equality assertion covering all
+  eleven examples and the refused-substring check. Then, **with JavaScript disabled**, the
+  page loads and every row's right column is *rendered output* — a real table, two real
+  checkboxes, **the diagram visible rather than a broken-image box**, and the frontmatter
+  row showing no keys at all — which is what proves the block is markup in the file rather
+  than something built at load, and it is the same no-JS check Phase 1's CSS override
+  needed. The diagram is called out because it is the one thing in the gate that the
+  equality assertion cannot fail on: §2 records why a wrongly-encoded URI leaves both sides
+  agreeing about bytes that render nothing.
+  - **The compile path is unchanged, so the browser half needs no wasm rebuild to be honest
+    about the page.** The module is still rebuilt once, and the number to beat is
+    **25,342,182 bytes** — `web/pkg/md2pdf_web_spike_bg.wasm` as Phase 3 left it on
+    2026-08-22, which is the file in the tree rather than `web/Cargo.toml`'s 2026-08-15
+    header figure. A public export nothing reachable calls should not survive `lto` into
+    the module, so the expected result is no change; **any growth at all is recorded** in
+    `web/Cargo.toml` and `rules/web-demo.md` rather than left unremarked in a page whose
+    cost is a design input §2 reasons from.
+- **Close-out:** `rules/pipeline.md` gains `md_to_html` — it is a `core/src/lib.rs` export
+  and that file is one of its sources. `rules/web-demo.md` carries the generated column,
+  the markers, the substitution and the labels. **Both are within two lines of their own
+  caps** — 623/625 and 153/155 — so each is either compressed or has its cap raised with
+  the reason recorded in the commit, as Phase 3 did when it moved `web-demo.md` from 140.
+  **README: none needed**, and the reason is that it documents the dialect and the CLI,
+  neither of which this changes; a crate export that no command surfaces is not
+  user-facing. One push.

@@ -2,6 +2,85 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 4 only — 2026-08-22 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, two non-blocking. Converged inside the cap, on the
+episode's second round. The blocker was confirmed resolved **against the file**, and the
+reviewer did not check the scheme in principle — it ran the marker round-trip over all
+eleven measured `push_html` outputs and got the block back byte-for-byte **11/11**,
+`raw-html` included, which is the one output that ends without a trailing newline and
+therefore the one "nothing trimmed at either end" had to be unambiguous about. It also
+confirmed that none of the eleven blocks holds any of the four refused substrings, so the
+guard never false-fires; that no example name contains `--`, which would be illegal inside
+an HTML comment; and that the existing scans in `core/tests/page_examples_test.rs` —
+`examples()`, `asset()`, both attribute counts and the `data-error-for` scan — still find
+exactly what they found before, the 954-byte data URI included.
+
+**The percent-encoding was checked the same way, and one level deeper than asked.** The
+rule was run over the real inline bytes — `web/index.html`'s asset is `samples/pipeline.svg`
+minus its trailing newline, 509 against 510, and both carry the `stroke="#1e3c82"` that §2's
+argument turns on — producing a 954-byte URI that round-trips exactly, holds no raw `#`,
+`"`, `<`, `>`, `&`, `'` or space, and **rendered in Chromium off a served page at
+`naturalWidth: 320`, `naturalHeight: 72`**, the SVG's own declared size. The reviewer then
+checked the trap under the trap: `escape_href` does not double-encode `%`, so even the
+event-stream route would have survived — and the phase does not take it, substituting after
+`md_to_html` over a destination that occurs exactly once across all eleven outputs.
+
+Every re-keyed literal was re-derived rather than granted: three of eleven drifted columns,
+25,342,182 bytes for the module, 623/625 and 153/155 for the two `rules/` caps, and the
+`web-demo.md` cap precedent confirmed against `git log` as 120 → 140 → 155.
+
+Both non-blocking findings were folded rather than deferred. `web/Cargo.toml` is named in
+scope as a **conditional fourth file**, edited only if the module grew, with the expected
+result stated. And the page's "Do not reformat" comment grows to cover the generated
+blocks: they are exactly as byte-fragile as the examples it already warns about, and a
+reader meeting generated HTML in a hand-edited file has no way to know that from the file.
+
+### Round 1 — Phase 4 only — 2026-08-22 — fresh clean-context reviewer with repo access — **NOT READY**
+
+**Round 0 — is this the right thing to build at all?** Yes, and it is the second phase in
+this spec to produce no observable and argue for itself instead. The pane, the buttons and
+the compile path are untouched; what it does is put the last unchecked claim on the page
+under the test the other column has had since Phase 1. The evidence that it is wanted came
+out of drafting it: measured through `pulldown_cmark::html::push_html` over
+`core/src/emit.rs:options`, **three of the eleven written columns assert behaviour those
+options contradict** — a page built so it cannot claim what the compiler refuses had a
+second column claiming what the parser does not do, and nothing would ever have caught it.
+
+Verdict: `NOT READY`, one blocking, nine non-blocking. One generalist reviewer. **No
+finding was rejected.**
+
+**The blocker was the same one Phase 1's round 1 caught, one column over.** The phase said
+the test would compare "the page's stored block" and named no marker, no key back to
+`data-example="<name>"`, and no delimiting rule — and §2's standing justification for plain
+string scans, that *each region ends at the next closing tag*, is **provably false for this
+region**: the `raw-html` block ends `<div>a raw HTML block</div>` and the `footnote` block
+carries a `<div class="footnote-definition">`, so a wrapper closed by `</div>` is
+mis-delimited by the very convention that bought the scan. Counting opens against closes is
+an HTML parser under another name, which the same paragraph refuses. Resolved with comment
+markers keyed to the row's own example name — `push_html` emits none, a comment cannot
+nest, and the region between them is exactly the generator's returned string.
+
+Of the nine non-blocking findings, four are worth the record. **The reflex `data:` URI is
+broken and the break is invisible to the check**: `escape_href` leaves `#` unencoded and
+`pipeline.svg` carries `stroke="#1e3c82"`, so the URI truncates at the fragment and an
+equality assertion agrees with itself about bytes that render nothing — the encoding is now
+named, and the gate's browser half says *the diagram visible rather than a broken-image
+box* and says why that item exists. **"One rule in one place" contradicted "applied in the
+generator and in the test alike"** unless the generator *is* the test, which was the reading
+that worked and was unstated; saying it also holds the phase to three files. **The drift
+count was one and is three** — `math-refusal` carries the same `ENABLE_MATH` drift as
+`display-math`, and the footnote row promises a rule this backend draws no `<hr>` for. And
+**the prose reversal was scoped to the wrong elements**: the row-level `.says` and `.does`
+sentences are `md2pdf`'s own and need no edit, while the opening lede, group 1's heading and
+its "the other column prints it" were left asserting the universal the phase forbids.
+
+The rest: `§1` and the frontmatter `reference:` needed the dated `CORRECTED` notes §1.2 had
+already got; OQ-1's superseded resolution needed striking through per conventions §4; both
+`rules/` files sit within two lines of their caps and the close-out said nothing about it;
+and the module-size clause was keyed to `web/Cargo.toml`'s 2026-08-15 header rather than to
+the file in the tree, with no threshold and no unit — advisory dressed as a gate.
+
 ### Round 2 — Phase 3 only — 2026-08-22 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, two non-blocking. Converged inside the cap, on the
