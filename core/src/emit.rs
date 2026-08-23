@@ -743,9 +743,9 @@ fn collect_definitions(md: &str) -> Definitions {
 
 /// What one walk of a document produced.
 ///
-/// A record rather than a tuple because four things travel and three callers
-/// each want a different one. Every field comes out of the same walk that wrote
-/// the source, which is what stops the markup and the shopping list disagreeing
+/// A record rather than a tuple because six things travel and four callers each
+/// want a different one. Every field comes out of the same walk that wrote the
+/// source, which is what stops the markup and the shopping list disagreeing
 /// about which paths the dialect accepts.
 pub(crate) struct Emitted {
     /// The Typst markup, header and body and reference list.
@@ -760,6 +760,23 @@ pub(crate) struct Emitted {
     pub headings: Vec<usize>,
     /// The bibliography the frontmatter named, if it named one.
     pub bibliography: Option<BibliographyRef>,
+    /// Every citation key this document writes, with the line its `[@…]` sits
+    /// on, from [`Names::cited`].
+    ///
+    /// It leaves the walk because the refusal it feeds cannot be raised inside
+    /// one. Whether the bibliography holds a key is a question about the file's
+    /// *bytes*, and emission reads no bytes on either channel — so the check
+    /// lives beside `crate::collect`, which is the only place they exist.
+    pub cited: Vec<(String, usize)>,
+    /// Every name a `[](#name)` pointed at, with the line that link sits on,
+    /// from [`Names::referenced`].
+    ///
+    /// It travels for one refusal only: Typst's labels are one namespace, so a
+    /// name this document declares that the bibliography also holds is refused
+    /// where a reference points at it. [`check_references`] has already refused
+    /// every reference to a name nothing declares, so each of these is a
+    /// declared name by the time the bytes are known.
+    pub referenced: Vec<(String, usize)>,
 }
 
 /// Translate one markdown document into Typst markup.
@@ -783,8 +800,14 @@ pub(crate) fn emit(md: &str) -> Result<Emitted> {
 
     // Taken off the walk before `finish` consumes it, the way the math flag
     // already is, so `Walk::finish` and `collect_definitions` need no change.
+    // The two checks above have already read the names, and `declared` is
+    // dropped here: every entry in `referenced` is a declared name once
+    // `check_references` has passed, so nothing downstream needs the third.
     let headings = std::mem::take(&mut walk.headings);
     let bibliography = walk.front.bibliography.take();
+    let Names {
+        cited, referenced, ..
+    } = std::mem::take(&mut walk.names);
 
     let mut out = header(&walk.front, walk.math);
     let (body, images) = walk.finish();
@@ -814,6 +837,8 @@ pub(crate) fn emit(md: &str) -> Result<Emitted> {
         images,
         headings,
         bibliography,
+        cited,
+        referenced,
     })
 }
 
@@ -2450,8 +2475,9 @@ fn typst_string_or_none(value: Option<&str>) -> String {
 /// mode interprets; a string literal interprets only `\` and `"`, and escaping
 /// the markup set inside one would put the backslashes into the PDF. Two kinds
 /// of thing travel this way: the frontmatter's own strings — the title, the
-/// author, the date and the `equations` name — and the content of every `#raw`
-/// call the walk writes, for inline code and for code blocks alike.
+/// author, the date and the `equations` name — the content of every `#raw` call
+/// the walk writes, for inline code and for code blocks alike, and the two a
+/// citation needs, the key inside `label(…)` and the bibliography's own path.
 ///
 /// A newline is the one addition a code block needs. A literal cannot hold one,
 /// and inline code never carries one, because CommonMark folds a code span's
