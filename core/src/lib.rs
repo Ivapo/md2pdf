@@ -6,6 +6,7 @@
 //! natively and to `wasm32` without a rewrite, and it is why an image arrives as
 //! named bytes rather than as a path this crate would have to open.
 
+mod bibliography;
 mod emit;
 mod frontmatter;
 mod math;

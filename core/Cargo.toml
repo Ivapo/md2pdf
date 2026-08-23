@@ -21,5 +21,11 @@ thiserror = "2"
 # them the same way rather than by their raw spelling. This is already in the
 # tree as pulldown-cmark's own dependency.
 unicase = "2"
+# The bibliography reader, and not a second one: this is the crate and the
+# version `typst-library` 0.15.1 already depends on directly, so naming it here
+# adds no crate to the tree — `biblatex` 0.12.0 arrives under it either way, on
+# `wasm32` as well. Reading the file with Typst's own reader at Typst's own
+# version is also what stops this crate's key set and Typst's disagreeing.
+hayagriva = "0.10.1"
 typst = "0.15.1"
 typst-pdf = "0.15.1"
