@@ -13,16 +13,18 @@
 //! in the page, and two consumers read that same element: the page itself, and
 //! this file through `include_str!`. One copy of one thing.
 //!
-//! **The page's one image arrives the same way.** Phase 3 gave the page a file
-//! of its own, inline in the same document, and every example here is compiled
-//! with it in hand — ignored by the ten that name no image, load-bearing for the
-//! one that does. Excluding that row from the gate was refused deliberately: a
-//! row no test compiles is exactly the claim this file exists to prevent.
+//! **The page's two files arrive the same way.** Phase 3 gave the page an image
+//! of its own, inline in the same document, and `mpdf-007` Phase 4 sent a
+//! bibliography down the same attribute; every example here is compiled with
+//! both in hand — ignored by the eleven that name no image and the eleven that
+//! name no bibliography, load-bearing for the one apiece that does. Excluding
+//! either row from the gate was refused deliberately: a row no test compiles is
+//! exactly the claim this file exists to prevent.
 //!
 //! **The column beside each example is generated here, and checked here.** Every
 //! `md2pdf` column has been compiled by this file since Phase 1; the column
-//! opposite was prose nothing checked, and three of the eleven had drifted off
-//! the baseline the page declares. Phase 4 replaced it with
+//! opposite was prose nothing checked, and three of the eleven the page then
+//! carried had drifted off the baseline it declares. Phase 4 replaced it with
 //! `md2pdf_core::md_to_html` over the same source — one parse, one set of
 //! options, pulldown-cmark's own writer instead of the emitter — stored in the
 //! page between `<!--html:NAME-->` markers. **The generator is this test**:
@@ -46,7 +48,7 @@ const PAGE: &str = include_str!("../../web/index.html");
 /// Asserted rather than counted, so an element that stops matching the marker —
 /// a renamed attribute, a mangled tag — fails the suite instead of silently
 /// leaving it and taking its claim with it.
-const EXPECTED: usize = 11;
+const EXPECTED: usize = 12;
 
 /// The opening of an example element. An example must carry **both** this and a
 /// `data-example` attribute: the page will select on the attribute and this file
@@ -54,19 +56,37 @@ const EXPECTED: usize = 11;
 /// loaded by the page and checked by nothing.
 const OPEN: &str = "<script type=\"text/markdown\"";
 
-/// The opening of the element carrying the page's one image file.
+/// How many `data-asset` elements the page is expected to carry.
+///
+/// **This one moves against [`EXPECTED`] rather than with it**, and is written
+/// separately for that reason: it is a count of the page's own files, not of its
+/// examples, so a row added or removed leaves it alone and a file added or
+/// removed leaves the other alone.
+const ASSETS: usize = 2;
+
+/// The opening of the element carrying the page's image file.
 ///
 /// A different type from the examples', and carrying no `data-example`
 /// attribute — so the count above ignores it, and so does the page's
 /// `script[data-example] { display: block }` override, which would otherwise
 /// show a reader several lines of raw SVG.
-const ASSET_OPEN: &str = "<script type=\"image/svg+xml\"";
+const IMAGE_OPEN: &str = "<script type=\"image/svg+xml\"";
+
+/// The opening of the element carrying the page's bibliography file.
+///
+/// **One attribute, two elements, told apart by their `type`.** `data-asset`'s
+/// value *is* the path `md2pdf_core::Asset` is given, which is as true of a
+/// `.yml` as of an `.svg`, so a second attribute would be a second mechanism for
+/// something the page already has one word for. The type is what the page's own
+/// module selects on and what this file scans for, and it is also what keeps the
+/// `data:` URI substitution below keyed to the image alone.
+const BIBLIOGRAPHY_OPEN: &str = "<script type=\"application/yaml\"";
 
 /// What a generated block may never contain.
 ///
 /// The first three would hand this file's own scans a phantom element to find —
-/// a second `<script type="text/markdown"`, a twelfth `data-example="`, a second
-/// `data-asset="` — and `<script` would also be executable content reaching the
+/// a second `<script type="text/markdown"`, a thirteenth `data-example="`, a
+/// third `data-asset="` — and `<script` would also be executable content reaching the
 /// page out of an example. The fourth would break the delimiter the block is
 /// found by: an HTML comment cannot nest, so a `<!--` inside one ends it early.
 const REFUSED: [&str; 4] = ["<script", "data-example=\"", "data-asset=\"", "<!--"];
@@ -114,15 +134,45 @@ fn examples() -> Vec<Example<'static>> {
     found
 }
 
-/// The one image file the page carries, as the compiler takes it.
+/// Both files the page carries, as the compiler takes them.
+///
+/// The page hands every compile both, so this file does too: `md_to_pdf` ignores
+/// an asset the document never names, and a channel open to one row alone would
+/// be a page that draws its figure on a click and refuses it on the reader's
+/// next keystroke.
+fn assets() -> [Asset; 2] {
+    [image(), bibliography()]
+}
+
+/// The image file the page carries, as the compiler takes it.
 ///
 /// **The name is read, not duplicated.** The element's attribute value *is* the
 /// path handed to `md2pdf_core::Asset`, and the caption row's own
 /// `![…](pipeline.svg)` must equal it. Nothing asserts that equality and nothing
 /// needs to: a row naming a different file comes back `MissingImage` from
 /// `core/src/lib.rs:collect` and fails `every_ok_example_compiles`.
-fn asset() -> Asset {
-    let (attributes, content) = asset_element();
+///
+/// It is named apart from [`bibliography`] because the `data:` URI substitution
+/// below is the image's alone — a bibliography is named in the frontmatter and
+/// never as an image destination, so generalizing that rule would add a branch
+/// nothing takes.
+fn image() -> Asset {
+    named(IMAGE_OPEN)
+}
+
+/// The bibliography file the page carries, as the compiler takes it.
+///
+/// Same reading as [`image`] and for the same reason: the citation row's own
+/// `bibliography: refs.yml` must equal this element's attribute, and a row naming
+/// a different file comes back `MissingBibliography` from
+/// `core/src/lib.rs:collect` rather than needing an assertion of its own.
+fn bibliography() -> Asset {
+    named(BIBLIOGRAPHY_OPEN)
+}
+
+/// One `data-asset` element, as the compiler takes it.
+fn named(open: &str) -> Asset {
+    let (attributes, content) = asset_element(open);
 
     Asset {
         path: attribute(attributes, "data-asset").to_string(),
@@ -130,15 +180,18 @@ fn asset() -> Asset {
     }
 }
 
-/// The asset element, as its attribute region and its content.
+/// One asset element, as its attribute region and its content.
 ///
-/// Two readers want different halves of the same element — the compiler wants
-/// the path and the bytes, the generated `data:` URI wants the media type — and
-/// one scan serves both rather than each finding the element for itself.
-fn asset_element() -> (&'static str, &'static str) {
+/// **The `type` is what picks it out**, not document order — the page's own
+/// module selects on the same attribute pair, so neither reader depends on which
+/// of the two elements happens to come first. Two readers want different halves
+/// of the same element — the compiler wants the path and the bytes, the generated
+/// `data:` URI wants the media type — and one scan serves both rather than each
+/// finding the element for itself.
+fn asset_element(open: &str) -> (&'static str, &'static str) {
     let start = PAGE
-        .find(ASSET_OPEN)
-        .expect("the page carries no asset element");
+        .find(open)
+        .unwrap_or_else(|| panic!("the page carries no `{open}` asset element"));
     let element = &PAGE[start..];
     let open_end = element
         .find('>')
@@ -150,13 +203,13 @@ fn asset_element() -> (&'static str, &'static str) {
     (&element[..open_end], &element[open_end + 1..close])
 }
 
-/// The media type the page declares for its one asset.
+/// The media type the page declares for its image.
 ///
 /// Read off the element rather than spelled a second time here: it is what the
 /// `data:` URI below announces, and a URI announcing a type the page does not
 /// carry would be this file asserting something the page never said.
 fn asset_media() -> &'static str {
-    attribute(asset_element().0, "type")
+    attribute(asset_element(IMAGE_OPEN).0, "type")
 }
 
 /// One double-quoted attribute value out of a tag's attribute region.
@@ -292,7 +345,7 @@ fn percent_encode(bytes: &[u8]) -> String {
 
 /// The page carries exactly the examples the phase says it does.
 #[test]
-fn the_page_carries_eleven_examples() {
+fn the_page_carries_twelve_examples() {
     let found = examples();
     assert_eq!(
         found.len(),
@@ -319,7 +372,7 @@ fn the_page_carries_eleven_examples() {
 /// Every example is marked, and marked with one of the two words the gate reads.
 ///
 /// Without this an example whose attribute is absent or misspelt would be
-/// skipped in silence while the count above still read ten — a claim on the page
+/// skipped in silence while the count above still read eleven — a claim on the page
 /// that nothing compiles.
 #[test]
 fn every_example_says_what_it_expects() {
@@ -383,13 +436,13 @@ fn every_example_is_flush_left_and_unpadded() {
 
 /// Every example the page presents as accepted is one the compiler accepts.
 ///
-/// Every one of them is handed the page's asset, because the page hands it to
-/// every compile: `md_to_pdf` ignores an asset the document never names, and a
-/// channel open to one row alone would be a page that draws its figure on a
-/// click and refuses it on the reader's next keystroke.
+/// Every one of them is handed **both** the page's files, because the page hands
+/// both to every compile: `md_to_pdf` ignores an asset the document never names,
+/// and a channel open to one row alone would be a page that draws its figure on
+/// a click and refuses it on the reader's next keystroke.
 #[test]
 fn every_ok_example_compiles() {
-    let assets = [asset()];
+    let assets = assets();
     for example in examples() {
         if example.expect != "ok" {
             continue;
@@ -419,7 +472,7 @@ fn every_ok_example_compiles() {
 /// terminal.
 #[test]
 fn every_refusal_prints_the_sentence_beside_it() {
-    let assets = [asset()];
+    let assets = assets();
     for example in examples() {
         if example.expect != "error" {
             continue;
@@ -466,35 +519,46 @@ fn the_message_elements_match_the_refusals() {
     );
 }
 
-/// The page carries one image file, and it obeys the half of the byte rule it can.
+/// The page carries its two files, and each obeys the half of the byte rule it can.
 ///
-/// One file, not several: the page selects the first such element and this file
-/// scans for the first, so a second would be read by neither and would sit there
-/// looking like a second channel. **No leading and no trailing newline**, for the
-/// same reason the examples have none — `textContent` in the page and the slice
-/// taken here are then the same bytes by construction. The indentation inside is
-/// deliberately unconstrained: these bytes reach Typst's image loader rather than
-/// a markdown parser whose parse depends on them.
+/// **Two, and told apart by their `type`.** The page and this file both select on
+/// the type rather than taking the first `data-asset` element, so neither is
+/// keyed to document order — but the count is still asserted, because a third
+/// element under this attribute would be read by neither and would sit there
+/// looking like a channel. **No leading and no trailing newline**, for the same
+/// reason the examples have none: `textContent` in the page and the slice taken
+/// here are then the same bytes by construction.
+///
+/// What is *not* asserted is indentation, and the two files differ on why. The
+/// SVG's is free — those bytes reach Typst's image loader rather than a parser
+/// whose reading depends on them. The bibliography's is load-bearing and reaches
+/// a YAML reader that does care, but a wrong indent there is not a silent pass:
+/// it is a parse failure `core/src/bibliography.rs:keys` names, or a key the
+/// citation row cannot resolve, and `every_ok_example_compiles` fails on either.
 #[test]
-fn the_page_carries_one_asset() {
+fn the_page_carries_two_assets() {
     assert_eq!(
         PAGE.matches("data-asset=\"").count(),
-        1,
-        "the page carries more than one asset element"
+        ASSETS,
+        "the page carries a number of asset elements other than {ASSETS}"
     );
 
-    let asset = asset();
-    assert!(!asset.path.is_empty(), "the asset element names no path");
+    for asset in assets() {
+        assert!(!asset.path.is_empty(), "an asset element names no path");
 
-    let content = std::str::from_utf8(&asset.bytes).expect("the asset is not UTF-8");
-    assert!(
-        !content.starts_with('\n'),
-        "the asset element has a leading newline"
-    );
-    assert!(
-        !content.ends_with('\n'),
-        "the asset element has a trailing newline"
-    );
+        let content = std::str::from_utf8(&asset.bytes)
+            .unwrap_or_else(|_| panic!("the '{}' asset is not UTF-8", asset.path));
+        assert!(
+            !content.starts_with('\n'),
+            "the '{}' asset element has a leading newline",
+            asset.path
+        );
+        assert!(
+            !content.ends_with('\n'),
+            "the '{}' asset element has a trailing newline",
+            asset.path
+        );
+    }
 }
 
 /// No expected message needs a character reference to reach the page intact.
@@ -556,16 +620,17 @@ fn every_example_carries_one_generated_block() {
 ///
 /// **This is the assertion the column never had.** Every `md2pdf` column has been
 /// compiled since Phase 1 and the one beside it was prose — and measured through
-/// `md_to_html`, three of the eleven asserted behaviour these options contradict:
+/// `md_to_html`, three of the eleven the page then carried asserted behaviour
+/// these options contradict:
 /// two described the dollars printing as literal text, which `ENABLE_MATH`
 /// refuses, and one promised a rule this backend draws no `<hr>` for.
 #[test]
 fn every_generated_block_is_the_parsers_own_html() {
-    let asset = asset();
+    let image = image();
     for example in examples() {
         assert_eq!(
             stored_html(example.name),
-            generated(example.content, &asset),
+            generated(example.content, &image),
             "the '{}' row's other column is not what the parser writes for its source \u{2014} \
              regenerate with `cargo test -p md2pdf-core --test page_examples_test -- \
              --ignored bless`",
@@ -574,7 +639,7 @@ fn every_generated_block_is_the_parsers_own_html() {
     }
 }
 
-/// The page's image is named once across the eleven outputs, and inlined there.
+/// The page's image is named once across the twelve outputs, and inlined there.
 ///
 /// **The assertion above cannot fail on this.** A `data:` URI encoded wrongly
 /// leaves the page and the generator agreeing about bytes that render nothing, so
@@ -584,12 +649,12 @@ fn every_generated_block_is_the_parsers_own_html() {
 /// meeting a broken image on the published page.
 #[test]
 fn the_assets_destination_is_inlined_exactly_once() {
-    let asset = asset();
+    let image = image();
     let raw: usize = examples()
         .iter()
         .map(|example| {
             md_to_html(example.content)
-                .matches(&destination(&asset))
+                .matches(&destination(&image))
                 .count()
         })
         .sum();
@@ -600,7 +665,7 @@ fn the_assets_destination_is_inlined_exactly_once() {
 
     for example in examples() {
         assert!(
-            !generated(example.content, &asset).contains(&destination(&asset)),
+            !generated(example.content, &image).contains(&destination(&image)),
             "the '{}' row's column still names the image file rather than carrying it",
             example.name
         );
@@ -610,9 +675,9 @@ fn the_assets_destination_is_inlined_exactly_once() {
 /// No generated block carries a marker this file or the page scans for.
 #[test]
 fn no_generated_block_carries_a_marker_of_its_own() {
-    let asset = asset();
+    let image = image();
     for example in examples() {
-        let block = generated(example.content, &asset);
+        let block = generated(example.content, &image);
         for refused in REFUSED {
             assert!(
                 !block.contains(refused),
@@ -623,7 +688,7 @@ fn no_generated_block_carries_a_marker_of_its_own() {
     }
 }
 
-/// Write the eleven generated blocks into the page.
+/// Write the twelve generated blocks into the page.
 ///
 /// **Not part of the gate** — `#[ignore]` keeps it out of the
 /// `cargo test --workspace` every phase runs — and the constraint it satisfies is
@@ -642,7 +707,7 @@ fn no_generated_block_carries_a_marker_of_its_own() {
 #[test]
 #[ignore = "rewrites web/index.html; run it deliberately, then run the suite"]
 fn bless_the_generated_blocks() {
-    let asset = asset();
+    let image = image();
     let mut page = PAGE.to_string();
 
     for example in examples() {
@@ -658,7 +723,7 @@ fn bless_the_generated_blocks() {
             .unwrap_or_else(|| panic!("the '{}' generated block is never closed", example.name))
             + start;
 
-        page.replace_range(start..end, &generated(example.content, &asset));
+        page.replace_range(start..end, &generated(example.content, &image));
     }
 
     std::fs::write(SOURCE, page).expect("could not write the page");
