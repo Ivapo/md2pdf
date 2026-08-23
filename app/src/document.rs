@@ -49,8 +49,8 @@ pub struct Render {
     pub anchors: Vec<Anchor>,
 }
 
-/// Compile one markdown string, reading the image files it names from beside
-/// the document.
+/// Compile one markdown string, reading the files it names from beside the
+/// document.
 ///
 /// **The markdown is a parameter and not a path**, and that is the whole of
 /// what the text pane needed: the string the pane holds is what compiles, and
@@ -79,12 +79,23 @@ pub fn render_with(
     markdown: &str,
     read: impl FnMut(&Path) -> std::io::Result<Vec<u8>>,
 ) -> Render {
-    let assets = md2pdf_core::image_paths(markdown)
-        .ok()
-        .map(|images| images.into_iter().map(|image| image.path).collect());
+    // The path travels separately from the bytes, and this is the only place
+    // it is built: `read_assets_with` below returns a `Vec<Asset>` that reaches
+    // the compile and nothing else, where this list reaches the watch filter.
+    // Both exports come off one walk, so they answer or fail together — the
+    // bibliography first, as `cli/src/main.rs:read_assets` orders them.
+    let assets = md2pdf_core::image_paths(markdown).ok().map(|images| {
+        md2pdf_core::bibliography_path(markdown)
+            .ok()
+            .flatten()
+            .map(|named| named.path)
+            .into_iter()
+            .chain(images.into_iter().map(|image| image.path))
+            .collect()
+    });
 
-    let rendered = read_assets_with(markdown, directory, read).and_then(|assets| {
-        md2pdf_core::md_to_pdf_with_anchors(markdown, &assets).map_err(|e| e.to_string())
+    let rendered = read_assets_with(markdown, directory, read).and_then(|supplied| {
+        md2pdf_core::md_to_pdf_with_anchors(markdown, &supplied).map_err(|e| e.to_string())
     });
 
     // The anchors describe the bytes, so a failure has none — where `assets`
@@ -123,11 +134,11 @@ pub fn read_document(document: &Path) -> Result<String, String> {
         .map_err(|e| format!("cannot read {}: {e}", document.display()))
 }
 
-/// The directory a document's figures resolve against: the one it sits in.
+/// The directory a document's assets resolve against: the one it sits in.
 ///
-/// An empty parent is a document named with no directory at all, and joining a
-/// figure onto `""` resolves it against the working directory, which is what
-/// the CLI does for the same input.
+/// An empty parent is a document named with no directory at all, and joining an
+/// asset onto `""` resolves it against the working directory, which is what the
+/// CLI does for the same input.
 pub fn directory(document: &Path) -> &Path {
     document.parent().unwrap_or(Path::new(""))
 }
@@ -154,18 +165,20 @@ pub fn default_output(document: &Path) -> PathBuf {
     document.with_extension("pdf")
 }
 
-/// Read every image file the document names, from beside the document.
+/// Read every file the document names, from beside the document.
 ///
 /// This mirrors `cli/src/main.rs:read_assets`: a path resolves against the
-/// directory of the open file, so a document and its figures travel as one
-/// folder, and an asset keeps the path the markdown wrote, because that is the
-/// name the generated Typst source asks for. The duplication between the two
-/// wrappers is deliberate. A shared helper crate for forty lines would buy
-/// less than it costs, and the two report their errors differently, which is
-/// most of what those forty lines do.
+/// directory of the open file, so a document, its figures and its bibliography
+/// travel as one folder, and an asset keeps the path the markdown wrote,
+/// because that is the name the generated Typst source asks for. The
+/// duplication between the two wrappers is deliberate. A shared helper crate
+/// for forty lines would buy less than it costs, and the two report their
+/// errors differently, which is most of what those forty lines do.
 ///
-/// The list arrives in document order and may name one path twice, so this
-/// reads each file once.
+/// The image list arrives in document order and may name one path twice, so
+/// this reads each file once. The bibliography is one frontmatter value rather
+/// than something the walk finds, so it comes from an export of its own — and
+/// it is read first, since the line it names is the earliest one in the file.
 ///
 /// The read is a parameter for one gate. Phase 1 asks that a path the document
 /// names twice is read *once*, and a caller that counts its own reads is the
@@ -176,9 +189,28 @@ fn read_assets_with(
     mut read: impl FnMut(&Path) -> std::io::Result<Vec<u8>>,
 ) -> Result<Vec<Asset>, String> {
     let images = md2pdf_core::image_paths(markdown).map_err(|e| e.to_string())?;
+    let bibliography = md2pdf_core::bibliography_path(markdown).map_err(|e| e.to_string())?;
 
     let mut assets = Vec::new();
     let mut seen = HashSet::new();
+
+    if let Some(named) = bibliography {
+        let file = directory.join(&named.path);
+        let bytes = read(&file).map_err(|e| {
+            format!(
+                "cannot read {} for the bibliography at line {}: {e}",
+                file.display(),
+                named.line
+            )
+        })?;
+
+        seen.insert(named.path.clone());
+        assets.push(Asset {
+            path: named.path,
+            bytes,
+        });
+    }
+
     for image in images {
         if !seen.insert(image.path.clone()) {
             continue;
