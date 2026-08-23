@@ -5,12 +5,12 @@ note: >
   A document cites its sources and prints their reference list: the frontmatter names a
   bibliography file, the caller supplies it as bytes beside the images, `[@key]` becomes a
   citation, and Typst renders both the marks and the list.
-status: draft
+status: accepted
 last_updated: 2026-08-22
 
 phases:
   - name: "Phase 1 — a cited source reaches the reference list"
-    reviewed: null
+    reviewed: 2026-08-22
     shipped: null
     cut: null
     by: null
@@ -114,8 +114,18 @@ contradict* it. §2 below is where that is spent.
   frontmatter — that alternative is argued and refused in §2.
 - **Not full Pandoc-markdown.** `mpdf-001` §1.1's line holds. One citation form is
   borrowed because a reader already types it; the rest of Pandoc is not.
-- **No change to how a document without a bibliography compiles.** A file naming no
-  `bibliography` key emits exactly the Typst it emits today, byte for byte.
+- **No change to how a document carrying no citation compiles.** A file with no `[@…]`
+  in it, and naming no bibliography, emits exactly the Typst it emits today, byte for
+  byte. **This is deliberately narrower than the draft's "no document without a
+  bibliography changes"**, which round 1 showed was incompatible with the citation being
+  in the dialect at all: a `[@key]` in a document that names no bibliography is a
+  *refusal* under §2, not literal text, so that document does change and should. A
+  document that names a bibliography and cites nothing gains the list and its label —
+  the promise is about documents that do neither.
+- **Pandoc's prefix form is out of reach, and stated rather than discovered.** `[see @k]`
+  and a bracketed email `[a@b.com]` stay literal text: §2's callback fires on a reference
+  beginning `@` or `-@` and nothing else. This dialect has no prefix form, so they print
+  for the reason any unclaimed markdown prints.
 
 ## 2. Design
 
@@ -145,10 +155,91 @@ OQ-8 worked and shipped: a `[@key]` in a document today reaches the page as
 `\[\@smith2020\]`, visible and meaningless. A census of `tests/fixtures/`, `samples/` and
 the README is Phase 1's, on that precedent.
 
-**The Typst side is `#cite(<key>)` and not `@key`**, for the reason `mpdf-005` OQ-8's
+**The Typst side is `#cite(…)` and not `@key`**, for the reason `mpdf-005` OQ-8's
 own CORRECTED note gives one construct over: the marker form takes its label from the
 surrounding text and an adjacent character silently joins it, where the function form
 takes an argument that ends where the parenthesis does.
+
+**And the argument is `label("key")` rather than `<key>`, which is where this diverges
+from `mpdf-005` on purpose.** Measured in round 1: `#cite(<DBLP:books/lib/Knuth86a>)`
+fails to *parse* — "unclosed label; unexpected slash" — with no line and no construct,
+because Typst's label syntax admits a narrower character set than a bibliography key does.
+`label` is a constructor function over a string, so `#cite(label("DBLP:books/lib/Knuth86a"))`
+carries any key a `.bib` file holds. `mpdf-005` could constrain its names through
+`core/src/emit.rs:check_name` because a figure name is authored inside this dialect; **a
+citation key is authored in a file the author often did not write and cannot change**, so
+constraining it would refuse real bibliographies rather than protect anyone.
+
+**One consequence is worth recording because nothing warns about it.** Typst's labels are
+one namespace, so a figure named `{#smith2020}` in a document whose bibliography holds
+`smith2020` fails with "label `<smith2020>` occurs both in the document and a
+bibliography". Measured in round 1. `check_name` is where a named error for that would
+live; the message is Phase 2's, and Phase 1 records the collision rather than discovering
+it.
+
+### `[@key]` is not a link until a scoped callback makes it one (decision, recorded)
+
+**The draft said the emitter "maps a `[@key]` shortcut link", and there is no such
+event.** Measured in round 1 and reproduced: under `core/src/emit.rs:options`,
+`See [@smith2020] ok.` parses to five `Event::Text` runs — `"See "`, `"["`,
+`"@smith2020"`, `"]"`, `" ok."` — and no `Tag::Link` at all. A CommonMark shortcut
+reference link is only a link when a matching reference definition exists, and a
+citation never has one. **The central mechanism of Phase 1 did not exist.**
+
+Two routes were available and only one survives. Stitching the three text runs back
+together in the walk is refused: `core/src/emit.rs` has no inline cross-event machinery —
+`caption_name` and `equation_name` both work on a single run — and building some would put
+a second, hand-written inline parser beside `pulldown-cmark`, which is the thing
+`mpdf-001` §2 chose a parser to avoid.
+
+**So: `Parser::new_with_broken_link_callback`, over a callback that fires on a reference
+beginning `@` or `-@`.** `pulldown_cmark::BrokenLink` carries the `reference` text, and
+returning `None` leaves the source exactly as it is. **The `-@` half is not decoration:**
+round 2 measured that an `@`-only predicate leaves `[-@k]` — Pandoc's suppressed-author
+form, which OQ-3 refuses by name — as five `Text` runs the emitter never sees, so it would
+have reached the page as `\[\-\@k\]`: a refusal the spec promised and the parse could
+not deliver. Measured over the whole hostile set:
+
+| source | with the callback |
+|---|---|
+| `See [@smith2020] ok.` | `Link { ShortcutUnknown, id: "@smith2020" }` |
+| `Suppressed [-@smith2020] here.` | `Link { ShortcutUnknown, id: "-@smith2020" }` |
+| `[@a; @b]`, `[@smith2020, p. 33]` | one `Link`, whole payload in `id` |
+| `Collapsed [@k][] form.` | `Link { **CollapsedUnknown**, id: "@k" }` |
+| `an [ open bracket, a ] close bracket` | **byte-identical to today** |
+| `a[0]`, `[see this]`, `[](#fig:one)` | **byte-identical** |
+| `[link](http://x.com)`, `![alt](dot.png)`, `[ref][d]` | **byte-identical** |
+| `an email a@b.com and a bare @thing` | **byte-identical** |
+| `a prefix form [see @k]`, `[a@b.com]` | **byte-identical** |
+
+Three things that table settles, each of which round 2 raised:
+
+- **`[@k][]` is `CollapsedUnknown`, not `ShortcutUnknown`.** The emitter matches both. One
+  arm alone would send the collapsed form to the generic link arm as `#link("@k")[@k]` — a
+  wrong document where today it is literal text, which is worse than either.
+- **The callback returns the reference as the destination**, never an empty string: the
+  existing `Tag::Link` arm errors on an empty destination, and the value also reaches
+  `core/src/lib.rs:md_to_html`, where a citation renders as `<a href="@k">@k</a>`. That is
+  honest for `mpdf-006`'s comparison column — a writer with no notion of citations makes a
+  dangling link of one — and it is Phase 4's row to show, not Phase 1's problem.
+- **The boundary is `@` or `-@` at the start, and nothing else.** Pandoc's prefix form
+  `[see @k]` and a bracketed email `[a@b.com]` stay literal text. That is not a silent
+  drop of something the dialect claims: this dialect has no prefix form, so `[see @k]`
+  prints for the same reason any unclaimed markdown prints. §1.2 names it so it is a
+  stated boundary rather than a discovered one.
+
+**`link_type` rides `Tag::Link` at `Start` while the emitter decides at
+`End(TagEnd::Link)`**, so the discriminator is carried on the existing `LinkFrame` rather
+than read at the end. Ordinary work, named because the scope otherwise reads as one arm.
+
+**Both backends must take the same constructor, or `md_to_html` stops telling the truth.**
+`mpdf-006` Phase 4 rests on the demo's two columns coming out of "one parse with one set
+of options". A callback is not part of `Options`, so `emit` exposes a parser constructor
+rather than options alone, and `core/src/lib.rs:md_to_html` calls it. Measured: a plain
+`fn` pointer satisfies `BrokenLinkCallback`, so the constructor returns a concrete
+`Parser<'_, Cb>` with no boxing. **The demo's generated column needs no re-blessing** —
+censused in round 1, none of `web/index.html`'s eleven examples contains `[@`, so every
+stored block is byte-identical.
 
 ### The bibliography is a file the frontmatter names, and the records are not in the frontmatter (decision, recorded)
 
@@ -165,6 +256,16 @@ thing a bibliography is *for*; and it would mean inventing a record format, or e
 Hayagriva's inside YAML that `frontmatter.rs` parses with a hand-written line reader.
 **A format Typst already reads, in a file the author already has, is the smaller change
 and the larger capability.**
+
+**A citation in a document that names no bibliography is refused, not printed.** Round 1
+found the draft ambiguous here and the ambiguity was load-bearing: mapping only when the
+frontmatter key is present would leave `[@smith2020]` reaching the page as
+`\[\@smith2020\]` — visible, meaningless, and exactly the silent flattening
+`mpdf-001` §2 refuses for every other construct. So the mapping is unconditional and the
+missing bibliography is named with its line, in the dialect's own words rather than
+Typst's "the document does not contain a bibliography", which carries neither construct
+nor line. §1.2's non-goal is narrowed to match, because a promise that no document
+without a bibliography changes cannot survive the citation being in the dialect at all.
 
 **Typst 0.15.1 takes Hayagriva `.yaml`/`.yml` and BibLaTeX `.bib`**, and takes them
 either as paths or as raw bytes. Both extensions are accepted; nothing is gained by
@@ -187,6 +288,15 @@ what makes Phase 1 small.**
   it did, would be refused for not holding PNG or SVG data. It grows a second, unchecked
   entry — unchecked because Typst parses the file itself and names its own error, where
   an image's magic bytes are the only thing that could.
+- **A bibliography the caller did not supply is refused by name.** `collect` exists so a
+  missing file is named with the author's own path before Typst is asked — without it the
+  compile says "file not found (searched at refs.yml)" with no line. `Error::MissingImage`
+  is the shape and the wrong words, so a sibling variant carries the bibliography's.
+  **Its line comes from the shopping list**: the new export returns the path *with* the
+  line it was declared on, in the shape `core/src/lib.rs:ImageRef` already has. Only
+  `frontmatter::parse` ever sees that line today, so it is what carries it out — as a
+  field beside the key or as a second return value, which are indistinguishable in
+  behaviour and so are the implementer's to pick.
 - **The shopping list is the real new thing.** `core/src/lib.rs:image_paths` is derived
   from the walk — a document's images are found by reading it. A bibliography path is not
   walked; it is one frontmatter value. So a caller needs a second way to be told, and
@@ -206,10 +316,28 @@ frontmatter and never names a position.
 
 What it *looks* like is the look's, on `mpdf-001` §2's own seam: `core/assets/template.typ`
 and `core/assets/press-release.typ` decide type, and a two-column look has an opinion
-about a reference list that a one-column look does not. OQ-5 carries whether the heading
-above it is the emitter's or the look's, and it is a real question rather than a
-formality — a heading the emitter writes appears in the anchors `mpdf-003` Phase 6
-reports, and one the look writes does not.
+about a reference list that a one-column look does not.
+
+**The emitter writes `title: none`, and this is not a style preference — it is what stops
+Phase 1 silently breaking the desktop app.** Measured in round 1: `BibliographyElem`'s
+default `title: auto` realises a real `HeadingElem`, so a document with one markdown
+heading and a bibliography queries **two** headings where the walk counted one — and
+`core/src/lib.rs:anchors_from` returns an **empty** vector on a count mismatch, by design.
+Every document with a bibliography would therefore lose *all* its heading anchors, taking
+`mpdf-003` Phase 6's scroll sync and `web/src/lib.rs:anchors` with it, with no error
+anywhere. `title: none` keeps the counts equal.
+
+**So the label above the list is the look's, and it must not be a heading.** Each look
+gains a `show bibliography:` rule that prepends styled text — beside the `show figure:`
+rules both already carry — which is the same seam and costs the anchors nothing. This
+resolves OQ-5 rather than deferring it: Phase 1 cannot emit the call without choosing, so
+a phase that left it open would be a phase that forced a guess.
+
+**And both look files are in Phase 1's scope, which round 2 found the draft had left
+out.** `core/assets/template.typ` and `core/assets/press-release.typ` are where the rule
+goes. Without them `title: none` reaches looks that draw nothing, and the reference list
+runs straight on from the last paragraph with no label at all — and with OQ-5 closed,
+nothing would ever have forced one.
 
 ### The browser is the one front end this cannot reach, and it already has the answer (decision, recorded)
 
@@ -238,14 +366,20 @@ than one that lies.
   key that selects a rendering, and `template:` is precedent for the look owning one.
 - **OQ-3 — do the locator and suppressed-author forms land at all?** *(needs-input)*
   `[@key, p. 33]` and `[-@key]` are Pandoc's and Typst has `#cite(<k>, supplement: …)`
-  and `form: "year"`. Phase 1 refuses them by name rather than guessing; whether a later
-  phase adds them is not this spec's to assume.
+  and `form: "year"`. Phase 1 refuses them by name rather than guessing — **both are
+  within the callback's reach, measured in round 2**, which is what makes "refuses by
+  name" something the parse can actually deliver. Whether a later phase adds them is not
+  this spec's to assume.
 - **OQ-4 — `.bib`, `.yml`, or both?** *(deferred by evidence)* Typst 0.15.1 reads both
   and the emitter writes one string either way, so **the question does not discriminate**
   — there is nothing to decide until something costs different. Both are accepted.
 - **OQ-5 — does the reference list carry a heading, and whose is it?** *(design call)*
-  §2 records the consequence: a heading the emitter writes enters `mpdf-003` Phase 6's
-  anchor list, and one the look writes does not.
+  **RESOLVED 2026-08-22, in round 1: the emitter writes `title: none`, and the look draws
+  the label as styled text rather than a heading.** It stopped being a design call the
+  moment it was measured: Typst's default `title: auto` realises a real `HeadingElem`,
+  which makes the walk's heading count disagree with the compiled document's, and
+  `core/src/lib.rs:anchors_from` withdraws **every** anchor on a mismatch. Leaving this
+  open would have shipped a phase that silently breaks `mpdf-003` Phase 6. §2 carries it.
 - **OQ-6 — does Phase 4 happen at all?** *(needs-input)* The same question `mpdf-006`
   OQ-3 asked of its own image phase, with the same shape: it opens a narrow slice of a
   story two specs parked, and Phases 1–3 stand without it.
@@ -261,21 +395,80 @@ Phase 1 introduces; Phase 4 carries one into a front end that cannot open it.
 key compiles to a PDF with a mark in the body and a reference list at the end — the first
 instance of the observable this project has never been able to produce.
 
-- **Scope:** `core/src/frontmatter.rs` gains the seventh key; `core/src/emit.rs` maps a
-  `[@key]` shortcut link to `#cite(<key>)` and appends `#bibliography(…)` when the key is
-  present; `core/src/lib.rs` grows the new shopping-list export and `collect` admits one
-  unchecked asset; `cli/src/main.rs` reads the file. `TypstWorld` and `Asset` are
-  untouched, per §2. A census of `tests/fixtures/`, `samples/` and the README establishes
-  that no existing document carries a `[@…]` shortcut link, on `mpdf-005` OQ-8's
-  precedent. The locator and suppressed forms are refused by name (OQ-3).
-- **Exit gate:** `cargo test --workspace`, with a new fixture/golden pair under
-  `tests/fixtures` and `tests/golden` proving the emitted Typst, and a compile assertion
-  proving the PDF. A document naming no `bibliography` key emits **byte-identical** Typst
-  to what it emits today — asserted over every existing golden, which is what makes the
-  no-change claim in §1.2 checkable rather than asserted.
-- **Close-out:** `rules/pipeline.md` carries the seventh key, the citation construct, the
-  second asset channel and the new export. README gains the construct and moves the
-  supported count off twenty-two. One push.
+- **Scope:** six files, and §2 settles each.
+  - `core/src/emit.rs` exposes a **parser constructor** rather than `options` alone, built
+    with `Parser::new_with_broken_link_callback` over a callback firing on a reference
+    that begins `@` or `-@` — §2's block, with every hostile case measured.
+    `core/src/lib.rs:md_to_html` is repointed at it, so `mpdf-006`'s two columns keep
+    coming out of one parse. (`core/src/math.rs` holds a fourth `Parser::new_ext` call,
+    checked in round 2: it is inside `#[cfg(test)] mod tests` and filters `InlineMath`
+    only, so it is not a call site this change must follow.) **Both of `emit.rs`'s own
+    parser sites take the constructor** — `collect_definitions` and `emit`, the two walks
+    footnotes need — or a citation inside a footnote definition would print literally
+    while the same text in the body cited.
+  - `core/src/emit.rs` maps the resulting link to `#cite(label("key"))` — matching **both**
+    `LinkType::ShortcutUnknown` and `LinkType::CollapsedUnknown`, since `[@k][]` is the
+    latter and one arm alone would emit `#link("@k")[@k]`, a wrong document where today
+    there is literal text. The discriminator rides `Tag::Link` at `Start` and the decision
+    is made at `End`, so it is carried on the existing `LinkFrame`. It appends
+    `#bibliography(…, title: none)` when the frontmatter names one — **the key reaching
+    `label(…)` through `core/src/emit.rs:typst_string`**, which already escapes a `"` or a
+    `\` for URLs and is the reuse rather than a second escaper — and **refuses by name**,
+    each with its line: a citation with no bibliography declared, and the payloads
+    `[@a; @b]`, `[@k, p. 33]` and `[-@k]` (OQ-3).
+  - `core/src/frontmatter.rs` gains the seventh key.
+  - `core/src/lib.rs` grows the shopping-list export — returning the path **with the line
+    it was declared on**, in `ImageRef`'s shape — `collect` admits one unchecked asset,
+    and a `MissingBibliography` variant mirrors `MissingImage`. `Asset` and `TypstWorld`
+    are untouched, per §2 and confirmed in round 1.
+  - `core/assets/template.typ` and `core/assets/press-release.typ` each gain a
+    `show bibliography:` rule drawing the label as styled text, beside the `show figure:`
+    rules they already carry. **Without this the list arrives unlabelled**, `title: none`
+    having removed Typst's own — round 2's second blocker.
+  - `cli/src/main.rs` reads the file.
+  - A census of `tests/fixtures/`, `samples/`, `README.md` and `web/index.html` establishes
+    that nothing in the corpus carries `[@` — run in round 1, **zero occurrences** — which
+    is what makes the byte-identical claim in the gate provable rather than hopeful.
+  - **The desktop app is knowingly left behind**: `app/src/document.rs:read_assets_with`
+    builds its asset list from `image_paths` alone, so a document naming a bibliography
+    fails in the app until Phase 3. It fails there today too, on the unknown key, so this
+    is a gap and not a regression — but it is named here rather than discovered there.
+- **Exit gate:** `cargo test --workspace`, and six things it must contain.
+  1. A new fixture/golden pair under `tests/fixtures` and `tests/golden` proving the
+     emitted Typst, plus a compile assertion. The compile is stronger than "it runs":
+     `#cite` compiles only when the key resolves against a present bibliography, so a
+     green compile proves both the mark and the list reached the document. The fixture's
+     key **must carry a `:` and a `/`** — `DBLP:books/lib/Knuth86a` is the measured case —
+     since that is what fails under `<key>` and passes under `label("key")`.
+  2. **Every existing golden is byte-identical and no golden file is edited.** The goldens
+     are hand-written `include_str!` constants in `core/tests/golden_test.rs` with no
+     walking harness, so "unchanged" means the existing assertions still pass *and* the
+     diff touches no file under `tests/golden/`. Stated because the first half alone is
+     satisfied by editing a golden to match.
+  3. **`tests/golden/hostile.typ` is the named teeth.** Its fixture carries
+     `an [ open bracket, a ] close bracket`; an unscoped broken-link callback turns that
+     into a link and moves the golden. This is the one assertion that can fail for the
+     right reason, and round 1 showed that without naming it the byte-identical check
+     passes on the status quo whichever way the phase is built.
+  4. **Both looks draw the label.** **Two** fixtures, not one — a fixture carries one
+     `template:` key, and `tests/fixtures/press_release.md` is the precedent for the pair —
+     and the `show bibliography:` rule is asserted in each look the way
+     `core/tests/golden_test.rs` already asserts look contracts, by naming the needle it
+     must contain. Without this the phase's own resolution of OQ-5 is unenforced.
+  5. **Each refusal is asserted by its sentence**, `[-@k]` included: it is the one round 2
+     measured as unreachable under the narrower callback, so a gate that omits it would
+     pass a phase that silently prints it.
+  6. **The heading count is asserted.** A fixture with one markdown heading and a
+     bibliography returns a non-empty `anchors` from
+     `core/src/lib.rs:md_to_pdf_with_anchors` — which is what proves `title: none` was
+     written, and which is the assertion whose absence would have let Phase 1 silently
+     empty every anchor list in the project.
+- **Close-out:** `rules/pipeline.md` carries the seventh key, the citation construct and
+  its refusals, the parser constructor, the second asset channel and the new export; its
+  **"Twenty-two things are supported" count is that file's own** and moves — round 1
+  re-derived it, and `README.md` carries a prose list with no number, so the README gains
+  the construct and no count. `rules/web-demo.md` notes that `md_to_html` now reads the
+  shared constructor. One push.
 
 ### Phase 2 — a key the bibliography does not hold is named, not compiled
 
@@ -286,7 +479,10 @@ names its construct and its line, in the words the CLI prints — and a citation
 first construct whose failure currently escapes as `typst compilation failed: …`.
 
 - **Scope:** OQ-1 decides it. Either `core` reads the file and names the key with the
-  author's own line, or the Typst diagnostic is mapped to a new `Error` variant.
+  author's own line, or Typst's diagnostic is mapped to a new `Error` variant — measured
+  in round 1 as ``citation key `x` is not present in the bibliography``, which carries the
+  key but no line. The label-namespace collision §2 records — a figure name equal to a
+  bibliography key — is the second message this phase owns.
 - **Exit gate:** a fixture citing an absent key returns `Err` whose `to_string()` names
   the key and the line, asserted in `core/tests/golden_test.rs` and at the CLI.
 - **Close-out:** `rules/pipeline.md`'s rejection section. One push.
@@ -296,8 +492,10 @@ first construct whose failure currently escapes as `typst compilation failed: �
 *Produces the observable: **yes**.* Editing the `.yml` re-renders the pane, which is the
 whole promise `mpdf-003` makes about a document's files.
 
-- **Scope:** `app/src/watch.rs` — the loop watches the document and the images it names;
-  the bibliography joins that list, through the same export Phase 1 added.
+- **Scope:** two files, and round 1 found the draft named only one. `app/src/document.rs`
+  — `read_assets_with` builds the app's asset list from `image_paths` alone, so the
+  bibliography must be **read** here through the export Phase 1 added, or there is nothing
+  for a watch to re-render. `app/src/watch.rs` then watches it beside the images.
 - **Exit gate:** an integration check that changing the bibliography alone re-renders,
   matching how the image watch is already tested.
 - **Close-out:** `rules/desktop.md`'s watch section. One push.
