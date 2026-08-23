@@ -257,7 +257,7 @@ pub fn md_to_pdf(md: &str, assets: &[Asset]) -> Result<Vec<u8>> {
 /// workspace that pins every one it has.
 pub fn md_to_pdf_with_anchors(md: &str, assets: &[Asset]) -> Result<Rendered> {
     let emitted = emit::emit(md)?;
-    let assets = collect(&emitted.images, emitted.bibliography.as_ref(), assets)?;
+    let assets = collect(&emitted, assets)?;
     let world = TypstWorld::new(emitted.source, assets)?;
 
     let Warned { output, .. } = typst::compile(&world);
@@ -313,28 +313,41 @@ fn anchors_from(lines: Vec<usize>, pages: Vec<usize>) -> Vec<Anchor> {
 
 // -- assets -----------------------------------------------------------------
 
-/// Check every file the document names, then build the map the world serves.
+/// Check every file the document names and every key it cites, then build the
+/// map the world serves.
 ///
 /// This runs before the compile, and that order is the whole point. A missing
-/// or a mislabeled file would otherwise break the compile second-hand, and
-/// Typst's own error would name a span in `main.typ`, which the user has never
-/// seen. Here the error names the path and the line the document wrote.
+/// file, a mislabeled one or a key nothing holds would otherwise break the
+/// compile second-hand, and Typst's own error would name a span in `main.typ`,
+/// which the user has never seen. Here the error names the path, the key and
+/// the line the document wrote.
 ///
 /// One path is checked once, at its first reference, so a figure used twice
 /// reports one error rather than two.
 ///
-/// **The bibliography goes in unchecked, and first.** Unchecked because Typst
-/// parses the file itself and names its own error where an image's magic bytes
-/// are the only thing that could — and a `.yml` needs no second channel, since
-/// `Asset` is a named blob with nothing image-specific in it and
-/// [`TypstWorld::file`] already answers from this map by `FileId`. First because
-/// its line comes from the frontmatter and is therefore earlier than every
-/// image's.
-fn collect(
-    images: &[ImageRef],
-    bibliography: Option<&BibliographyRef>,
-    assets: &[Asset],
-) -> Result<HashMap<FileId, Bytes>> {
+/// **The bibliography goes in unchecked by [`bytes_match`], and first.**
+/// Unchecked because the file is parsed for its keys a few lines down and names
+/// its own error there, where an image's magic bytes are the only thing that
+/// could — and a `.yml` needs no second channel, since `Asset` is a named blob
+/// with nothing image-specific in it and [`TypstWorld::file`] already answers
+/// from this map by `FileId`. First because its line comes from the frontmatter
+/// and is therefore earlier than every image's.
+///
+/// **The two citation checks live here rather than in `emit` because this is
+/// the only place the bibliography's bytes exist** — emission reads no file on
+/// either channel, which is what lets `md_to_typst` work on a document whose
+/// bibliography is not beside it.
+///
+/// **Where several refusals are candidates, the earliest line is the error.**
+/// One rule over every refusal this function can raise, not one per class: a
+/// document with a missing image on line 3 and an absent key on line 9 has two,
+/// and answering with the later one would send the author past the first thing
+/// that is wrong. This is what `emit::check_references` and
+/// `emit::check_citations` already do inside the walk, and for the reason they
+/// record — "the first" out of a set varies between runs. Two refusals on one
+/// line are settled by the order below, which is the order this function
+/// already checked in.
+fn collect(emitted: &emit::Emitted, assets: &[Asset]) -> Result<HashMap<FileId, Bytes>> {
     let supplied: HashMap<&str, &[u8]> = assets
         .iter()
         .map(|asset| (asset.path.as_str(), asset.bytes.as_slice()))
@@ -342,43 +355,123 @@ fn collect(
 
     let mut map = HashMap::new();
     let mut seen = HashSet::new();
+    let mut refusals: Vec<(usize, Error)> = Vec::new();
 
-    if let Some(named) = bibliography {
-        let bytes = supplied
-            .get(named.path.as_str())
-            .ok_or_else(|| Error::MissingBibliography {
-                path: named.path.clone(),
-                line: named.line,
-            })?;
-        map.insert(file_id(&named.path)?, Bytes::new(bytes.to_vec()));
+    if let Some(named) = &emitted.bibliography {
+        match supplied.get(named.path.as_str()) {
+            None => refusals.push((
+                named.line,
+                Error::MissingBibliography {
+                    path: named.path.clone(),
+                    line: named.line,
+                },
+            )),
+            Some(bytes) => {
+                map.insert(file_id(&named.path)?, Bytes::new(bytes.to_vec()));
+                match bibliography::keys(&named.path, bytes) {
+                    // A file that does not parse has no key set, so the two
+                    // checks below have nothing to run against. Its own line is
+                    // the frontmatter's and is earlier than either of theirs.
+                    Err(problem) => refusals.push((
+                        named.line,
+                        Error::Citation {
+                            line: named.line,
+                            problem,
+                        },
+                    )),
+                    Ok(keys) => refusals.extend(unresolved(&keys, emitted)),
+                }
+            }
+        }
     }
 
-    for image in images {
+    for image in &emitted.images {
         if !seen.insert(image.path.as_str()) {
             continue;
         }
 
-        let bytes = supplied
-            .get(image.path.as_str())
-            .ok_or_else(|| Error::MissingImage {
-                path: image.path.clone(),
-                line: image.line,
-            })?;
+        let Some(bytes) = supplied.get(image.path.as_str()) else {
+            refusals.push((
+                image.line,
+                Error::MissingImage {
+                    path: image.path.clone(),
+                    line: image.line,
+                },
+            ));
+            continue;
+        };
 
         // The emitter has already refused every extension outside Typst's own
         // table, so the extension is known here and it alone names the format.
         let extension = emit::extension_of(&image.path).unwrap_or_default();
         if !bytes_match(&extension, bytes) {
-            return Err(Error::ImageFormat {
-                path: image.path.clone(),
-                line: image.line,
-                format: format_name(&extension).to_string(),
-            });
+            refusals.push((
+                image.line,
+                Error::ImageFormat {
+                    path: image.path.clone(),
+                    line: image.line,
+                    format: format_name(&extension).to_string(),
+                },
+            ));
+            continue;
         }
 
         map.insert(file_id(&image.path)?, Bytes::new(bytes.to_vec()));
     }
-    Ok(map)
+
+    match refusals.into_iter().min_by_key(|(line, _)| *line) {
+        Some((_, error)) => Err(error),
+        None => Ok(map),
+    }
+}
+
+/// Every citation the bibliography cannot honour, and every name both of them
+/// hold.
+///
+/// Two refusals, one key set, and Typst raises both itself in words that carry
+/// no line the author would recognise: ``citation key `k` is not present in the
+/// bibliography``, and ``label `<k>` occurs both in the document and a
+/// bibliography``.
+///
+/// **The collision needs three ingredients and the reference is the third.** A
+/// figure named `{#k}` in a document whose bibliography holds `k` compiles
+/// perfectly well, and so does the same document citing `[@k]`; Typst raises
+/// only where a `[](#k)` points at the shared label, and then whether or not the
+/// key is cited. That is where the message lives — it is raised while resolving
+/// a reference, not while realising a bibliography — so this is a test on
+/// [`emit::Emitted::referenced`] and never on what was declared or cited.
+fn unresolved(keys: &HashSet<String>, emitted: &emit::Emitted) -> Vec<(usize, Error)> {
+    let absent = emitted
+        .cited
+        .iter()
+        .filter(|(key, _)| !keys.contains(key))
+        .map(|(key, line)| {
+            (
+                *line,
+                Error::Citation {
+                    line: *line,
+                    problem: format!("'@{key}' is cited and the bibliography does not hold it"),
+                },
+            )
+        });
+
+    let shared = emitted
+        .referenced
+        .iter()
+        .filter(|(name, _)| keys.contains(name))
+        .map(|(name, line)| {
+            (
+                *line,
+                Error::Citation {
+                    line: *line,
+                    problem: format!(
+                        "'{name}' names something in this document and a key in the bibliography, and one reference cannot mean both"
+                    ),
+                },
+            )
+        });
+
+    absent.chain(shared).collect()
 }
 
 /// Whether the bytes hold the format that the extension names.
