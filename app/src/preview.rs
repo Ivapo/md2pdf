@@ -644,6 +644,14 @@ mod tests {
         document
     }
 
+    /// A copy of `tests/fixtures/citations.md` and the bibliography it names.
+    fn citing_document_in(dir: &Path) -> PathBuf {
+        let document = dir.join("citations.md");
+        std::fs::copy(fixture("citations.md"), &document).unwrap();
+        std::fs::copy(fixture("refs.yml"), dir.join("refs.yml")).unwrap();
+        document
+    }
+
     /// A preview holding one document, read from disk and compiled, built
     /// without a session.
     fn compiled(document: &Path) -> Preview {
@@ -760,6 +768,82 @@ mod tests {
         std::fs::copy(fixture("mark.svg"), dir.join("figures/new.svg")).unwrap();
 
         assert!(wait_for(&compiles, 2) >= 2, "creating the figure compiles");
+        assert!(session.preview().pdf().unwrap().starts_with(b"%PDF"));
+        assert!(!session.preview().is_stale());
+    }
+
+    /// The bibliography moves and nothing else does, and the page that comes
+    /// back is a real one.
+    ///
+    /// **The compile count is not the assertion here.** [`Session::on_change`]
+    /// calls `on_render()` whenever the asset mark is set, a failed compile
+    /// included, so a counter alone passes an app that publishes the path to
+    /// the filter and never supplies the bytes: it would go 1 → 2 while every
+    /// compile of the two errored `MissingBibliography`. The bytes and the
+    /// stale mark are what tell the two apart.
+    #[test]
+    fn a_replaced_bibliography_compiles_again_and_the_page_is_good() {
+        let dir = scratch_dir("watch-bibliography");
+        let document = citing_document_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1, "opening compiles once");
+        assert!(session.preview().pdf().unwrap().starts_with(b"%PDF"));
+
+        // The same key under a different record, so the citation still
+        // resolves: a compile that reached these bytes succeeds, and one that
+        // reached nothing fails on the file rather than on the key.
+        std::fs::write(
+            dir.join("refs.yml"),
+            concat!(
+                "\"DBLP:books/lib/Knuth86a\":\n",
+                "  type: book\n",
+                "  title: The TeXbook\n",
+                "  author: Knuth, Donald E.\n",
+                "  date: 1984\n",
+                "  publisher: Addison-Wesley\n",
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            wait_for(&compiles, 2),
+            2,
+            "rewriting the bibliography compiles"
+        );
+
+        assert!(session.preview().pdf().unwrap().starts_with(b"%PDF"));
+        assert!(!session.preview().is_stale());
+    }
+
+    /// A bibliography the document names minutes before anyone creates it.
+    ///
+    /// The sibling of
+    /// [`a_figure_that_does_not_exist_yet_is_watched_and_then_compiles`], and
+    /// the case that fails for an app publishing the path only out of a
+    /// successful read: the first compile has no bytes at all, so the list the
+    /// filter holds can only have come from the text.
+    #[test]
+    fn a_bibliography_that_does_not_exist_yet_is_watched_and_then_compiles() {
+        let dir = scratch_dir("bibliography-to-come");
+        let document = dir.join("citations.md");
+        std::fs::copy(fixture("citations.md"), &document).unwrap();
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        let error = session.preview().error().unwrap().to_string();
+        assert!(error.contains("refs.yml"), "{error}");
+        assert!(error.contains("line 3"), "{error}");
+        assert!(session.preview().pdf().is_none());
+
+        std::fs::copy(fixture("refs.yml"), dir.join("refs.yml")).unwrap();
+
+        assert!(
+            wait_for(&compiles, 2) >= 2,
+            "creating the bibliography compiles"
+        );
         assert!(session.preview().pdf().unwrap().starts_with(b"%PDF"));
         assert!(!session.preview().is_stale());
     }

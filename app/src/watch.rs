@@ -355,19 +355,28 @@ mod tests {
         assert_eq!(root(Path::new("paper.md")), Path::new("."));
     }
 
-    /// The document and both the figures it names reach the loop, and they
-    /// reach it as two different things. A sibling the document never names
-    /// reaches it as neither, though the watch covers it.
+    /// The document, both the figures it names and the bibliography it
+    /// declares reach the loop, and they reach it as two different things. A
+    /// sibling the document never names reaches it as neither, though the
+    /// watch covers it.
+    ///
+    /// The bibliography is nothing special here, and that is the finding: it
+    /// is one more string in the one list, sorted by the same comparison.
     #[test]
-    fn the_filter_sorts_the_document_from_its_figures_and_drops_the_rest() {
+    fn the_filter_sorts_the_document_from_its_assets_and_drops_the_rest() {
         let dir = scratch_dir("filter");
         let document = dir.join("figure.md");
-        let assets = ["dot.png".to_string(), "figures/mark.svg".to_string()];
+        let assets = [
+            "refs.yml".to_string(),
+            "dot.png".to_string(),
+            "figures/mark.svg".to_string(),
+        ];
 
         let real = dir.canonicalize().unwrap();
         let sort = |path: PathBuf| classify(&path, &document, &assets);
 
         assert_eq!(sort(real.join("figure.md")), Some(Change::Document));
+        assert_eq!(sort(real.join("refs.yml")), Some(Change::Asset));
         assert_eq!(sort(real.join("dot.png")), Some(Change::Asset));
         assert_eq!(sort(real.join("figures/mark.svg")), Some(Change::Asset));
         assert_eq!(sort(real.join("notes.txt")), None);

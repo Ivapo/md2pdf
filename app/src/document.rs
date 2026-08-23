@@ -313,6 +313,52 @@ mod tests {
         assert_eq!(reads, [dir.join("dot.png")]);
     }
 
+    /// A document and the bibliography it declares, read from beside it.
+    ///
+    /// The second asset channel at this app's own seam, mirroring
+    /// `cli/src/main.rs:read_assets`: the bibliography is read **first**, and
+    /// the asset keeps the path the frontmatter wrote rather than the resolved
+    /// one. `tests/fixtures/citations.md` names no image, so the one asset is
+    /// the whole list.
+    #[test]
+    fn a_document_and_its_bibliography_read_as_one_asset() {
+        let dir = scratch_dir("bibliography-doc");
+        std::fs::copy(fixture("refs.yml"), dir.join("refs.yml")).unwrap();
+
+        let markdown = std::fs::read_to_string(fixture("citations.md")).unwrap();
+        let mut reads = Vec::new();
+        let assets = read_assets_with(&markdown, &dir, |file| {
+            reads.push(file.to_path_buf());
+            std::fs::read(file)
+        })
+        .unwrap();
+
+        assert_eq!(reads, [dir.join("refs.yml")]);
+        assert_eq!(assets.len(), 1);
+        assert_eq!(assets[0].path, "refs.yml");
+        assert!(!assets[0].bytes.is_empty());
+    }
+
+    /// The same document beside no bibliography at all, which is how
+    /// `scratch_dir` stands until something copies one in.
+    ///
+    /// The sentence is `cli/src/main.rs:read_assets`' own, word for word, and
+    /// the line is the frontmatter's rather than any the walk could reach —
+    /// a bibliography is one value the walk never meets.
+    #[test]
+    fn a_missing_bibliography_names_the_path_the_line_and_the_reason() {
+        let dir = scratch_dir("bibliography-absent");
+        let _ = std::fs::remove_file(dir.join("refs.yml"));
+
+        let markdown = std::fs::read_to_string(fixture("citations.md")).unwrap();
+        let error = read_assets_with(&markdown, &dir, |file| std::fs::read(file)).unwrap_err();
+
+        assert!(error.contains("refs.yml"), "{error}");
+        assert!(error.contains("for the bibliography"), "{error}");
+        assert!(error.contains("line 3"), "{error}");
+        assert!(error.contains("os error"), "{error}");
+    }
+
     /// A fixture compiled the way the pane compiles: its text as a string,
     /// against the directory it sits in.
     fn render_fixture(name: &str) -> Render {
