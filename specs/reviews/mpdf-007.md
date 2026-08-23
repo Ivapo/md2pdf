@@ -2,6 +2,103 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 2 only — 2026-08-23 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, four non-blocking, all four folded. Converged in two
+rounds. All five round-1 blockers confirmed resolved **against the files**, with every
+behaviour the fixes are keyed to re-measured rather than read off the changelog.
+
+**The reviewer's own round-1 finding was corrected by the author, and the reviewer
+confirmed the correction.** It had written that the label collision "fires even when the
+colliding key is never cited, so the check is against the whole key set" — true, and
+incomplete. The full matrix, measured on both sides: a figure `{#smith2020}` in a document
+whose bibliography holds `smith2020` **compiles clean**, and so does the same document
+citing `[@smith2020]`; the message fires only where a **cross-reference** `[](#smith2020)`
+points at the shared label, and then whether or not the key is cited. Consistent with the
+message living at `typst-library-0.15.1/src/model/reference.rs:267` — reference
+resolution — rather than in `bibliography.rs`. **This moved the check's home twice**: off
+`check_name`, which runs at declaration and knows neither, and past `check_references`,
+which runs inside `emit` and never sees asset bytes, to beside `collect`. §2's paragraph
+carries a dated `CORRECTED` note in §6.1's form.
+
+**OQ-1 resolved rather than deferred, on OQ-5's precedent, and by measurement rather than
+argument.** Its cost sentence — "a BibLaTeX/Hayagriva reader this project would then own"
+— was measured false: `hayagriva 0.10.1` is already a **direct** dependency of
+`typst-library 0.15.1`, declared with no `default-features = false`, so its
+`["biblatex", "archive"]` defaults are already on and `biblatex 0.12.0` is already
+compiled. The reviewer checked `cargo tree -i hayagriva` inside `web/` and confirmed the
+no-new-crate claim holds for the wasm build too, and strengthened the faithfulness claim
+past what the author wrote: `typst-library`'s own `decode_library` dispatches a path
+bibliography on the extension into `io::from_yaml_str` and `io::from_biblatex_str`, so
+`core` mirrors Typst's **code path**, not merely its behaviour. The rejected branch is
+recorded with why — it is not impossible, `Names::cited` already carrying every key with
+its line, but it means matching a diagnostic's wording and leaves the collision message no
+route at all.
+
+The four non-blocking, all folded and all worth their round:
+
+1. **A third failure escapes, so the phase's own count was wrong.** `bibliography: refs.txt`
+   over a good Hayagriva file gives "unknown bibliography format (must be .yaml/.yml or
+   .bib)" — reachable, no line, because `frontmatter.rs` validates `portable_path` and
+   nothing about the extension. "Two remaining failures" became three, the module got a
+   third dispatch arm, and gate item 5 got a case that forces it.
+2. **A case-folding seam between `core` and Typst.** `decode_library` matches
+   `ext.to_lowercase()`; `core/src/emit.rs:extension_of` returns the extension unfolded.
+   Measured: `bibliography: refs.YML` compiles clean today and would be neither format to
+   a naive `match`. `bytes_match` carries the same shape, so it folded as a clause.
+3. **Gate item 3's construction hint was made stale by OQ-1's own resolution** — the
+   pattern the loop warns about, a fix introducing a defect. With `core` refusing before
+   the compile, Typst's diagnostic ordering no longer participates in anything the gate can
+   check. Re-derived: what differs is `Names::cited`'s vector order against line order, via
+   the footnote splice, which extends `cited` from a definition's body at the *reference*.
+   Measured — reference line 8, body citation line 10, definition's line 12 — the vector is
+   `[12, 10]` where the lines are `[10, 12]`. **A document with two plain body citations
+   does not discriminate**, so the obvious fixture would have had no teeth.
+4. **The earliest-line rule read as scoped to the two new checks**, leaving the ordering
+   against `collect`'s own refusals unstated. Widened to one rule over every refusal that
+   function can raise, on `collect`'s own recorded argument.
+
+**No finding was rejected, in either round** — as in every round of Phase 1's episode.
+
+### Round 1 — Phase 2 only — 2026-08-23 — fresh clean-context reviewer with repo access — **NOT READY**
+
+**Round 0 — is this the right thing to build at all?** Yes. Phase 2 produces no observable
+and says so and argues it, rather than assuming it: `mpdf-001` §2 makes the rejection rule
+non-negotiable, and the citation channel is where failures still escape as a raw Typst
+diagnostic. Measured against shipped Phase 1 before the round opened, the gap is real and
+unchanged — an absent key gives ``typst compilation failed: citation key `nosuchkey` is not
+present in the bibliography``: the key, no line, and none of the dialect's own words.
+
+Verdict: `NOT READY`, five blocking, six non-blocking. One generalist reviewer, matching
+every prior episode in this corpus.
+
+**The largest finding is that the phase had no scope.** `spec-authoring.md` §3 requires each
+phase to name the files and functions it touches, because one phase is one plan-mode pass
+from a fresh context; Phase 1's scope named six files with a bullet each and Phase 2 named
+**zero**. Under any resolution of OQ-1 the real work was discoverable only by reading code.
+
+The other four, and what each really was:
+
+1. **OQ-1 was open and the phase was scoped as "whatever OQ-1 decides".** The two branches
+   differ in dependency footprint, in where the error is raised and in what it can say —
+   the identical shape to OQ-5, which Phase 1's round 1 forced closed on the ground that a
+   phase leaving it open forces a guess.
+2. **The exit gate demanded a line one permitted branch could not produce**, so the gate and
+   the scope contradicted each other and an implementer had to guess which to believe.
+   `core/src/lib.rs:join` maps each `SourceDiagnostic` to `d.message` and drops every span,
+   and there is no markdown↔`main.typ` source map.
+3. **The one pointer the phase gave for its second message contradicted the code** —
+   `check_name` runs inside the walk, and `emit` never receives asset bytes.
+4. **The gate covered one of the phase's two messages**, so the phase could pass it with
+   half its scope unbuilt — the same defect round 2 rated blocking on Phase 1, when OQ-5's
+   label was assigned to the looks with no look fixture.
+
+Notable among the non-blocking: "a citation is the **first** construct whose failure escapes
+as `typst compilation failed: …`" is false — a PNG corrupt past its magic bytes already
+does, and `rules/pipeline.md` documents that as a recorded limit; and several absent keys
+produce several diagnostics joined by `; ` in Typst's order rather than the document's,
+which would have made the error non-deterministic.
+
 ### Round 3 — Phase 1 only — 2026-08-22 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, six non-blocking, all folded. Converged **on the cap**,

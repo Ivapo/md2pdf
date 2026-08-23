@@ -6,7 +6,7 @@ note: >
   bibliography file, the caller supplies it as bytes beside the images, `[@key]` becomes a
   citation, and Typst renders both the marks and the list.
 status: accepted
-last_updated: 2026-08-22
+last_updated: 2026-08-23
 
 phases:
   - name: "Phase 1 — a cited source reaches the reference list"
@@ -15,7 +15,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 2 — a key the bibliography does not hold is named, not compiled"
-    reviewed: null
+    reviewed: 2026-08-23
     shipped: null
     cut: null
     by: null
@@ -176,6 +176,23 @@ one namespace, so a figure named `{#smith2020}` in a document whose bibliography
 bibliography". Measured in round 1. `check_name` is where a named error for that would
 live; the message is Phase 2's, and Phase 1 records the collision rather than discovering
 it.
+
+> **CORRECTED 2026-08-23, by Phase 2's round 1.** The paragraph above is kept as it was
+> written and is wrong in both of its operative claims. **The collision needs a third
+> ingredient**: measured against shipped Phase 1 over the whole matrix, a figure named
+> `{#smith2020}` in a document whose bibliography holds `smith2020` **compiles clean**,
+> and so does the same document citing `[@smith2020]`. The message fires only where a
+> **cross-reference** points at the shared label — `[](#smith2020)` — and it fires there
+> whether or not the key is also cited. That is consistent with where the message
+> actually lives, which is `typst-library-0.15.1/src/model/reference.rs` and not
+> `bibliography.rs`: it is raised while *resolving a reference*, not while realising a
+> bibliography. **So `check_name` is the wrong home**, and not by a little: it runs at
+> *declaration*, inside the walk, where neither the reference nor the bibliography's
+> contents are known. `core/src/emit.rs:check_references` is the function that already
+> owns this class — a reference Typst would refuse with a message naming a label and no
+> line — but it too runs inside `emit`, which never sees asset bytes, so the check itself
+> lands beside `collect` where the bytes are. Phase 2's scope carries the corrected
+> version.
 
 ### `[@key]` is not a link until a scoped callback makes it one (decision, recorded)
 
@@ -355,12 +372,27 @@ than one that lies.
 ## 3. Open questions
 
 - **OQ-1 — does `core` parse the bibliography to name an unknown key, or map Typst's
-  diagnostic?** *(design call)* The dialect's rule is that nothing is dropped and every
-  refusal names its line — `core/src/emit.rs:describe` and `Error::Math` both do. A key
-  the file does not hold is that same failure, and Typst reports it in its own words with
-  a Typst position, which `Error::Compile` would pass through as "typst compilation
-  failed: …". Parsing the file in `core` buys the author's own line number and costs a
-  BibLaTeX/Hayagriva reader this project would then own. Phase 2 is where it lands.
+  diagnostic?** *(design call)* ~~Parsing the file in `core` buys the author's own line
+  number and costs a BibLaTeX/Hayagriva reader this project would then own.~~
+  **RESOLVED 2026-08-23, in Phase 2's round 1: `core` parses the file, through
+  `hayagriva`.** The dialect's rule is that nothing is dropped and every refusal names its
+  line — `core/src/emit.rs:describe` and `Error::Math` both do. A key the file does not
+  hold is that same failure, and Typst reports it in its own words with a Typst position,
+  which `Error::Compile` passes through as ``typst compilation failed: citation key
+  `nosuchkey` is not present in the bibliography`` — the key, and no line. **The cost that
+  made this a design call was measured and is not there.** `hayagriva 0.10.1` is already a
+  *direct* dependency of `typst-library 0.15.1`, and `biblatex 0.12.0` arrives under it,
+  so both are already compiled into every build including the `wasm32` one: naming
+  `hayagriva` in `core/Cargo.toml` adds **no crate to the tree**. It exposes exactly what
+  is needed and covers both formats OQ-4 accepts — `io::from_yaml_str`,
+  `io::from_biblatex_str`, `Library::get` and `Library::keys` — so this project owns no
+  reader of its own. **And because it is the same reader at the same version Typst uses,
+  `core`'s key set and Typst's cannot disagree**, which is the faithfulness risk any
+  second parser would have carried. The rejected branch is not impossible — Typst's
+  message names the key, and `core/src/emit.rs:Names::cited` already holds every key with
+  its line, so a key→line lookup would work — but it means matching a diagnostic's
+  *wording*, which a version bump moves silently, and it leaves the collision message of
+  §2 with no route at all, since that one needs the key set rather than a message.
 - **OQ-2 — which citation style, and is it frontmatter's or the look's?** *(design call)*
   Typst's default is IEEE-numeric. `equations: numbered` is precedent for a frontmatter
   key that selects a rendering, and `template:` is precedent for the look owning one.
@@ -472,20 +504,112 @@ instance of the observable this project has never been able to produce.
 
 ### Phase 2 — a key the bibliography does not hold is named, not compiled
 
-*Produces the observable: **no**, and it is argued.* It produces no new PDF; it replaces a
-Typst diagnostic with the dialect's own sentence. **It earns its place because the
+*Produces the observable: **no**, and it is argued.* It produces no new PDF; it replaces
+three Typst diagnostics with the dialect's own sentences. **It earns its place because the
 rejection rule is the one thing `mpdf-001` §2 makes non-negotiable** — a refusal that
-names its construct and its line, in the words the CLI prints — and a citation is the
-first construct whose failure currently escapes as `typst compilation failed: …`.
+names its construct and its line, in the words the CLI prints — and the citation channel
+carries the three remaining failures that escape as `typst compilation failed: …`.
+**Three rather than two**, round 2 having measured a third: `bibliography: refs.txt` over
+a perfectly good Hayagriva file gives "unknown bibliography format (must be .yaml/.yml or
+.bib)", reachable from ordinary markdown and naming no line, because
+`core/src/frontmatter.rs`'s `bibliography` arm validates `portable_path` and nothing about
+the extension. **Not the *first***:
+round 1 measured a PNG corrupt past its magic bytes doing the same, and `rules/pipeline.md`
+already documents that one as a recorded limit rather than a gap. These two are gaps,
+because both are reachable from ordinary markdown and neither names a line.
 
-- **Scope:** OQ-1 decides it. Either `core` reads the file and names the key with the
-  author's own line, or Typst's diagnostic is mapped to a new `Error` variant — measured
-  in round 1 as ``citation key `x` is not present in the bibliography``, which carries the
-  key but no line. The label-namespace collision §2 records — a figure name equal to a
-  bibliography key — is the second message this phase owns.
-- **Exit gate:** a fixture citing an absent key returns `Err` whose `to_string()` names
-  the key and the line, asserted in `core/tests/golden_test.rs` and at the CLI.
-- **Close-out:** `rules/pipeline.md`'s rejection section. One push.
+**OQ-1 is resolved and this phase builds its answer**, on the precedent OQ-5 set for Phase
+1: a phase that left the question open would be a phase that forced a guess.
+
+- **Scope:** six files.
+  - `core/Cargo.toml` gains `hayagriva = "0.10.1"` — the version `typst-library 0.15.1`
+    already pins, so **the tree gains no crate** and the `wasm32` build gains nothing.
+    OQ-1 records the measurement.
+  - **`core/src/bibliography.rs`, new**, and the only new module: bytes in, a key set out.
+    `io::from_yaml_str` for `.yml`/`.yaml` and `io::from_biblatex_str` for `.bib`,
+    dispatched on the extension through `core/src/emit.rs:extension_of` — already
+    `pub(crate)`, and already the function Typst's own format detection reads, so the two
+    cannot disagree about where a name ends. **Three arms, not two**: an extension outside
+    the pair is the third failure named above, refused here rather than left to Typst.
+    **And the dispatch folds case**, which is a seam round 2 measured: Typst's
+    `decode_library` matches on `ext.to_lowercase()` where `extension_of` returns the
+    extension unfolded, so `bibliography: refs.YML` compiles clean today and would be
+    neither format to a naive `match`. `core/src/lib.rs:bytes_match` carries the same
+    shape, so this is a clause rather than a new rule.
+    **A file whose own parse fails is its own refusal**, named with the frontmatter line,
+    rather than a panic or a Typst diagnostic: nothing checks the extension against the
+    content, so a `.yml` holding BibLaTeX reaches this module too.
+  - `core/src/emit.rs` exposes what the walk already computes. `Names::cited` holds every
+    key with its line and `Names::referenced` every referenced name with its line, and
+    **neither leaves `emit` today** — both become fields on `core/src/emit.rs:Emitted`,
+    the way `bibliography` did in Phase 1. Nothing about the walk changes.
+  - `core/src/lib.rs` runs both checks **beside `core/src/lib.rs:collect`, before the
+    compile**, which is the only place the bibliography's bytes exist — `emit` never sees
+    an asset, as `md_to_typst`'s own doc says. `Error::Citation { line, problem }` already
+    exists and already carries a line, so **no new variant is added**; Phase 1's own doc
+    comment on it already claims this ground.
+    - *An absent key* names the key and the **citation's own markdown line**, from
+      `Names::cited`.
+    - *The collision*, per §2's `CORRECTED` note: a name that is declared in the document,
+      present in the bibliography's key set, **and referenced** — the reference is the
+      trigger, measured over the whole matrix — named at the **reference's** line.
+    - **Where several are refused, the earliest line is the error**, by `min_by_key` over
+      a `Vec`, which is what `check_references` and `check_citations` already do and for
+      the reason they record: "the first" out of a set varies between runs. **The rule
+      reaches `collect`'s own refusals too**, which round 2 found the draft had left
+      scoped to the two new checks: a document with a missing image on line 3 and an absent
+      key on line 9 has two candidate errors, and `collect`'s doc already argues the
+      bibliography is checked before the images "since its line comes from the frontmatter
+      and is therefore earlier than every image's". One rule, over every refusal this
+      function can raise.
+  - `core/tests/golden_test.rs` and `cli/tests/cli_test.rs` carry the gate.
+- **One asymmetry is stated rather than discovered.** Every citation refusal Phase 1
+  shipped is raised inside `emit`, so `--emit-typst` refuses them too. Both of this
+  phase's need the bytes, so they can only run on the PDF path: `--emit-typst` will emit
+  `#cite(label("nope"))` for a key nothing holds, and that is correct — emission reads no
+  file on either channel, which `cli/tests/cli_test.rs:emit_typst_reads_no_bibliography`
+  already pins.
+- **Exit gate:** `cargo test --workspace`, and six things it must contain.
+  1. A fixture citing an absent key returns `Err(Error::Citation)` whose `to_string()`
+     names **the key and the citation's own line**, asserted in `core/tests/golden_test.rs`
+     and at the CLI on a **compile** run — not `--emit-typst`, per the asymmetry above.
+  2. **The collision is asserted too**, and by its own fixture: a figure named `{#k}`, a
+     bibliography holding `k`, and a `[](#k)` pointing at it. Without this item the phase
+     passes its gate with half its scope unbuilt — the defect round 2 rated blocking on
+     Phase 1, when OQ-5's label was assigned to the looks with no look fixture. The
+     fixture must carry the reference: the same document **without** it compiles clean,
+     so a fixture missing it would assert nothing.
+  3. **Where two keys are absent, the error names the one on the earlier line**, asserted
+     over a document built so the two orderings differ. A gate that took either would pass
+     a non-deterministic implementation. **The construction is the footnote splice**, and
+     round 2 re-derived it after the resolution of OQ-1 made the draft's hint stale — core
+     now refuses before the compile, so Typst's diagnostic ordering no longer participates
+     in anything the gate can check. What can differ is `Names::cited`'s *vector* order
+     against *line* order, because `core/src/emit.rs` extends `names.cited` from a
+     definition's body at the **reference**: measured with the reference on line 8, a body
+     citation on line 10 and the definition's on line 12, the vector is `[12, 10]` where
+     the lines are `[10, 12]`, so `.first()` and `min_by_key` disagree. **A document with
+     two plain body citations does not discriminate** — it comes out in document order —
+     so a fixture built from the obvious shape would have no teeth.
+  4. **A bibliography whose own parse fails is refused by name**, with the frontmatter
+     line, asserted over a `.yml` holding something that is not Hayagriva.
+  5. **Both accepted formats are exercised** — one `.yml` fixture and one `.bib` — since
+     OQ-4 accepts both and the extension is what dispatches. `tests/fixtures/refs.yml`
+     exists; the `.bib` is new. **A third case joins them**: an extension outside the pair
+     is refused by name with the frontmatter line, which is the third failure the
+     observable argument counts and which nothing else in this gate would force.
+  6. **Every existing golden is byte-identical and no golden file is edited.** This phase
+     emits no markup at all, so unlike Phase 1 **no golden may move for any reason** —
+     which makes this the cheapest possible check that the walk was not disturbed.
+- **Close-out:** `rules/pipeline.md`'s **`## Citations and the bibliography`** section —
+  *not* a "rejection section", which that file does not have; the rejection rule sits under
+  `## The dialect` and the citation failures under their own heading. It gains the two
+  refusals, the reader and its module. **Its `max_lines: 760` has seven lines of headroom
+  against 753 used, so the cap moves with the section.** `README.md`'s `## Citing sources`
+  says "Four shapes are errors" and "a key the file does not hold fails the compile", and
+  this phase falsifies both, so the count and that sentence move with it.
+  `rules/web-demo.md` needs nothing: no export crosses to wasm that did not before, and
+  the dependency was already in that build. One push.
 
 ### Phase 3 — the desktop app watches the bibliography
 
