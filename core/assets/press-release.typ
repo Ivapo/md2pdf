@@ -76,6 +76,18 @@
   // something rather than inheriting it.
   show figure.where(kind: raw): set align(left)
 
+  // The label above the reference list, answered here as everything else is.
+  // The emitter writes `title: none` and passes the words over, because Typst's
+  // own title is a real `heading`: the compiled document would carry one more
+  // than the markdown wrote, and every heading anchor would be withdrawn with
+  // nothing on the page to show for it. This look sets the label to its own
+  // heading rhythm — larger and further from the text than the article's, which
+  // is what one wide column has room for.
+  show bibliography: it => {
+    block(above: 1.8em, below: 0.85em, text(size: 12pt, weight: "bold", "References"))
+    it
+  }
+
   // The masthead. The dateline sits above the title, where a press release
   // carries it, and the title is set flush left rather than centred, which is
   // what separates this look from the article's on the page. A document that

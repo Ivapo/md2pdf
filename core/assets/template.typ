@@ -76,6 +76,19 @@
   // `grid`.
   show figure.where(kind: raw): set align(left)
 
+  // The label above the reference list. The emitter writes
+  // `#bibliography(…, title: none)` and hands the words to the look, because
+  // Typst's own title is a real `heading` — one more heading in the compiled
+  // document than the markdown wrote, which withdraws every anchor
+  // `md_to_pdf_with_anchors` reports and breaks the desktop app's scroll sync
+  // with nothing on the page to show for it. So this is styled text, set to the
+  // rhythm this look gives a heading without being one. The other bundled look
+  // picks its own size and spacing.
+  show bibliography: it => {
+    block(above: 1.4em, below: 0.8em, text(size: 1.2em, weight: "bold", "References"))
+    it
+  }
+
   // The title block spans every column. `scope: "parent"` is what lifts it out
   // of the column grid, and Typst supports that only together with `float`.
   // A document with none of the three keys gets no title block at all. The
