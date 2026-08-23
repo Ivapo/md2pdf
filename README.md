@@ -93,10 +93,10 @@ unsaved work. `⌘S`, or the Save button, writes the pane back to the file. Drag
 divider to give either side more room.
 
 **Save the file in another program and the page redraws too** — with one exception. The
-window watches the folder the document sits in, so editing a figure elsewhere redraws
-it as well. If the pane holds unsaved edits when the file changes underneath, the app
-keeps your text and says so rather than choosing for you: save to write the pane over
-the file, or open the file again to take it. It never merges the two.
+window watches the folder the document sits in, so editing a figure or the bibliography
+elsewhere redraws it as well. If the pane holds unsaved edits when the file changes
+underneath, the app keeps your text and says so rather than choosing for you: save to
+write the pane over the file, or open the file again to take it. It never merges the two.
 
 A document that will not compile leaves the last good page on screen, dimmed, with the
 error above it — the same sentence the command prints — and the page comes back when you

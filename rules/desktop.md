@@ -19,7 +19,7 @@ covers: >
   bundle and the document association that launches it, the anchor path that
   opens the pane on the author's own page, and the configuration facts a build
   enforces
-max_lines: 435
+max_lines: 455
 generated: 2026-08-15
 ---
 
@@ -179,27 +179,40 @@ wrote.
 ## The file I/O
 
 `app/src/document.rs:render` **takes the markdown as a parameter and not a path**,
-and hands that one string to both the image list and the compile. The read left it
+and hands that one string to both the asset list and the compile. The read left it
 for `app/src/document.rs:read_document`, one call further out, so that the string
 the pane holds is what compiles; `md2pdf_core::md_to_pdf` already took a `&str`,
 so `core` gained nothing for *that* change. It returns a `Render`, which carries the
-image paths **even when the compile failed** — emission reads the text and not
+asset paths **even when the compile failed** — emission reads the text and not
 the disk, so a document whose figures are all missing still names them, and that
-is what keeps the watch filter alive while nothing compiles. `images` is `None`
+is what keeps the watch filter alive while nothing compiles. `assets` is `None`
 only when the document did not parse, and the caller then keeps the list it had.
 
+**A file the document names makes two journeys through this app, and they are
+independent.** The bytes travel `read_assets_with` → `md_to_pdf_with_anchors` and
+reach nothing else; the paths are built separately in
+`app/src/document.rs:render_with`, which calls `md2pdf_core::image_paths` and
+`md2pdf_core::bibliography_path` for itself, and travel `Render::assets` → the
+watch filter. **The bytes are what make the document compile; the paths are what
+make a change to one of them redraw.** Both exports come off one walk, so they
+answer or fail together, and the paths arrive even when a read failed — which is
+what an asset named before it exists depends on.
+
 The compile itself is `md2pdf_core::md_to_pdf_with_anchors`, and `Render` carries
-its `anchors` beside the bytes. **They go the other way from `images`**: a failed
-compile has none, because they describe the *page* where the image list describes
+its `anchors` beside the bytes. **They go the other way from `assets`**: a failed
+compile has none, because they describe the *page* where the asset list describes
 the text. `app/src/document.rs:Anchor` is `md2pdf_core::Anchor` again, and the
 duplication is the one `read_assets_with` already makes — this copy crosses to
 the page inside `Status`, so it must serialize, and `core` carries no serde.
 
 `app/src/document.rs:read_assets_with` mirrors `cli/src/main.rs:read_assets` —
 resolve each path against `app/src/document.rs:directory`, read each once, and
-keep the path the markdown wrote. The duplication is deliberate: the two wrappers
-report their errors differently. Its read is a parameter, so a caller counting
-its own reads can check that a path named twice is read once, and
+keep the path the markdown wrote. **The bibliography is read first**, and its
+path seeds the same `seen` set the images are deduplicated against, because the
+line it names is the frontmatter's and is therefore earlier than every image's.
+The duplication is deliberate: the two wrappers report their errors differently.
+Its read is a parameter, so a caller counting its own reads can check that a
+path named twice is read once, and
 `app/src/document.rs:render_with` is the same seam one level up. Both classes of
 failure reach the page in the terminal's words: a `md2pdf_core::Error` through
 its `Display`, and a file that will not read through the sentence this builds.
@@ -213,18 +226,23 @@ binary reachable from the other.
 
 `app/src/watch.rs:root` is the whole watch set: **the document's own directory,
 watched recursively**. `core/src/emit.rs:check_image` refuses a URI scheme, a
-leading `/`, a `..` segment and a backslash, so every path a document can
-legally name resolves under there — one watch covers the document, every figure
-it names, every figure it will name, and every directory not yet created. It is
-computable from the document's path alone, so a document the dialect refuses is
-watched too. The limit: a figure that is a symlink out of the directory is not
+leading `/`, a `..` segment and a backslash, and `core/src/frontmatter.rs` puts
+the bibliography under that same rule, so every path a document can legally name
+resolves under there — one watch covers the document, every asset it names, every
+asset it will name, and every directory not yet created. It is computable from
+the document's path alone, so a document the dialect refuses is
+watched too. The limit: an asset that is a symlink out of the directory is not
 watched, because a watch follows the tree and not the targets.
 
-`app/src/watch.rs:classify` is the filter, and the list `image_paths` returns is
-what it filters against — the list is not the set, and it follows the buffer,
-because the buffer is the document now. **It sorts rather than admits**: an event
-is `Change::Document` or `Change::Figure` or neither, because the two no longer
-mean the same thing. The document **stays** in the filter though its events no
+`app/src/watch.rs:classify` is the filter, and the one list `image_paths` and
+`bibliography_path` fill is what it filters against — the list is not the set, and
+it follows the buffer, because the buffer is the document now. **It sorts rather
+than admits**: an event is `Change::Document` or `Change::Asset` or neither,
+because the two no longer mean the same thing. **A bibliography is one more string in that one list**
+rather than an arm of its own: the split is the open document against everything
+the disk supplies, and a bibliography sits on the second side for the reason a
+figure does. It also makes a *dropped* `bibliography:` key free, since
+`Preview::compile` replaces the whole list on every compile. The document **stays** in the filter though its events no
 longer mean "compile" — a path dropped from it would never reach the rule that
 decides what its events do mean. **Both sides are
 canonicalized**, and the loop depends on it: `notify` canonicalizes a path as it
@@ -250,7 +268,7 @@ need no clock and cannot flake.
 `app/src/watch.rs:settle` is the thread both intervals run on: it folds a stream
 into one call per quiet interval, accumulating what arrived. `app/src/watch.rs:start`
 registers the watch and settles `notify` events into a `Changed` — which of the
-document and the figures moved, since one window can hold both.
+document and the assets moved, since one window can hold both.
 `app/src/watch.rs:debounced` settles bare nudges, and is what the keyboard uses.
 
 **Dropping the `Watch` stops the loop**: it unregisters the directory and drops
@@ -262,7 +280,7 @@ whole mechanism by which opening a second document moves both.
 
 `app/src/preview.rs:Preview` is what the loop writes and the pane shows: **the
 text the pane holds and the text as it stood at the last open or save**, the last
-good PDF bytes, how long they took, the image list the filter reads, two counters,
+good PDF bytes, how long they took, the asset list the filter reads, two counters,
 a stale flag, the error and the divergence. The two strings are what
 `app/src/preview.rs:external_change` compares, and holding them here rather than
 in the page is what keeps that rule testable at all.
@@ -336,9 +354,9 @@ document before writing, because dropping a `Watch` or a typing channel does not
 join its thread and a thread mid-compile could otherwise write its page over a
 newer one.
 
-`Session::on_change` is where the document's events and the figures' events reach
-different code: a figure is a bare recompile, and the document runs the rule. A
-window that took the disk copy compiled inside the rule and read the new figures
+`Session::on_change` is where the document's events and the assets' events reach
+different code: an asset is a bare recompile, and the document runs the rule. A
+window that took the disk copy compiled inside the rule and read the new assets
 on the way, so one window never compiles twice, and **nothing is announced when
 nothing happened**.
 
