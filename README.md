@@ -584,7 +584,7 @@ the look says *how* — the format, and where on the line it sits. Both bundled 
 Without `title`, `author` and `date` together, the PDF gets no title block. Without the
 frontmatter altogether, it gets every default.
 
-A key outside the six, a `columns` value other than `1` or `2`, or a `template` or
+A key outside the seven, a `columns` value other than `1` or `2`, or a `template` or
 `equations` name outside its set, is an error that names the key and its line:
 
 ```console
