@@ -64,9 +64,30 @@ pub enum Error {
     #[error("name error at line {line}: {problem}")]
     Name { line: usize, problem: String },
 
+    /// A citation the document cannot honour, or a payload the dialect does not
+    /// read.
+    ///
+    /// This is not an `UnsupportedConstruct`, on the argument [`Error::Math`]
+    /// and [`Error::Name`] were both added under: the construct is a citation,
+    /// which the dialect supports, and what the error names is what the author
+    /// typed inside its brackets — or the bibliography key the frontmatter left
+    /// out. Typst raises on some of these itself, in its own words and with no
+    /// line the author would recognise.
+    #[error("citation error at line {line}: {problem}")]
+    Citation { line: usize, problem: String },
+
     /// The document names an image file that the caller did not supply.
     #[error("no image file supplied for '{path}' at line {line}")]
     MissingImage { path: String, line: usize },
+
+    /// The frontmatter names a bibliography file that the caller did not supply.
+    ///
+    /// A sibling of [`Error::MissingImage`] rather than a reuse of it: the words
+    /// are the only thing that differs, and they are the whole point — without
+    /// this the compile says "file not found (searched at refs.yml)" against a
+    /// span in a `main.typ` the user has never seen.
+    #[error("no bibliography file supplied for '{path}' at line {line}")]
+    MissingBibliography { path: String, line: usize },
 
     /// A supplied image holds bytes of a format other than the one its name
     /// claims.
@@ -152,7 +173,7 @@ pub struct Rendered {
 /// inspection, not a standalone `typst compile`. Emission reads no image
 /// bytes, so this function needs no assets.
 pub fn md_to_typst(md: &str) -> Result<String> {
-    Ok(emit::emit(md)?.0)
+    Ok(emit::emit(md)?.source)
 }
 
 /// Translate markdown into HTML, out of the same parse the emitter reads.
@@ -191,13 +212,28 @@ pub fn md_to_html(md: &str) -> String {
 ///
 /// The list may name one path more than once. The caller deduplicates it.
 pub fn image_paths(md: &str) -> Result<Vec<ImageRef>> {
-    Ok(emit::emit(md)?.1)
+    Ok(emit::emit(md)?.images)
+}
+
+/// Name the bibliography file the document's frontmatter declares, if any.
+///
+/// The shopping list's second half, and a second export rather than a widening
+/// of [`image_paths`], whose name and contract three callers cite. It has to be
+/// one: a document's images are *found* by reading it, so they fall out of the
+/// walk, where a bibliography is one frontmatter value that no walk would ever
+/// meet.
+///
+/// The line is the frontmatter line the key was written on, which is what lets a
+/// file the caller did not supply be refused in the author's own terms.
+pub fn bibliography_path(md: &str) -> Result<Option<BibliographyRef>> {
+    Ok(emit::emit(md)?.bibliography)
 }
 
 /// Translate markdown into Typst markup and compile it to a PDF.
 ///
-/// `assets` supplies the bytes of every path [`image_paths`] listed. An asset
-/// the document never names is ignored.
+/// `assets` supplies the bytes of every path [`image_paths`] listed, and of the
+/// one [`bibliography_path`] named. An asset the document never names is
+/// ignored.
 ///
 /// This is [`md_to_pdf_with_anchors`] with the anchors dropped, rather than a
 /// second path to the same bytes. Two paths over the same input that could
@@ -219,8 +255,9 @@ pub fn md_to_pdf(md: &str, assets: &[Asset]) -> Result<Vec<u8>> {
 /// a parameter is not, and writing one would mean adding a dependency to a
 /// workspace that pins every one it has.
 pub fn md_to_pdf_with_anchors(md: &str, assets: &[Asset]) -> Result<Rendered> {
-    let (typst_source, images, headings) = emit::emit(md)?;
-    let world = TypstWorld::new(typst_source, collect(&images, assets)?)?;
+    let emitted = emit::emit(md)?;
+    let assets = collect(&emitted.images, emitted.bibliography.as_ref(), assets)?;
+    let world = TypstWorld::new(emitted.source, assets)?;
 
     let Warned { output, .. } = typst::compile(&world);
     let document = output.map_err(|diags| Error::Compile(join(&diags)))?;
@@ -246,7 +283,7 @@ pub fn md_to_pdf_with_anchors(md: &str, assets: &[Asset]) -> Result<Rendered> {
 
     Ok(Rendered {
         pdf,
-        anchors: anchors_from(headings, pages),
+        anchors: anchors_from(emitted.headings, pages),
     })
 }
 
@@ -275,7 +312,7 @@ fn anchors_from(lines: Vec<usize>, pages: Vec<usize>) -> Vec<Anchor> {
 
 // -- assets -----------------------------------------------------------------
 
-/// Check every image the document names, then build the map the world serves.
+/// Check every file the document names, then build the map the world serves.
 ///
 /// This runs before the compile, and that order is the whole point. A missing
 /// or a mislabeled file would otherwise break the compile second-hand, and
@@ -284,7 +321,19 @@ fn anchors_from(lines: Vec<usize>, pages: Vec<usize>) -> Vec<Anchor> {
 ///
 /// One path is checked once, at its first reference, so a figure used twice
 /// reports one error rather than two.
-fn collect(images: &[ImageRef], assets: &[Asset]) -> Result<HashMap<FileId, Bytes>> {
+///
+/// **The bibliography goes in unchecked, and first.** Unchecked because Typst
+/// parses the file itself and names its own error where an image's magic bytes
+/// are the only thing that could — and a `.yml` needs no second channel, since
+/// `Asset` is a named blob with nothing image-specific in it and
+/// [`TypstWorld::file`] already answers from this map by `FileId`. First because
+/// its line comes from the frontmatter and is therefore earlier than every
+/// image's.
+fn collect(
+    images: &[ImageRef],
+    bibliography: Option<&BibliographyRef>,
+    assets: &[Asset],
+) -> Result<HashMap<FileId, Bytes>> {
     let supplied: HashMap<&str, &[u8]> = assets
         .iter()
         .map(|asset| (asset.path.as_str(), asset.bytes.as_slice()))
@@ -292,6 +341,17 @@ fn collect(images: &[ImageRef], assets: &[Asset]) -> Result<HashMap<FileId, Byte
 
     let mut map = HashMap::new();
     let mut seen = HashSet::new();
+
+    if let Some(named) = bibliography {
+        let bytes = supplied
+            .get(named.path.as_str())
+            .ok_or_else(|| Error::MissingBibliography {
+                path: named.path.clone(),
+                line: named.line,
+            })?;
+        map.insert(file_id(&named.path)?, Bytes::new(bytes.to_vec()));
+    }
+
     for image in images {
         if !seen.insert(image.path.as_str()) {
             continue;

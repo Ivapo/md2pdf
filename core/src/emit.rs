@@ -28,7 +28,7 @@ use unicase::UniCase;
 
 use crate::frontmatter::{self, Equations, Frontmatter};
 use crate::math;
-use crate::{Error, ImageRef, Result};
+use crate::{BibliographyRef, Error, ImageRef, Result};
 
 /// Characters that Typst markup mode interprets inside a text run.
 ///
@@ -282,6 +282,19 @@ struct Names {
     declared: Vec<Declaration>,
     /// Each referenced name and the line its link sits on.
     referenced: Vec<(String, usize)>,
+    /// Each citation key this walk wrote, and the line its `[@…]` sits on.
+    ///
+    /// It travels with the two above rather than beside them, because it needs
+    /// exactly what they need: a walk of a footnote definition collects these
+    /// and is then discarded, so a citation that appears only inside a footnote
+    /// must reach the document's walk on the [`Body`] its reference splices in.
+    ///
+    /// **The refusal it feeds cannot be raised where the citation is written.**
+    /// `collect_definitions` never parses the frontmatter — the metadata block
+    /// sits outside every definition — so its `front` is the default one, and a
+    /// missing-bibliography test inside the walk would refuse a citation in a
+    /// footnote of a document that names a bibliography perfectly well.
+    cited: Vec<(String, usize)>,
 }
 
 /// The link the walk is inside, held while its text is collected.
@@ -295,6 +308,13 @@ struct LinkFrame {
     url: String,
     /// The line the link opens on, which a refusal over it names.
     line: usize,
+    /// Which shape of link the parser read.
+    ///
+    /// A citation arrives as an unresolved shortcut or collapsed reference whose
+    /// destination the callback wrote, and that is half the discriminator. It
+    /// rides `Tag::Link` at `Start` while the emitter decides at
+    /// `End(TagEnd::Link)`, so it is carried here rather than read at the end.
+    link_type: LinkType,
 }
 
 /// Everything one walk of the event stream carries from event to event.
@@ -721,18 +741,29 @@ fn collect_definitions(md: &str) -> Definitions {
     found
 }
 
+/// What one walk of a document produced.
+///
+/// A record rather than a tuple because four things travel and three callers
+/// each want a different one. Every field comes out of the same walk that wrote
+/// the source, which is what stops the markup and the shopping list disagreeing
+/// about which paths the dialect accepts.
+pub(crate) struct Emitted {
+    /// The Typst markup, header and body and reference list.
+    pub source: String,
+    /// Every image the document names, in the order a reader meets them — which
+    /// puts an image inside a footnote definition at the first reference to that
+    /// footnote, where its content is set.
+    pub images: Vec<ImageRef>,
+    /// The line each heading sits on, in document order, which
+    /// [`crate::md_to_pdf_with_anchors`] pairs with the pages the compiled
+    /// headings landed on.
+    pub headings: Vec<usize>,
+    /// The bibliography the frontmatter named, if it named one.
+    pub bibliography: Option<BibliographyRef>,
+}
+
 /// Translate one markdown document into Typst markup.
-///
-/// The second part of the result is every image the document names, in the
-/// order a reader meets them — which puts an image inside a footnote definition
-/// at the first reference to that footnote, where its content is set. One walk
-/// writes both, so the source and the shopping list cannot disagree about which
-/// paths the dialect accepts.
-///
-/// The third is the line each heading sits on, in document order, which
-/// [`crate::md_to_pdf_with_anchors`] pairs with the pages the compiled headings
-/// landed on. It comes from the same walk for the same reason.
-pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>, Vec<usize>)> {
+pub(crate) fn emit(md: &str) -> Result<Emitted> {
     let found = collect_definitions(md);
     let mut notes = Notes {
         found: &found,
@@ -748,16 +779,42 @@ pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>, Vec<usize>)> {
 
     walk.unclosed()?;
     check_references(&walk.names, walk.front.equations)?;
+    check_citations(&walk.names, walk.front.bibliography.as_ref())?;
 
     // Taken off the walk before `finish` consumes it, the way the math flag
     // already is, so `Walk::finish` and `collect_definitions` need no change.
     let headings = std::mem::take(&mut walk.headings);
+    let bibliography = walk.front.bibliography.take();
 
     let mut out = header(&walk.front, walk.math);
     let (body, images) = walk.finish();
     out.push_str(body.trim_end_matches('\n'));
     out.push('\n');
-    Ok((out, images, headings))
+
+    // The reference list goes after the document's own content, which is where
+    // a reference list goes and the only placement the markdown gives it: the
+    // source names the file in the frontmatter and never names a position. What
+    // it *looks* like is the look's, reached with a `show bibliography:` rule.
+    //
+    // **`title: none` is not a style preference.** Typst's default `title: auto`
+    // realises a real heading, so a document with one markdown heading would
+    // compile two — and `crate::anchors_from` withdraws *every* anchor on a
+    // count mismatch, taking the desktop app's scroll sync with it and raising
+    // nothing anywhere. The label above the list is the look's, and it must not
+    // be a heading.
+    if let Some(named) = &bibliography {
+        out.push('\n');
+        out.push_str("#bibliography(");
+        out.push_str(&typst_string(&named.path));
+        out.push_str(", title: none)\n");
+    }
+
+    Ok(Emitted {
+        source: out,
+        images,
+        headings,
+        bibliography,
+    })
 }
 
 /// Translate one event into the walk's own state.
@@ -1356,6 +1413,7 @@ fn step(
             *link = Some(LinkFrame {
                 url,
                 line: line_of(md, range.start),
+                link_type,
             });
             bufs.push(String::new());
         }
@@ -1376,6 +1434,20 @@ fn step(
         Event::End(TagEnd::Link) => {
             let text = bufs.pop().expect("a link end follows its start");
             let frame = link.take().expect("a link end follows its start");
+
+            // A citation is decided before either of the two below, and its
+            // collected text is discarded: the payload is the destination the
+            // callback wrote, and the brackets' content is that same payload
+            // escaped as prose.
+            if wrote_citation(&frame) {
+                let key = cite_key(&frame.url, frame.line)?;
+                names.cited.push((key.to_string(), frame.line));
+                let out = top(bufs);
+                out.push_str("#cite(label(");
+                out.push_str(&typst_string(key));
+                out.push_str("))");
+                return Ok(());
+            }
 
             match frame.url.strip_prefix('#').filter(|_| text.is_empty()) {
                 Some(name) => {
@@ -1485,6 +1557,11 @@ fn step(
                         names
                             .referenced
                             .extend(body.names.referenced.iter().cloned());
+                        // A citation inside a definition is cited where the
+                        // definition is set, which is here — so an uncited
+                        // definition cites nothing, exactly as it declares
+                        // nothing.
+                        names.cited.extend(body.names.cited.iter().cloned());
                     }
                     top(bufs).push_str(&format!("]<fn-{number}>"));
                 }
@@ -2129,6 +2206,83 @@ fn check_references(names: &Names, equations: Equations) -> Result<()> {
         Some((line, problem)) => Err(Error::Name { line, problem }),
         None => Ok(()),
     }
+}
+
+/// Refuse a citation the document cannot honour, naming the earliest one.
+///
+/// **A `[@key]` in a document that names no bibliography is refused, not
+/// printed.** Mapping only where the frontmatter key is present would leave it
+/// reaching the page as `\\[\\@smith2020\\]` — visible, meaningless, and exactly
+/// the silent flattening the dialect refuses for every other construct. Typst
+/// would raise on its own, with "the document does not contain a bibliography",
+/// which carries neither the construct nor the line.
+///
+/// This runs after the walk for the reason [`Names::cited`] records, and so it
+/// shares [`check_references`]' one limit: the walk aborts at the first
+/// construct error, so a document with a citation on line 3 and a raw HTML block
+/// on line 5 reports the HTML.
+fn check_citations(names: &Names, bibliography: Option<&BibliographyRef>) -> Result<()> {
+    if bibliography.is_some() {
+        return Ok(());
+    }
+
+    match names.cited.iter().min_by_key(|(_, line)| *line) {
+        Some((key, line)) => Err(Error::Citation {
+            line: *line,
+            problem: format!("'@{key}' is cited and the frontmatter names no bibliography"),
+        }),
+        None => Ok(()),
+    }
+}
+
+/// Whether a finished link is a citation the callback claimed.
+///
+/// Two halves, and both are load-bearing. The type has to be an unresolved
+/// shortcut **or** an unresolved collapsed reference — `[@k][]` is the second,
+/// and one arm alone would send it to the generic link arm as `#link("@k")[@k]`,
+/// a wrong document where today it is literal text. And the destination has to
+/// be one [`is_citation`] claims, which is the same predicate the callback read,
+/// so the parse and the emitter cannot disagree about what a citation is.
+fn wrote_citation(frame: &LinkFrame) -> bool {
+    matches!(
+        frame.link_type,
+        LinkType::ShortcutUnknown | LinkType::CollapsedUnknown
+    ) && is_citation(&frame.url)
+}
+
+/// The one key a citation's payload names, or the refusal its payload earns.
+///
+/// Pandoc spells three more things inside these brackets, and this dialect reads
+/// none of them, so each is named at its own line rather than guessed at or
+/// silently dropped — OQ-3 is where whether they ever land is argued. The
+/// suppressed-author arm is the `else` rather than a test of its own, because
+/// [`is_citation`] has already established that a payload reaching here begins
+/// `@` or `-@`.
+///
+/// **The key is not checked against a character set**, which is where this parts
+/// from `check_name`. A figure name is authored inside this dialect and can be
+/// constrained; a citation key is authored in a file the author often did not
+/// write and cannot change, so a rule here would refuse real bibliographies
+/// rather than protect anyone.
+fn cite_key(payload: &str, line: usize) -> Result<&str> {
+    let refuse = |problem: String| Error::Citation { line, problem };
+
+    let Some(key) = payload.strip_prefix('@') else {
+        return Err(refuse(format!(
+            "'{payload}' suppresses the author, which the dialect does not read"
+        )));
+    };
+    if key.contains(';') {
+        return Err(refuse(format!(
+            "'{payload}' cites several sources at once, and one citation cites one"
+        )));
+    }
+    if key.contains(',') {
+        return Err(refuse(format!(
+            "'{payload}' carries a locator, which the dialect does not read"
+        )));
+    }
+    Ok(key)
 }
 
 /// Lay a block out under a prefix: the first line takes `prefix`, and every
