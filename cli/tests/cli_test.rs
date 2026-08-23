@@ -186,6 +186,91 @@ fn a_missing_image_file_names_the_path_the_line_and_the_reason() {
     assert!(stderr.contains("os error"), "stderr: {stderr}");
 }
 
+/// A document, its bibliography and the PDF that carries the reference list.
+///
+/// The second channel the caller reads, tested the way the image channel
+/// already is: the file travels beside the document, and the binary is what
+/// opens it.
+#[test]
+fn a_document_and_its_bibliography_convert() {
+    let dir = scratch_dir("citations-doc");
+    let input = dir.join("citations.md");
+    std::fs::copy(fixture("citations.md"), &input).unwrap();
+    std::fs::copy(fixture("refs.yml"), dir.join("refs.yml")).unwrap();
+
+    let out = run(&[input.as_ref()]);
+    assert!(out.status.success(), "the run failed: {:?}", out);
+
+    let bytes = std::fs::read(input.with_extension("pdf")).unwrap();
+    assert!(bytes.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// The same document beside no bibliography at all.
+///
+/// `refs.yml` sits in `tests/fixtures` next to the fixture, so this runs from a
+/// scratch directory holding the document alone.
+#[test]
+fn a_missing_bibliography_file_names_the_path_the_line_and_the_reason() {
+    let dir = scratch_dir("citations-alone");
+    let input = dir.join("citations.md");
+    std::fs::copy(fixture("citations.md"), &input).unwrap();
+
+    let out = run(&[input.as_ref()]);
+    assert!(!out.status.success(), "the run should have failed");
+
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(stderr.contains("refs.yml"), "stderr: {stderr}");
+    assert!(stderr.contains("line 3"), "stderr: {stderr}");
+    assert!(stderr.contains("os error"), "stderr: {stderr}");
+}
+
+/// Emission needs paths and no bytes on either channel, so the flag works on
+/// the document whose bibliography is not beside it.
+#[test]
+fn emit_typst_reads_no_bibliography() {
+    let dir = scratch_dir("citations-emit");
+    let input = dir.join("citations.md");
+    std::fs::copy(fixture("citations.md"), &input).unwrap();
+
+    let out = run(&[input.as_ref(), "--emit-typst".as_ref()]);
+    assert!(out.status.success(), "the run failed: {:?}", out);
+
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.contains(r#"#cite(label("DBLP:books/lib/Knuth86a"))"#),
+        "stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains(r#"#bibliography("refs.yml", title: none)"#),
+        "stdout: {stdout}"
+    );
+}
+
+/// Each citation the dialect refuses exits non-zero and prints its sentence.
+///
+/// Read here as a user reads them, rather than only as an `Error` value: the
+/// three payloads Pandoc spells and this dialect does not read, and a citation
+/// in a document that names no bibliography.
+#[test]
+fn each_refused_citation_exits_non_zero_and_names_its_payload() {
+    for (body, needle) in [
+        ("A cite [@smith2020] here.", "names no bibliography"),
+        ("Several [@a; @b] here.", "cites several sources at once"),
+        ("A locator [@k, p. 33] here.", "carries a locator"),
+        ("Suppressed [-@k] here.", "suppresses the author"),
+    ] {
+        let input = scratch(&format!("refused-{}.md", needle.replace(' ', "-")));
+        std::fs::write(&input, format!("# H\n\n{body}\n")).unwrap();
+
+        let out = run(&[input.as_ref()]);
+        assert!(!out.status.success(), "the run should have failed: {body}");
+
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(stderr.contains("citation error at line 3"), "stderr: {stderr}");
+        assert!(stderr.contains(needle), "stderr: {stderr}");
+    }
+}
+
 /// Emission needs paths and no bytes, so the flag works on the same document
 /// whose second image is absent.
 #[test]

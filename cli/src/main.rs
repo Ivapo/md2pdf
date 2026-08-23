@@ -64,20 +64,44 @@ fn run() -> Result<(), String> {
     std::fs::write(&output, pdf).map_err(|e| format!("cannot write {}: {e}", output.display()))
 }
 
-/// Read every image file the document names, from beside the document.
+/// Read every file the document names, from beside the document.
 ///
-/// A path resolves against the directory of the input file, so a document and
-/// its figures travel as one folder. An asset keeps the path the markdown
-/// wrote, because that is the name the generated Typst source asks for, and it
-/// is the name every later error uses.
+/// A path resolves against the directory of the input file, so a document, its
+/// figures and its bibliography travel as one folder. An asset keeps the path
+/// the markdown wrote, because that is the name the generated Typst source asks
+/// for, and it is the name every later error uses.
 ///
-/// The list arrives in document order and may name one path twice, so this
-/// reads each file once.
+/// The image list arrives in document order and may name one path twice, so
+/// this reads each file once. The bibliography is one frontmatter value rather
+/// than something the walk finds, so it comes from an export of its own — and
+/// it is read first, since the line it names is the earliest one in the file.
+///
+/// `core` reads nothing itself, on either channel. That split is what lets the
+/// same crate compile natively and to `wasm32`.
 fn read_assets(markdown: &str, directory: &Path) -> Result<Vec<md2pdf_core::Asset>, String> {
     let images = md2pdf_core::image_paths(markdown).map_err(|e| e.to_string())?;
+    let bibliography = md2pdf_core::bibliography_path(markdown).map_err(|e| e.to_string())?;
 
     let mut assets = Vec::new();
     let mut seen = HashSet::new();
+
+    if let Some(named) = bibliography {
+        let file = directory.join(&named.path);
+        let bytes = std::fs::read(&file).map_err(|e| {
+            format!(
+                "cannot read {} for the bibliography at line {}: {e}",
+                file.display(),
+                named.line
+            )
+        })?;
+
+        seen.insert(named.path.clone());
+        assets.push(md2pdf_core::Asset {
+            path: named.path,
+            bytes,
+        });
+    }
+
     for image in images {
         if !seen.insert(image.path.clone()) {
             continue;
