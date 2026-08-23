@@ -1,7 +1,7 @@
 //! The loop that notices a save, and the one that notices a pause in typing.
 //!
 //! One recursive watch on the open document's own directory, a filter that
-//! sorts an event into the document or one of the figures it names, and a
+//! sorts an event into the document or one of the assets it names, and a
 //! debounce, because one save arrives as several filesystem events. The
 //! debounce serves the keyboard too, on an interval of its own. Everything
 //! here except the watcher itself is a plain function over plain values.
@@ -71,13 +71,14 @@ pub const TYPING_DEBOUNCE: Duration = Duration::from_millis(300);
 ///
 /// Every path the dialect lets a document name resolves under here —
 /// `core/src/emit.rs:check_image` refuses a URI scheme, a leading `/`, a `..`
-/// segment and a backslash — so one recursive watch on this directory covers
-/// the document, every figure it names, every figure it will name, and every
+/// segment and a backslash, and `core/src/frontmatter.rs` puts the bibliography
+/// under that same rule — so one recursive watch on this directory covers the
+/// document, every asset it names, every asset it will name, and every
 /// directory not yet created. It is also computable from the document's path
 /// alone, so a document the dialect refuses is watched too, and can be fixed
 /// into one that compiles.
 ///
-/// The limit that rides with it: a figure that is a symlink pointing out of
+/// The limit that rides with it: an asset that is a symlink pointing out of
 /// this directory is not watched. Its path is legal and resolves inside, and
 /// the bytes it names live where a recursive watch on the tree never sees.
 pub fn root(document: &Path) -> PathBuf {
@@ -90,16 +91,16 @@ pub fn root(document: &Path) -> PathBuf {
 
 /// What a path under the watch is, to the document the pane holds.
 ///
-/// The two are not the same event any more. A figure that moves is still "the
+/// The two are not the same event any more. An asset that moves is still "the
 /// page is out of date, compile", because nothing but the disk supplies a
-/// figure. The document that moves is "the disk moved, decide", because the
-/// pane's own buffer is what compiles now.
+/// figure or a bibliography. The document that moves is "the disk moved,
+/// decide", because the pane's own buffer is what compiles now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Change {
     /// The open document itself.
     Document,
-    /// One of the figures the document names.
-    Figure,
+    /// One of the assets the document names: a figure, or its bibliography.
+    Asset,
 }
 
 /// What one settled window of events was about.
@@ -111,16 +112,16 @@ pub enum Change {
 pub struct Changed {
     /// The open document moved on disk.
     pub document: bool,
-    /// At least one figure the document names moved.
-    pub figures: bool,
+    /// At least one asset the document names moved.
+    pub assets: bool,
 }
 
 /// Which of the two a change to this path is, or neither.
 ///
 /// It is one of them when the path is the document, or one of the paths
-/// `md2pdf_core::image_paths` returned for it. Everything else under the
-/// directory is dropped, which is what a directory-valued watch buys and pays
-/// for.
+/// `md2pdf_core::image_paths` and `md2pdf_core::bibliography_path` returned for
+/// it. Everything else under the directory is dropped, which is what a
+/// directory-valued watch buys and pays for.
 ///
 /// **The document stays in here**, though its events no longer mean "compile".
 /// A path dropped from the filter would never reach the rule that decides what
@@ -136,19 +137,19 @@ pub struct Changed {
 /// would run, every event would be dropped, and the page would simply never
 /// redraw.
 ///
-/// The document's directory is what gets resolved, not each file, because a
-/// figure the document names before anyone creates it has no real path to
+/// The document's directory is what gets resolved, not each file, because an
+/// asset the document names before anyone creates it has no real path to
 /// resolve yet. Joining a relative path onto a resolved directory gives a
 /// resolved path either way.
-pub fn classify(event: &Path, document: &Path, images: &[String]) -> Option<Change> {
+pub fn classify(event: &Path, document: &Path, assets: &[String]) -> Option<Change> {
     let name = document.file_name()?;
     let root = resolve(&root(document));
     let event = resolve(event);
 
     if event == root.join(name) {
         Some(Change::Document)
-    } else if images.iter().any(|image| event == root.join(image)) {
-        Some(Change::Figure)
+    } else if assets.iter().any(|asset| event == root.join(asset)) {
+        Some(Change::Asset)
     } else {
         None
     }
@@ -214,7 +215,7 @@ pub struct Watch {
 /// `classify` is the filter and runs on every event, before the debounce.
 /// `on_change` runs on this watch's own thread, so a compile there does not
 /// touch the thread that draws the window. It is handed what the window was
-/// about rather than nothing, because the document and a figure now mean two
+/// about rather than nothing, because the document and an asset now mean two
 /// different things.
 pub fn start(
     root: &Path,
@@ -247,7 +248,7 @@ pub fn start(
             for path in &event.paths {
                 match classify(path) {
                     Some(Change::Document) => (changed.document, counted) = (true, true),
-                    Some(Change::Figure) => (changed.figures, counted) = (true, true),
+                    Some(Change::Asset) => (changed.assets, counted) = (true, true),
                     None => {}
                 }
             }
@@ -361,14 +362,14 @@ mod tests {
     fn the_filter_sorts_the_document_from_its_figures_and_drops_the_rest() {
         let dir = scratch_dir("filter");
         let document = dir.join("figure.md");
-        let images = ["dot.png".to_string(), "figures/mark.svg".to_string()];
+        let assets = ["dot.png".to_string(), "figures/mark.svg".to_string()];
 
         let real = dir.canonicalize().unwrap();
-        let sort = |path: PathBuf| classify(&path, &document, &images);
+        let sort = |path: PathBuf| classify(&path, &document, &assets);
 
         assert_eq!(sort(real.join("figure.md")), Some(Change::Document));
-        assert_eq!(sort(real.join("dot.png")), Some(Change::Figure));
-        assert_eq!(sort(real.join("figures/mark.svg")), Some(Change::Figure));
+        assert_eq!(sort(real.join("dot.png")), Some(Change::Asset));
+        assert_eq!(sort(real.join("figures/mark.svg")), Some(Change::Asset));
         assert_eq!(sort(real.join("notes.txt")), None);
     }
 

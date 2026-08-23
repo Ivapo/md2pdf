@@ -1,7 +1,7 @@
 //! What the pane is showing, and what keeps it current.
 //!
 //! [`Preview`] is the state the loop writes: the text the pane holds, the last
-//! good PDF bytes, how long they took, the image list the filter needs,
+//! good PDF bytes, how long they took, the asset list the filter needs,
 //! whether the page still belongs to that text, and the error when there is
 //! one. [`Session`] is that state plus the two loops that keep it up to date —
 //! the watch, and the keyboard. Neither needs a window, so both are tested by
@@ -152,7 +152,7 @@ pub struct Preview {
     document: Option<PathBuf>,
     buffer: String,
     saved: String,
-    images: Vec<String>,
+    assets: Vec<String>,
     pdf: Option<Vec<u8>>,
     anchors: Vec<document::Anchor>,
     elapsed: Option<Duration>,
@@ -370,8 +370,8 @@ impl Preview {
         let render = document::render(document::directory(&document), &self.buffer);
         let took = started.elapsed();
 
-        if let Some(images) = render.images {
-            self.images = images;
+        if let Some(assets) = render.assets {
+            self.assets = assets;
         }
 
         match render.pdf {
@@ -475,7 +475,7 @@ impl Session {
         self.preview().save()
     }
 
-    /// The filter, closed over the image list the last successful parse left.
+    /// The filter, closed over the asset list the last successful parse left.
     ///
     /// That list follows the buffer, because the buffer is the document now: a
     /// figure named in text that has not been saved is watched for all the
@@ -483,26 +483,26 @@ impl Session {
     fn classifier(&self, document: PathBuf) -> impl Fn(&Path) -> Option<Change> + Send + 'static {
         let state = Arc::clone(&self.state);
         move |path| {
-            let images = state
+            let assets = state
                 .lock()
                 .expect("the preview lock was poisoned")
-                .images
+                .assets
                 .clone();
-            watch::classify(path, &document, &images)
+            watch::classify(path, &document, &assets)
         }
     }
 
     /// What one settled window of filesystem events does.
     ///
-    /// **The document and the figures reach different code**, which is the
-    /// whole of what this phase changed in the loop. A figure that moved is
-    /// still a bare recompile, because nothing but the disk supplies a figure.
-    /// The document that moved runs [`Preview::reload`], because the pane's
-    /// own text is what compiles and the file is now a second opinion about
-    /// it.
+    /// **The document and the assets reach different code**, which is the
+    /// whole of what this phase changed in the loop. An asset that moved is
+    /// still a bare recompile, because nothing but the disk supplies a figure
+    /// or a bibliography. The document that moved runs [`Preview::reload`],
+    /// because the pane's own text is what compiles and the file is now a
+    /// second opinion about it.
     ///
     /// A window that took the disk copy compiled inside the rule, and it read
-    /// the new figures on the way, so the two never compile twice for one
+    /// the new assets on the way, so the two never compile twice for one
     /// window. And nothing is announced when nothing happened: the app's own
     /// save arrives here, changes nothing, and must not redraw a frame the
     /// reader has scrolled.
@@ -526,7 +526,7 @@ impl Session {
                     false
                 };
 
-                if changed.figures && !taken {
+                if changed.assets && !taken {
                     preview.compile();
                     announce = true;
                 }

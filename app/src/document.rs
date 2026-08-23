@@ -28,14 +28,15 @@ pub struct Anchor {
 
 /// What one compile produced, and what the document named while producing it.
 pub struct Render {
-    /// The image paths the document names, in reader order.
+    /// The asset paths the document names: the images in reader order, and
+    /// the bibliography it declares.
     ///
     /// `None` when the document did not parse, and the caller then keeps the
     /// list it already had. Otherwise it arrives even when the compile failed,
     /// because emission reads the text and not the disk: a document whose
     /// figures are all missing still names them. That is what keeps the watch
     /// filter working while the compile does not.
-    pub images: Option<Vec<String>>,
+    pub assets: Option<Vec<String>>,
 
     /// The bytes, or the sentence the terminal would print.
     pub pdf: Result<Vec<u8>, String>,
@@ -43,7 +44,7 @@ pub struct Render {
     /// Where each heading landed, for the pane to open on.
     ///
     /// Empty when the compile failed, and empty when `core`'s own count guard
-    /// declined to answer. Unlike [`Render::images`] this describes the *page*
+    /// declined to answer. Unlike [`Render::assets`] this describes the *page*
     /// rather than the text, so it is only ever as good as the bytes beside it.
     pub anchors: Vec<Anchor>,
 }
@@ -78,7 +79,7 @@ pub fn render_with(
     markdown: &str,
     read: impl FnMut(&Path) -> std::io::Result<Vec<u8>>,
 ) -> Render {
-    let images = md2pdf_core::image_paths(markdown)
+    let assets = md2pdf_core::image_paths(markdown)
         .ok()
         .map(|images| images.into_iter().map(|image| image.path).collect());
 
@@ -86,7 +87,7 @@ pub fn render_with(
         md2pdf_core::md_to_pdf_with_anchors(markdown, &assets).map_err(|e| e.to_string())
     });
 
-    // The anchors describe the bytes, so a failure has none — where `images`
+    // The anchors describe the bytes, so a failure has none — where `assets`
     // above survives one, because it describes the text.
     let (pdf, anchors) = match rendered {
         Ok(rendered) => (
@@ -104,7 +105,7 @@ pub fn render_with(
     };
 
     Render {
-        images,
+        assets,
         pdf,
         anchors,
     }
@@ -314,13 +315,13 @@ mod tests {
     /// back anyway, which is what keeps the watch filter alive while a figure
     /// is missing.
     #[test]
-    fn the_image_list_survives_a_failed_compile_but_not_a_failed_parse() {
-        assert_eq!(render_fixture("unsupported_html.md").images, None);
+    fn the_asset_list_survives_a_failed_compile_but_not_a_failed_parse() {
+        assert_eq!(render_fixture("unsupported_html.md").assets, None);
 
         let render = render_fixture("figure.md");
         assert!(render.pdf.is_err());
         assert_eq!(
-            render.images,
+            render.assets,
             Some(vec!["dot.png".to_string(), "figures/mark.svg".to_string()])
         );
     }
