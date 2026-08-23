@@ -2,6 +2,113 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 4 only — 2026-08-23 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, three non-blocking, all three folded. Converged in two
+rounds, as every episode of this spec after Phase 1's has. All six round-1 blockers
+confirmed resolved **against the files**, with the numbers re-derived rather than read off
+the changelog: `EXPECTED`'s four readers were re-counted and four is exact, and there are
+exactly two `[asset()]` slices.
+
+**Both places the author flagged as most likely to have introduced a defect came back
+clean, and the reviewer checked them rather than agreeing.** The `data:` URI substitution
+staying keyed to the image is *correct*, and for a reason the author had not written:
+`refs.yml` cannot appear in `md_to_html`'s output at all, because
+`ENABLE_YAML_STYLE_METADATA_BLOCKS` consumes the frontmatter and emits nothing — the
+shipped `frontmatter` block opens at `<h1>Introduction</h1>`. So all three generated-column
+guards survive, `the_assets_destination_is_inlined_exactly_once` still summing to 1 with the
+new row contributing zero. **And the `anchors` change is not scope creep**, which is what
+the author asked to be pushed back on: nothing calls that export, and passing `&[]` means it
+already cannot answer for the *image* row either, so "takes the same two files" closes a
+pre-existing hole in `mpdf-003` Phase 6's browser answer rather than opening a question.
+Gate item 4's `wasm-pack build` is what compile-checks it, `web/` being outside the
+workspace.
+
+The three non-blocking, all folded:
+
+1. **The module-size baseline predates Phase 2**, which made `core/src/bibliography.rs` and
+   `hayagriva`'s reader reachable from the wasm build — so the delta this phase records is
+   partly earned earlier. It cannot fail wrongly, the requirement being to record rather
+   than to stay under, but an unattributed number would read as one row costing what two
+   phases did. The gate now says so.
+2. **One sentence conflated two attributes.** The chosen-route bullet credited `asset_media`
+   with reading `data-asset` where it reads `type`. Both underlying claims were true and the
+   discriminator in the bullet's own heading was already the right one; the sentence now
+   separates them.
+3. **Close-out hygiene in the two files already in scope**: group 2's intro carries a
+   `Frontmatter · Footnotes` link row wanting a third entry, and
+   `core/tests/page_examples_test.rs`'s own doc comments carry six counts a twelfth row
+   moves — including a "twelfth `data-example=\"`" that becomes a thirteenth.
+
+**No finding was rejected, in either round** — as in every round of this spec.
+
+### Round 1 — Phase 4 only — 2026-08-23 — fresh clean-context reviewer with repo access — **NOT READY**
+
+**Round 0 — is this the right thing to build at all?** Yes, and the phase understated its
+case in the same way Phase 3's did. It produces the observable, and it produces the instance
+§1 says nothing else can — a document whose last page is a reference list — in the one front
+end that has never drawn one. Beyond that, the page's own claim has been incomplete since
+Phase 1: `rules/web-demo.md` describes the eleven examples as what the dialect adds, and the
+dialect has held citations for a day. **This resolved OQ-6** on `mpdf-006` OQ-3's precedent
+— the ask is the answer, and this loop is the gate it passes through — so the phase's
+cuttability argument is spent and its text no longer leans on it.
+
+Verdict: `NOT READY`, six blocking, six non-blocking. One generalist reviewer, matching
+every prior episode in this corpus.
+
+**The largest finding is that the phase's one-sentence scope hid a channel that is singular
+in four places.** "Carries the records inline as `mpdf-006` Phase 3 carries the SVG" names a
+mechanism that does not generalize: `core/tests/page_examples_test.rs:the_page_carries_one_asset`
+asserts `PAGE.matches("data-asset=\"").count() == 1` and *argues* the singularity in its own
+doc comment; `asset` builds one `Asset` from the first such element; `web/index.html`'s
+module takes the first through `querySelector`; and `web/src/lib.rs:render` takes
+`asset_path` and `asset_bytes` as two scalar `wasm_bindgen` arguments. A second file is
+refused by all four, and none was named. The same shape as Phase 2's round 1 — a phase with
+no real scope — and it was resolved the same way, by writing one.
+
+**The sharpest finding is that §2's own cost argument was backwards, and it entered the
+record permanently, so the author re-measured it before folding.** The draft said Typst's
+raw-bytes form "makes this cheaper than the image was". Confirmed in the source: this project
+never reaches that form — `core/src/emit.rs:emit` writes `#bibliography("<path>", title:
+none)` and `core/src/lib.rs:collect` inserts the bytes keyed by `file_id`, so the
+bibliography already *is* a virtual file here. And reaching it would cost Phase 2:
+`decode_library`'s `LoadSource::Path` branch dispatches on `ext.to_lowercase()` while its
+bytes branch **guesses**, Hayagriva YAML then BibLaTeX — and Phase 2 shipped a refusal naming
+an extension outside the pair, which a guess has no extension to refuse. §2 keeps its
+paragraph and carries a dated `CORRECTED` note in the form Phase 2's §2 note established.
+
+The other four blocking, and what each really was:
+
+1. **`core/tests/page_examples_test.rs` was out of scope and must change substantially** —
+   both `[asset()]` slices, the asset machinery and the `== 1` scan. The draft's "`core/src`
+   untouched" was *true*, and that is exactly how it hid: this file is not `core/src`.
+   `mpdf-006` Phase 3 named the same file in its own scope and said doing so is what keeps a
+   scope honest about the files it edits.
+2. **`render`'s signature was an unmade decision.** Resolved as two more scalars rather than
+   an asset array, grounded rather than asserted: `web/Cargo.toml` carries `wasm-bindgen`
+   and `console_error_panic_hook` and nothing else, so an array boundary is a new dependency
+   on the page whose whole cost is its 7.8 MB — and `mpdf-006` §1.2 parks a reader's own
+   files permanently, so the set is closed at two forever.
+3. **"`page_examples_test.rs`'s counts move together" named no count, and they do not move
+   together.** Re-derived: `EXPECTED` 11 → 12 feeds four assertions, and the asset scan's
+   `1` → `2` moves *against* them and is not a count of examples at all. A gate phrased that
+   way passes for the wrong reason. `mpdf-006` Phase 3's gate named its three literals one
+   by one; this one now names all of them.
+4. **The browser half was "in a browser" and nothing more.** `web/pkg/` is gitignored and
+   never committed, so a second person following it literally opens `file://` and sees
+   nothing. The gate now carries `wasm-pack build --target web --release` in `web/` over
+   `http://127.0.0.1`, and Chromium alone on `mpdf-006`'s own recorded argument that a byte
+   array crossing an existing `wasm-bindgen` boundary is not something two engines disagree
+   about.
+
+Notable among the non-blocking: three sentences of the page's own prose go stale and were
+unnamed, one of them the filenote saying the box "reads one image file and no other"; the
+lede's "Twenty-two constructs" was **already** stale against `rules/pipeline.md`'s
+twenty-three, moved by this spec's Phase 1, and is corrected in passing because this phase
+edits that sentence anyway; `mpdf-006` Phase 4's 25,342,182-byte module baseline was not
+carried; and `web/src/lib.rs:anchors` passes `&[]`, which the reviewer rated invisible and
+the author took further — see round 2.
+
 ### Round 2 — Phase 3 only — 2026-08-23 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, two non-blocking, both folded. Converged in two rounds.

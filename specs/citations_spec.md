@@ -25,7 +25,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 4 — the browser carries a bibliography of its own"
-    reviewed: null
+    reviewed: 2026-08-23
     shipped: null
     cut: null
     by: null
@@ -369,6 +369,21 @@ bibliography needs no new virtual file at all. The phase is cuttable: nothing in
 1–3 depends on it, and a demo that cannot show a citation is a demo with a gap rather
 than one that lies.
 
+> **CORRECTED 2026-08-23, by Phase 4's round 1.** The paragraph above is kept as it was
+> written and its cost claim is backwards in both halves. **This project never reaches
+> Typst's bytes form.** `core/src/emit.rs:emit` writes `#bibliography("<path>", title:
+> none)` through `typst_string`, and `core/src/lib.rs:collect` inserts the bibliography's
+> bytes into the virtual filesystem keyed by `file_id` exactly as it does an image's — so
+> the bibliography *is* a virtual file here, and a page-owned one inherits that rather
+> than escaping it. **And reaching the bytes form would cost Phase 2.** Measured in round
+> 1 against `decode_library`, in `typst-library-0.15.1/src/model/bibliography.rs`: the
+> path branch dispatches on `ext.to_lowercase()`, and the bytes branch **guesses** — Hayagriva
+> YAML first, BibLaTeX second. Phase 2 shipped a refusal naming an extension outside the
+> pair, and a guess has no extension to refuse. So Phase 4 sends its second file down the
+> channel the image already uses, and its real cost is the one the draft never named:
+> **the page's asset channel is singular in four places.** Phase 4's scope carries the
+> corrected version.
+
 ## 3. Open questions
 
 - **OQ-1 — does `core` parse the bibliography to name an unknown key, or map Typst's
@@ -412,9 +427,18 @@ than one that lies.
   which makes the walk's heading count disagree with the compiled document's, and
   `core/src/lib.rs:anchors_from` withdraws **every** anchor on a mismatch. Leaving this
   open would have shipped a phase that silently breaks `mpdf-003` Phase 6. §2 carries it.
-- **OQ-6 — does Phase 4 happen at all?** *(needs-input)* The same question `mpdf-006`
+- **OQ-6 — does Phase 4 happen at all?** *(needs-input)* ~~The same question `mpdf-006`
   OQ-3 asked of its own image phase, with the same shape: it opens a narrow slice of a
-  story two specs parked, and Phases 1–3 stand without it.
+  story two specs parked, and Phases 1–3 stand without it.~~ **RESOLVED 2026-08-23, at
+  Phase 4's round 0: yes, on `mpdf-006` OQ-3's own precedent — the phase was asked for.**
+  That spec closed the identical question the same way and for the same reason: the ask
+  *is* the answer, and this loop is the gate that ask passes through. Round 0 also found
+  the phase understating its case. It produces the observable, and it produces the
+  instance §1 says nothing else can — a document whose last page is a reference list — in
+  the one front end that has never drawn one; and the page's own claim has been
+  incomplete since Phase 1, `rules/web-demo.md` describing the examples as what the
+  dialect adds while the dialect has held citations for a day. **The cuttability argument
+  is therefore spent**, and Phase 4's own text no longer leans on it.
 
 ## 4. Implementation phases
 
@@ -718,12 +742,118 @@ both set — a phase that leaves this open is a phase that forces a guess.
 
 ### Phase 4 — the browser carries a bibliography of its own
 
-*Produces the observable: **yes**, and **this phase is cuttable** (OQ-6).* The demo shows
-a citation for the first time.
+*Produces the observable: **yes**.* The demo shows a citation for the first time: a row
+whose PDF ends in a reference list, in the one front end that has never drawn one.
+**OQ-6 is resolved and the cuttability argument is spent** — §3 carries the resolution
+and round 0's reasoning.
 
-- **Scope:** `web/index.html` carries the records inline as `mpdf-006` Phase 3 carries the
-  SVG, one row uses them, and `web/src/lib.rs:render` passes them. `core/src` untouched.
-  §2 records that Typst's raw-bytes form may make this cheaper than the image was.
-- **Exit gate:** `core/tests/page_examples_test.rs`'s counts move together and the new
-  row compiles; in a browser, the row draws a PDF carrying the reference list.
-- **Close-out:** `rules/web-demo.md`. One push.
+**What makes this more than "one more row" is that the page's asset channel is singular
+in four places, and round 1 found the draft had named none of them.**
+`core/tests/page_examples_test.rs:the_page_carries_one_asset` asserts
+`PAGE.matches("data-asset=\"").count() == 1` and argues the singularity in its own doc
+comment; `core/tests/page_examples_test.rs:asset` builds one `Asset` from the *first*
+such element; `web/index.html`'s module does `querySelector('script[data-asset]')`, which
+takes the first; and `web/src/lib.rs:render` takes `asset_path` and `asset_bytes` as two
+scalar `wasm_bindgen` arguments. A second file is refused by all four, and §2's
+`CORRECTED` note records why it cannot dodge them through Typst's bytes form.
+
+**The one channel generalizes rather than gaining a second (decision, resolved).** Three
+routes, on the precedent Phase 1's OQ-5, Phase 2's OQ-1 and Phase 3's filter route all
+set — a phase that leaves this open is a phase that forces a guess.
+
+- *A second attribute, `data-bibliography`.* Refused: a second mechanism, a second scan
+  and a second selector for something the page already has one word for. `data-asset`'s
+  value **is** the path `md2pdf_core::Asset` is given, which is as true of a `.yml` as of
+  an `.svg`.
+- *Records inside the row's own markdown.* Refused by §2 already — the frontmatter names
+  a file and does not carry records — and it would make the demo's source something no
+  reader could paste into the CLI, which is the one thing every row promises.
+- **Chosen: one attribute, two elements, told apart by their `type`.** `data-asset` stays
+  the name and `type` is the discriminator — which the page already reads and already
+  tests: `core/tests/page_examples_test.rs:asset_media` returns that attribute, and it is
+  what the `data:` URI substitution's own prefix is built from. Neither half of the
+  mechanism is new. The new element is `<script type="application/yaml"
+  data-asset="refs.yml">` — a non-JavaScript type like the other two, so it is not
+  executed and its content needs no escaping.
+
+**`render` takes the second file as two more scalars, and that is deliberately not an
+asset array (decision, resolved).** `web/Cargo.toml` carries `wasm-bindgen` alone — no
+`js-sys`, no `serde-wasm-bindgen` — so a `Vec<Vec<u8>>` across that boundary means a new
+dependency on the page whose entire cost is its 7.8 MB. And the set is **closed**:
+`mpdf-006` §1.2 parks a reader's own files *permanently*, so this page has exactly two
+files and will never have three. §5's "don't pre-abstract before there are real
+consumers" is this case exactly.
+
+- **Scope:** four files, and the decisions above settle each.
+  - `web/index.html` — a twelfth row, in **group 2, "Things markdown has no way to say"**,
+    which is what a bibliography is. Its source names `bibliography: refs.yml` and cites a
+    key the records hold; the records are the second `data-asset` element. **Three
+    sentences of the page's own prose go stale and are in scope**: the lede's "eleven are
+    shown here"; the byte-rule comment's "one of the eleven ends without a trailing
+    newline"; and the filenote's "The box below reads one image file and no other:
+    `pipeline.svg`", which after this phase reads two. The lede's "Twenty-two constructs
+    are supported" is **already** stale against `rules/pipeline.md`'s twenty-three, moved
+    by Phase 1 — it is corrected here rather than left, because this phase edits that
+    sentence anyway. The generated column is **blessed, not written**, through the
+    `#[ignore]`d `bless_the_generated_blocks`; §2 records what it will hold, a citation
+    reaching `md_to_html` as `<a href="@k">@k</a>`, which is the honest thing for a
+    writer with no notion of citations to make of one. **Group 2's own intro carries a
+    link row** — `Frontmatter · Footnotes` — which gains a third entry pointing at the
+    README's citations section.
+  - `web/src/lib.rs` — `render` gains `bibliography_path` and `bibliography_bytes`, and
+    **`web/src/lib.rs:anchors` takes the same two files**. It passes `&[]` today, so it
+    would answer `MissingBibliography` for a document this page itself ships. Nothing
+    calls it, but an export that cannot answer for the page's own source is a gap in
+    `mpdf-003` Phase 6's contract rather than a limit worth recording, and the shape is
+    already being decided one function above.
+  - `core/tests/page_examples_test.rs` — **named in scope rather than left to the gate**,
+    which is where round 1 found the draft's "`core/src` untouched" hiding it: `core/src`
+    *is* untouched, and this file is not `core/src`. `asset` becomes the pair, the
+    singular scan becomes a count keyed to a constant beside `EXPECTED`, and both
+    `let assets = [asset()]` slices take both files. **The `data:` URI substitution stays
+    keyed to the image element alone** — a bibliography is named in the frontmatter and
+    never as an image destination, so generalizing it would add a branch nothing takes.
+    **This file's own doc comments carry counts the twelfth row moves** — "the ten that
+    name no image", "three of the eleven" twice, "the eleven outputs", "the eleven
+    generated blocks", and a "twelfth `data-example=\"`" that becomes a thirteenth. They
+    are prose in a file the phase is already editing, and the documentation tracks the
+    code.
+  - `web/Cargo.toml` — only if the module grew, and only to record it; see the gate.
+- **Exit gate:** `cargo test --workspace`, and five things.
+  1. **Every literal a twelfth row moves is named here rather than discovered.**
+     `core/tests/page_examples_test.rs:EXPECTED` 11 → 12, which **four** assertions read:
+     the example count, the `data-example="` count, and both the `<!--html:` and
+     `<!--/html:` marker counts. **And one literal moves the other way** — the asset
+     scan's `1` → `2`, which is not a count of examples at all. That is why "the counts
+     move together" was a gate that passed for the wrong reason, and round 1 said so.
+  2. **The new row compiles and its PDF carries the reference list.**
+     `every_ok_example_compiles` reaches it once both files are in the slice, and that it
+     compiles at all is the proof: `#cite` compiles only when the key resolves against a
+     present bibliography, which is the argument Phase 1's own gate rests on.
+  3. **The generated column is the generator's own output**, unchanged —
+     `every_generated_block_is_the_parsers_own_html` covering the twelfth block — and the
+     three guards still hold: the marker counts, the image named once and surviving
+     nowhere after substitution, and no block carrying `<script`, `data-example="`,
+     `data-asset="` or `<!--`.
+  4. **The browser half names its recipe and its engine**, which round 1 found the draft
+     had left as "in a browser". `web/pkg/` is gitignored and never committed, so the
+     check is `wasm-pack build --target web --release` inside `web/`, served over
+     `http://127.0.0.1` — a second person following the draft literally opens `file://`
+     and sees nothing. `mpdf-006` Phase 2 put that recipe in its own gate for this reason.
+     **Chromium alone is enough**, on that spec's own recorded argument for the asset
+     channel: a byte array crossing an existing `wasm-bindgen` boundary is not something
+     two engines can disagree about.
+  5. **The module size is recorded against the baseline.** `mpdf-006` Phase 4 fixed
+     **25,342,182 bytes** — `web/pkg/md2pdf_web_spike_bg.wasm` as its Phase 3 left it —
+     and requires any growth at all to be recorded. This phase changes `web/src/lib.rs`,
+     so it owes that measurement whether or not the number moves. **The delta is not all
+     this phase's, and the record says so rather than implying it**: that baseline
+     predates Phase 2, which made `core/src/bibliography.rs` and `hayagriva`'s reader
+     reachable from the wasm build. The requirement is to *record*, never to stay under,
+     so this cannot fail for the wrong reason — but an unattributed number would read as
+     one row costing what two phases did.
+- **Close-out:** `rules/web-demo.md` — the second asset and the one channel that now
+  carries two, the twelfth example, and the two exports' shapes. Its `max_lines: 205` has
+  ten lines of headroom against 195 used, so unlike Phases 2 and 3 the cap may not need
+  to move; that is checked rather than assumed. `README.md` needs nothing — it documents
+  the dialect and the CLI, and the demo's row count is not a fact it carries. One push.
