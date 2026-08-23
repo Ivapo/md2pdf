@@ -550,7 +550,7 @@ pub(crate) fn parser(md: &str) -> Parser<'_, Citations<'_>> {
 /// `an [ open bracket, a ] close bracket`, `[see @k]` and `[a@b.com]` the
 /// literal text they have always been.
 fn citation_reference<'a>(link: BrokenLink<'a>) -> Option<(CowStr<'a>, CowStr<'a>)> {
-    is_citation(&link.reference).then(|| (link.reference, CowStr::Borrowed("")))
+    is_citation(&link.reference).then_some((link.reference, CowStr::Borrowed("")))
 }
 
 /// Whether a reference is one this dialect reads as a citation.

@@ -61,6 +61,12 @@ const PLAIN_EQUATION_NAMES_MD: &str = include_str!("../../tests/fixtures/plain_e
 const PLAIN_EQUATION_NAMES_TYP: &str = include_str!("../../tests/golden/plain_equation_names.typ");
 const GROUPS_MD: &str = include_str!("../../tests/fixtures/groups.md");
 const GROUPS_TYP: &str = include_str!("../../tests/golden/groups.typ");
+const CITATIONS_MD: &str = include_str!("../../tests/fixtures/citations.md");
+const CITATIONS_TYP: &str = include_str!("../../tests/golden/citations.typ");
+const CITATIONS_PRESS_RELEASE_MD: &str =
+    include_str!("../../tests/fixtures/citations_press_release.md");
+const CITATIONS_PRESS_RELEASE_TYP: &str =
+    include_str!("../../tests/golden/citations_press_release.typ");
 
 /// Every bundled look, by the name the `template` key selects it with. Four
 /// tests read these: the header-row rule, and the three Phase 9 cases that no
@@ -77,6 +83,16 @@ const BUNDLED_TEMPLATES: [(&str, &str); 2] = [
 /// pins. An asset's name is the path the markdown wrote, not a real filename.
 const DOT_PNG: &[u8] = include_bytes!("../../tests/fixtures/dot.png");
 const MARK_SVG: &[u8] = include_bytes!("../../tests/fixtures/mark.svg");
+
+/// The bibliography the two citation fixtures name.
+///
+/// It rides the same `Asset` type an image does — a named blob, with nothing
+/// image-specific in it — which is why this channel needed no new type.
+const REFS_YML: &[u8] = include_bytes!("../../tests/fixtures/refs.yml");
+
+fn citations_assets() -> Vec<Asset> {
+    vec![asset("refs.yml", REFS_YML)]
+}
 
 fn images_assets() -> Vec<Asset> {
     vec![
@@ -3160,5 +3176,281 @@ fn every_bundled_template_places_a_listing() {
             source.contains("figure.where(kind: raw)"),
             "{file} does not decide where a listing sits"
         );
+    }
+}
+
+// -- mpdf-007 Phase 1: a cited source reaches the reference list --------------
+
+#[test]
+fn citations_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(CITATIONS_MD).unwrap(), CITATIONS_TYP);
+}
+
+#[test]
+fn citations_press_release_fixture_matches_its_golden_file() {
+    assert_eq!(
+        md_to_typst(CITATIONS_PRESS_RELEASE_MD).unwrap(),
+        CITATIONS_PRESS_RELEASE_TYP
+    );
+}
+
+/// Both fixtures compile, and the compile is the assertion.
+///
+/// **It is stronger than "it runs".** `#cite` compiles only when its key
+/// resolves against a bibliography the document actually contains, so a green
+/// compile proves the mark reached the body *and* the list reached the end —
+/// which no golden file can say, since a golden pins emitter output alone.
+///
+/// The key carries a `:` and a `/`, which is the whole reason the fixture is
+/// keyed the way it is: `#cite(<DBLP:books/lib/Knuth86a>)` fails to *parse* —
+/// "unclosed label; unexpected slash", naming neither line nor construct —
+/// where `#cite(label("…"))` carries any key a bibliography file holds.
+#[test]
+fn each_citation_fixture_compiles_to_a_pdf() {
+    for (md, what) in [
+        (CITATIONS_MD, "the article look"),
+        (CITATIONS_PRESS_RELEASE_MD, "the press-release look"),
+    ] {
+        let pdf = md_to_pdf(md, &citations_assets()).unwrap();
+        assert!(pdf.starts_with(b"%PDF"), "{what} is not a PDF");
+        assert!(pdf.len() > 1000, "{what} is suspiciously small");
+    }
+}
+
+/// A bibliography withdraws no heading anchor, under either look.
+///
+/// **This is the assertion whose absence would have let the phase silently
+/// empty every anchor list in the project.** Typst's default `title: auto`
+/// realises a real `HeadingElem`, so a document with one markdown heading would
+/// compile two, and `anchors_from` returns an *empty* vector on a count
+/// mismatch — taking `mpdf-003`'s scroll sync with it, with no error anywhere.
+///
+/// It also pins what no needle can: that neither look's `show bibliography:`
+/// rule draws its label as a heading either. Both fixtures carry exactly one
+/// markdown heading, so both must report exactly one anchor.
+#[test]
+fn a_bibliography_withdraws_no_heading_anchor() {
+    for (md, what) in [
+        (CITATIONS_MD, "the article look"),
+        (CITATIONS_PRESS_RELEASE_MD, "the press-release look"),
+    ] {
+        let rendered = md_to_pdf_with_anchors(md, &citations_assets()).unwrap();
+        assert_eq!(
+            rendered.anchors.len(),
+            1,
+            "{what} did not report exactly one anchor: {:?}",
+            rendered.anchors
+        );
+    }
+}
+
+/// Both bundled looks label the reference list.
+///
+/// A test of its own rather than an extension of any earlier look-contract
+/// test, each of which is named for what it asserts. **The needle is
+/// `show bibliography`**: the emitter writes `title: none`, so without a rule
+/// here the list runs straight on from the last paragraph with no label at all.
+///
+/// The label's *words* and its size are deliberately not needles — the word is
+/// the look's, as the caption separator is — and that it is not a `heading` is
+/// pinned by `a_bibliography_withdraws_no_heading_anchor` instead, which is a
+/// stronger check than any needle could be.
+#[test]
+fn every_bundled_template_labels_a_reference_list() {
+    for (file, source) in BUNDLED_TEMPLATES {
+        assert!(
+            source.contains("show bibliography"),
+            "{file} does not label a reference list"
+        );
+    }
+}
+
+/// The callback claims a citation and nothing else.
+///
+/// **Emitted rather than read off the golden**, per the argument Phase 4 of
+/// `mpdf-005` made: a needle over a golden constant holds only what that file
+/// says, and the file is written by the same implementation the case is meant
+/// to catch. The one exception is the last line, which is the point: an
+/// unscoped broken-link callback turns `hostile.md`'s bracket pair into a link
+/// and moves a shipped golden, and that is the assertion that can fail for the
+/// right reason.
+///
+/// Pandoc's prefix form is on this list because this dialect has no prefix
+/// form. `[see @k]` prints for the same reason any unclaimed markdown prints,
+/// which is a stated boundary rather than a discovered one.
+#[test]
+fn the_callback_claims_a_citation_and_nothing_else() {
+    for (md, form, what) in [
+        (
+            "# H\n\nan [ open bracket, a ] close bracket\n",
+            r"an \[ open bracket, a \] close bracket",
+            "a bracket pair that is not a reference",
+        ),
+        (
+            "# H\n\na prefix form [see @k] here\n",
+            r"\[see \@k\]",
+            "Pandoc's prefix form, which this dialect has not",
+        ),
+        (
+            "# H\n\na bracketed email [a@b.com] here\n",
+            r"\[a\@b.com\]",
+            "a bracketed email address",
+        ),
+        (
+            "# H\n\nan a[0] index\n",
+            r"a\[0\]",
+            "an index that looks like a shortcut reference",
+        ),
+        (
+            "# H\n\nan email a@b.com and a bare @thing\n",
+            r"a\@b.com and a bare \@thing",
+            "an unbracketed at-sign, which is why the bare form is not adopted",
+        ),
+        (
+            "# H\n\na [labelled][d] reference\n\n[d]: https://typst.app\n",
+            r#"#link("https://typst.app")[labelled]"#,
+            "a reference that resolves, which the callback never sees",
+        ),
+    ] {
+        let typst = md_to_typst(md).unwrap();
+        assert!(
+            typst.contains(form),
+            "{what} stopped reaching the page unchanged: {typst}"
+        );
+    }
+
+    // The shipped golden that an unscoped callback would move.
+    assert!(
+        HOSTILE_TYP.contains(r"an \[ open bracket, a \] close bracket"),
+        "the hostile golden no longer carries its bracket pair"
+    );
+    assert_eq!(md_to_typst(HOSTILE_MD).unwrap(), HOSTILE_TYP);
+}
+
+/// Each citation the dialect refuses names the author's own line.
+///
+/// The three payloads are Pandoc's and this dialect reads none of them, so each
+/// is named where it stands rather than guessed at or silently dropped. **`[-@k]`
+/// is on this list for a measured reason**: under a callback firing on `@`
+/// alone it stays five text runs the emitter never sees, and would have reached
+/// the page as `\[\-\@k\]` — a refusal the dialect promises and the parse could
+/// not deliver.
+///
+/// The fourth is the one that is not about the payload. A `[@key]` in a
+/// document that names no bibliography is refused rather than printed: mapping
+/// only where the frontmatter key is present would leave it on the page as
+/// `\[\@smith2020\]`, visible and meaningless, which is the silent flattening
+/// the dialect refuses for every other construct.
+#[test]
+fn each_refused_citation_names_the_authors_line() {
+    for (md, line, needle, what) in [
+        (
+            "# H\n\nA cite [@smith2020] here.\n".to_string(),
+            3,
+            "names no bibliography",
+            "a citation in a document that declares none",
+        ),
+        (
+            "# H\n\nSeveral [@a; @b] here.\n".to_string(),
+            3,
+            "cites several sources at once",
+            "Pandoc's multiple-key form",
+        ),
+        (
+            "# H\n\nA locator [@k, p. 33] here.\n".to_string(),
+            3,
+            "carries a locator",
+            "Pandoc's locator form",
+        ),
+        (
+            "# H\n\nSuppressed [-@k] here.\n".to_string(),
+            3,
+            "suppresses the author",
+            "Pandoc's suppressed-author form",
+        ),
+        (
+            "# H\n\nA note[^1].\n\n[^1]: See [@k].\n".to_string(),
+            5,
+            "names no bibliography",
+            "a citation only a footnote definition carries",
+        ),
+    ] {
+        match md_to_typst(&md) {
+            Err(Error::Citation {
+                line: found,
+                problem,
+            }) => {
+                assert_eq!(found, line, "for {what}");
+                assert!(
+                    problem.contains(needle),
+                    "for {what}, the problem `{problem}` does not name `{needle}`"
+                );
+            }
+            other => panic!("expected a citation error for {what}, got {other:?}"),
+        }
+    }
+}
+
+/// A citation inside a footnote definition cites, rather than printing.
+///
+/// The definition's own walk never parses the frontmatter — the metadata block
+/// sits outside every definition — so the missing-bibliography test cannot run
+/// where the citation is written. The citation travels out on the same `Body`
+/// that already carries a definition's images, its math flag and its names, and
+/// this is the case that proves it: the document names a bibliography, and the
+/// citation inside the note must not be refused for the lack of one.
+#[test]
+fn a_citation_inside_a_footnote_definition_cites() {
+    let typst = md_to_typst(CITATIONS_MD).unwrap();
+    assert!(
+        typst.contains(r#"#footnote[The definition cites #cite(label("DBLP:books/lib/Knuth86a"))"#),
+        "the citation inside the note did not reach the reference site: {typst}"
+    );
+}
+
+/// A bibliography the caller did not supply is refused by name.
+///
+/// `collect` exists so a missing file is named with the author's own path
+/// before Typst is asked — without it the compile says "file not found
+/// (searched at refs.yml)" against a span in a `main.typ` the user has never
+/// seen. The line is the frontmatter line, which is the only place a
+/// bibliography's position is ever known.
+#[test]
+fn a_bibliography_the_caller_did_not_supply_names_the_path_and_the_line() {
+    match md_to_pdf(CITATIONS_MD, &[]) {
+        Err(Error::MissingBibliography { path, line }) => {
+            assert_eq!(path, "refs.yml");
+            assert_eq!(line, 3);
+        }
+        other => panic!("expected a missing bibliography, got {other:?}"),
+    }
+}
+
+/// The bibliography path rule refuses a whole document, not only a block.
+///
+/// One rule with two renderings: the image arm says what the image is, the key
+/// says what the key takes. `core/src/frontmatter.rs` pins each shape's
+/// sentence; this pins that a document carrying one never reaches the compiler,
+/// where a backslash path would otherwise become `Error::Internal` — whose own
+/// contract says a broken build rather than bad input.
+#[test]
+fn a_bibliography_path_outside_the_shape_rule_refuses_the_document() {
+    for value in [
+        "https://example.com/refs.yml",
+        "/etc/refs.yml",
+        "../refs.yml",
+        r"refs\bib.yml",
+    ] {
+        let md = format!("---\nbibliography: {value}\n---\n\n# H\n");
+        match md_to_typst(&md) {
+            Err(Error::Frontmatter { line, problem }) => {
+                assert_eq!(line, 2, "wrong line for {value}");
+                assert!(
+                    problem.contains("beside the document"),
+                    "problem was: {problem}"
+                );
+            }
+            other => panic!("expected a Frontmatter error for {value}, got {other:?}"),
+        }
     }
 }
