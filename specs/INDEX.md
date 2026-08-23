@@ -14,5 +14,5 @@
   Figures, tables, listings and equations gain captions, numbers and cross-references: the emitter wraps them in Typst's `figure`, the looks decide what a caption and a number look like, and a reference that names one stays true when another is inserted above it.
 - **[web-demo](web_demo_spec.md)** — `mpdf-006` · accepted · done
   The published browser demo becomes the project's front door: the page says what the dialect adds to markdown, every claim it makes is a snippet the workspace suite compiles, and one click sets that snippet as a PDF in the reader's own browser.
-- **[citations-and-bibliography](citations_spec.md)** — `mpdf-007` · accepted · partial
+- **[citations-and-bibliography](citations_spec.md)** — `mpdf-007` · accepted · done
   A document cites its sources and prints their reference list: the frontmatter names a bibliography file, the caller supplies it as bytes beside the images, `[@key]` becomes a citation, and Typst renders both the marks and the list.

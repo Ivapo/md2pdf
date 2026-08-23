@@ -26,7 +26,7 @@ phases:
     by: null
   - name: "Phase 4 — the browser carries a bibliography of its own"
     reviewed: 2026-08-23
-    shipped: null
+    shipped: 2026-08-23
     cut: null
     by: null
 
