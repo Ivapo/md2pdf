@@ -2,6 +2,93 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 3 only — 2026-08-23 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, two non-blocking, both folded. Converged in two rounds.
+All three round-1 blockers confirmed resolved **against the files**, and the reviewer
+re-derived the new file count from the code rather than from the author's argument: every
+site of `Render::images`, `Change::Figure`, `Changed::figures` and `Preview.images` lives
+in the three named files and nowhere else, nothing crosses the Tauri boundary — `Status`
+carries no image field — and neither renamed identifier collides, `watch.rs` importing no
+`Asset` at all and `preview.rs` naming `md2pdf_core::Asset` only fully qualified inside its
+test module. **The rename is compiler-enforced on both a struct field and an enum variant**,
+so an unnamed site cannot pass silently.
+
+**The route was resolved rather than deferred, and it is a third route neither round-1
+option named.** The reviewer offered "ride `Render::images` unrenamed" and "give it a
+`Change::Bibliography` of its own"; the author took *one list, renamed* —
+`Render::assets`, `Change::Asset`, `Changed::assets`, and no new arm. The first was
+refused because it leaves three shipped doc comments false, which is the one price this
+project does not pay; the second because `on_change` would gain a branch identical to the
+one `changed.figures` already runs and `Changed` a field no reader distinguishes, which is
+§5's "don't pre-abstract before there are real consumers". `mpdf-003`'s own split decides
+it: the open document against everything the disk supplies, and a bibliography is on the
+second side for the reason a figure is. It also makes a *dropped* `bibliography:` key free,
+`Preview::compile` replacing the whole list on every compile.
+
+The two non-blocking, both folded:
+
+1. **`classifier` and `on_change` are `Session` methods, not `Preview`'s.** The rewritten
+   phase had qualified both to `Preview`, which is where `compile` lives. `rules/desktop.md`
+   already spells it `Session::on_change`, so the spec now matches the rule file. The same
+   bullet had `on_change` reading `Preview.images`; it reads `Changed::assets`.
+2. **The rename lands in three `rules/desktop.md` sections, not two.** Beyond `## The file
+   I/O` and `## The watch loop`, `## The session` carries "a figure is a bare recompile …
+   read the new figures on the way", a sentence about the renamed arm. The stated cap
+   arithmetic already covers the extra lines.
+
+**No finding was rejected, in either round** — as in every round of this spec's episodes.
+
+### Round 1 — Phase 3 only — 2026-08-23 — fresh clean-context reviewer with repo access — **NOT READY**
+
+**Round 0 — is this the right thing to build at all?** Yes, and the phase understated its
+own case. It produces the observable, and today a document naming a bibliography does not
+merely fail to *update* in the app — it fails to compile there at all, because
+`app/src/document.rs:read_assets_with` builds its asset list from `image_paths` alone and
+`core/src/lib.rs:collect` raises `MissingBibliography` on every pass. Phase 1 named that
+gap; this is the phase that closes it, so the citation channel is reachable from that front
+end at all rather than only kept current.
+
+Verdict: `NOT READY`, three blocking, six non-blocking. One generalist reviewer, matching
+every prior episode in this corpus.
+
+**The largest finding is that the phase's stated mechanism was backwards.** The scope said
+the bibliography "must be **read** [in `read_assets_with`] … or there is nothing for a
+watch to re-render", and `read_assets_with`'s output is a `Vec<Asset>` that reaches
+`md_to_pdf_with_anchors` and nothing else. What feeds the filter is `Render::images`, built
+by a **second and separate** `image_paths` call in `render_with`, travelling
+`Preview::compile` → `Preview.images` → `Session::classifier` → `watch::classify`. An
+implementer doing exactly what the phase said would ship a document that compiles once and
+then never updates. None of `render_with`, `Render`, `Preview::compile` or
+`Session::classifier` was named, against §3's requirement that a phase name the functions
+it touches.
+
+The other two, and what each really was:
+
+2. **"Two files" was not derivable from the code**, because the route that decides the
+   count was left open — and the two available routes differed in scope, in which shipped
+   contracts got reworded, and in whether `app/src/preview.rs` was in or out. The identical
+   shape to Phase 1's OQ-5 and Phase 2's OQ-1, both forced closed on the ground that a
+   phase leaving a design call open forces a guess. Resolved by a third route; see round 2.
+3. **The exit gate passed with half the phase unbuilt.** "Changing the bibliography alone
+   re-renders" is satisfied by the compile *counter*, and `Session::on_change` calls
+   `on_render()` whenever the asset mark is set, a failed compile included — so an
+   implementation that publishes the path to the filter and never supplies the bytes goes
+   1 → 2 compiles while every one of them errors `MissingBibliography`. The shipped image
+   tests it said it matched guard against exactly that by also asserting
+   `pdf().unwrap().starts_with(b"%PDF")` and `!is_stale()`; the phase borrowed the harness
+   and dropped the teeth. **The same defect the record has now rated blocking three times**
+   — Phase 1 round 2, Phase 2 round 1, and here.
+
+Notable among the non-blocking: the phase claimed "round 1 found the draft named only one"
+where every recorded round to that point was scoped "Phase 1 only" or "Phase 2 only", and
+Phase 1's round-1 entry closes by recording that Phases 2–4 were unjudged; the close-out
+named one `rules/desktop.md` section where the change lands in three, and stated no cap
+arithmetic against that file's four lines of headroom; the gate dropped
+`cargo test --workspace`, which both shipped phases anchor on; and the "watches it beside
+the images" verb was wrong, `mpdf-003` having fixed the watch set as one recursive
+directory watch with the path list as the *filter* rather than the set.
+
 ### Round 2 — Phase 2 only — 2026-08-23 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, four non-blocking, all four folded. Converged in two

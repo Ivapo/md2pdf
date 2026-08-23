@@ -20,7 +20,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 3 — the desktop app watches the bibliography"
-    reviewed: null
+    reviewed: 2026-08-23
     shipped: null
     cut: null
     by: null
@@ -613,16 +613,108 @@ because both are reachable from ordinary markdown and neither names a line.
 
 ### Phase 3 — the desktop app watches the bibliography
 
-*Produces the observable: **yes**.* Editing the `.yml` re-renders the pane, which is the
-whole promise `mpdf-003` makes about a document's files.
+*Produces the observable: **yes**, and more of it than "re-renders" says.* Today a
+document naming a bibliography does not merely fail to *update* in the app — it fails to
+compile there at all: `app/src/document.rs:read_assets_with` builds its asset list from
+`image_paths` alone, so `core/src/lib.rs:collect` raises `MissingBibliography` on every
+pass. Phase 1 named that gap rather than leaving it to be discovered. This phase closes it
+and then keeps the page current when the `.yml` changes, which is the promise `mpdf-003`
+makes about every file a document names.
 
-- **Scope:** two files, and round 1 found the draft named only one. `app/src/document.rs`
-  — `read_assets_with` builds the app's asset list from `image_paths` alone, so the
-  bibliography must be **read** here through the export Phase 1 added, or there is nothing
-  for a watch to re-render. `app/src/watch.rs` then watches it beside the images.
-- **Exit gate:** an integration check that changing the bibliography alone re-renders,
-  matching how the image watch is already tested.
-- **Close-out:** `rules/desktop.md`'s watch section. One push.
+**The bibliography makes two journeys through this app, and its own round 1 found the
+draft had named one of them and got its direction backwards.** The draft said the file
+"must be **read** [in `read_assets_with`] … or there is nothing for a watch to
+re-render". Measured against the shipped app: `read_assets_with` returns a `Vec<Asset>`
+that reaches `md_to_pdf_with_anchors` and nothing else. What feeds the filter is
+`app/src/document.rs:Render::images`, built by a **second and separate** `image_paths`
+call in `app/src/document.rs:render_with`, which `app/src/preview.rs:Preview::compile`
+copies into `Preview.images` and `app/src/preview.rs:Session::classifier` hands to
+`app/src/watch.rs:classify`. So the journeys are independent: the **bytes** are what make
+the document compile, and the **path** is what makes a change to it redraw. A phase built
+to the draft's sentence would ship a document that compiles once and then never updates.
+
+**The watch set needs nothing, and that is `mpdf-003`'s decision rather than a new one.**
+Its "Why the watch set is the document's own directory" records one recursive watch on the
+document's own directory, covering every path the dialect can legally name — and
+`core/src/frontmatter.rs` puts the bibliography under the same `portable_path` rule every
+image takes, so it already resolves inside. **"Watches it beside the images" was the wrong
+verb**: nothing is watched per file. What changes is the *filter*, which that same section
+fixes as the list's second job.
+
+**The filter carries one list, renamed to hold what it now holds (decision, resolved
+rather than deferred).** Three routes, on the precedent Phase 1's OQ-5 and Phase 2's OQ-1
+both set — a phase that leaves this open is a phase that forces a guess.
+
+- *Ride `Render::images` unrenamed.* Cheapest, and it leaves three shipped doc comments
+  false at once: `Render::images` says "the image paths the document names",
+  `classify` says "one of the paths `md2pdf_core::image_paths` returned", and
+  `Change::Figure` says "one of the figures the document names". This project's whole
+  discipline is that the documentation tracks the code, so that price is not payable.
+- *Give it a `Change::Bibliography` of its own.* Honest, and it buys nothing: `on_change`
+  would gain a branch identical to the one `changed.figures` already runs, and `Changed`
+  a field no reader distinguishes. §5's "don't pre-abstract before there are real
+  consumers" is exactly this case.
+- **Chosen: one list, renamed.** `Render::images` becomes `Render::assets`,
+  `Change::Figure` becomes `Change::Asset`, `Changed::figures` becomes `Changed::assets`.
+  `Asset` is this project's own word for the set — `rules/pipeline.md` already calls these
+  "the two asset channels", and `read_assets_with` already names the same set in bytes
+  where these name it in paths. **No new arm**, because `mpdf-003`'s split is the open
+  document against everything the disk supplies, and a bibliography sits on the second
+  side for the reason a figure does: nothing but the disk supplies it, so its change is a
+  bare recompile. And it is what makes a *dropped* `bibliography:` key free —
+  `Preview::compile` replaces the whole list on every compile, so a path that stops being
+  named disappears on its own, where a separate `Option<String>` field would have to be
+  cleared by hand.
+
+- **Scope:** three files, which is what resolving the route above settles.
+  - `app/src/document.rs` — `read_assets_with` reads the bibliography through
+    `core/src/lib.rs:bibliography_path`, **mirroring `cli/src/main.rs:read_assets`
+    exactly**: first, seeded into the same `seen` set, and refused in the same sentence,
+    `cannot read {file} for the bibliography at line {line}: {e}`. That wording is not
+    decoration — `render_with`'s own doc records that a file which will not read is no
+    `Error` at all and that this app owes the CLI the sentence. `render_with` then
+    publishes the path on `Render`, from the same `Option` the images ride, so a document
+    that did not parse still keeps the list the caller already had.
+  - `app/src/watch.rs` — `classify` takes the one renamed list, and `Change::Asset` and
+    `Changed::assets` are renamed with it. Its doc comment's "one of the paths
+    `md2pdf_core::image_paths` returned" moves with them.
+  - `app/src/preview.rs` — `Preview.images` follows the rename, and so do its readers:
+    `Preview::compile` writes it, `Session::classifier` reads it, and
+    `Session::on_change` reads the renamed `Changed::assets` beside it. **Both
+    `classifier` and `on_change` are `Session` methods and not `Preview`'s**, which is
+    the form `rules/desktop.md` already uses. **`on_change` gains no branch**, which is
+    the whole point of the route chosen above.
+- **Exit gate:** `cargo test --workspace`, and three things it must contain.
+  1. **Changing the bibliography alone re-renders, and the page that results is good.**
+     In `app/src/preview.rs`'s test module, on the harness the image tests already use —
+     `counted()`, `wait_for()`, `settle()` and a real `Session::open` on a `scratch_dir` —
+     a document, a `.yml` beside it, then a rewrite of the `.yml` alone. **The compile
+     count moving is not the assertion.** `Session::on_change` calls `on_render()`
+     whenever the asset mark is set, a *failed* compile included, so a counter alone
+     passes an implementation that publishes the path and never supplies the bytes — half
+     this phase, unbuilt, through its own gate. It must also assert
+     `pdf().unwrap().starts_with(b"%PDF")` and `!is_stale()`, which is exactly what
+     `preview.rs:a_saved_document_and_a_replaced_figure_each_compile_again` already does.
+     This is the defect the record has rated blocking twice, at Phase 1 round 2 and Phase
+     2 round 1.
+  2. **A bibliography named before it exists is watched and then compiles**, the sibling
+     of `preview.rs:a_figure_that_does_not_exist_yet_is_watched_and_then_compiles`: open
+     on a document whose `.yml` is not beside it, assert the error names the path and
+     `pdf()` is `None`, create the file, assert the compile lands and the page is good.
+     **This is the case the directory watch exists for**, and it is the one that fails for
+     an implementation publishing the path only out of a successful read — which
+     `Render::images`' own doc says the image list is built to survive.
+  3. **The rename moves no behaviour.** `watch::tests`' existing `classify` cases and
+     `preview::tests`' image cases pass with nothing changed but the renamed identifiers.
+     That is what `cargo test --workspace` is anchored for, and it is what makes item 1's
+     "alone" provable rather than asserted.
+- **Close-out:** `rules/desktop.md`, **three sections rather than one.** `## The file
+  I/O`, where `read_assets_with` is documented as mirroring `cli/src/main.rs:read_assets`
+  and `Render`'s list contract is stated; `## The watch loop`, where the filter and
+  `Change`'s two arms are; and `## The session`, whose "a figure is a bare recompile …
+  read the new figures on the way" is a sentence about the renamed arm and goes stale
+  with it. **Its `max_lines: 435` has four lines of headroom against 431 used, so the cap
+  moves with the sections.** One push.
 
 ### Phase 4 — the browser carries a bibliography of its own
 
