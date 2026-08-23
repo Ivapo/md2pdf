@@ -1,11 +1,12 @@
 //! Parses the leading YAML frontmatter block.
 //!
-//! The schema is six keys, so this is a hand-written parser over a documented
+//! The schema is seven keys, so this is a hand-written parser over a documented
 //! YAML subset rather than a dependency. It follows the same policy the emitter
 //! applies to markdown: anything outside the subset is an error that names the
 //! offending key and its line, never a guess.
 
-use crate::{Error, Result};
+use crate::emit::portable_path;
+use crate::{BibliographyRef, Error, Result};
 
 /// The bundled looks a document may select.
 ///
@@ -99,7 +100,7 @@ impl Equations {
     }
 }
 
-/// The layout keys a document may carry.
+/// The keys a document may carry.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Frontmatter {
     pub title: Option<String>,
@@ -108,6 +109,18 @@ pub(crate) struct Frontmatter {
     pub template: Template,
     pub date: Option<String>,
     pub equations: Equations,
+    /// The bibliography file this document names, with the line that named it.
+    ///
+    /// The only key that names a *file*, which is why it alone carries a line:
+    /// a missing image is refused at the line the markdown drew it on, and this
+    /// is the only place a bibliography's own position is ever known.
+    ///
+    /// The records are deliberately not in the block. Carrying them here would
+    /// cost no new channel, and it would put a bibliography in every document
+    /// that cites it rather than in one file several documents share — and it
+    /// would mean inventing a record format, or embedding Hayagriva's inside a
+    /// YAML subset this hand-written reader parses a line at a time.
+    pub bibliography: Option<BibliographyRef>,
 }
 
 impl Default for Frontmatter {
@@ -132,6 +145,7 @@ impl Default for Frontmatter {
             template: Template::Article,
             date: None,
             equations: Equations::Plain,
+            bibliography: None,
         }
     }
 }
@@ -213,6 +227,28 @@ pub(crate) fn parse(block: &str, first_line: usize) -> Result<Frontmatter> {
                     ));
                 };
                 out.equations = equations;
+            }
+            // The one key that names a file. Its value takes the shape rule
+            // every path in this dialect takes — a document and the files it
+            // names travel as one folder — phrased for a key rather than for an
+            // image. An empty value means the key is absent, so a document that
+            // wrote `bibliography:` and nothing else names none.
+            "bibliography" => {
+                out.bibliography = match non_empty(value) {
+                    Some(path) => {
+                        portable_path(&path).map_err(|shape| {
+                            problem(
+                                line,
+                                format!(
+                                    "key 'bibliography' takes a path beside the document, not {}",
+                                    shape.key()
+                                ),
+                            )
+                        })?;
+                        Some(BibliographyRef { path, line })
+                    }
+                    None => None,
+                }
             }
             other => return Err(problem(line, format!("unknown key '{other}'"))),
         }
@@ -348,6 +384,48 @@ mod tests {
         }
     }
 
+    /// The one key that names a file keeps the line it was named on.
+    #[test]
+    fn the_bibliography_key_carries_its_path_and_its_line() {
+        let out = parse("title: A\nbibliography: refs.yml\n", 2).unwrap();
+        assert_eq!(
+            out.bibliography,
+            Some(BibliographyRef {
+                path: "refs.yml".to_string(),
+                line: 3,
+            })
+        );
+
+        // An empty value means the key is absent, as it does for every other
+        // string key.
+        assert_eq!(parse("bibliography:\n", 2).unwrap().bibliography, None);
+    }
+
+    /// Every shape the path rule refuses names the key and says what it takes.
+    ///
+    /// The rule is `emit::portable_path`'s, shared with the image arm, so this
+    /// asserts the phrasing a key gets rather than the rule itself: an author who
+    /// wrote a URL needs to be told the key takes a path beside the document,
+    /// where an author who wrote one on an image is told about the image.
+    #[test]
+    fn a_bibliography_path_outside_the_shape_rule_names_the_key() {
+        for (value, needle) in [
+            ("https://example.com/refs.yml", "not a URL"),
+            ("/etc/refs.yml", "not an absolute path"),
+            ("../refs.yml", "not a path with a '..' segment"),
+            ("refs\\bib.yml", "not a path with a backslash"),
+        ] {
+            match parse(&format!("bibliography: {value}\n"), 2) {
+                Err(Error::Frontmatter { line, problem }) => {
+                    assert_eq!(line, 2, "wrong line for {value}");
+                    assert!(problem.contains("bibliography"), "problem was: {problem}");
+                    assert!(problem.contains(needle), "problem was: {problem}");
+                }
+                other => panic!("expected a Frontmatter error for {value}, got {other:?}"),
+            }
+        }
+    }
+
     #[test]
     fn the_date_is_kept_as_it_was_written() {
         let out = parse("date: 10 August 2026\n", 2).unwrap();
@@ -361,6 +439,7 @@ mod tests {
             ("title: A\ncolumns: 3\n", "columns"),
             ("title: A\ntemplate: ieee\n", "press-release"),
             ("title: A\nequations: yes\n", "numbered"),
+            ("title: A\nbibliography: /refs.yml\n", "beside the document"),
             ("title: A\ntitle: B\n", "title"),
             ("title: A\njust a line\n", "key: value"),
             ("title: A\n  nested: B\n", "nested keys"),

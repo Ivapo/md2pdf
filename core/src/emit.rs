@@ -1514,18 +1514,82 @@ fn top(bufs: &mut [String]) -> &mut String {
     bufs.last_mut().expect("the document body is always open")
 }
 
+// -- paths ------------------------------------------------------------------
+
+/// A shape a path in this dialect may not have.
+///
+/// Two renderings rather than one sentence, because the two readers name the
+/// path differently: an image arm says what the image is, and a frontmatter key
+/// says what the key takes. The rule underneath is the same rule, which is the
+/// point of the enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PathShape {
+    Scheme,
+    Absolute,
+    DotDot,
+    Backslash,
+}
+
+impl PathShape {
+    /// The fragment the image arm names, unchanged since it was written.
+    fn image(self) -> &'static str {
+        match self {
+            PathShape::Scheme => "a URL destination",
+            PathShape::Absolute => "an absolute path",
+            PathShape::DotDot => "a '..' path segment",
+            PathShape::Backslash => "a backslash in its path",
+        }
+    }
+
+    /// The fragment a frontmatter key that takes a path names.
+    pub fn key(self) -> &'static str {
+        match self {
+            PathShape::Scheme => "a URL",
+            PathShape::Absolute => "an absolute path",
+            PathShape::DotDot => "a path with a '..' segment",
+            PathShape::Backslash => "a path with a backslash",
+        }
+    }
+}
+
+/// The virtual path a relative destination resolves to, or the shape that
+/// refuses it.
+///
+/// One rule, read by every construct that names a file: a document and the files
+/// it names travel as one folder. A scheme is a fetch request and nothing
+/// fetches, an absolute path converts on one machine only, a `..` segment
+/// escapes both the document's directory and the world's virtual root, and a
+/// Windows separator writes a path Typst's own virtual filesystem cannot hold.
+///
+/// **The resolution happens here rather than after the checks**, so the one
+/// shape `VirtualPath` itself refuses is named by this function too. A caller
+/// that checked the first three and then resolved would have to answer for the
+/// fourth twice, or hand `crate::file_id` a path it cannot build — which returns
+/// `Error::Internal`, whose own contract says a broken build rather than bad
+/// input.
+pub(crate) fn portable_path(dest: &str) -> std::result::Result<VirtualPath, PathShape> {
+    if has_scheme(dest) {
+        return Err(PathShape::Scheme);
+    }
+    if dest.starts_with('/') {
+        return Err(PathShape::Absolute);
+    }
+    if dest.split('/').any(|segment| segment == "..") {
+        return Err(PathShape::DotDot);
+    }
+    VirtualPath::new(dest).map_err(|_| PathShape::Backslash)
+}
+
 // -- images -----------------------------------------------------------------
 
 /// Refuse every image destination the pipeline cannot carry, naming the shape.
 ///
-/// The first two mirror the link arm, for the same two reasons. The next three
-/// are the relative-path rule: a scheme is a fetch request and nothing fetches,
-/// an absolute path converts on one machine only, and a `..` segment escapes
-/// both the document's directory and the world's virtual root. The sixth is a
-/// path Typst's own virtual filesystem cannot hold; a Windows separator is the
-/// way to write one. The last is the format gate's first half — Typst reads the
-/// extension before the content, so an extension it does not name leaves the
-/// format undecided, and the dialect refuses to guess.
+/// The first two mirror the link arm, for the same two reasons. The next four
+/// are [`portable_path`]'s, which the `bibliography` frontmatter key reads too —
+/// one rule about what a path in this dialect may be, phrased twice. The last is
+/// the format gate's first half: Typst reads the extension before the content,
+/// so an extension it does not name leaves the format undecided, and the dialect
+/// refuses to guess.
 fn check_image(dest: &str, title: &str, line: usize) -> Result<()> {
     let refuse = |construct: String| Err(Error::UnsupportedConstruct { construct, line });
 
@@ -1535,18 +1599,10 @@ fn check_image(dest: &str, title: &str, line: usize) -> Result<()> {
     if !title.is_empty() {
         return refuse("image with a title".to_string());
     }
-    if has_scheme(dest) {
-        return refuse("image with a URL destination".to_string());
-    }
-    if dest.starts_with('/') {
-        return refuse("image with an absolute path".to_string());
-    }
-    if dest.split('/').any(|segment| segment == "..") {
-        return refuse("image with a '..' path segment".to_string());
-    }
 
-    let Ok(vpath) = VirtualPath::new(dest) else {
-        return refuse("image with a backslash in its path".to_string());
+    let vpath = match portable_path(dest) {
+        Ok(vpath) => vpath,
+        Err(shape) => return refuse(format!("image with {}", shape.image())),
     };
     match vpath.extension() {
         None => refuse("image with no file extension".to_string()),

@@ -110,6 +110,20 @@ pub struct ImageRef {
     pub line: usize,
 }
 
+/// The bibliography file a document names, and the frontmatter line that named
+/// it.
+///
+/// [`ImageRef`]'s shape under its own name rather than a second use of that
+/// one: `image_paths` names what it returns, and three callers cite that
+/// contract. The line is what lets a missing file be refused in the author's own
+/// terms — a bibliography is not walked, so this is the only place its position
+/// is known.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BibliographyRef {
+    pub path: String,
+    pub line: usize,
+}
+
 /// One heading, and the page its typeset form landed on.
 ///
 /// `line` is the 1-based line of the markdown heading; `page` is the 1-based
