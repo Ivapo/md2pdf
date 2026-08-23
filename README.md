@@ -511,19 +511,40 @@ directly:
 
 The mark and the numbering are Typst's, and the look decides what the label above the list
 says and how it is set. Nothing is fetched: no key is resolved against anything on the
-network, and a key the file does not hold fails the compile.
+network. The file is read for its keys before anything is typeset, so a key it does not
+hold is named where you cited it rather than reported by the compiler.
 
 The brackets are required. A bare `@key` is not a citation, because an unbracketed `@` is
 load-bearing in ordinary text — an email address is the everyday case — so `a@b.com` and
 `@thing` reach the page as you typed them, and so do `[see @k]` and `[a@b.com]`.
 
-Four shapes are errors. Pandoc's `[@a; @b]`, `[@k, p. 33]` and `[-@k]` are not in this
-dialect and are named rather than guessed at, and a citation in a document that names no
-bibliography is an error rather than text on the page:
+Eight things are errors, and each names the line you wrote it on. Four are about the
+citation: Pandoc's `[@a; @b]`, `[@k, p. 33]` and `[-@k]` are not in this dialect and are
+named rather than guessed at, and a citation in a document that names no bibliography is
+an error rather than text on the page:
 
 ```
 error: citation error at line 7: '@smith2020' is cited and the frontmatter names no bibliography
 ```
+
+Two more are about the keys. A key the bibliography does not hold is one:
+
+```
+error: citation error at line 7: '@smith2020' is cited and the bibliography does not hold it
+```
+
+and so is a name your document and your bibliography both use, because Typst's labels are
+one namespace. Naming a figure `{#smith2020}` beside a bibliography holding `smith2020` is
+fine on its own; it is `[](#smith2020)` that has no way to mean one of them rather than
+the other:
+
+```
+error: citation error at line 12: 'smith2020' names something in this document and a key in the bibliography, and one reference cannot mean both
+```
+
+The last two are about the file, and both name the frontmatter line that declared it: a
+bibliography that does not parse, and one whose extension is neither `.yml`, `.yaml` nor
+`.bib`.
 
 ## Frontmatter
 

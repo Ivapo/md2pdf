@@ -4,6 +4,7 @@ sources:
   - core/src/lib.rs
   - core/src/emit.rs
   - core/src/frontmatter.rs
+  - core/src/bibliography.rs
   - core/src/math.rs
   - core/assets/math.typ
   - core/assets/template.typ
@@ -15,13 +16,14 @@ covers: >
   channels, the caption that makes an image, a table or a code block a figure and
   the splice that attaches it, the `:::` group that makes several of them one figure,
   the name a caption or a display equation declares and
-  the reference that points at it, the citation the broken-link callback claims and the
-  reference list it earns, the LaTeX subset a formula may hold and the prelude
+  the reference that points at it, the citation the broken-link callback claims, the
+  reference list it earns and the four ways the bibliography channel refuses,
+  the LaTeX subset a formula may hold and the prelude
   it compiles against, the bundled looks and the call contract they meet, the equation numbering
   the author asks for and the look formats, the heading anchors a compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 760
-generated: 2026-08-22
+max_lines: 810
+generated: 2026-08-23
 ---
 
 # Pipeline
@@ -160,14 +162,21 @@ never raises. A definition whose translation failed keeps that error, and the se
 reports it at the region, so the first error in document order is still the one reported
 and the frontmatter still wins over a construct error below it.
 
-**Two errors do not keep their document position.** The two reference refusals below are
+**Some errors do not keep their document position.** The two reference refusals below are
 checked after the walk, because a reference may precede its declaration; the
 missing-bibliography refusal is checked there too, because `collect_definitions` never
 parses the frontmatter and a test inside the walk would refuse a citation in a footnote of
-a document that names a bibliography perfectly well. The walk aborts at the first construct
-error, so a document carrying a bad reference on line 3 and a raw HTML block on line 5
-reports the HTML. Every other error, in either walk's territory, still surfaces where it
-stands.
+a document that names a bibliography perfectly well. Later still, the asset stage checks
+what needs a file's bytes — a missing or mislabeled image, and the two citation refusals
+the bibliography's own contents answer. The walk aborts at the first construct error, so a
+document carrying a bad reference on line 3 and a raw HTML block on line 5 reports the
+HTML. Every other error, in either walk's territory, still surfaces where it stands.
+
+**Where the asset stage has several candidates, the earliest line is the error.**
+`core/src/lib.rs:collect` gathers every refusal it can raise and answers with one, by
+`min_by_key` over the line: a document with a missing image on line 3 and an absent
+citation key on line 9 reports the image, because the later one would send the author past
+the first thing that is wrong. One rule over every class it raises, not one per class.
 
 **Everything else is an error** — raw HTML and a task list marker.
 `core/src/emit.rs:describe` names the construct, `Error::UnsupportedConstruct` carries
@@ -289,9 +298,10 @@ the function Typst's own detection reads.
 `core/src/lib.rs:collect` then checks the bytes before the compile, once per path at its
 first reference: no asset is `Error::MissingImage`, bytes that disagree with the extension
 are `Error::ImageFormat`, and both name the path and the line. **The bibliography goes
-into that same map, first and unchecked** — first because its line comes from the
-frontmatter and is earlier than every image's, unchecked because Typst parses the file
-itself and names its own error where an image's magic bytes are the only thing that could.
+into that same map, first and past no magic bytes** — first because its line comes from
+the frontmatter and is earlier than every image's, and past no magic bytes because the
+citation section's own reader parses it a few lines later and names a real error, where
+for an image the magic bytes are the only thing that could.
 A file the caller did not supply is `Error::MissingBibliography`, the sibling of
 `MissingImage`: without it the compile says "file not found (searched at refs.yml)"
 against a span in a `main.typ` the user has never seen. `core/src/lib.rs:Asset` and
@@ -528,9 +538,6 @@ character set than a bibliography key does: `#cite(<DBLP:books/lib/Knuth86a>)` f
 same escaper a URL uses. It is checked against no character set, which is where this parts
 from `core/src/emit.rs:check_name`: a figure name is authored inside this dialect, and a
 citation key is authored in a file the author often did not write and cannot change.
-One consequence nothing warns about: Typst's labels are one namespace, so a figure named
-`{#smith2020}` in a document whose bibliography holds `smith2020` fails the compile with
-``label `<smith2020>` occurs both in the document and a bibliography``.
 
 `core/src/emit.rs:cite_key` refuses three payloads Pandoc spells and this dialect does not
 read, each an `Error::Citation` naming the line: `[@a; @b]`, `[@k, p. 33]` and `[-@k]`.
@@ -547,6 +554,48 @@ after the walk for the reason `core/src/emit.rs:Names::cited` records: `collect_
 never parses the frontmatter, so a citation inside a footnote definition travels out on the
 same `Body` that already carries that definition's images, its math flag and its names, and
 is judged where the document's own frontmatter is known.
+
+**The bibliography is read for its keys before the compile, by Typst's own reader.**
+`core/src/bibliography.rs:keys` takes the bytes the caller supplied and returns the key set
+the file holds, through `hayagriva` — the crate and the version `typst-library` 0.15.1
+already depends on directly, so `core/Cargo.toml` naming it adds no crate to the tree, on
+`wasm32` as much as natively, and the two key sets cannot disagree. The dispatch is the
+extension through `core/src/emit.rs:extension_of`, **folded to lower case**, because
+Typst's own `decode_library` matches on `ext.to_lowercase()` and `bibliography: refs.YML`
+compiles perfectly well.
+
+Four things the channel refuses, each an `Error::Citation` naming a line, and Typst raises
+every one of them itself in words that carry none. Two are answered from the key set, at
+the author's own markdown line:
+
+- **A cited key the file does not hold**, at the line its `[@…]` sits on. Typst's own is
+  ``citation key `k` is not present in the bibliography`` — the key, and no line, because
+  `core/src/lib.rs:join` keeps a diagnostic's message and drops its span.
+- **A name the document and the bibliography both hold**, at the line that *points* at it.
+  Typst's labels are one namespace, and its ``label `<k>` occurs both in the document and a
+  bibliography`` is raised while resolving a reference. **The reference is the trigger**: a
+  figure named `{#k}` beside a bibliography holding `k` compiles clean, and so does the
+  same document citing `[@k]`; only `[](#k)` raises it, and then whether or not the key is
+  cited. So the test is on `core/src/emit.rs:Names::referenced` alone, which reaches the
+  asset stage on `core/src/emit.rs:Emitted` beside `Names::cited`.
+
+Two are about the file rather than the keys, and both name the frontmatter line, the only
+line a bibliography has:
+
+- **A file whose own parse fails**, the reader's message folded into the sentence. Nothing
+  checks an extension against its content on either side, so a `.yml` holding BibLaTeX
+  reaches this too, and so do bytes that are not UTF-8.
+- **An extension that is neither**, which `core/src/frontmatter.rs` does not catch — it
+  validates the path's *shape* through `portable_path` and nothing about its ending — so
+  `bibliography: refs.txt` over a perfectly good Hayagriva file would otherwise reach
+  Typst's "unknown bibliography format (must be .yaml/.yml or .bib)".
+
+**All four run beside `core/src/lib.rs:collect` and none inside the walk**, because the
+bibliography's bytes are the only thing that can answer any of them and emission reads no
+file on either channel. One consequence is worth stating rather than discovering:
+`--emit-typst` refuses none of the four, and emits `#cite(label("nope"))` for a key nothing
+holds. That is correct — the flag reads no file, which is what lets it work on a document
+whose bibliography is not beside it.
 
 Where the frontmatter names a bibliography, `core/src/emit.rs:emit` appends
 `#bibliography("…", title: none)` after the body. That is the only placement the markdown

@@ -1386,6 +1386,7 @@ dependencies = [
 name = "md2pdf-core"
 version = "0.1.0"
 dependencies = [
+ "hayagriva",
  "mitex",
  "pulldown-cmark",
  "thiserror",
