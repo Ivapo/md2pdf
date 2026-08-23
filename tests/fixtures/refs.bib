@@ -1,0 +1,14 @@
+% The BibLaTeX half of the pair Typst reads, and the format the extension is
+% what dispatches on. Nothing here is a format this pipeline owns: `hayagriva`
+% reads both, and it is the same reader at the same version Typst uses.
+%
+% The key is a plain one on purpose. `refs.yml`'s carries a ':' and a '/' to
+% prove the key crosses as a string; this one has to be a key that is *also* a
+% legal figure name under `core/src/emit.rs:check_name`, because the label
+% collision needs one name that a document and a bibliography can both hold.
+@book{knuth1986,
+  author    = {Knuth, Donald E.},
+  title     = {Computers and Typesetting, Volume A: The {TeXbook}},
+  year      = {1986},
+  publisher = {Addison-Wesley},
+}

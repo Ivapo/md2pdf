@@ -395,7 +395,10 @@ fn every_ok_example_compiles() {
             continue;
         }
         let pdf = md_to_pdf(example.content, &assets).unwrap_or_else(|e| {
-            panic!("the '{}' example is shown as accepted but fails: {e}", example.name)
+            panic!(
+                "the '{}' example is shown as accepted but fails: {e}",
+                example.name
+            )
         });
         assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
         assert!(pdf.len() > 1000, "the PDF is suspiciously small");

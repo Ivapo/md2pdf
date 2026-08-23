@@ -90,8 +90,19 @@ const MARK_SVG: &[u8] = include_bytes!("../../tests/fixtures/mark.svg");
 /// image-specific in it — which is why this channel needed no new type.
 const REFS_YML: &[u8] = include_bytes!("../../tests/fixtures/refs.yml");
 
+/// The other format Typst reads, and the one whose key is a legal figure name.
+///
+/// `refs.yml`'s key carries a ':' and a '/', which `core/src/emit.rs:check_name`
+/// refuses, so the label collision needs a bibliography this one can be named
+/// against.
+const REFS_BIB: &[u8] = include_bytes!("../../tests/fixtures/refs.bib");
+
 fn citations_assets() -> Vec<Asset> {
     vec![asset("refs.yml", REFS_YML)]
+}
+
+fn bib_assets() -> Vec<Asset> {
+    vec![asset("refs.bib", REFS_BIB)]
 }
 
 fn images_assets() -> Vec<Asset> {
@@ -3453,4 +3464,183 @@ fn a_bibliography_path_outside_the_shape_rule_refuses_the_document() {
             other => panic!("expected a Frontmatter error for {value}, got {other:?}"),
         }
     }
+}
+
+// -- mpdf-007 Phase 2: a key the bibliography does not hold -------------------
+
+/// A key the bibliography does not hold names the key and the citation's line.
+///
+/// Typst raises this itself, and its whole sentence is ``citation key `k` is
+/// not present in the bibliography`` — the key, and no line at all, because
+/// `core/src/lib.rs:join` keeps the message and drops the span, and there is no
+/// map from a `main.typ` span back to the markdown anyway. This is the refusal
+/// the rejection rule asks for: the author's own key, on the author's own line.
+///
+/// The check runs beside `collect` rather than in the walk, so this is
+/// `md_to_pdf` and not `md_to_typst` — the bibliography's bytes are the only
+/// thing that can answer the question, and emission reads no bytes.
+#[test]
+fn an_absent_key_names_the_key_and_the_citations_line() {
+    let md = "---\ntitle: T\nbibliography: refs.yml\n---\n\n# H\n\nA cite [@nosuchkey] here.\n";
+    match md_to_pdf(md, &citations_assets()) {
+        Err(Error::Citation { line, problem }) => {
+            assert_eq!(line, 8);
+            assert!(problem.contains("nosuchkey"), "problem was: {problem}");
+            assert!(
+                problem.contains("does not hold it"),
+                "problem was: {problem}"
+            );
+        }
+        other => panic!("expected a citation error, got {other:?}"),
+    }
+}
+
+/// A name the document and the bibliography both hold is refused where it is
+/// pointed at.
+///
+/// **The reference is the trigger, and the fixture would assert nothing without
+/// it.** Measured over the whole matrix: a figure named `{#knuth1986}` in a
+/// document whose bibliography holds `knuth1986` compiles clean, and so does the
+/// same document citing `[@knuth1986]`; Typst raises ``label `<knuth1986>`
+/// occurs both in the document and a bibliography`` only where a `[](#knuth1986)`
+/// points at the shared label, and then whether or not the key is cited. The
+/// second half of this test is the clean case, which is what makes the first
+/// half about the reference rather than about the name.
+///
+/// A table carries the name rather than an image, so the case needs no image
+/// asset beside the bibliography.
+#[test]
+fn a_name_the_document_and_the_bibliography_both_hold_is_refused_at_the_reference() {
+    let figure = "---\ntitle: T\nbibliography: refs.bib\n---\n\n# H\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n: A table. {#knuth1986}\n";
+
+    match md_to_pdf(
+        &format!("{figure}\nAs [](#knuth1986) shows.\n"),
+        &bib_assets(),
+    ) {
+        Err(Error::Citation { line, problem }) => {
+            assert_eq!(line, 14);
+            assert!(problem.contains("knuth1986"), "problem was: {problem}");
+            assert!(
+                problem.contains("cannot mean both"),
+                "problem was: {problem}"
+            );
+        }
+        other => panic!("expected a citation error for the collision, got {other:?}"),
+    }
+
+    // The same document with no reference, citing the shared key: clean.
+    let pdf = md_to_pdf(
+        &format!("{figure}\nA cite [@knuth1986] and no reference.\n"),
+        &bib_assets(),
+    )
+    .unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the clean case is not a PDF");
+}
+
+/// Where two keys are absent, the error is the one on the earlier line.
+///
+/// **The construction is the footnote splice, and the obvious document has no
+/// teeth.** `core/src/emit.rs` extends `names.cited` from a definition's body at
+/// the *reference*, carrying the line the citation had inside the definition —
+/// so with the reference on line 8, a body citation on line 10 and the
+/// definition's on line 12, the vector is `[12, 10]` where the lines are
+/// `[10, 12]`, and `.first()` and `min_by_key` disagree. Two plain body
+/// citations come out in document order and would pass either way.
+#[test]
+fn where_two_keys_are_absent_the_earlier_line_is_the_error() {
+    let md = "---\ntitle: T\nbibliography: refs.yml\n---\n\n# H\n\nA note[^n] here.\n\nA cite [@alpha] here.\n\n[^n]: The definition cites [@omega].\n";
+    match md_to_pdf(md, &citations_assets()) {
+        Err(Error::Citation { line, problem }) => {
+            assert_eq!(line, 10, "the error was: {problem}");
+            assert!(problem.contains("alpha"), "problem was: {problem}");
+        }
+        other => panic!("expected a citation error, got {other:?}"),
+    }
+}
+
+/// A bibliography whose own parse fails is refused by name, with the
+/// frontmatter's line.
+///
+/// The file's only line is the one that named it, which is the line
+/// `Error::MissingBibliography` already reports. Nothing checks an extension
+/// against its content on either side, so a `.yml` holding something that is not
+/// Hayagriva reaches the reader and is refused there rather than by a panic or a
+/// Typst diagnostic.
+#[test]
+fn a_bibliography_that_does_not_parse_names_itself_and_the_frontmatter_line() {
+    let md = "---\ntitle: T\nbibliography: refs.yml\n---\n\n# H\n\nA cite [@k] here.\n";
+    let bad = asset("refs.yml", b"this is not a bibliography at all\n");
+    match md_to_pdf(md, &[bad]) {
+        Err(Error::Citation { line, problem }) => {
+            assert_eq!(line, 3);
+            assert!(problem.contains("refs.yml"), "problem was: {problem}");
+            assert!(
+                problem.contains("does not parse as Hayagriva"),
+                "problem was: {problem}"
+            );
+        }
+        other => panic!("expected a citation error, got {other:?}"),
+    }
+}
+
+/// Both formats resolve a key, and a third extension is refused by name.
+///
+/// The extension is what dispatches, so both accepted spellings are exercised
+/// rather than one — and the third case is the failure that is reachable from
+/// ordinary markdown today and names no line: `core/src/frontmatter.rs` checks
+/// the path's *shape* and nothing about its extension, so `bibliography:
+/// refs.txt` over a perfectly good Hayagriva file reaches Typst's "unknown
+/// bibliography format (must be .yaml/.yml or .bib)" against a span in a
+/// `main.typ` the user has never seen.
+#[test]
+fn both_bibliography_formats_resolve_a_key_and_a_third_is_refused() {
+    for (path, key, assets, what) in [
+        (
+            "refs.yml",
+            "DBLP:books/lib/Knuth86a",
+            citations_assets(),
+            "Hayagriva",
+        ),
+        ("refs.bib", "knuth1986", bib_assets(), "BibLaTeX"),
+    ] {
+        let md =
+            format!("---\ntitle: T\nbibliography: {path}\n---\n\n# H\n\nA cite [@{key}] here.\n");
+        let pdf = md_to_pdf(&md, &assets).unwrap();
+        assert!(pdf.starts_with(b"%PDF"), "{what} did not produce a PDF");
+    }
+
+    // Good Hayagriva bytes under an extension neither reader is dispatched on.
+    let md = "---\ntitle: T\nbibliography: refs.txt\n---\n\n# H\n\nA cite [@DBLP:books/lib/Knuth86a] here.\n";
+    match md_to_pdf(md, &[asset("refs.txt", REFS_YML)]) {
+        Err(Error::Citation { line, problem }) => {
+            assert_eq!(line, 3);
+            assert!(problem.contains("refs.txt"), "problem was: {problem}");
+            assert!(
+                problem.contains("no format this dialect reads"),
+                "problem was: {problem}"
+            );
+        }
+        other => panic!("expected a citation error for the extension, got {other:?}"),
+    }
+}
+
+/// This phase emits no markup at all, so no golden may move for any reason.
+///
+/// The cheapest possible check that the walk was not disturbed, and stronger
+/// than Phase 1's: that one allowed the two new goldens, where this one allows
+/// nothing. Every pair the file holds is asserted individually above; this
+/// re-asserts the two the citation channel owns, which are the ones a change to
+/// `Emitted` or to `emit`'s tail could move.
+#[test]
+fn phase_two_moves_no_golden() {
+    assert_eq!(md_to_typst(CITATIONS_MD).unwrap(), CITATIONS_TYP);
+    assert_eq!(
+        md_to_typst(CITATIONS_PRESS_RELEASE_MD).unwrap(),
+        CITATIONS_PRESS_RELEASE_TYP
+    );
+    assert_eq!(md_to_typst(HOSTILE_MD).unwrap(), HOSTILE_TYP);
+    assert_eq!(
+        md_to_typst(CROSS_REFERENCES_MD).unwrap(),
+        CROSS_REFERENCES_TYP
+    );
 }

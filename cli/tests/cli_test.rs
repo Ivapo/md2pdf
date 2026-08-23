@@ -246,6 +246,40 @@ fn emit_typst_reads_no_bibliography() {
     );
 }
 
+/// A key the bibliography does not hold exits non-zero and names its line.
+///
+/// **On a compile run, and that is the assertion.** Both of this phase's
+/// refusals need the bibliography's bytes, so neither can run on `--emit-typst`
+/// — which is correct, and which `emit_typst_reads_no_bibliography` above pins
+/// from the other side. Without the check the same run prints Typst's own
+/// ``typst compilation failed: citation key `nosuchkey` is not present in the
+/// bibliography``: the key, and no line.
+#[test]
+fn an_absent_key_exits_non_zero_and_names_the_key_and_the_line() {
+    let dir = scratch_dir("citations-absent");
+    let input = dir.join("absent.md");
+    std::fs::write(
+        &input,
+        "---\ntitle: T\nbibliography: refs.yml\n---\n\n# H\n\nA cite [@nosuchkey] here.\n",
+    )
+    .unwrap();
+    std::fs::copy(fixture("refs.yml"), dir.join("refs.yml")).unwrap();
+
+    let out = run(&[input.as_ref()]);
+    assert!(!out.status.success(), "the run should have failed");
+
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.contains("citation error at line 8"),
+        "stderr: {stderr}"
+    );
+    assert!(stderr.contains("nosuchkey"), "stderr: {stderr}");
+    assert!(
+        !stderr.contains("typst compilation failed"),
+        "the Typst diagnostic still escapes: {stderr}"
+    );
+}
+
 /// Each citation the dialect refuses exits non-zero and prints its sentence.
 ///
 /// Read here as a user reads them, rather than only as an `Error` value: the
@@ -266,7 +300,10 @@ fn each_refused_citation_exits_non_zero_and_names_its_payload() {
         assert!(!out.status.success(), "the run should have failed: {body}");
 
         let stderr = String::from_utf8(out.stderr).unwrap();
-        assert!(stderr.contains("citation error at line 3"), "stderr: {stderr}");
+        assert!(
+            stderr.contains("citation error at line 3"),
+            "stderr: {stderr}"
+        );
         assert!(stderr.contains(needle), "stderr: {stderr}");
     }
 }
