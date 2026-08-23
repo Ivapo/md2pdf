@@ -20,7 +20,9 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
-use pulldown_cmark::{Alignment, CodeBlockKind, Event, LinkType, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{
+    Alignment, BrokenLink, CodeBlockKind, CowStr, Event, LinkType, Options, Parser, Tag, TagEnd,
+};
 use typst::syntax::VirtualPath;
 use unicase::UniCase;
 
@@ -484,6 +486,62 @@ pub(crate) fn options() -> Options {
     options
 }
 
+/// The broken-link callback every walk reads, as a plain function pointer.
+///
+/// A `fn` satisfies `BrokenLinkCallback`, so the parser below is a concrete
+/// type and nothing is boxed. The lifetime is the source's: the reference the
+/// callback hands back borrows the markdown it was read from.
+pub(crate) type Citations<'a> = fn(BrokenLink<'a>) -> Option<(CowStr<'a>, CowStr<'a>)>;
+
+/// The parser every walk reads, options and callback together.
+///
+/// One constructor for all of them, on the argument [`options`] already carries
+/// one builder under: two walks of the same stream that disagreed about the
+/// parse would disagree about what the document says. **Both of this file's
+/// walks take it** — `collect_definitions` and `emit` — or a citation inside a
+/// footnote definition would print literally while the same text in the body
+/// cited. So does [`crate::md_to_html`], which is what keeps the demo page's two
+/// columns coming out of one parse.
+pub(crate) fn parser(md: &str) -> Parser<'_, Citations<'_>> {
+    Parser::new_with_broken_link_callback(md, options(), Some(citation_reference))
+}
+
+/// Claim a broken shortcut reference that begins `@` or `-@`, and no other.
+///
+/// **A `[@key]` is not a link until this makes it one.** A CommonMark shortcut
+/// reference is a link only where a matching reference definition exists, and a
+/// citation never has one: without this callback `See [@smith2020] ok.` parses
+/// to five `Event::Text` runs and no `Tag::Link` at all, so the walk would never
+/// see the construct. Stitching those runs back together was the alternative and
+/// is refused — it would put a second, hand-written inline parser beside
+/// `pulldown-cmark`, which is the thing a parser was chosen to avoid.
+///
+/// **The reference itself is the destination**, never an empty string: the
+/// `Tag::Link` arm errors on an empty one, and the value also reaches
+/// `crate::md_to_html`, where a citation renders as `<a href="@k">@k</a>` — which
+/// is honest for a writer that has no notion of citations.
+///
+/// **`-@` is not decoration.** It is Pandoc's suppressed-author form, which the
+/// dialect refuses by name; under an `@`-only predicate `[-@k]` would stay five
+/// text runs the emitter never sees and would reach the page as `\[\-\@k\]` — a
+/// refusal the dialect promises and the parse could not deliver.
+///
+/// Returning `None` leaves the source exactly as it is, which is what keeps
+/// `an [ open bracket, a ] close bracket`, `[see @k]` and `[a@b.com]` the
+/// literal text they have always been.
+fn citation_reference<'a>(link: BrokenLink<'a>) -> Option<(CowStr<'a>, CowStr<'a>)> {
+    is_citation(&link.reference).then(|| (link.reference, CowStr::Borrowed("")))
+}
+
+/// Whether a reference is one this dialect reads as a citation.
+///
+/// Read twice over the same string — once by the callback above, once by the
+/// link's end arm over the destination the callback wrote — so the parse and the
+/// emitter cannot disagree about what a citation is.
+fn is_citation(reference: &str) -> bool {
+    reference.starts_with('@') || reference.starts_with("-@")
+}
+
 /// One footnote label, folded the way the parser folds it.
 ///
 /// pulldown-cmark keys its own label map by `UniCase`, so `[^A]` cites a
@@ -609,7 +667,7 @@ fn collect_definitions(md: &str) -> Definitions {
     let mut open: Option<Label> = None;
     let mut failure: Option<Error> = None;
 
-    for (event, range) in Parser::new_ext(md, options()).into_offset_iter() {
+    for (event, range) in parser(md).into_offset_iter() {
         if open.is_none() {
             match &event {
                 Event::Start(Tag::FootnoteDefinition(label)) => {
@@ -684,7 +742,7 @@ pub(crate) fn emit(md: &str) -> Result<(String, Vec<ImageRef>, Vec<usize>)> {
     };
 
     let mut walk = Walk::new();
-    for (event, range) in Parser::new_ext(md, options()).into_offset_iter() {
+    for (event, range) in parser(md).into_offset_iter() {
         step(&mut walk, md, event, range, Mode::Document(&mut notes))?;
     }
 
