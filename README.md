@@ -129,8 +129,8 @@ the one thing an unsigned bundle cannot do.
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
-constructs, links, cross-references, tables, images, captions, figure groups, footnotes,
-strikethrough, and math in both its forms**:
+constructs, links, cross-references, citations, tables, images, captions, figure groups,
+footnotes, strikethrough, and math in both its forms**:
 
 ````markdown
 # Introduction
@@ -482,9 +482,52 @@ put a footnote inside a footnote. A reference whose definition is missing altoge
 not an error: it stays on the page as the text you typed, the way an unresolved link
 reference does.
 
+## Citing sources
+
+Name a bibliography file in the frontmatter and cite a key with `[@key]`. The reference
+list is set at the end of the document:
+
+````markdown
+---
+title: Citing a source
+bibliography: refs.yml
+---
+
+Typesetting was rethought from the ground up [@DBLP:books/lib/Knuth86a].
+````
+
+The file sits beside the document, as an image does, and it is the author's own — either
+a Hayagriva `.yml`/`.yaml` file or a BibLaTeX `.bib` one, both of which Typst reads
+directly:
+
+```yaml
+"DBLP:books/lib/Knuth86a":
+  type: book
+  title: "Computers and Typesetting, Volume A: The TeXbook"
+  author: Knuth, Donald E.
+  date: 1986
+  publisher: Addison-Wesley
+```
+
+The mark and the numbering are Typst's, and the look decides what the label above the list
+says and how it is set. Nothing is fetched: no key is resolved against anything on the
+network, and a key the file does not hold fails the compile.
+
+The brackets are required. A bare `@key` is not a citation, because an unbracketed `@` is
+load-bearing in ordinary text — an email address is the everyday case — so `a@b.com` and
+`@thing` reach the page as you typed them, and so do `[see @k]` and `[a@b.com]`.
+
+Four shapes are errors. Pandoc's `[@a; @b]`, `[@k, p. 33]` and `[-@k]` are not in this
+dialect and are named rather than guessed at, and a citation in a document that names no
+bibliography is an error rather than text on the page:
+
+```
+error: citation error at line 7: '@smith2020' is cited and the frontmatter names no bibliography
+```
+
 ## Frontmatter
 
-A leading `---` block controls the layout. It takes six keys, all optional:
+A leading `---` block controls the layout. It takes seven keys, all optional:
 
 ```markdown
 ---
@@ -494,6 +537,7 @@ date: 10 August 2026        # a free string, typeset as you wrote it
 template: article           # article or press-release
 columns: 1                  # 1 or 2
 equations: numbered         # numbered or plain
+bibliography: refs.yml      # a Hayagriva .yml/.yaml or BibLaTeX .bib file
 ---
 ```
 

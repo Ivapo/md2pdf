@@ -11,7 +11,7 @@ last_updated: 2026-08-22
 phases:
   - name: "Phase 1 — a cited source reaches the reference list"
     reviewed: 2026-08-22
-    shipped: null
+    shipped: 2026-08-22
     cut: null
     by: null
   - name: "Phase 2 — a key the bibliography does not hold is named, not compiled"

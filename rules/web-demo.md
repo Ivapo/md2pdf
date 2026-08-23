@@ -14,7 +14,7 @@ covers: >
   height model and the panes beneath the list, the one image the page carries
   and the limit that remains, the engines the page has been run in, and the
   build and deploy that publish it
-max_lines: 195
+max_lines: 205
 generated: 2026-08-22
 ---
 
@@ -140,8 +140,9 @@ can differ, which is the failure the whole arrangement prevents.
 ## The other column, and where its markup comes from
 
 **The column beside each example is generated, not written.** It is
-`core/src/lib.rs:md_to_html` over that row's own source — the same parser and the same
-`core/src/emit.rs:options`, written out by pulldown-cmark's own HTML backend instead of by
+`core/src/lib.rs:md_to_html` over that row's own source — the same parser through
+`core/src/emit.rs:parser`, options and broken-link callback together, written out by
+pulldown-cmark's own HTML backend instead of by
 the emitter, so it is not a second renderer but the one the page's whole claim is already
 about. It shows what this parse looks like when something other than the emitter sets it
 down: the caption marker is lost because nothing but the emitter is looking for it. The
