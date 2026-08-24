@@ -1,6 +1,6 @@
 //! Parses the leading YAML frontmatter block.
 //!
-//! The schema is seven keys, so this is a hand-written parser over a documented
+//! The schema is eight keys, so this is a hand-written parser over a documented
 //! YAML subset rather than a dependency. It follows the same policy the emitter
 //! applies to markdown: anything outside the subset is an error that names the
 //! offending key and its line, never a guess.
@@ -100,6 +100,43 @@ impl Equations {
     }
 }
 
+/// Whether a figure's number carries the section it stands in.
+///
+/// A name against a closed set, on `Equations`' own shape and for its own
+/// reason: a per-chapter restart without a prefix is the same mechanism minus an
+/// argument, so it is a third name here rather than a third key. The author
+/// decides *whether* a number carries a section; the look decides *how* one is
+/// formatted, which is why this crosses to the template as a name and carries no
+/// numbering string of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Figures {
+    Flat,
+    Sectioned,
+}
+
+impl Figures {
+    /// Every accepted name. The default sits first, as `Equations::ALL`'s does.
+    pub const ALL: [Figures; 2] = [Figures::Flat, Figures::Sectioned];
+
+    /// The name a document writes in the `figures` key, and the string the
+    /// emitter hands the look.
+    pub fn name(self) -> &'static str {
+        match self {
+            Figures::Flat => "flat",
+            Figures::Sectioned => "sectioned",
+        }
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        Figures::ALL.into_iter().find(|f| f.name() == name)
+    }
+
+    /// The accepted names, for the error a name outside the set raises.
+    fn names() -> String {
+        Figures::ALL.map(Figures::name).join(" or ")
+    }
+}
+
 /// The keys a document may carry.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Frontmatter {
@@ -109,6 +146,7 @@ pub(crate) struct Frontmatter {
     pub template: Template,
     pub date: Option<String>,
     pub equations: Equations,
+    pub figures: Figures,
     /// The bibliography file this document names, with the line that named it.
     ///
     /// The only key that names a *file*, which is why it alone carries a line:
@@ -135,8 +173,9 @@ impl Default for Frontmatter {
     /// is read, and the value below is what a document with no `template` key
     /// lands on.
     ///
-    /// `equations` defaults to the name that numbers nothing, so a document
-    /// written before the key existed compiles to the same page it always did.
+    /// `equations` defaults to the name that numbers nothing, and `figures` to
+    /// the name that sections nothing, so a document written before either key
+    /// existed compiles to the same page it always did.
     fn default() -> Self {
         Self {
             title: None,
@@ -145,6 +184,7 @@ impl Default for Frontmatter {
             template: Template::Article,
             date: None,
             equations: Equations::Plain,
+            figures: Figures::Flat,
             bibliography: None,
         }
     }
@@ -227,6 +267,15 @@ pub(crate) fn parse(block: &str, first_line: usize) -> Result<Frontmatter> {
                     ));
                 };
                 out.equations = equations;
+            }
+            "figures" => {
+                let Some(figures) = Figures::from_name(value) else {
+                    return Err(problem(
+                        line,
+                        format!("key 'figures' takes {}, not '{value}'", Figures::names()),
+                    ));
+                };
+                out.figures = figures;
             }
             // The one key that names a file. Its value takes the shape rule
             // every path in this dialect takes — a document and the files it
@@ -384,6 +433,34 @@ mod tests {
         }
     }
 
+    #[test]
+    fn both_figure_names_parse() {
+        for (name, figures) in [("flat", Figures::Flat), ("sectioned", Figures::Sectioned)] {
+            let out = parse(&format!("figures: {name}\n"), 2).unwrap();
+            assert_eq!(out.figures, figures);
+        }
+    }
+
+    /// A document that leaves the key out sections nothing.
+    #[test]
+    fn an_absent_figures_key_sections_nothing() {
+        assert_eq!(parse("title: A\n", 2).unwrap().figures, Figures::Flat);
+    }
+
+    /// A name outside the set names the key and lists what it accepts, exactly
+    /// as `template` and `equations` do. One mechanism, not three.
+    #[test]
+    fn a_figures_name_outside_the_set_lists_the_names_it_accepts() {
+        match parse("figures: numbered\n", 2) {
+            Err(Error::Frontmatter { problem, .. }) => {
+                assert!(problem.contains("figures"), "problem was: {problem}");
+                assert!(problem.contains("flat"), "problem was: {problem}");
+                assert!(problem.contains("sectioned"), "problem was: {problem}");
+            }
+            other => panic!("expected a Frontmatter error, got {other:?}"),
+        }
+    }
+
     /// The one key that names a file keeps the line it was named on.
     #[test]
     fn the_bibliography_key_carries_its_path_and_its_line() {
@@ -439,6 +516,7 @@ mod tests {
             ("title: A\ncolumns: 3\n", "columns"),
             ("title: A\ntemplate: ieee\n", "press-release"),
             ("title: A\nequations: yes\n", "numbered"),
+            ("title: A\nfigures: yes\n", "sectioned"),
             ("title: A\nbibliography: /refs.yml\n", "beside the document"),
             ("title: A\ntitle: B\n", "title"),
             ("title: A\njust a line\n", "key: value"),
