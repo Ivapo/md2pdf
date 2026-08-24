@@ -749,10 +749,10 @@ and round 0's reasoning.
 
 **What makes this more than "one more row" is that the page's asset channel is singular
 in four places, and round 1 found the draft had named none of them.**
-`core/tests/page_examples_test.rs:the_page_carries_one_asset` asserts
-`PAGE.matches("data-asset=\"").count() == 1` and argues the singularity in its own doc
-comment; `core/tests/page_examples_test.rs:asset` builds one `Asset` from the *first*
-such element; `web/index.html`'s module does `querySelector('script[data-asset]')`, which
+`core/tests/page_examples_test.rs:the_page_carries_two_assets` — then named for the one
+asset it allowed — asserts `PAGE.matches("data-asset=\"").count() == 1` and argues the
+singularity in its own doc comment; `core/tests/page_examples_test.rs:image` — then
+`asset` — builds one `Asset` from the *first* such element; `web/index.html`'s module does `querySelector('script[data-asset]')`, which
 takes the first; and `web/src/lib.rs:render` takes `asset_path` and `asset_bytes` as two
 scalar `wasm_bindgen` arguments. A second file is refused by all four, and §2's
 `CORRECTED` note records why it cannot dodge them through Typst's bytes form.
