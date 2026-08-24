@@ -17,10 +17,15 @@
 //! built while joining, and the five entry points in `crate` resolve through it
 //! on the way out.
 //!
+//! **The same map answers where a section's own neighbours are.** A path named
+//! inside `sections/method.md` resolves against `sections/`, and `emit` asks this
+//! module for the prefix because this is the one place that knows both the
+//! destination and the file it was written in.
+//!
 //! **A document that names no section has a one-entry map**, so the translation
-//! is the identity and every message is what it was before this module existed —
-//! character for character. That is a property of the arithmetic rather than of
-//! a branch anybody has to remember.
+//! is the identity, nothing is prefixed, and every message and every destination
+//! is what it was before this module existed — character for character. That is a
+//! property of the arithmetic rather than of a branch anybody has to remember.
 
 use crate::emit::{self, Include};
 use crate::{Asset, Error, Location, Result};
@@ -33,6 +38,20 @@ struct Segment {
     file: Option<String>,
     /// The 1-based line that run's first line has in its own file.
     source_line: usize,
+}
+
+impl Segment {
+    /// The directory this run's file sits in, without a trailing separator.
+    ///
+    /// Empty for the master, whose paths are already written in the frame a
+    /// caller supplies assets in, and empty for a section beside the master —
+    /// `[](chapter.md)` has no directory to give.
+    fn directory(&self) -> &str {
+        self.file
+            .as_deref()
+            .and_then(|file| file.rsplit_once('/'))
+            .map_or("", |(directory, _)| directory)
+    }
 }
 
 /// Where every line of the joined document came from.
@@ -53,16 +72,54 @@ impl Sources {
     /// the offset within that segment is preserved. For a one-segment map this
     /// returns `Location::at(line)` unchanged.
     pub(crate) fn locate(&self, line: usize) -> Location {
-        let index = self
-            .segments
-            .partition_point(|segment| segment.joined_line <= line)
-            .saturating_sub(1);
-        let segment = &self.segments[index];
+        let segment = self.segment(line);
 
         Location {
             file: segment.file.clone(),
             line: segment.source_line + line.saturating_sub(segment.joined_line),
         }
+    }
+
+    /// The destination a master would have written for a path named on `line`.
+    ///
+    /// **A section's neighbours are its own**, and this is where that becomes
+    /// true: an image named inside `sections/method.md` means
+    /// `sections/figure.png`, so a chapter folder holding its own figures can be
+    /// moved, copied or shared whole.
+    ///
+    /// **It is done here rather than in the caller because the written path is an
+    /// identity and not just a lookup.** It is what `emit::image_call` writes into
+    /// the Typst source, what `crate::collect` keys `supplied`, `seen` and the
+    /// world's `FileId` on, and what both wrappers dedupe on. Two sections in
+    /// different folders each naming `figure.png` would emit two byte-identical
+    /// calls, and a caller resolving them against different directories would read
+    /// the first, skip the second as already seen, and set one figure twice — with
+    /// no error and nothing on the page to see. Prefixed here the path is unique by
+    /// construction, so there is no collision to detect and none to refuse.
+    ///
+    /// **A section with no directory of its own prefixes with nothing**, and so
+    /// does the master. The idiom matters: a naive `format!("{dir}/{dest}")` yields
+    /// `/dot.png`, which `emit::portable_path` refuses as absolute — loud rather
+    /// than silent, but wrong. A single-file document has a one-segment map whose
+    /// only file is absent, so nothing is prefixed and every golden is
+    /// byte-identical: the same arithmetic the inertness of `locate` rests on.
+    pub(crate) fn resolve(&self, line: usize, dest: &str) -> String {
+        match self.segment(line).directory() {
+            "" => dest.to_string(),
+            directory => format!("{directory}/{dest}"),
+        }
+    }
+
+    /// The segment a line of the joined document fell in.
+    ///
+    /// The last one beginning at or before it, by binary search over runs that
+    /// are sorted by construction.
+    fn segment(&self, line: usize) -> &Segment {
+        let index = self
+            .segments
+            .partition_point(|segment| segment.joined_line <= line)
+            .saturating_sub(1);
+        &self.segments[index]
     }
 
     /// The same error, naming the author's own file and line.

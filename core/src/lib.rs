@@ -277,7 +277,7 @@ pub struct Rendered {
 /// hand the whole array here too.
 pub fn md_to_typst(md: &str, sections: &[Asset]) -> Result<String> {
     let (joined, sources) = sections::assemble(md, sections)?;
-    emit::emit(&joined)
+    emit::emit(&joined, &sources)
         .map(|emitted| emitted.source)
         .map_err(|error| sources.relocate(error))
 }
@@ -324,7 +324,7 @@ pub fn md_to_html(md: &str) -> String {
 /// author wrote it in.
 pub fn image_paths(md: &str, sections: &[Asset]) -> Result<Vec<ImageRef>> {
     let (joined, sources) = sections::assemble(md, sections)?;
-    let images = emit::emit(&joined)
+    let images = emit::emit(&joined, &sources)
         .map_err(|error| sources.relocate(error))?
         .images;
 
@@ -352,7 +352,7 @@ pub fn image_paths(md: &str, sections: &[Asset]) -> Result<Vec<ImageRef>> {
 /// message prints comes from one place.
 pub fn bibliography_path(md: &str, sections: &[Asset]) -> Result<Option<BibliographyRef>> {
     let (joined, sources) = sections::assemble(md, sections)?;
-    let named = emit::emit(&joined)
+    let named = emit::emit(&joined, &sources)
         .map_err(|error| sources.relocate(error))?
         .bibliography;
 
@@ -420,7 +420,7 @@ pub fn md_to_pdf(md: &str, assets: &[Asset]) -> Result<Vec<u8>> {
 /// out, once, for the error and for every anchor.
 pub fn md_to_pdf_with_anchors(md: &str, assets: &[Asset]) -> Result<Rendered> {
     let (joined, sources) = sections::assemble(md, assets)?;
-    let rendered = render(&joined, assets).map_err(|error| sources.relocate(error))?;
+    let rendered = render(&joined, &sources, assets).map_err(|error| sources.relocate(error))?;
 
     Ok(Rendered {
         pdf: rendered.pdf,
@@ -436,8 +436,8 @@ pub fn md_to_pdf_with_anchors(md: &str, assets: &[Asset]) -> Result<Rendered> {
 }
 
 /// Compile the joined document, answering in the joined document's own lines.
-fn render(md: &str, assets: &[Asset]) -> Result<Rendered> {
-    let emitted = emit::emit(md)?;
+fn render(md: &str, sources: &sections::Sources, assets: &[Asset]) -> Result<Rendered> {
+    let emitted = emit::emit(md, sources)?;
     let assets = collect(&emitted, assets)?;
     let world = TypstWorld::new(emitted.source, assets)?;
 

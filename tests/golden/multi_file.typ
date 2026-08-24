@@ -6,7 +6,7 @@
 A master names its sections in the order they are read, and the emitter is
 handed one stream. Nothing here knows it was written in four files.
 
-#figure(image("dot.png", alt: "The three steps, drawn as boxes"), caption: [The pipeline, declared in the first file.]) <fig:pipeline>
+#figure(image("sections/dot.png", alt: "The three steps, drawn as boxes"), caption: [The pipeline, declared in the first file.]) <fig:pipeline>
 
 Last line of part one.
 
@@ -18,7 +18,7 @@ one above it.
 A claim the third file footnotes.#footnote[The note, defined in the third file and set at the foot of the
 column that cites it in the second.]<fn-1>
 
-#figure(image("mark.svg", alt: "A check mark"), caption: [The mark, declared in the second file.]) <fig:mark>
+#figure(image("sections/mark.svg", alt: "A check mark"), caption: [The mark, declared in the second file.]) <fig:mark>
 
 = Results
 

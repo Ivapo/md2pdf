@@ -28,6 +28,7 @@ use unicase::UniCase;
 
 use crate::frontmatter::{self, Equations, Frontmatter};
 use crate::math;
+use crate::sections::Sources;
 use crate::{BibliographyRef, Error, ImageRef, Location, Result};
 
 /// Characters that Typst markup mode interprets inside a text run.
@@ -813,7 +814,7 @@ enum Mode<'a, 'b> {
 /// document's walk reports it where the region stands, so the first error in
 /// document order is still the one the user reads — a frontmatter error
 /// included, which is parsed in that second walk and nowhere here.
-fn collect_definitions(md: &str) -> Definitions {
+fn collect_definitions(md: &str, sources: &Sources) -> Definitions {
     let mut found = Definitions::default();
     let mut walk = Walk::new();
     let mut open: Option<Label> = None;
@@ -864,7 +865,7 @@ fn collect_definitions(md: &str) -> Definitions {
         // already holds is the first one in that region, and that is the one
         // to report.
         if failure.is_none()
-            && let Err(error) = step(&mut walk, md, event, range, Mode::Definition)
+            && let Err(error) = step(&mut walk, md, event, range, Mode::Definition, sources)
         {
             failure = Some(error);
         }
@@ -912,8 +913,8 @@ pub(crate) struct Emitted {
 }
 
 /// Translate one markdown document into Typst markup.
-pub(crate) fn emit(md: &str) -> Result<Emitted> {
-    let found = collect_definitions(md);
+pub(crate) fn emit(md: &str, sources: &Sources) -> Result<Emitted> {
+    let found = collect_definitions(md, sources);
     let mut notes = Notes {
         found: &found,
         seen: HashSet::new(),
@@ -923,7 +924,7 @@ pub(crate) fn emit(md: &str) -> Result<Emitted> {
 
     let mut walk = Walk::new();
     for (event, range) in parser(md).into_offset_iter() {
-        step(&mut walk, md, event, range, Mode::Document(&mut notes))?;
+        step(&mut walk, md, event, range, Mode::Document(&mut notes), sources)?;
     }
 
     walk.unclosed()?;
@@ -981,6 +982,7 @@ fn step(
     event: Event,
     range: Range<usize>,
     mut mode: Mode,
+    sources: &Sources,
 ) -> Result<()> {
     let Walk {
         bufs,
@@ -1633,18 +1635,36 @@ fn step(
         // where the pipeline decides which files it will ever ask for.
         // `check_image` refuses every shape it cannot carry; what survives
         // opens the alt capture and joins the shopping list.
+        //
+        // **The shape is checked on what the author wrote, and the section's
+        // own directory is prefixed after.** The two orders differ on more
+        // than tidiness: `typst-syntax` normalises a non-leading empty
+        // segment away, so `/x.png` prefixed to `one//x.png` would pass
+        // `portable_path` as `/one/x.png` — an absolute path laundered into a
+        // relative one, silently. Checked first, every refusal names the shape
+        // the author typed in the words it has always used. Nothing slips
+        // through the other way, because a section's directory came from a
+        // marker path that already passed `portable_path`, so a destination
+        // this check accepts is still portable once it is prefixed.
         Event::Start(Tag::Image {
             dest_url, title, ..
         }) => {
             let line = line_of(md, range.start);
             check_image(&dest_url, &title, line)?;
+
+            // The path the master would have written. It is the identity every
+            // downstream reader keys on — the Typst source, the world's
+            // `FileId`, and both wrappers' dedupe — which is why it is settled
+            // here, at the one place that knows both the destination and the
+            // file it was written in.
+            let dest = sources.resolve(line, &dest_url);
             images.push(ImageRef {
-                path: dest_url.to_string(),
+                path: dest.clone(),
                 location: Location::at(line),
             });
             *alt = Some(AltCapture {
                 opened: *para == Some(top(bufs).len()),
-                path: dest_url.into_string(),
+                path: dest,
                 text: String::new(),
                 depth: 0,
             });

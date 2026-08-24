@@ -135,10 +135,14 @@ fn multi_file_sections() -> Vec<Asset> {
 }
 
 /// The same three, and the two images they name between them.
+///
+/// **Each is named under the section's own directory**, because that is the path
+/// the emitter writes now: a section's neighbours are its own, and an `Asset`'s
+/// path is the name the markdown resolves to rather than a filename on disk.
 fn multi_file_assets() -> Vec<Asset> {
     let mut assets = multi_file_sections();
-    assets.push(asset("dot.png", DOT_PNG));
-    assets.push(asset("mark.svg", MARK_SVG));
+    assets.push(asset("sections/dot.png", DOT_PNG));
+    assets.push(asset("sections/mark.svg", MARK_SVG));
     assets
 }
 
@@ -4130,11 +4134,13 @@ fn section_paths_names_every_section_in_reader_order() {
     );
 }
 
-/// The image list names the file each image was drawn in.
+/// The image list names the file each image was drawn in, and the path that
+/// file's own directory resolves it to.
 ///
-/// This is what Phase 2 needs and what the CLI does not yet read: every path
-/// still resolves against the master's directory, and the file below is carried
-/// rather than used.
+/// The two halves answer different questions and both are the shopping list's.
+/// The **location** is where the author would go to edit it; the **path** is what
+/// the caller must open and what the Typst source asks for. Each section writes
+/// a bare `dot.png` or `mark.svg`, and each comes back under `sections/`.
 #[test]
 fn the_image_list_names_the_section_that_drew_each_image() {
     let images = image_paths(MULTI_FILE_MD, &multi_file_sections()).unwrap();
@@ -4143,14 +4149,14 @@ fn the_image_list_names_the_section_that_drew_each_image() {
         images,
         vec![
             ImageRef {
-                path: "dot.png".to_string(),
+                path: "sections/dot.png".to_string(),
                 location: Location {
                     file: Some("sections/introduction.md".to_string()),
                     line: 6
                 }
             },
             ImageRef {
-                path: "mark.svg".to_string(),
+                path: "sections/mark.svg".to_string(),
                 location: Location {
                     file: Some("sections/method.md".to_string()),
                     line: 8

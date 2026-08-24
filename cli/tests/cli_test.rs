@@ -489,6 +489,11 @@ fn each_refused_formula_exits_non_zero_and_names_its_latex() {
 /// files. `read_sections` resolves each path against the master's directory and
 /// reads them before the images, so the whole document exists before anything is
 /// asked about it.
+///
+/// **The figures sit in `sections/`, beside the files that name them**, which is
+/// the layout this phase exists for. `read_assets` is unedited: `core` writes
+/// `sections/dot.png` into the shopping list, and joining that against the
+/// master's directory finds it.
 #[test]
 fn a_master_and_its_sections_convert() {
     let dir = scratch_dir("multi-file");
@@ -503,11 +508,8 @@ fn a_master_and_its_sections_convert() {
         )
         .unwrap();
     }
-    // Every path still resolves against the master's directory, a section's own
-    // images included. That is Phase 2's job, and this is what it looks like
-    // until then.
     for name in ["dot.png", "mark.svg"] {
-        std::fs::copy(fixture(name), dir.join(name)).unwrap();
+        std::fs::copy(fixture(name), dir.join("sections").join(name)).unwrap();
     }
 
     let out = run(&[input.as_ref()]);
