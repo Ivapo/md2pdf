@@ -9,3 +9,6 @@
 # The wasm spike builds into these; the module is 25.7 MB and is never committed.
 /web/pkg/
 /web/target/
+
+# Finder metadata, which reappears however often it is deleted.
+.DS_Store
