@@ -61,6 +61,8 @@ const PLAIN_EQUATION_NAMES_MD: &str = include_str!("../../tests/fixtures/plain_e
 const PLAIN_EQUATION_NAMES_TYP: &str = include_str!("../../tests/golden/plain_equation_names.typ");
 const GROUPS_MD: &str = include_str!("../../tests/fixtures/groups.md");
 const GROUPS_TYP: &str = include_str!("../../tests/golden/groups.typ");
+const SECTIONED_FIGURES_MD: &str = include_str!("../../tests/fixtures/sectioned_figures.md");
+const SECTIONED_FIGURES_TYP: &str = include_str!("../../tests/golden/sectioned_figures.typ");
 const CITATIONS_MD: &str = include_str!("../../tests/fixtures/citations.md");
 const CITATIONS_TYP: &str = include_str!("../../tests/golden/citations.typ");
 const CITATIONS_PRESS_RELEASE_MD: &str =
@@ -228,7 +230,7 @@ fn the_generated_source_carries_the_title_and_the_author() {
 fn absent_frontmatter_gets_every_default() {
     assert!(
         md_to_typst(BASIC_MD).unwrap().contains(
-            "template.with(title: none, author: none, columns: 2, date: none, equations: \"plain\")"
+            "template.with(title: none, author: none, columns: 2, date: none, equations: \"plain\", figures: \"flat\")"
         ),
         "the defaults did not reach the template call"
     );
@@ -1966,11 +1968,18 @@ fn the_captions_golden_carries_each_form() {
 /// "Figure 2" with no Figure 1 on the page, and `figure` centres its body where
 /// a bare block sits flush left — a bounding box moving from `xMin=70.87` to
 /// `277.48`.
+///
+/// **The needle is `#figure(` and not `figure`.** Every golden's
+/// `template.with` line has carried a `figures:` argument since `mpdf-005`
+/// Phase 7, so the looser word is in all 27 of them and would fail here for the
+/// key's name rather than for a wrapper. `#figure(` is what
+/// `core/src/emit.rs:splice_caption` writes, which is the thing this asserts the
+/// absence of.
 #[test]
 fn an_uncaptioned_standalone_image_is_not_wrapped() {
     assert_eq!(md_to_typst(IMAGES_MD).unwrap(), IMAGES_TYP);
     assert!(
-        !IMAGES_TYP.contains("figure"),
+        !IMAGES_TYP.contains("#figure("),
         "the images golden gained a figure"
     );
 }
@@ -2142,6 +2151,10 @@ fn the_captioned_blocks_golden_carries_each_form() {
 /// The blast radius is one golden each: `tests/golden/table.typ` carries the
 /// only `#table(` in the corpus and `tests/golden/blocks.typ` the only
 /// `#raw(block: true`.
+///
+/// **The needle is `#figure(` and not `figure`**, for the reason
+/// `an_uncaptioned_standalone_image_is_not_wrapped` records: the `figures:`
+/// argument puts the looser word on every golden's `template.with` line.
 #[test]
 fn an_uncaptioned_table_and_code_block_are_not_wrapped() {
     assert_eq!(md_to_typst(TABLE_MD).unwrap(), TABLE_TYP);
@@ -2149,7 +2162,7 @@ fn an_uncaptioned_table_and_code_block_are_not_wrapped() {
 
     for (golden, what) in [(TABLE_TYP, "table"), (BLOCKS_TYP, "blocks")] {
         assert!(
-            !golden.contains("figure"),
+            !golden.contains("#figure("),
             "the {what} golden gained a figure"
         );
     }
@@ -3656,4 +3669,104 @@ fn phase_two_moves_no_golden() {
         md_to_typst(CROSS_REFERENCES_MD).unwrap(),
         CROSS_REFERENCES_TYP
     );
+}
+
+// -- mpdf-005 Phase 7: a figure number may carry its section ------------------
+
+#[test]
+fn the_sectioned_figures_fixture_matches_its_golden_file() {
+    assert_eq!(
+        md_to_typst(SECTIONED_FIGURES_MD).unwrap(),
+        SECTIONED_FIGURES_TYP
+    );
+}
+
+/// The fixture compiles, and under both looks.
+///
+/// The compile is a real assertion here rather than a smoke test: the section
+/// prefix is built by a closure that reads `counter(heading)`, and a numbering
+/// function that reached for a counter Typst could not give it in context would
+/// fail here rather than print a wrong number.
+#[test]
+fn the_sectioned_figures_fixture_compiles_to_a_pdf() {
+    for (md, what) in [
+        (SECTIONED_FIGURES_MD.to_string(), "the article look"),
+        (
+            SECTIONED_FIGURES_MD.replace(
+                "figures: sectioned",
+                "figures: sectioned\ntemplate: press-release",
+            ),
+            "the press-release look",
+        ),
+    ] {
+        let pdf = md_to_pdf(&md, &[asset("dot.png", DOT_PNG)])
+            .unwrap_or_else(|e| panic!("{what} did not compile: {e}"));
+        assert!(pdf.starts_with(b"%PDF"), "{what} did not produce a PDF");
+    }
+}
+
+/// The key crosses to the look, and the reference the page's number is read
+/// through survives the phase.
+///
+/// The *number* is deliberately not here and cannot be: the emitter writes no
+/// numbering at all, so `1.1` exists only in the compiled PDF. What a golden can
+/// hold is that the author's ask reached the call and that the reference is
+/// still a `#ref`, which is what gate (2) reads the page for.
+#[test]
+fn the_sectioned_figures_golden_carries_each_form() {
+    for (form, what) in [
+        ("figures: \"sectioned\"", "the key the author set"),
+        ("#ref(<tab:one>)", "the reference that reads the number"),
+    ] {
+        assert!(
+            SECTIONED_FIGURES_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+}
+
+/// Sectioned numbering withdraws no heading anchor.
+///
+/// **This is the assertion whose absence would let the phase silently empty
+/// every anchor list in the project**, on the precedent
+/// `a_bibliography_withdraws_no_heading_anchor` set: this phase installs a
+/// `show heading.where(level: 1):` rule, and whether a `show` rule changes what
+/// `introspector.query(HeadingElem)` returns is invisible until a pane stops
+/// scrolling. `core/src/lib.rs:anchors_from` answers an *empty* vector on a
+/// count mismatch, with no error anywhere.
+///
+/// The fixture carries three headings — two `#` and one `##`. The walk pushes a
+/// line for a heading before it looks at `level` at all and the query names no
+/// level, so all three are counted on both sides.
+#[test]
+fn sectioned_numbering_withdraws_no_heading_anchor() {
+    let rendered =
+        md_to_pdf_with_anchors(SECTIONED_FIGURES_MD, &[asset("dot.png", DOT_PNG)]).unwrap();
+    assert_eq!(
+        rendered.anchors.len(),
+        3,
+        "the fixture's three headings did not come back: {:?}",
+        rendered.anchors
+    );
+}
+
+/// A name outside the set names the key, its line, and what it accepts.
+///
+/// It reads exactly as the `template` and `equations` errors do, because it is
+/// the same mechanism. The bad value is `numbered` deliberately: it is the
+/// *other* numbering key's valid name, which is the mistake an author who knows
+/// `equations` actually makes, and it would otherwise reach Typst as a string
+/// no rule matches and section nothing, silently.
+#[test]
+fn a_figures_value_outside_the_schema_is_an_error_that_lists_the_names() {
+    let md = "---\nfigures: numbered\n---\n\n# Heading\n";
+    match md_to_typst(md) {
+        Err(Error::Frontmatter { line, problem }) => {
+            assert_eq!(line, 2);
+            for needle in ["figures", "flat", "sectioned"] {
+                assert!(problem.contains(needle), "problem was: {problem}");
+            }
+        }
+        other => panic!("expected a Frontmatter error, got {other:?}"),
+    }
 }

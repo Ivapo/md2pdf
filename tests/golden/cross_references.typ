@@ -1,6 +1,6 @@
 #import "template.typ": template, divider
 #import "math.typ": aligned, bmatrix, diff, matrix, mitexmathbf, mitexsqrt, negthinspace, pmatrix, sect, vmatrix
-#show: template.with(title: none, author: none, columns: 2, date: none, equations: "plain")
+#show: template.with(title: none, author: none, columns: 2, date: none, equations: "plain", figures: "flat")
 
 = Cross\-references
 
