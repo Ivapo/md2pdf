@@ -41,7 +41,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 7 — a figure number may carry its section"
-    reviewed: null
+    reviewed: 2026-08-23
     shipped: null
     cut: null
     by: null
@@ -724,26 +724,64 @@ so **each is a later phase or a later spec** and none needs a new mechanism here
 is that phase for the first of the three, appended per §6.1 step 2 — the subject is figure
 numbering, which this spec owns.
 
-**The mechanism was measured on 2026-08-23 rather than reasoned, through the shipped
-pipeline**, with a probe added to `core/assets/template.typ` and reverted after each run.
-The first probe is the one that matters, because the obvious design fails:
+**Measured 2026-08-23 through the shipped pipeline**, over three probes, each a temporary
+edit to `core/assets/template.typ` reverted after its run.
 
-- **With `set heading(numbering: none)` — which both looks carry today —
-  `counter(heading).get().first()` is `0`.** A figure numbered off it reads **`Table 0.1`**
-  and **`Table 0.2`** across two sections. The section counter does not advance while its
-  numbering is `none`, and the per-kind counter does not restart at a heading. So the
-  scheme is *not* reachable by writing a `numbering` argument alone: it needs the look to
-  change something it currently declines.
-- **With `set heading(numbering: "1.")` plus `show heading: it => it.body`, the counter
-  advances and no number reaches the page**, and a second rule —
-  `show heading: it => { counter(figure.where(kind: table)).update(0); it }` — restarts the
-  per-kind counter. Result: **`Table 1.1`** then **`Table 2.1`**, over headings that read
-  *First section* and *Second section* with no number on either.
+**The obvious design fails, and that is why the rules are written out below rather than
+left to an implementer.** With `set heading(numbering: none)` — which both looks carry
+today — `counter(heading).get().first()` is `0`, and a figure numbered off it reads
+**`Table 0.1`** and **`Table 0.2`** across two sections. A `numbering` argument alone does
+not reach this scheme: the section counter does not advance while its own numbering is
+`none`.
 
-**That second measurement is what makes this phase cheap, and it is the whole design.**
-The scheme costs three rules inside a look and nothing in `core/src/emit.rs` — the emitter
-still writes no numbering format string anywhere, which is the seam §2 has held since
-Phase 1.
+**The rule set is three rules and this is all of them**, as measured:
+
+```typst
+set heading(numbering: if figures == "sectioned" { (..n) => none } else { none })
+show heading.where(level: 1): it => {
+  if figures == "sectioned" {
+    counter(figure.where(kind: image)).update(0)
+    counter(figure.where(kind: table)).update(0)
+    counter(figure.where(kind: raw)).update(0)
+  }
+  it
+}
+set figure(numbering: if figures == "sectioned" {
+  (..n) => numbering("1.1", counter(heading).get().first(), n.pos().first())
+} else { "1" })
+```
+
+Each of the three carries a decision, and each was measured against the shape that looks
+right and is not:
+
+- **`(..n) => none` rather than `"1."` with `show heading: it => it.body`.** Both advance
+  the counter and neither puts a number on the page, and the second was measured and
+  **rejected**: replacing a heading with its inline body leaves both looks'
+  `show heading: set block(above: …, below: …)` nothing to apply to, so a sectioned
+  document's headings lose their spacing and read as ordinary paragraphs. A numbering
+  function returning `none` keeps a heading a heading.
+- **`heading.where(level: 1)` rather than `heading`.** An unscoped rule restarts the
+  counters at a `##` as well, so two tables in one section either side of a subheading both
+  read `Table 1.1`. Scoped to level 1 they read **`Table 1.1`** and **`Table 1.2`**.
+- **All three kinds, not the one a probe happens to use.** This spec numbers images, tables
+  and listings on counters of their own, so a reset naming only `kind: table` hands an image
+  the advancing prefix with no restart. Measured over a document carrying a subheading, two
+  tables and an image: **`Table 1.1`**, **`Table 1.2`**, **`Figure 1.1`**, then
+  **`Table 2.1`** under the next `#`.
+
+**The conditional is *not* `equations`' conditional, and reading it as one ships a silent
+no-op.** `equations` is a ternary inside a `set` argument, and both look files carry a
+comment recording why: a `set` written inside a scoped `if` block "would compile, emit a
+valid PDF, and put no number on any page". **One of the three rules above is a `show`
+rule**, for which that form does not exist — so its branch moves **inside the closure** and
+the rule itself is installed unconditionally. The other two are `set` rules and keep the
+ternary-in-argument shape the looks already use.
+
+**Inertness is measured rather than argued, because a golden cannot see it.** The same
+document compiled under the shipped look and under a look carrying all three rules with
+`figures: "flat"` produced **byte-identical PDFs** — `448e98a8…`, 2026-08-23. That is
+`mpdf-004` Phase 3's property held rather than bent, and §4's gate reproduces the
+comparison rather than asserting it.
 
 **The author says whether and the look says how, on `equations`' own precedent.** A
 frontmatter key selects the scheme and each look implements it. The alternative — the look
@@ -752,20 +790,18 @@ makes a look the unit of a numbering choice rather than of a house style, and OQ
 refused a frontmatter key for the three `figure` *kinds* on the opposite ground. Kinds are
 typography; a scheme is what the document is.
 
-**And unlike Phase 6, this phase keeps `mpdf-004` Phase 3's property intact.** That phase
-fixed "no document's typeset output changes unless its author asks, **because the default
-name is the one that numbers nothing**", and Phase 6 had to bend it because OQ-2 had left
-it no key to condition on. This one has a key by construction: both new rules sit inside
-the same conditional the `equations` rules already sit in, so a document that does not ask
-compiles to the bytes it compiles to today. Phase 7's gate asserts exactly that, as a diff.
+**The key is `figures`, taking `flat` and `sectioned`, and `flat` is the default.** It is
+named for what it governs, beside `equations`, which governs the other numbered thing. What
+it does *not* govern is recorded in OQ-16: a `$$…$$` under `equations: numbered` keeps
+`(1)` and takes no section, because Typst numbers it through `math.equation` and the rules
+above reach `figure`.
 
-**Two of §1.2's three schemes are deliberately not here.** A per-chapter restart *without*
-a prefix is the same mechanism minus one argument, so it costs nothing different and is a
+**Two of §1.2's three schemes are deliberately not here.** A per-chapter restart *without* a
+prefix is the same mechanism minus one argument, so it costs nothing different and is a
 value the same key can take the day someone wants it — `mpdf-007` OQ-4's shape, a question
 that does not discriminate. **`A.1` appendices are a different subject**: an appendix is a
 document-structure concept this dialect does not carry and markdown has no syntax for, so
 it needs something invented before it needs a number. OQ-16 records both.
-
 
 ## 3. Open questions
 
@@ -1249,19 +1285,19 @@ it needs something invented before it needs a number. OQ-16 records both.
   on the same ground. **If this is taken up it is a spec of its own rather than a
   phase here**, and OQ-5's test is the one to work: a shared carrier is not a
   shared subject. Design call. Blocks nothing.
-- **OQ-16 — what is the key called, do the other two schemes ever land, and does a
-  numbered equation take the section too?** *(design call)* Three questions Phase 7 forces
-  and does not settle. **The name**: `figures: sectioned` is the draft's placeholder and it
-  reads oddly beside `equations: numbered`, which already owns equation numbering — a
-  reader meeting both will ask which governs a `$$…$$` sitting under a section, and Phase
-  7's own scope says the spelling is not assumed. A single `numbering:` key governing both
-  is the obvious alternative and costs `equations` its independence. **The other two
-  schemes**: a per-chapter restart without a prefix is the same mechanism minus an
-  argument, so it does not discriminate until something costs different (`mpdf-007` OQ-4's
-  shape); `A.1` appendices need an appendix, which this dialect does not carry and markdown
-  has no syntax for, so that one is a larger subject and probably not this spec's.
-  **Blocks nothing** — Phase 7 ships one scheme under one key and the answer changes a name
-  rather than a mechanism.
+- **OQ-16 — does a numbered equation take the section too, and do the other two schemes
+  ever land?** *(design call)* Phase 7 settles the key — `figures`, taking `flat` and
+  `sectioned` — and leaves two things it forces. **The equation**: a `$$…$$` under
+  `equations: numbered` keeps `(1)` and takes no section prefix, because Typst numbers it
+  through `math.equation` while Phase 7's rules reach `figure`. That is defensible — an
+  equation is not a figure and this spec numbered them separately from Phase 4 — and it is
+  also the first place the two keys visibly disagree, which a reader will notice before a
+  maintainer does. **The other two schemes**: a per-chapter restart without a prefix is the
+  same mechanism minus an argument, so it does not discriminate until something costs
+  different (`mpdf-007` OQ-4's shape); `A.1` appendices need an appendix, which this
+  dialect does not carry and markdown has no syntax for, so that one is a larger subject
+  and probably not this spec's. **Blocks nothing** — Phase 7 ships one scheme under one
+  settled key.
 
 ## 4. Implementation phases
 
@@ -2386,102 +2422,129 @@ look could ever make would make the seam a fiction.
   this phase's blast radius exactly "documents that caption a listing".
 
 ### Phase 7 — a figure number may carry its section
-*Produces the observable: yes — a PDF whose first section holds **Table 1.1** and whose
-second holds **Table 2.1**, over headings that carry no number of their own. It is the
-first numbering this spec has put on a page that Typst's default does not already give.*
+*Produces the observable: yes — a PDF whose first section holds **Table 1.1** and
+**Figure 1.1** and whose second holds **Table 2.1**, over headings that carry no number of
+their own. It is the first numbering this spec has put on a page that Typst's default does
+not already give.*
 
 **Drafted 2026-08-23**, on §2's scheme decision above, and appended per §6.1 step 2. The
 ordered test lands on step 2 and the steps above it are worked rather than skipped. **Step
 0 — a decision, not only code:** §1.2 refuses this today, so admitting it reverses a stated
 non-goal. **Step 1 — does it remove or contradict shipped work? No, and the default is the
 whole reason.** One counter per kind stays exactly what a document gets when it asks for
-nothing; nothing is renumbered, no phase is un-built, and the emitter is untouched. The
-subject is figure numbering, which this spec has owned since Phase 1, and its rollup is
+nothing — measured byte-identical in §2 — nothing is renumbered and no phase is un-built.
+The subject is figure numbering, which this spec has owned since Phase 1, and its rollup is
 `done` rather than `abandoned` — so a phase, not a spec.
 
-- **Scope: one frontmatter key, one parameter per look, and three rules.**
+- **Scope: one frontmatter key, one parameter per look, three rules, and the assertions
+  they move.**
 
-  `core/src/frontmatter.rs` gains the **eighth key**, taking two names and refusing a
-  third by its own line, exactly as `equations` does. The key's spelling is **OQ-16 and is
-  not assumed here** — `figures: sectioned` is the draft's placeholder, and the question
-  is live because `equations` already owns equation numbering and a reader will ask which
-  key governs a `$$…$$` under a section.
+  `core/src/frontmatter.rs` gains the **eighth key**, `figures`, taking `flat` (the
+  default) and `sectioned` and refusing a third by name with its line, exactly as
+  `equations` does. **The spelling is settled in §2 rather than left to OQ-16**, since the
+  gate below is phrased in it.
 
   `core/assets/template.typ` and `core/assets/press-release.typ` each take it as a **sixth
-  parameter** and carry §2's three rules, all inert unless the key selects them.
+  parameter** and carry §2's three rules **verbatim**. **Rule 1 replaces each look's
+  existing `set heading(numbering: none)` rather than joining it** — added after it rule 1
+  wins, added before it the old line wins and the whole scheme no-ops silently back to
+  `Table 0.1`. The branch sits inside the closure for
+  the one `show` rule and the ternary in the argument for the two `set` rules, which §2
+  records is not `equations`' shape and why taking it for one ships a silent no-op.
   **The look contract moves from five to six**, which is worth naming rather than
-  discovering: `rules/pipeline.md` says the contract "stays at five" and has said so for
-  six phases running, and `core/src/emit.rs:header` names every parameter on every call, so
-  a look missing the sixth fails the compile with an error naming neither the document nor
-  the key.
+  discovering: `rules/pipeline.md` says the contract "stays at five" in three places, and
+  `core/src/emit.rs:header` names every parameter on every call, so a look missing the
+  sixth fails the compile with an error naming neither the document nor the key.
 
-  `core/src/emit.rs:header` passes it through, and **every shipped golden file changes on
-  its `template.with` line** — all **26**, measured 2026-08-23, each gaining a sixth
-  argument. That is this spec's largest golden movement and it is named here rather than
-  met in the gate, on `mpdf-004` Phase 3's own precedent: that phase added the fifth
-  argument, moved all 17 goldens then in the tree, and argued why it is acceptable — a
-  golden pins what a document compiles to, and a document that now carries a sixth
-  parameter genuinely compiles to that.
+  `core/src/emit.rs:header` passes it through. **No numbering format string reaches the
+  emitter** — every one of them is in a look — which is the claim the seam needs and what
+  gate (5) checks.
 
-  **Nothing else in `core/src` changes** — beyond the key and the argument, no numbering
-  format string reaches the emitter, which is the claim the seam needs.
+  **Three sets of assertions move with the sixth argument, and each is named here rather
+  than met in the gate:**
+  - **Every shipped golden changes on its `template.with` line** — all **26**, measured
+    2026-08-23, each gaining a sixth argument. That is this spec's largest golden movement,
+    on `mpdf-004` Phase 3's precedent: that phase added the fifth argument, moved the 17
+    then in the tree, and argued why it is acceptable — a golden pins what a document
+    compiles to, and a document carrying a sixth parameter genuinely compiles to that.
+  - **`core/tests/golden_test.rs:absent_frontmatter_gets_every_default` carries the call
+    line as a literal** and breaks on the sixth argument. `mpdf-004` Phase 3 budgeted for
+    this same assertion as "the eighteenth" of the assertions it moved, being the 17
+    goldens plus this one. The arithmetic here is 26 plus this one; the ordinal is not
+    restated, because the count that matters is the 26 above and this assertion beside
+    them.
+  - **The new fixture takes a golden of its own**, making the tree **27**. It is a fixture
+    like any other and the count above is the count *before* it.
 
   **`cli/src` and `app/src` are untouched**, on this spec's own standing argument.
-- **Exit gate:** six cases, and two of them exist because a shipped phase in another spec
-  already paid for the lesson.
+- **Exit gate:** six cases. Two exist because other phases already paid for the lesson, and
+  one is a comparison rather than an assertion because §2 measured that a golden cannot see
+  this phase at all.
 
-  (1) **The phase itself, read by eye, one PDF per look.** A new fixture carrying two
-  headed sections, each with a captioned table, plus `figures: sectioned`. Both looks show
-  **Table 1.1** and **Table 2.1**, and **neither heading carries a number** — the last
-  clause is the one that separates this phase from one that simply switched heading
-  numbering on, which would change every document's headings and is not what was asked for.
+  (1) **The phase itself, read by eye, one PDF per look.** The fixture is specified, because
+  gate (2) and the §2 holes both need more than "two sections": **two `#` sections; two
+  captioned tables in the first with a `##` subheading *between them*, one of the two named
+  `{#tab:one}`; a captioned image in the first; one captioned table in the second; and a
+  `[](#tab:one)` in prose.** **The `##` sits between the tables deliberately** — with both
+  tables ahead of it the document reads `Table 1.1` and `Table 1.2` under an *unscoped*
+  `show heading:` too, so the level-1 decision §2 measured would go unchecked by the very
+  fixture widened for it. Under `figures: sectioned` both looks show **Table 1.1**,
+  **Table 1.2**, **Figure 1.1**, **Table 2.1** — which is the §2 measurement reproduced —
+  and **no heading carries a number**, which separates this phase from one that merely
+  switched heading numbering on. **The headings still read as headings**, with the block
+  spacing both looks set, which is what rejects the `it.body` shape §2 measured and
+  refused.
 
   (2) **A cross-reference reads the new number.** `[](#tab:one)` becomes `#ref(<tab:one>)`,
-  and §1's whole promise is that it reads what the caption reads. Under this key it must
-  say **"Table 1.1"** and not "Table 1". **Measured in the phase rather than assumed** —
-  `ref` takes its text from the element's own numbering, so this should fall out, and a
-  gate that leaves it unasserted is a gate that ships §1's promise broken for the one
-  document that asked.
+  and §1's whole promise is that it reads what the caption reads. Under this key it must say
+  **"Table 1.1"** and not "Table 1", read on the same fixture — which is why (1) specifies
+  the name and the link rather than leaving (2) unreproducible.
 
-  (3) **The heading anchors survive, asserted and not hoped.** This is the case that exists
-  because `mpdf-007` Phase 1 met its twin: `core/src/lib.rs:anchors_from` returns an
-  **empty** vector when the walk's heading count and the compiled document's disagree, and
-  it does so silently, taking `mpdf-003` Phase 6's scroll sync and `web/src/lib.rs:anchors`
-  with it. This phase adds two `show heading:` rules, one of which *replaces the element
-  with its own body*. Whether that changes what `introspector.query(HeadingElem)` returns
-  is exactly the kind of thing that is invisible until a pane stops scrolling. So: a
-  document with headings and `figures: sectioned` returns a **non-empty** `anchors` from
-  `core/src/lib.rs:md_to_pdf_with_anchors`, of the expected length.
+  (3) **The heading anchors survive, asserted and not hoped.** This case exists because
+  `mpdf-007` Phase 1 met its twin: `core/src/lib.rs:anchors_from` returns an **empty**
+  vector when the walk's heading count and the compiled document's disagree, and it does so
+  silently, taking `mpdf-003` Phase 6's scroll sync and `web/src/lib.rs:anchors` with it.
+  This phase installs a `show heading.where(level: 1):` rule, and whether a `show` rule
+  changes what `introspector.query(HeadingElem)` returns is invisible until a pane stops
+  scrolling. So: the fixture with `figures: sectioned` returns a **non-empty** `anchors`
+  from `core/src/lib.rs:md_to_pdf_with_anchors`, of length **3** — its two `#` and its one
+  `##`.
 
-  (4) **Both looks carry the parameter *and act on it*** — two needles per look over
+  (4) **Both looks carry the parameter *and act on it*** — a needle pair per look over
   `core/tests/golden_test.rs:BUNDLED_TEMPLATES`, on the precedent `rules/pipeline.md`
   records for `equations`: "the parameter alone is satisfied by a look that takes it and
-  ignores it".
+  ignores it". **The needles are named**: `figures` for the parameter and
+  `counter(figure.where(kind:` for the rule, the second chosen because it is the one line
+  no look can carry while ignoring the key.
 
-  (5) **The default changes nothing — and "no golden moves" is the wrong way to say it,
-  because all 26 do.** The sixth argument rewrites every `template.with` line, so a
-  byte-identical golden is not available to this phase and a gate asking for one would be
-  unsatisfiable. Two assertions carry the property instead, and together they are stronger:
+  (5) **Inertness, as a byte comparison a second person can reproduce — not as an
+  in-suite assertion, which cannot fail.** A test comparing "no key" against
+  `figures: flat` proves nothing: `core/src/emit.rs:header` writes the *resolved* default
+  on every call, so both emit identical Typst and therefore identical PDFs whatever the
+  looks contain, and a sibling of
+  `core/tests/golden_test.rs:the_two_forms_of_the_default_compile_to_the_same_bytes` would
+  catch only a wrong default in `frontmatter.rs`. So the check is the one §2 ran: **compile
+  the fixture on the tree before this phase, compile it again after with no `figures` key,
+  and compare the PDF bytes.** They must be equal. An implementer who writes the three
+  rules unconditionally passes (1) and fails here, which is the discrimination the
+  in-suite form cannot make. **Both compiles are of the document with *no* `figures` key**,
+  which is the only form the pre-phase tree can read at all — `figures: sectioned` is an
+  unknown key there and `core/src/frontmatter.rs` refuses it by name, so the fixture as
+  gate (1) defines it cannot be the input to the first compile. `mpdf-001` Phase 9 hit this
+  wall first and recorded the answer, quoted by `mpdf-004` Phase 3 when it hit the same one
+  — *"a golden pins emitter output and cannot pin a look, so the observable needs an
+  artifact of its own"*.
 
-  - **Every golden's diff is the `template.with` line and nothing else.** A change reaching
-    any other line is the emitter having started to write numbering, which §2 refuses.
-  - **A sibling of `core/tests/golden_test.rs:the_two_forms_of_the_default_compile_to_the_same_bytes`**:
-    a document with no key and the same document with the default spelled out compile to
-    **identical PDF bytes**. That is `mpdf-004` Phase 3's property at the level it actually
-    lives — the page, not the markup — and it is the case that proves §2's "inert unless
-    selected". An implementer who writes the three rules unconditionally passes (1) and
-    fails here.
-
-  **A golden cannot see this phase at all**, which `mpdf-004` Phase 3 recorded when it hit
-  the same wall: a golden pins emitter output and cannot pin a look. That is why (1) is a
-  read by eye and why this case is about what the goldens *may not* show.
-
-  (6) A value outside the pair is refused by name with its frontmatter line, and
-  `cargo test --workspace` passes.
+  (6) **`figures: nonsense` is refused by name with its frontmatter line**, as `equations`
+  is, and `cargo test --workspace` passes with the 26 goldens re-blessed on their
+  `template.with` line **and nowhere else** — a change reaching any other line is the
+  emitter having started to write numbering, which §2 refuses.
 - **Close-out:** `rules/pipeline.md` — the frontmatter schema's eighth key, the look
   contract at **six** rather than five (three sentences say five), and the numbering
-  section. `README.md`'s `## Frontmatter` gains the key and its `## Styling` close a
-  clause. Its "A key outside the seven" sentence moves with the count. One push.
+  section. `README.md` — `## Frontmatter` gains the key and its "A key outside the seven"
+  sentence becomes eight; **`## Styling` states the contract in prose** — "let `template`
+  take `title`, `author`, `columns`, `date` and `equations` … `md2pdf` names all five on
+  every call" — so that is three edits there, not a clause. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

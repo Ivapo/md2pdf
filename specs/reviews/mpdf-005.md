@@ -2,6 +2,90 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 7 only — 2026-08-23 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, four non-blocking, all four folded. Converged in two
+rounds. All four round-1 blockers confirmed **against the files** rather than the
+changelog, and both numbers the fixes newly keyed the gate to were re-derived
+independently: the anchors count of 3 — `core/src/emit.rs`'s heading arm pushes a line
+before it looks at `level` at all, and `core/src/lib.rs` queries `HeadingElem::ELEM.select()`
+with no level filter — and the 26 goldens, all 26 carrying a `template.with` line.
+
+The four folded:
+
+1. **Gate (5)'s first compile could not use gate (1)'s fixture**, which carries
+   `figures: sectioned` — an unknown key on the pre-phase tree, refused by
+   `core/src/frontmatter.rs`. Both compiles are now stated to be of the document with *no*
+   key, which is the only form both trees can read.
+2. **Gate (1)'s fixture did not exercise the level-1 scoping it was widened for.** With both
+   tables ahead of the `##`, an *unscoped* `show heading:` also reads `Table 1.1` /
+   `Table 1.2`. The `##` now sits **between** the two tables, and the fixture says why.
+3. **"Carry §2's three rules verbatim" did not say rule 1 *replaces*** each look's existing
+   `set heading(numbering: none)`. Added before it, the old line wins and the scheme
+   silently no-ops back to `Table 0.1`.
+4. **A quote was attributed one spec too late.** "A golden pins emitter output and cannot
+   pin a look" is `mpdf-001` Phase 9's, which `mpdf-004` Phase 3 was quoting.
+
+### Round 1 — Phase 7 only — 2026-08-23 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 — is this the right thing to build at all?** Yes, with a caveat recorded rather
+than buried. It produces the observable — a PDF whose first section holds *Table 1.1* and
+*Figure 1.1* and whose second holds *Table 2.1* — and it was **asked for**, which is the
+precedent `mpdf-006` OQ-3 and `mpdf-007` OQ-6 both set for this question. The caveat: both
+bundled looks are short-form, and sectioned figure numbering earns its keep in long
+chaptered documents, so the phase's value rests on this dialect being used for papers —
+which its headings, footnotes, math and bibliography support and which nothing in the
+corpus measures.
+
+Verdict: `NOT READY`, four blocking, eight non-blocking. One generalist reviewer, matching
+every prior episode in this corpus. **No finding was rejected.**
+
+**The largest finding is that the phase's central rule set was never written down.** §2
+showed the probe's *effects* — "a figure numbered off it reads `Table 0.1`" — and never the
+`set figure(numbering: …)` rule keyed to `counter(heading).get().first()` that produces the
+format the gate is keyed to. The phase also counted its own rules two ways, "three rules"
+in the scope against "both new rules" in §2. §2 now carries all three as a `typst` block.
+
+**The sharpest finding is that the inertness gate could not fail for the reason it named.**
+Gate (5) asserted a sibling of
+`core/tests/golden_test.rs:the_two_forms_of_the_default_compile_to_the_same_bytes` — but
+`core/src/emit.rs:header` writes the *resolved* default on every call, so "no key" and "the
+default spelled out" emit byte-identical Typst and therefore identical PDFs **whatever the
+looks contain**. The claim "an implementer who writes the three rules unconditionally
+passes (1) and fails here" was false: they pass both. The in-suite form is abandoned for a
+cross-tree byte comparison, measured 2026-08-23 at `448e98a8…` — the shipped look against a
+look carrying all three rules with `figures: "flat"`, byte-identical.
+
+The other two blocking, and what each really was:
+
+1. **The counter reset was under-scoped twice, and the gate was shaped so it could see
+   neither.** It named only `kind: table`, so an image would take the advancing prefix with
+   no restart — `Figure 2.3`; and it matched *every* heading level, so a `##` restarted the
+   table counter inside its own section. Both fixed and re-measured together: `Table 1.1`,
+   `Table 1.2`, `Figure 1.1`, `Table 2.1`.
+2. **"The same conditional the `equations` rules already sit in" contradicted the shipped
+   looks.** There is no conditional — `equations` is a ternary inside a `set` argument, and
+   both look files carry a comment recording that a `set` inside a scoped `if` "would
+   compile, emit a valid PDF, and put no number on any page". Two of the three rules are
+   `show` rules, for which that form does not exist; the branch moves inside the closure.
+
+Notable among the non-blocking: `show heading: it => it.body` — the draft's way of hiding
+the number — leaves both looks' `show heading: set block(…)` nothing to apply to, so a
+sectioned document's headings would have lost their spacing and read as paragraphs. That
+was replaced by `(..n) => none`, which advances the counter and keeps a heading a heading,
+and it made the draft's unrecorded rule-ordering question moot. Also folded:
+`core/tests/golden_test.rs:absent_frontmatter_gets_every_default` pins the call line as a
+literal and moves with the sixth argument; `README.md`'s `## Styling` states the five-
+parameter contract in prose, so it is three edits and not a clause; gate (4)'s two needles
+are named; the new fixture and its golden are in scope, making the tree 27 with the 26 the
+count *before* it; and OQ-16 was narrowed, the key settled in §2 as `figures` taking
+`flat`/`sectioned` so no gate is phrased in a placeholder.
+
+**One precondition finding, outside the phase.** `spec-lint` failed the corpus before round
+1 on two citations in `specs/citations_spec.md` that `mpdf-007` Phase 4's own renames had
+broken. Repaired under §6.1's pointer rule in a commit of its own; the loop's round 1 ran
+against a clean linter.
+
 ### Round 3 — Phase 6 only — 2026-08-18 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, nothing newly found. Converged **inside the cap**,
