@@ -548,7 +548,7 @@ bibliography that does not parse, and one whose extension is neither `.yml`, `.y
 
 ## Frontmatter
 
-A leading `---` block controls the layout. It takes seven keys, all optional:
+A leading `---` block controls the layout. It takes eight keys, all optional:
 
 ```markdown
 ---
@@ -558,6 +558,7 @@ date: 10 August 2026        # a free string, typeset as you wrote it
 template: article           # article or press-release
 columns: 1                  # 1 or 2
 equations: numbered         # numbered or plain
+figures: sectioned          # sectioned or flat
 bibliography: refs.yml      # a Hayagriva .yml/.yaml or BibLaTeX .bib file
 ---
 ```
@@ -581,11 +582,21 @@ that says nothing gets no numbers and reads exactly as it did before. You say *w
 the look says *how* — the format, and where on the line it sits. Both bundled looks write
 `(1)`.
 
+`figures: sectioned` gives a figure, a table and a listing the number of the section it
+stands in — *Figure 1.1*, *Table 1.2*, *Table 2.1* — restarting each kind at every `#`
+heading and at no other level. The headings themselves stay unnumbered. `flat` is the
+default, one counter per kind down the whole document, so a file that says nothing reads
+exactly as it did before. You say *whether*; the look says *how*, as with `equations`. A
+reference reads whatever the caption reads, so `[](#tab:one)` says *Table 1.1* in a
+sectioned document. A display equation is not a figure: under `equations: numbered` it
+keeps its `(1)` and takes no section.
+
 Without `title`, `author` and `date` together, the PDF gets no title block. Without the
 frontmatter altogether, it gets every default.
 
-A key outside the seven, a `columns` value other than `1` or `2`, or a `template` or
-`equations` name outside its set, is an error that names the key and its line:
+A key outside the eight, a `columns` value other than `1` or `2`, or a `template`,
+`equations` or `figures` name outside its set, is an error that names the key and its
+line:
 
 ```console
 $ md2pdf paper.md
@@ -608,14 +619,16 @@ the emitter do not need to know.
 
 A third look is a third `.typ` file plus one name in `core/src/frontmatter.rs`. It has one
 contract to meet: export `template` and `divider`, and let `template` take `title`,
-`author`, `columns`, `date` and `equations` before its trailing document argument.
-`md2pdf` names all five on every call.
+`author`, `columns`, `date`, `equations` and `figures` before its trailing document
+argument. `md2pdf` names all six on every call.
 
 Everything else a look decides, it decides over Typst's own elements with `show` and `set`
 rules, taking no argument at all. A table's header row, a code block's font, a figure's
 caption, the space between a group's members and the left edge a captioned code block sits
-on all reach a look that way — which is why neither a caption nor a group added a sixth
-argument.
+on all reach a look that way — which is why neither a caption nor a group widened the call
+at all. An argument is added only where the *author* has something to ask for, which is
+what `equations` and `figures` are: the two questions a look cannot answer on its own,
+because the answer is a fact about the document rather than about the house style.
 
 ## Licence
 

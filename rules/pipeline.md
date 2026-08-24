@@ -20,9 +20,10 @@ covers: >
   reference list it earns and the four ways the bibliography channel refuses,
   the LaTeX subset a formula may hold and the prelude
   it compiles against, the bundled looks and the call contract they meet, the equation numbering
-  the author asks for and the look formats, the heading anchors a compile reports,
+  the author asks for and the look formats, the figure numbering a document may
+  section by, the heading anchors a compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 810
+max_lines: 850
 generated: 2026-08-23
 ---
 
@@ -609,13 +610,14 @@ not be a heading.
 
 ## The frontmatter
 
-Seven keys, all optional: `title` and `author`, strings; `date`, a free string the template
+Eight keys, all optional: `title` and `author`, strings; `date`, a free string the template
 typesets verbatim; `columns`, `1` or `2`; `template`, the look, `article` or
-`press-release`; `equations`, `plain` or `numbered`; and `bibliography`, a path. An absent
-block is valid, and
+`press-release`; `equations`, `plain` or `numbered`; `figures`, `flat` or `sectioned`; and
+`bibliography`, a path. An absent block is valid, and
 `core/src/frontmatter.rs:Frontmatter::default` gives the article look, no title block, no
-date, two columns, no equation numbers and no bibliography. Six of them reach the look:
-`core/src/emit.rs:header` always names all five arguments and the selected file.
+date, two columns, no equation numbers, flat figure numbers and no bibliography. Seven of
+them reach the look: `core/src/emit.rs:header` always names all six arguments and the
+selected file.
 
 `bibliography` is the one key that names a *file*, and the only one that carries a line —
 `core/src/lib.rs:BibliographyRef` holds both, because a bibliography is never
@@ -629,11 +631,19 @@ takes `core/src/emit.rs:portable_path`'s shape rule, phrased for a key: a URL, a
 path, a `..` segment and a backslash are each `Error::Frontmatter` naming the key and the
 line.
 
-`equations` is a name against a closed set rather than a boolean, so a later per-section
-scheme is a new name rather than a second key, and
-`core/src/frontmatter.rs:Equations::from_name` resolves it exactly as `Template::from_name`
-resolves the look. The author decides whether a document numbers its display equations; the
-look decides what a number looks like and where it sits.
+`equations` and `figures` are names against closed sets rather than booleans, and
+`core/src/frontmatter.rs:Equations::from_name` and `Figures::from_name` each resolve one
+exactly as `Template::from_name` resolves the look. The closed set is what makes a further
+scheme a new *name* rather than a further key — a per-chapter figure restart without a
+prefix is `figures`' third name, not a ninth key. The author decides whether a document
+numbers its display equations and whether a figure number carries its section; the look
+decides what each looks like and where it sits.
+
+**The two keys do not meet on the page, and that is a consequence rather than an
+oversight.** Typst numbers a display equation through `math.equation` and a figure through
+`figure`, and `figures` reaches only the second — so a `$$…$$` under
+`equations: numbered` keeps its `(1)` in a sectioned document and takes no section
+prefix.
 
 An absent `columns` takes the selected look's convention — `2` for `article`, `1` for
 `press-release` — resolved in `core/src/frontmatter.rs:parse` after the whole block is read,
@@ -682,12 +692,14 @@ count — and the emitter passes the frontmatter through and adds no styling of 
 third look is a third `.typ` file and one enum variant.
 
 Every look exports `template` and `divider`, and its `template` takes `title`, `author`,
-`columns`, `date` and `equations` before the trailing `doc`. That is the contract, because
-`core/src/emit.rs:header` names all five on every call; a look missing one would fail the
-compile with an error naming neither the document nor the key. No golden file pins it, so a
-test in `core/tests/golden_test.rs` reads each look's source and asserts it — two needles for
-`equations`, the parameter and `math.equation`, because the parameter alone is satisfied by a
-look that takes it and ignores it.
+`columns`, `date`, `equations` and `figures` before the trailing `doc`. That is the
+contract, because `core/src/emit.rs:header` names all six on every call; a look missing one
+would fail the compile with an error naming neither the document nor the key. No golden file
+pins it, so a test in `core/tests/golden_test.rs` reads each look's source and asserts it —
+two needles for `equations`, the parameter and `math.equation`, and two for `figures`, the
+parameter and `counter(figure.where(kind:`, because the parameter alone is satisfied by a
+look that takes it and ignores it. Each pair leaves the *format* off the list: `(1)` against
+`1.`, and `1.1` against anything else, is each look's own call.
 
 Both looks answer `equations` with
 `set math.equation(numbering: if equations == "numbered" { "(1)" } else { none })`, at the
@@ -698,15 +710,41 @@ emitter writes no format string anywhere. Typst numbers the block form alone, so
 formula takes no number and one `$$…$$` span takes one whatever it holds — a multi-line
 `aligned` derivation is numbered once, against its lines, not once per line.
 
+**`figures` is answered by three rules per look, and the shape of each is load-bearing.**
+`set heading(numbering: if figures == "sectioned" { (..n) => none } else { none })`
+**replaces** the plain `set heading(numbering: none)` rather than joining it: a figure's
+section prefix is built off `counter(heading)`, which does not advance while its own
+numbering is `none` — every figure reads `Table 0.1` — and the later of two set rules over
+one field wins, so an old line left below silently no-ops the scheme. `show heading: it =>
+it.body` reaches the same page and is refused: it leaves `show heading: set block(…)`
+nothing to apply to, and a sectioned document's headings lose their spacing.
+`show heading.where(level: 1):` resets `counter(figure.where(kind: image))`, `kind: table`
+and `kind: raw` — all three, because each kind runs a counter of its own and a reset naming
+one hands the others an advancing prefix with no restart; scoped to level 1, because an
+unscoped rule restarts at a `##` and two tables either side of a subheading both read
+`Table 1.1`. `set figure(numbering: …)` builds `numbering("1.1", counter(heading).get().first(),
+n.pos().first())` under `sectioned` and Typst's own `"1"` under `flat`.
+
+**Only the third takes `equations`' ternary-in-argument shape, and the difference is the
+rule kind rather than a style.** A `set` carries its condition in its argument because a
+`set` inside a scoped `if` dies with the block; a `show` rule has no such form, so the
+second rule's branch sits inside the closure and the rule itself is installed
+unconditionally. Under `flat` all three are inert, measured as byte-identical PDFs across
+the trees either side of the phase rather than asserted in-suite: `header` writes the
+*resolved* default on every call, so "no key" and `figures: flat` emit identical Typst and
+a sibling of `the_two_forms_of_the_default_compile_to_the_same_bytes` could only catch a
+wrong default in `frontmatter.rs`.
+
 A caption crosses no argument at all, and neither does a group. Each look carries
 `set figure.caption(…)`, `show figure: set block(…)`, `show figure.caption: …`,
 `show figure: set grid(gutter: …)` and `show figure.where(kind: raw): set align(left)` of its
 own, reaching Typst elements the way both already reach `raw` and `table.cell`, so the
-contract stays at five. **The first four are kind-agnostic in both looks**, which is what
+contract stays at six. **The first four are kind-agnostic in both looks**, which is what
 styled and numbered a captioned table, a captioned listing and a group the day the emitter
-first emitted one, with no look edit at all. **The fifth is the only `.where(kind: …)` rule
-in either look**: `figure` centres its body, which an image and a table want and code cannot
-have — a captioned listing would otherwise stand where its uncaptioned twin does not — so
+first emitted one, with no look edit at all. **The fifth is the only `.where(kind: …)` *rule*
+in either look** — `figures`' counter reset names all three kinds, but through
+`counter(figure.where(kind: …))`, which is a selector rather than a rule: `figure` centres
+its body, which an image and a table want and code cannot have — a captioned listing would otherwise stand where its uncaptioned twin does not — so
 both looks send one back to the left edge, caption and all, and a group of listings with it.
 Each look answers for itself: the article separates the number from the words with a full
 stop and the press release with a dash, both set the caption beneath, the two gutters differ,
