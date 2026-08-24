@@ -6,7 +6,7 @@
 //! offending key and its line, never a guess.
 
 use crate::emit::portable_path;
-use crate::{BibliographyRef, Error, Result};
+use crate::{BibliographyRef, Error, Location, Result};
 
 /// The bundled looks a document may select.
 ///
@@ -294,7 +294,10 @@ pub(crate) fn parse(block: &str, first_line: usize) -> Result<Frontmatter> {
                                 ),
                             )
                         })?;
-                        Some(BibliographyRef { path, line })
+                        Some(BibliographyRef {
+                            path,
+                            location: Location::at(line),
+                        })
                     }
                     None => None,
                 }
@@ -311,7 +314,7 @@ pub(crate) fn parse(block: &str, first_line: usize) -> Result<Frontmatter> {
 
 fn problem(line: usize, problem: impl Into<String>) -> Error {
     Error::Frontmatter {
-        line,
+        location: Location::at(line),
         problem: problem.into(),
     }
 }
@@ -469,7 +472,7 @@ mod tests {
             out.bibliography,
             Some(BibliographyRef {
                 path: "refs.yml".to_string(),
-                line: 3,
+                location: Location::at(3),
             })
         );
 
@@ -493,8 +496,8 @@ mod tests {
             ("refs\\bib.yml", "not a path with a backslash"),
         ] {
             match parse(&format!("bibliography: {value}\n"), 2) {
-                Err(Error::Frontmatter { line, problem }) => {
-                    assert_eq!(line, 2, "wrong line for {value}");
+                Err(Error::Frontmatter { location, problem }) => {
+                    assert_eq!(location.line, 2, "wrong line for {value}");
                     assert!(problem.contains("bibliography"), "problem was: {problem}");
                     assert!(problem.contains(needle), "problem was: {problem}");
                 }
@@ -523,8 +526,8 @@ mod tests {
             ("title: A\n  nested: B\n", "nested keys"),
         ] {
             match parse(block, 2) {
-                Err(Error::Frontmatter { line, problem }) => {
-                    assert_eq!(line, 3, "wrong line for {needle}");
+                Err(Error::Frontmatter { location, problem }) => {
+                    assert_eq!(location.line, 3, "wrong line for {needle}");
                     assert!(problem.contains(needle), "problem was: {problem}");
                 }
                 other => panic!("expected a Frontmatter error, got {other:?}"),

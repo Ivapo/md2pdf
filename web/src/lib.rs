@@ -95,7 +95,7 @@ pub fn anchors(
     Ok(rendered
         .anchors
         .iter()
-        .map(|anchor| format!("{}:{}", anchor.line, anchor.page))
+        .map(|anchor| format!("{}:{}", anchor.location.line, anchor.page))
         .collect::<Vec<_>>()
         .join(" "))
 }

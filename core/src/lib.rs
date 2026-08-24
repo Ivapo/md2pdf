@@ -1,7 +1,8 @@
 //! Converts one markdown document into one typeset PDF.
 //!
-//! This crate holds no OS access. Its API takes a markdown string and the image
-//! files that string names, and it returns Typst source, HTML or PDF bytes. The
+//! This crate holds no OS access. Its API takes a markdown string and the files
+//! that string names — its images, its bibliography and its sections — and it
+//! returns Typst source, HTML or PDF bytes. The
 //! caller does the file I/O. That split is what lets the same crate compile
 //! natively and to `wasm32` without a rewrite, and it is why an image arrives as
 //! named bytes rather than as a path this crate would have to open.
@@ -10,6 +11,7 @@ mod bibliography;
 mod emit;
 mod frontmatter;
 mod math;
+mod sections;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
@@ -31,6 +33,49 @@ use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
 use typst_pdf::PdfOptions;
 
+/// Where in the author's own source something is.
+///
+/// **One type with one `Display`**, because a message carrying a file and a line
+/// as two fields would have to choose its phrasing again at each of the nine
+/// sites that print one. With no file it renders `at line 12`, which is the
+/// phrase every message printed before a document could have sections, character
+/// for character. With one it renders `in sections/method.md at line 4`.
+///
+/// **A source file is never quoted and an asset path always is.** That is what
+/// keeps the two apart in the four messages carrying both: `no image file
+/// supplied for 'fig.png' in sections/two.md at line 3` reads once and
+/// correctly.
+///
+/// Inside this crate every location is built by [`Location::at`] against the
+/// *joined* document and carries no file. The file arrives at one boundary, on
+/// the way out, where `sections::Sources` translates a joined line back into the
+/// file the author wrote it in. A document naming no section has a one-entry map,
+/// so that translation is the identity and every message is what it always was.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Location {
+    /// The section file the author wrote this line in, or `None` for the
+    /// document the caller handed in.
+    pub file: Option<String>,
+    /// The 1-based line, in `file` where there is one.
+    pub line: usize,
+}
+
+impl Location {
+    /// A location in the document the caller handed in.
+    pub fn at(line: usize) -> Self {
+        Self { file: None, line }
+    }
+}
+
+impl std::fmt::Display for Location {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.file {
+            None => write!(f, "at line {}", self.line),
+            Some(file) => write!(f, "in {file} at line {}", self.line),
+        }
+    }
+}
+
 /// The errors this crate can return.
 ///
 /// These clone, because a footnote definition's translation is kept until the
@@ -39,20 +84,23 @@ use typst_pdf::PdfOptions;
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
     /// A markdown construct outside the supported dialect.
-    #[error("unsupported markdown construct '{construct}' at line {line}")]
-    UnsupportedConstruct { construct: String, line: usize },
+    #[error("unsupported markdown construct '{construct}' {location}")]
+    UnsupportedConstruct {
+        construct: String,
+        location: Location,
+    },
 
     /// The frontmatter block does not match the schema.
-    #[error("frontmatter error at line {line}: {problem}")]
-    Frontmatter { line: usize, problem: String },
+    #[error("frontmatter error {location}: {problem}")]
+    Frontmatter { location: Location, problem: String },
 
     /// A math span holds LaTeX outside the accepted subset.
     ///
     /// This is not an `UnsupportedConstruct`: the construct is a math span,
     /// which the dialect supports, and what the error names is the LaTeX inside
     /// it — a command, an environment or a character the author typed.
-    #[error("math error at line {line}: {problem}")]
-    Math { line: usize, problem: String },
+    #[error("math error {location}: {problem}")]
+    Math { location: Location, problem: String },
 
     /// A figure's name, or a reference to one, that the dialect refuses.
     ///
@@ -62,8 +110,8 @@ pub enum Error {
     /// is what the author typed. Typst resolves a label itself and fails on one
     /// it cannot, but its message names a label the author never wrote and
     /// carries no line, so the check is `core`'s.
-    #[error("name error at line {line}: {problem}")]
-    Name { line: usize, problem: String },
+    #[error("name error {location}: {problem}")]
+    Name { location: Location, problem: String },
 
     /// A citation the document cannot honour, or a payload the dialect does not
     /// read.
@@ -74,12 +122,12 @@ pub enum Error {
     /// typed inside its brackets — or the bibliography key the frontmatter left
     /// out. Typst raises on some of these itself, in its own words and with no
     /// line the author would recognise.
-    #[error("citation error at line {line}: {problem}")]
-    Citation { line: usize, problem: String },
+    #[error("citation error {location}: {problem}")]
+    Citation { location: Location, problem: String },
 
     /// The document names an image file that the caller did not supply.
-    #[error("no image file supplied for '{path}' at line {line}")]
-    MissingImage { path: String, line: usize },
+    #[error("no image file supplied for '{path}' {location}")]
+    MissingImage { path: String, location: Location },
 
     /// The frontmatter names a bibliography file that the caller did not supply.
     ///
@@ -87,15 +135,24 @@ pub enum Error {
     /// are the only thing that differs, and they are the whole point — without
     /// this the compile says "file not found (searched at refs.yml)" against a
     /// span in a `main.typ` the user has never seen.
-    #[error("no bibliography file supplied for '{path}' at line {line}")]
-    MissingBibliography { path: String, line: usize },
+    #[error("no bibliography file supplied for '{path}' {location}")]
+    MissingBibliography { path: String, location: Location },
+
+    /// The master names a section file that the caller did not supply.
+    ///
+    /// A third sibling, on the argument [`Error::MissingBibliography`] was added
+    /// under and for the same reason. It lives here rather than in a wrapper
+    /// because `web/src/lib.rs:render` calls [`md_to_pdf`] directly with a fixed
+    /// asset array, and there is no wrapper there to catch it.
+    #[error("no section file supplied for '{path}' {location}")]
+    MissingSection { path: String, location: Location },
 
     /// A supplied image holds bytes of a format other than the one its name
     /// claims.
-    #[error("image file '{path}' at line {line} does not hold {format} data")]
+    #[error("image file '{path}' {location} does not hold {format} data")]
     ImageFormat {
         path: String,
-        line: usize,
+        location: Location,
         format: String,
     },
 
@@ -112,13 +169,37 @@ pub enum Error {
     Internal(String),
 }
 
+impl Error {
+    /// The location this error names, where it names one.
+    ///
+    /// **This is the whole of the relocation surface**, which is why it is one
+    /// exhaustive match and not a `_` arm: `sections::Sources` translates through
+    /// it, and a tenth line-carrying variant added later cannot slip past the
+    /// translation without the compiler saying so.
+    pub(crate) fn location_mut(&mut self) -> Option<&mut Location> {
+        match self {
+            Error::UnsupportedConstruct { location, .. }
+            | Error::Frontmatter { location, .. }
+            | Error::Math { location, .. }
+            | Error::Name { location, .. }
+            | Error::Citation { location, .. }
+            | Error::MissingImage { location, .. }
+            | Error::MissingBibliography { location, .. }
+            | Error::MissingSection { location, .. }
+            | Error::ImageFormat { location, .. } => Some(location),
+            Error::Compile(_) | Error::PdfExport(_) | Error::Internal(_) => None,
+        }
+    }
+}
+
 /// The result type this crate returns.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// One image file, supplied by the caller.
+/// One file supplied by the caller: an image, a bibliography or a section.
 ///
 /// `path` is the destination exactly as the markdown wrote it, which is the
-/// name the generated Typst source asks for.
+/// name the generated Typst source asks for, and the name a section marker is
+/// matched against.
 #[derive(Debug, Clone)]
 pub struct Asset {
     pub path: String,
@@ -129,7 +210,7 @@ pub struct Asset {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImageRef {
     pub path: String,
-    pub line: usize,
+    pub location: Location,
 }
 
 /// The bibliography file a document names, and the frontmatter line that named
@@ -137,24 +218,42 @@ pub struct ImageRef {
 ///
 /// [`ImageRef`]'s shape under its own name rather than a second use of that
 /// one: `image_paths` names what it returns, and three callers cite that
-/// contract. The line is what lets a missing file be refused in the author's own
-/// terms — a bibliography is not walked, so this is the only place its position
-/// is known.
+/// contract. The location is what lets a missing file be refused in the author's
+/// own terms — a bibliography is not walked, so this is the only place its
+/// position is known.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BibliographyRef {
     pub path: String,
-    pub line: usize,
+    pub location: Location,
+}
+
+/// One place where a master names a section file.
+///
+/// The third of the same shape, and the only one whose location can never carry
+/// a file: [`section_paths`] reads the master's own text alone, and a section
+/// may not name a section of its own, so there is nothing for it to relocate
+/// through. It is a [`Location`] rather than a bare line so that all four refs
+/// read the same, and so a later phase that allowed nesting would have the field
+/// already there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SectionRef {
+    pub path: String,
+    pub location: Location,
 }
 
 /// One heading, and the page its typeset form landed on.
 ///
-/// `line` is the 1-based line of the markdown heading; `page` is the 1-based
-/// page of the compiled one. The Nth heading in the markdown is the Nth heading
-/// in the document, which is what makes this pairing possible without a source
-/// map and without the emitter writing an anchor of its own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// `location` is the markdown heading's own file and 1-based line; `page` is the
+/// 1-based page of the compiled one. The Nth heading in the markdown is the Nth
+/// heading in the document, which is what makes this pairing possible without a
+/// source map and without the emitter writing an anchor of its own.
+///
+/// **It is deliberately not `Copy`.** A location owns a `String`, and the two
+/// consumers never wanted a copy: `app/src/document.rs` takes the vector by
+/// `into_iter` and `web/src/lib.rs` reads it by reference.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Anchor {
-    pub line: usize,
+    pub location: Location,
     pub page: usize,
 }
 
@@ -172,9 +271,15 @@ pub struct Rendered {
 /// The output imports the look the frontmatter selected, and every bundled
 /// look exists only inside this crate's virtual filesystem. It serves
 /// inspection, not a standalone `typst compile`. Emission reads no image
-/// bytes, so this function needs no assets.
-pub fn md_to_typst(md: &str) -> Result<String> {
-    Ok(emit::emit(md)?.source)
+/// bytes, so `sections` is the only channel it needs: the bytes of every file
+/// [`section_paths`] listed, which are markdown and are joined before the walk.
+/// An asset the master does not name as a section is ignored, so a caller may
+/// hand the whole array here too.
+pub fn md_to_typst(md: &str, sections: &[Asset]) -> Result<String> {
+    let (joined, sources) = sections::assemble(md, sections)?;
+    emit::emit(&joined)
+        .map(|emitted| emitted.source)
+        .map_err(|error| sources.relocate(error))
 }
 
 /// Translate markdown into HTML, out of the same parse the emitter reads.
@@ -212,8 +317,24 @@ pub fn md_to_html(md: &str) -> String {
 /// named it on.
 ///
 /// The list may name one path more than once. The caller deduplicates it.
-pub fn image_paths(md: &str) -> Result<Vec<ImageRef>> {
-    Ok(emit::emit(md)?.images)
+///
+/// `sections` is the same channel [`md_to_typst`] takes, and for the same
+/// reason: an image named inside a section is only visible once that section's
+/// text has been joined in. Each [`ImageRef`] comes back naming the file the
+/// author wrote it in.
+pub fn image_paths(md: &str, sections: &[Asset]) -> Result<Vec<ImageRef>> {
+    let (joined, sources) = sections::assemble(md, sections)?;
+    let images = emit::emit(&joined)
+        .map_err(|error| sources.relocate(error))?
+        .images;
+
+    Ok(images
+        .into_iter()
+        .map(|image| ImageRef {
+            location: sources.locate(image.location.line),
+            path: image.path,
+        })
+        .collect())
 }
 
 /// Name the bibliography file the document's frontmatter declares, if any.
@@ -224,17 +345,53 @@ pub fn image_paths(md: &str) -> Result<Vec<ImageRef>> {
 /// walk, where a bibliography is one frontmatter value that no walk would ever
 /// meet.
 ///
-/// The line is the frontmatter line the key was written on, which is what lets a
-/// file the caller did not supply be refused in the author's own terms.
-pub fn bibliography_path(md: &str) -> Result<Option<BibliographyRef>> {
-    Ok(emit::emit(md)?.bibliography)
+/// The location is the frontmatter line the key was written on, which is what
+/// lets a file the caller did not supply be refused in the author's own terms.
+/// Only the master carries frontmatter, so that file is always the master —
+/// but it travels as a [`Location`] like every other, because the phrase a
+/// message prints comes from one place.
+pub fn bibliography_path(md: &str, sections: &[Asset]) -> Result<Option<BibliographyRef>> {
+    let (joined, sources) = sections::assemble(md, sections)?;
+    let named = emit::emit(&joined)
+        .map_err(|error| sources.relocate(error))?
+        .bibliography;
+
+    Ok(named.map(|named| BibliographyRef {
+        location: sources.locate(named.location.line),
+        path: named.path,
+    }))
+}
+
+/// Name every section file the master reads, in the order it reads them.
+///
+/// The shopping list's third entry, and the one that runs *before* the other
+/// two: the markers are in the master's own text, so this needs no join, where
+/// [`image_paths`] and [`bibliography_path`] can only answer about a document
+/// that has already been assembled. So the caller reads these files first and
+/// hands them back on every later call.
+///
+/// **The joining is this crate's and never the caller's.** `core` builds the map
+/// that turns a joined line back into a file from the boundaries it creates, so
+/// a caller that concatenated the sections itself would leave that map with no
+/// source and every message naming a document nobody wrote.
+///
+/// A [`SectionRef`]'s location never carries a file, because a section may not
+/// name a section of its own.
+pub fn section_paths(md: &str) -> Result<Vec<SectionRef>> {
+    Ok(emit::includes(md)
+        .into_iter()
+        .map(|include| SectionRef {
+            path: include.path,
+            location: Location::at(include.line),
+        })
+        .collect())
 }
 
 /// Translate markdown into Typst markup and compile it to a PDF.
 ///
-/// `assets` supplies the bytes of every path [`image_paths`] listed, and of the
-/// one [`bibliography_path`] named. An asset the document never names is
-/// ignored.
+/// `assets` supplies the bytes of every path [`image_paths`] listed, of the one
+/// [`bibliography_path`] named, and of every section [`section_paths`] named. An
+/// asset the document never names is ignored.
 ///
 /// This is [`md_to_pdf_with_anchors`] with the anchors dropped, rather than a
 /// second path to the same bytes. Two paths over the same input that could
@@ -255,7 +412,31 @@ pub fn md_to_pdf(md: &str, assets: &[Asset]) -> Result<Vec<u8>> {
 /// method calls on the value the compiler infers are fine, a helper taking it as
 /// a parameter is not, and writing one would mean adding a dependency to a
 /// workspace that pins every one it has.
+///
+/// **The relocation happens here and not one step earlier.** Everything below
+/// works in the joined document's own coordinates, because `collect` answers
+/// with the earliest refusal by line and a section-local line would sort against
+/// a different document. The joined line becomes a file and a line on the way
+/// out, once, for the error and for every anchor.
 pub fn md_to_pdf_with_anchors(md: &str, assets: &[Asset]) -> Result<Rendered> {
+    let (joined, sources) = sections::assemble(md, assets)?;
+    let rendered = render(&joined, assets).map_err(|error| sources.relocate(error))?;
+
+    Ok(Rendered {
+        pdf: rendered.pdf,
+        anchors: rendered
+            .anchors
+            .into_iter()
+            .map(|anchor| Anchor {
+                location: sources.locate(anchor.location.line),
+                page: anchor.page,
+            })
+            .collect(),
+    })
+}
+
+/// Compile the joined document, answering in the joined document's own lines.
+fn render(md: &str, assets: &[Asset]) -> Result<Rendered> {
     let emitted = emit::emit(md)?;
     let assets = collect(&emitted, assets)?;
     let world = TypstWorld::new(emitted.source, assets)?;
@@ -307,7 +488,10 @@ fn anchors_from(lines: Vec<usize>, pages: Vec<usize>) -> Vec<Anchor> {
     lines
         .into_iter()
         .zip(pages)
-        .map(|(line, page)| Anchor { line, page })
+        .map(|(line, page)| Anchor {
+            location: Location::at(line),
+            page,
+        })
         .collect()
 }
 
@@ -360,10 +544,10 @@ fn collect(emitted: &emit::Emitted, assets: &[Asset]) -> Result<HashMap<FileId, 
     if let Some(named) = &emitted.bibliography {
         match supplied.get(named.path.as_str()) {
             None => refusals.push((
-                named.line,
+                named.location.line,
                 Error::MissingBibliography {
                     path: named.path.clone(),
-                    line: named.line,
+                    location: named.location.clone(),
                 },
             )),
             Some(bytes) => {
@@ -373,9 +557,9 @@ fn collect(emitted: &emit::Emitted, assets: &[Asset]) -> Result<HashMap<FileId, 
                     // checks below have nothing to run against. Its own line is
                     // the frontmatter's and is earlier than either of theirs.
                     Err(problem) => refusals.push((
-                        named.line,
+                        named.location.line,
                         Error::Citation {
-                            line: named.line,
+                            location: named.location.clone(),
                             problem,
                         },
                     )),
@@ -392,10 +576,10 @@ fn collect(emitted: &emit::Emitted, assets: &[Asset]) -> Result<HashMap<FileId, 
 
         let Some(bytes) = supplied.get(image.path.as_str()) else {
             refusals.push((
-                image.line,
+                image.location.line,
                 Error::MissingImage {
                     path: image.path.clone(),
-                    line: image.line,
+                    location: image.location.clone(),
                 },
             ));
             continue;
@@ -406,10 +590,10 @@ fn collect(emitted: &emit::Emitted, assets: &[Asset]) -> Result<HashMap<FileId, 
         let extension = emit::extension_of(&image.path).unwrap_or_default();
         if !bytes_match(&extension, bytes) {
             refusals.push((
-                image.line,
+                image.location.line,
                 Error::ImageFormat {
                     path: image.path.clone(),
-                    line: image.line,
+                    location: image.location.clone(),
                     format: format_name(&extension).to_string(),
                 },
             ));
@@ -449,7 +633,7 @@ fn unresolved(keys: &HashSet<String>, emitted: &emit::Emitted) -> Vec<(usize, Er
             (
                 *line,
                 Error::Citation {
-                    line: *line,
+                    location: Location::at(*line),
                     problem: format!("'@{key}' is cited and the bibliography does not hold it"),
                 },
             )
@@ -463,7 +647,7 @@ fn unresolved(keys: &HashSet<String>, emitted: &emit::Emitted) -> Vec<(usize, Er
             (
                 *line,
                 Error::Citation {
-                    line: *line,
+                    location: Location::at(*line),
                     problem: format!(
                         "'{name}' names something in this document and a key in the bibliography, and one reference cannot mean both"
                     ),
@@ -716,9 +900,18 @@ mod tests {
         assert_eq!(
             anchors_from(vec![3, 9, 20], vec![1, 1, 2]),
             vec![
-                Anchor { line: 3, page: 1 },
-                Anchor { line: 9, page: 1 },
-                Anchor { line: 20, page: 2 },
+                Anchor {
+                    location: Location::at(3),
+                    page: 1
+                },
+                Anchor {
+                    location: Location::at(9),
+                    page: 1
+                },
+                Anchor {
+                    location: Location::at(20),
+                    page: 2
+                },
             ]
         );
 

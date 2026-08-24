@@ -46,8 +46,15 @@ fn run() -> Result<(), String> {
     let markdown = std::fs::read_to_string(&args.input)
         .map_err(|e| format!("cannot read {}: {e}", args.input.display()))?;
 
+    // The sections come first on every path, `--emit-typst` included: a master
+    // is not a document until they are joined in, so nothing downstream can be
+    // asked anything about it before they are read.
+    let directory = args.input.parent().unwrap_or(Path::new(""));
+    let sections = read_sections(&markdown, directory)?;
+
     if args.emit_typst {
-        let typst_source = md2pdf_core::md_to_typst(&markdown).map_err(|e| e.to_string())?;
+        let typst_source =
+            md2pdf_core::md_to_typst(&markdown, &sections).map_err(|e| e.to_string())?;
         print!("{typst_source}");
         std::io::stdout()
             .flush()
@@ -55,8 +62,7 @@ fn run() -> Result<(), String> {
         return Ok(());
     }
 
-    let directory = args.input.parent().unwrap_or(Path::new(""));
-    let assets = read_assets(&markdown, directory)?;
+    let assets = read_assets(&markdown, sections, directory)?;
 
     let pdf = md2pdf_core::md_to_pdf(&markdown, &assets).map_err(|e| e.to_string())?;
     let output = args.output.unwrap_or_else(|| default_output(&args.input));
@@ -76,22 +82,36 @@ fn run() -> Result<(), String> {
 /// than something the walk finds, so it comes from an export of its own — and
 /// it is read first, since the line it names is the earliest one in the file.
 ///
-/// `core` reads nothing itself, on either channel. That split is what lets the
-/// same crate compile natively and to `wasm32`.
-fn read_assets(markdown: &str, directory: &Path) -> Result<Vec<md2pdf_core::Asset>, String> {
-    let images = md2pdf_core::image_paths(markdown).map_err(|e| e.to_string())?;
-    let bibliography = md2pdf_core::bibliography_path(markdown).map_err(|e| e.to_string())?;
+/// **The sections are already read when this runs**, and they arrive here so
+/// they ride out on the same array: the other two lists cannot be asked for
+/// until the document they belong to has been assembled, which is why
+/// `read_sections` is a pass of its own and this one takes its result.
+///
+/// **Every path still resolves against the master's directory**, a section's
+/// own images included. That is `mpdf-008` Phase 2's job and a named limitation
+/// rather than an oversight.
+///
+/// `core` reads nothing itself, on any of the three channels. That split is what
+/// lets the same crate compile natively and to `wasm32`.
+fn read_assets(
+    markdown: &str,
+    sections: Vec<md2pdf_core::Asset>,
+    directory: &Path,
+) -> Result<Vec<md2pdf_core::Asset>, String> {
+    let images = md2pdf_core::image_paths(markdown, &sections).map_err(|e| e.to_string())?;
+    let bibliography =
+        md2pdf_core::bibliography_path(markdown, &sections).map_err(|e| e.to_string())?;
 
-    let mut assets = Vec::new();
-    let mut seen = HashSet::new();
+    let mut seen: HashSet<String> = sections.iter().map(|s| s.path.clone()).collect();
+    let mut assets = sections;
 
     if let Some(named) = bibliography {
         let file = directory.join(&named.path);
         let bytes = std::fs::read(&file).map_err(|e| {
             format!(
-                "cannot read {} for the bibliography at line {}: {e}",
+                "cannot read {} for the bibliography {}: {e}",
                 file.display(),
-                named.line
+                named.location
             )
         })?;
 
@@ -110,9 +130,9 @@ fn read_assets(markdown: &str, directory: &Path) -> Result<Vec<md2pdf_core::Asse
         let file = directory.join(&image.path);
         let bytes = std::fs::read(&file).map_err(|e| {
             format!(
-                "cannot read {} for the image at line {}: {e}",
+                "cannot read {} for the image {}: {e}",
                 file.display(),
-                image.line
+                image.location
             )
         })?;
 
@@ -122,6 +142,41 @@ fn read_assets(markdown: &str, directory: &Path) -> Result<Vec<md2pdf_core::Asse
         });
     }
     Ok(assets)
+}
+
+/// Read every section file the master names, in the order it names them.
+///
+/// **This runs before the other two lists and before `--emit-typst`**, because
+/// the markers are in the master's own text and every later question is about
+/// the document they assemble into. One extra round trip through `core`, no
+/// recursion here, and one place that ever concatenates — which is `core`,
+/// because it is the joining that builds the map every message is translated
+/// through.
+///
+/// A section that will not open is exit 1 naming the resolved path, the line the
+/// master named it on, and the message the OS gave — the third of the same
+/// sentence the image and the bibliography already print.
+fn read_sections(markdown: &str, directory: &Path) -> Result<Vec<md2pdf_core::Asset>, String> {
+    let named = md2pdf_core::section_paths(markdown).map_err(|e| e.to_string())?;
+
+    let mut sections = Vec::with_capacity(named.len());
+    for section in named {
+        let file = directory.join(&section.path);
+        let bytes = std::fs::read(&file).map_err(|e| {
+            format!(
+                "cannot read {} for the section {}: {e}",
+                file.display(),
+                section.location
+            )
+        })?;
+
+        sections.push(md2pdf_core::Asset {
+            path: section.path,
+            bytes,
+        });
+    }
+
+    Ok(sections)
 }
 
 /// The input path with its extension replaced by `.pdf`.

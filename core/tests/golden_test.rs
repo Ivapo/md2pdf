@@ -5,7 +5,7 @@
 //! read the same ones.
 
 use md2pdf_core::{
-    Asset, Error, ImageRef, image_paths, md_to_pdf, md_to_pdf_with_anchors, md_to_typst,
+    Asset, Error, ImageRef, Location, image_paths, md_to_pdf, md_to_pdf_with_anchors, md_to_typst,
 };
 
 const BASIC_MD: &str = include_str!("../../tests/fixtures/basic.md");
@@ -115,6 +115,37 @@ fn images_assets() -> Vec<Asset> {
     ]
 }
 
+/// The master, and the three files it names in the order it names them.
+///
+/// Four files and one document: `mpdf-008` Phase 1's own fixture, and the only
+/// pair here whose golden is not the emitter's answer to a single string.
+const MULTI_FILE_MD: &str = include_str!("../../tests/fixtures/multi_file.md");
+const MULTI_FILE_TYP: &str = include_str!("../../tests/golden/multi_file.typ");
+const INTRODUCTION_MD: &str = include_str!("../../tests/fixtures/sections/introduction.md");
+const METHOD_MD: &str = include_str!("../../tests/fixtures/sections/method.md");
+const RESULTS_MD: &str = include_str!("../../tests/fixtures/sections/results.md");
+
+/// The three sections, on the channel an image and a bibliography already ride.
+fn multi_file_sections() -> Vec<Asset> {
+    vec![
+        section("sections/introduction.md", INTRODUCTION_MD),
+        section("sections/method.md", METHOD_MD),
+        section("sections/results.md", RESULTS_MD),
+    ]
+}
+
+/// The same three, and the two images they name between them.
+fn multi_file_assets() -> Vec<Asset> {
+    let mut assets = multi_file_sections();
+    assets.push(asset("dot.png", DOT_PNG));
+    assets.push(asset("mark.svg", MARK_SVG));
+    assets
+}
+
+fn section(path: &str, text: &str) -> Asset {
+    asset(path, text.as_bytes())
+}
+
 fn asset(path: &str, bytes: &[u8]) -> Asset {
     Asset {
         path: path.to_string(),
@@ -124,7 +155,7 @@ fn asset(path: &str, bytes: &[u8]) -> Asset {
 
 #[test]
 fn basic_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(BASIC_MD).unwrap(), BASIC_TYP);
+    assert_eq!(md_to_typst(BASIC_MD, &[]).unwrap(), BASIC_TYP);
 }
 
 #[test]
@@ -136,7 +167,7 @@ fn basic_fixture_compiles_to_a_pdf() {
 
 #[test]
 fn hostile_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(HOSTILE_MD).unwrap(), HOSTILE_TYP);
+    assert_eq!(md_to_typst(HOSTILE_MD, &[]).unwrap(), HOSTILE_TYP);
 }
 
 /// Every character the spec names must appear escaped in the golden file.
@@ -175,8 +206,11 @@ fn hostile_fixture_compiles_to_a_pdf() {
 #[test]
 fn line_numbers_survive_a_frontmatter_block() {
     let md = "---\ntitle: A Title\n---\n\n# Heading\n\n<div>a block</div>\n";
-    match md_to_typst(md) {
-        Err(Error::UnsupportedConstruct { line, .. }) => assert_eq!(line, 7),
+    match md_to_typst(md, &[]) {
+        Err(Error::UnsupportedConstruct {
+            location: Location { file: None, line },
+            ..
+        }) => assert_eq!(line, 7),
         other => panic!("expected an UnsupportedConstruct error, got {other:?}"),
     }
 }
@@ -185,7 +219,7 @@ fn line_numbers_survive_a_frontmatter_block() {
 
 #[test]
 fn the_frontmatter_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(FRONTMATTER_MD).unwrap(), FRONTMATTER_TYP);
+    assert_eq!(md_to_typst(FRONTMATTER_MD, &[]).unwrap(), FRONTMATTER_TYP);
 }
 
 #[test]
@@ -197,7 +231,10 @@ fn the_frontmatter_fixture_compiles_to_a_pdf() {
 
 #[test]
 fn the_single_column_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(SINGLE_COLUMN_MD).unwrap(), SINGLE_COLUMN_TYP);
+    assert_eq!(
+        md_to_typst(SINGLE_COLUMN_MD, &[]).unwrap(),
+        SINGLE_COLUMN_TYP
+    );
 }
 
 #[test]
@@ -214,7 +251,7 @@ fn the_single_column_fixture_compiles_to_a_pdf() {
 /// message that points at the key it dropped.
 #[test]
 fn the_generated_source_carries_the_title_and_the_author() {
-    let typst_source = md_to_typst(FRONTMATTER_MD).unwrap();
+    let typst_source = md_to_typst(FRONTMATTER_MD, &[]).unwrap();
     assert!(
         typst_source.contains("title: \"A Minimal Example\""),
         "the title is missing"
@@ -229,7 +266,7 @@ fn the_generated_source_carries_the_title_and_the_author() {
 #[test]
 fn absent_frontmatter_gets_every_default() {
     assert!(
-        md_to_typst(BASIC_MD).unwrap().contains(
+        md_to_typst(BASIC_MD, &[]).unwrap().contains(
             "template.with(title: none, author: none, columns: 2, date: none, equations: \"plain\", figures: \"flat\")"
         ),
         "the defaults did not reach the template call"
@@ -238,8 +275,11 @@ fn absent_frontmatter_gets_every_default() {
 
 #[test]
 fn an_unknown_frontmatter_key_is_an_error_that_names_it() {
-    match md_to_typst(UNKNOWN_KEY_MD) {
-        Err(Error::Frontmatter { line, problem }) => {
+    match md_to_typst(UNKNOWN_KEY_MD, &[]) {
+        Err(Error::Frontmatter {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 3);
             assert!(problem.contains("subtitle"), "problem was: {problem}");
         }
@@ -250,8 +290,11 @@ fn an_unknown_frontmatter_key_is_an_error_that_names_it() {
 #[test]
 fn a_columns_value_outside_the_schema_is_an_error_that_names_the_key() {
     let md = "---\ncolumns: 3\n---\n\n# Heading\n";
-    match md_to_typst(md) {
-        Err(Error::Frontmatter { line, problem }) => {
+    match md_to_typst(md, &[]) {
+        Err(Error::Frontmatter {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 2);
             assert!(problem.contains("columns"), "problem was: {problem}");
         }
@@ -266,7 +309,7 @@ fn a_columns_value_outside_the_schema_is_an_error_that_names_the_key() {
 #[test]
 fn a_frontmatter_error_wins_over_a_later_construct_error() {
     let md = "---\nsubtitle: Bad\n---\n\n<div>a block</div>\n";
-    match md_to_typst(md) {
+    match md_to_typst(md, &[]) {
         Err(Error::Frontmatter { problem, .. }) => {
             assert!(problem.contains("subtitle"), "problem was: {problem}");
         }
@@ -278,7 +321,7 @@ fn a_frontmatter_error_wins_over_a_later_construct_error() {
 
 #[test]
 fn the_inline_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(INLINE_MD).unwrap(), INLINE_TYP);
+    assert_eq!(md_to_typst(INLINE_MD, &[]).unwrap(), INLINE_TYP);
 }
 
 #[test]
@@ -317,7 +360,7 @@ fn the_inline_golden_uses_the_function_forms() {
 
 #[test]
 fn the_hostile_code_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(HOSTILE_CODE_MD).unwrap(), HOSTILE_CODE_TYP);
+    assert_eq!(md_to_typst(HOSTILE_CODE_MD, &[]).unwrap(), HOSTILE_CODE_TYP);
 }
 
 #[test]
@@ -352,7 +395,7 @@ fn the_hostile_code_golden_applies_only_the_string_escape() {
 
 #[test]
 fn the_blocks_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(BLOCKS_MD).unwrap(), BLOCKS_TYP);
+    assert_eq!(md_to_typst(BLOCKS_MD, &[]).unwrap(), BLOCKS_TYP);
 }
 
 #[test]
@@ -406,7 +449,7 @@ fn the_blocks_golden_carries_each_construct() {
 
 #[test]
 fn the_list_spacing_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(LIST_SPACING_MD).unwrap(), LIST_SPACING_TYP);
+    assert_eq!(md_to_typst(LIST_SPACING_MD, &[]).unwrap(), LIST_SPACING_TYP);
 }
 
 #[test]
@@ -437,7 +480,7 @@ fn the_two_list_spacings_differ_only_in_the_blank_lines() {
 
 #[test]
 fn the_links_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(LINKS_MD).unwrap(), LINKS_TYP);
+    assert_eq!(md_to_typst(LINKS_MD, &[]).unwrap(), LINKS_TYP);
 }
 
 #[test]
@@ -506,8 +549,11 @@ fn the_links_golden_carries_each_form() {
 /// would each need one.
 #[test]
 fn a_raw_html_block_is_an_error_that_names_the_construct_and_the_line() {
-    match md_to_typst(HTML_MD) {
-        Err(Error::UnsupportedConstruct { construct, line }) => {
+    match md_to_typst(HTML_MD, &[]) {
+        Err(Error::UnsupportedConstruct {
+            construct,
+            location: Location { file: None, line },
+        }) => {
             assert_eq!(construct, "raw HTML block");
             assert_eq!(line, 5);
         }
@@ -520,8 +566,11 @@ fn a_raw_html_block_is_an_error_that_names_the_construct_and_the_line() {
 #[test]
 fn an_empty_link_destination_is_an_error_that_names_the_construct_and_the_line() {
     let md = "# Heading\n\nAn [empty destination]() in a sentence.\n";
-    match md_to_typst(md) {
-        Err(Error::UnsupportedConstruct { construct, line }) => {
+    match md_to_typst(md, &[]) {
+        Err(Error::UnsupportedConstruct {
+            construct,
+            location: Location { file: None, line },
+        }) => {
             assert_eq!(construct, "link with an empty destination");
             assert_eq!(line, 3);
         }
@@ -534,8 +583,11 @@ fn an_empty_link_destination_is_an_error_that_names_the_construct_and_the_line()
 #[test]
 fn an_empty_reference_definition_is_the_same_error() {
     let md = "# Heading\n\nA [reference link][ref] in a sentence.\n\n[ref]: <>\n";
-    match md_to_typst(md) {
-        Err(Error::UnsupportedConstruct { construct, line }) => {
+    match md_to_typst(md, &[]) {
+        Err(Error::UnsupportedConstruct {
+            construct,
+            location: Location { file: None, line },
+        }) => {
             assert_eq!(construct, "link with an empty destination");
             assert_eq!(line, 3);
         }
@@ -548,8 +600,11 @@ fn an_empty_reference_definition_is_the_same_error() {
 #[test]
 fn a_link_title_is_an_error_that_names_the_construct_and_the_line() {
     let md = "# Heading\n\nA [titled link](https://typst.app \"a title\") in a sentence.\n";
-    match md_to_typst(md) {
-        Err(Error::UnsupportedConstruct { construct, line }) => {
+    match md_to_typst(md, &[]) {
+        Err(Error::UnsupportedConstruct {
+            construct,
+            location: Location { file: None, line },
+        }) => {
             assert_eq!(construct, "link with a title");
             assert_eq!(line, 3);
         }
@@ -561,7 +616,7 @@ fn a_link_title_is_an_error_that_names_the_construct_and_the_line() {
 #[test]
 fn an_empty_link_title_is_not_an_error() {
     let md = "# Heading\n\nA [link](https://typst.app \"\") in a sentence.\n";
-    let typst = md_to_typst(md).unwrap();
+    let typst = md_to_typst(md, &[]).unwrap();
     assert!(
         typst.contains(r#"#link("https://typst.app")[link]"#),
         "the link did not survive its empty title: {typst}"
@@ -572,7 +627,7 @@ fn an_empty_link_title_is_not_an_error() {
 
 #[test]
 fn the_table_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(TABLE_MD).unwrap(), TABLE_TYP);
+    assert_eq!(md_to_typst(TABLE_MD, &[]).unwrap(), TABLE_TYP);
 }
 
 /// The compile is what exercises the template's header rule, which no golden
@@ -648,7 +703,7 @@ fn the_template_sets_the_header_row_in_strong_type() {
 #[test]
 fn a_single_column_table_emits_an_array_of_one_alignment() {
     let md = "| head |\n| :--- |\n| body |\n";
-    let typst = md_to_typst(md).unwrap();
+    let typst = md_to_typst(md, &[]).unwrap();
     assert!(
         typst.contains("align: (left,),"),
         "the one alignment is not an array: {typst}"
@@ -659,7 +714,7 @@ fn a_single_column_table_emits_an_array_of_one_alignment() {
 #[test]
 fn a_table_without_alignments_omits_the_argument() {
     let md = "| a | b |\n| - | - |\n| 1 | 2 |\n";
-    let typst = md_to_typst(md).unwrap();
+    let typst = md_to_typst(md, &[]).unwrap();
     assert!(
         !typst.contains("align:"),
         "an alignment argument that says nothing was written: {typst}"
@@ -670,7 +725,7 @@ fn a_table_without_alignments_omits_the_argument() {
 
 #[test]
 fn the_images_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(IMAGES_MD).unwrap(), IMAGES_TYP);
+    assert_eq!(md_to_typst(IMAGES_MD, &[]).unwrap(), IMAGES_TYP);
 }
 
 /// The compile is the phase's observable, at the library level: markdown that
@@ -764,7 +819,7 @@ fn the_alt_text_flattens_the_image_content() {
             "the link wrapper, contributing nothing",
         ),
     ] {
-        let typst = md_to_typst(md).unwrap();
+        let typst = md_to_typst(md, &[]).unwrap();
         assert!(
             typst.contains(expected),
             "the alt capture does not flatten {what} as `{expected}`: {typst}"
@@ -775,8 +830,11 @@ fn the_alt_text_flattens_the_image_content() {
 /// A construct outside the dialect still errors inside alt text.
 #[test]
 fn an_out_of_dialect_construct_inside_alt_text_is_still_an_error() {
-    match md_to_typst("![before <b>bold</b> after](dot.png)\n") {
-        Err(Error::UnsupportedConstruct { construct, line }) => {
+    match md_to_typst("![before <b>bold</b> after](dot.png)\n", &[]) {
+        Err(Error::UnsupportedConstruct {
+            construct,
+            location: Location { file: None, line },
+        }) => {
             assert_eq!(construct, "raw HTML");
             assert_eq!(line, 1);
         }
@@ -792,23 +850,23 @@ fn an_out_of_dialect_construct_inside_alt_text_is_still_an_error() {
 fn image_paths_lists_every_reference_in_document_order() {
     let md = "![one](a.png)\n\nText ![two](b.svg) more.\n\n![again](a.png)\n\n![outer ![in](c.png) x](d.png)\n";
     assert_eq!(
-        image_paths(md).unwrap(),
+        image_paths(md, &[]).unwrap(),
         vec![
             ImageRef {
                 path: "a.png".to_string(),
-                line: 1
+                location: Location::at(1)
             },
             ImageRef {
                 path: "b.svg".to_string(),
-                line: 3
+                location: Location::at(3)
             },
             ImageRef {
                 path: "a.png".to_string(),
-                line: 5
+                location: Location::at(5)
             },
             ImageRef {
                 path: "d.png".to_string(),
-                line: 7
+                location: Location::at(7)
             },
         ]
     );
@@ -873,10 +931,10 @@ fn each_bad_image_destination_names_its_shape_and_its_line() {
             "image with no file extension",
         ),
     ] {
-        match md_to_typst(md) {
+        match md_to_typst(md, &[]) {
             Err(Error::UnsupportedConstruct {
                 construct: found,
-                line,
+                location: Location { file: None, line },
             }) => {
                 assert_eq!(found, construct, "for: {md}");
                 assert_eq!(line, 3, "for: {md}");
@@ -890,7 +948,7 @@ fn each_bad_image_destination_names_its_shape_and_its_line() {
 /// mirrors the link arm, which draws the same line.
 #[test]
 fn an_empty_image_title_is_not_an_error() {
-    let typst = md_to_typst("# H\n\nA ![alt](a.png \"\") here.\n").unwrap();
+    let typst = md_to_typst("# H\n\nA ![alt](a.png \"\") here.\n", &[]).unwrap();
     assert!(
         typst.contains(r#"#box(image("a.png", alt: "alt"))"#),
         "the image did not survive its empty title: {typst}"
@@ -904,7 +962,10 @@ fn an_empty_image_title_is_not_an_error() {
 #[test]
 fn a_missing_image_file_names_the_path_and_the_line() {
     match md_to_pdf("# H\n\n![alt](missing.png)\n", &[]) {
-        Err(Error::MissingImage { path, line }) => {
+        Err(Error::MissingImage {
+            path,
+            location: Location { file: None, line },
+        }) => {
             assert_eq!(path, "missing.png");
             assert_eq!(line, 3);
         }
@@ -916,7 +977,10 @@ fn a_missing_image_file_names_the_path_and_the_line() {
 #[test]
 fn a_repeated_missing_path_reports_its_first_reference() {
     match md_to_pdf("# H\n\n![one](twice.png)\n\n![two](twice.png)\n", &[]) {
-        Err(Error::MissingImage { path, line }) => {
+        Err(Error::MissingImage {
+            path,
+            location: Location { file: None, line },
+        }) => {
             assert_eq!(path, "twice.png");
             assert_eq!(line, 3);
         }
@@ -932,7 +996,11 @@ fn a_repeated_missing_path_reports_its_first_reference() {
 fn image_bytes_that_the_extension_does_not_name_are_an_error() {
     let assets = vec![asset("mark.svg", DOT_PNG)];
     match md_to_pdf("# H\n\n![alt](mark.svg)\n", &assets) {
-        Err(Error::ImageFormat { path, line, format }) => {
+        Err(Error::ImageFormat {
+            path,
+            location: Location { file: None, line },
+            format,
+        }) => {
             assert_eq!(path, "mark.svg");
             assert_eq!(line, 3);
             assert_eq!(format, "SVG");
@@ -971,7 +1039,7 @@ fn each_format_check_reads_the_magic_its_extension_names() {
 
 #[test]
 fn the_footnotes_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(FOOTNOTES_MD).unwrap(), FOOTNOTES_TYP);
+    assert_eq!(md_to_typst(FOOTNOTES_MD, &[]).unwrap(), FOOTNOTES_TYP);
 }
 
 /// The compile is the phase's observable, at the library level: markdown whose
@@ -1068,10 +1136,14 @@ fn each_footnote_error_shape_names_its_construct_and_its_line() {
             "the reference inside a definition",
         ),
     ] {
-        match md_to_typst(md) {
+        match md_to_typst(md, &[]) {
             Err(Error::UnsupportedConstruct {
                 construct: found,
-                line: found_line,
+                location:
+                    Location {
+                        file: None,
+                        line: found_line,
+                    },
             }) => {
                 assert_eq!(found, construct, "for {what}");
                 assert_eq!(found_line, line, "for {what}");
@@ -1098,7 +1170,7 @@ fn a_frontmatter_error_wins_over_a_later_footnote_error() {
             "an uncited definition",
         ),
     ] {
-        match md_to_typst(md) {
+        match md_to_typst(md, &[]) {
             Err(Error::Frontmatter { problem, .. }) => {
                 assert!(problem.contains("subtitle"), "problem was: {problem}");
             }
@@ -1116,19 +1188,19 @@ fn a_frontmatter_error_wins_over_a_later_footnote_error() {
 fn image_paths_lists_a_definitions_images_at_its_first_reference() {
     let md = "![one](a.png)\n\nText[^n] and more[^n].\n\n![two](b.png)\n\n[^n]: A note ![in](c.png) here.\n";
     assert_eq!(
-        image_paths(md).unwrap(),
+        image_paths(md, &[]).unwrap(),
         vec![
             ImageRef {
                 path: "a.png".to_string(),
-                line: 1
+                location: Location::at(1)
             },
             ImageRef {
                 path: "c.png".to_string(),
-                line: 7
+                location: Location::at(7)
             },
             ImageRef {
                 path: "b.png".to_string(),
-                line: 5
+                location: Location::at(5)
             },
         ]
     );
@@ -1141,7 +1213,7 @@ fn image_paths_lists_a_definitions_images_at_its_first_reference() {
 /// somewhere in the document.
 #[test]
 fn a_footnote_reference_with_no_definition_stays_text() {
-    let typst = md_to_typst("# H\n\nA dangling reference[^gone] here.\n").unwrap();
+    let typst = md_to_typst("# H\n\nA dangling reference[^gone] here.\n", &[]).unwrap();
     assert!(
         typst.contains(r"reference\[^gone\] here."),
         "the dangling reference did not stay escaped text: {typst}"
@@ -1152,7 +1224,10 @@ fn a_footnote_reference_with_no_definition_stays_text() {
 
 #[test]
 fn the_strikethrough_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(STRIKETHROUGH_MD).unwrap(), STRIKETHROUGH_TYP);
+    assert_eq!(
+        md_to_typst(STRIKETHROUGH_MD, &[]).unwrap(),
+        STRIKETHROUGH_TYP
+    );
 }
 
 /// The compile is the phase's observable, at the library level: markdown whose
@@ -1222,10 +1297,10 @@ fn the_strikethrough_golden_carries_each_form() {
 #[test]
 fn each_refused_construct_names_itself_and_its_line() {
     for (md, construct, what) in [(TASK_LIST_MD, "task list marker", "the task list marker")] {
-        match md_to_typst(md) {
+        match md_to_typst(md, &[]) {
             Err(Error::UnsupportedConstruct {
                 construct: found,
-                line,
+                location: Location { file: None, line },
             }) => {
                 assert_eq!(found, construct, "for {what}");
                 assert_eq!(line, 3, "for {what}");
@@ -1239,7 +1314,7 @@ fn each_refused_construct_names_itself_and_its_line() {
 
 #[test]
 fn the_dated_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(DATED_MD).unwrap(), DATED_TYP);
+    assert_eq!(md_to_typst(DATED_MD, &[]).unwrap(), DATED_TYP);
 }
 
 /// The compile is half of the phase's observable: the article look, dated.
@@ -1252,7 +1327,10 @@ fn the_dated_fixture_compiles_to_a_pdf() {
 
 #[test]
 fn the_press_release_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(PRESS_RELEASE_MD).unwrap(), PRESS_RELEASE_TYP);
+    assert_eq!(
+        md_to_typst(PRESS_RELEASE_MD, &[]).unwrap(),
+        PRESS_RELEASE_TYP
+    );
 }
 
 /// The other half: the same dialect in a second look.
@@ -1270,7 +1348,7 @@ fn the_press_release_fixture_compiles_to_a_pdf() {
 /// file, or that drops the date, fails with a message naming what it dropped.
 #[test]
 fn the_default_look_keeps_the_import_line_every_document_carried() {
-    let typst_source = md_to_typst(DATED_MD).unwrap();
+    let typst_source = md_to_typst(DATED_MD, &[]).unwrap();
     assert!(
         typst_source.starts_with("#import \"template.typ\": template, divider\n"),
         "the import line moved: {typst_source}"
@@ -1288,7 +1366,7 @@ fn the_default_look_keeps_the_import_line_every_document_carried() {
 /// column count comes from the look, because this fixture names none.
 #[test]
 fn a_press_release_names_its_own_file_and_takes_one_column() {
-    let typst_source = md_to_typst(PRESS_RELEASE_MD).unwrap();
+    let typst_source = md_to_typst(PRESS_RELEASE_MD, &[]).unwrap();
     assert!(
         typst_source.starts_with("#import \"press-release.typ\": template, divider\n"),
         "the import does not name the selected look: {typst_source}"
@@ -1310,7 +1388,7 @@ fn an_explicit_column_count_wins_over_the_looks_convention() {
         "---\ntemplate: press-release\ncolumns: 2\n---\n\n# Heading\n",
         "---\ncolumns: 2\ntemplate: press-release\n---\n\n# Heading\n",
     ] {
-        let typst_source = md_to_typst(md).unwrap();
+        let typst_source = md_to_typst(md, &[]).unwrap();
         assert!(
             typst_source.contains("columns: 2,"),
             "the explicit count lost: {typst_source}"
@@ -1321,8 +1399,11 @@ fn an_explicit_column_count_wins_over_the_looks_convention() {
 /// A look outside the set names the key and lists what it accepts.
 #[test]
 fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
-    match md_to_typst(UNKNOWN_TEMPLATE_MD) {
-        Err(Error::Frontmatter { line, problem }) => {
+    match md_to_typst(UNKNOWN_TEMPLATE_MD, &[]) {
+        Err(Error::Frontmatter {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 3);
             for needle in ["template", "article", "press-release"] {
                 assert!(problem.contains(needle), "problem was: {problem}");
@@ -1381,7 +1462,7 @@ fn every_bundled_template_meets_the_call_contract() {
 
 #[test]
 fn the_math_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(MATH_MD).unwrap(), MATH_TYP);
+    assert_eq!(md_to_typst(MATH_MD, &[]).unwrap(), MATH_TYP);
 }
 
 /// The phase's observable, and the case that proves the bundled prelude
@@ -1487,10 +1568,10 @@ fn each_math_refusal_names_its_latex_and_its_line() {
             "the deferred command",
         ),
     ] {
-        match md_to_typst(md) {
+        match md_to_typst(md, &[]) {
             Err(Error::Math {
                 problem: found,
-                line,
+                location: Location { file: None, line },
             }) => {
                 assert_eq!(found, problem, "for {what}");
                 assert_eq!(line, 3, "for {what}");
@@ -1508,7 +1589,7 @@ fn each_math_refusal_names_its_latex_and_its_line() {
 #[test]
 fn the_escaped_percent_sign_converts_and_compiles() {
     let md = "# H\n\nA $100\\% of y$ here.\n";
-    assert!(md_to_typst(md).unwrap().contains("$1 0 0 % o f y$"));
+    assert!(md_to_typst(md, &[]).unwrap().contains("$1 0 0 % o f y$"));
 
     let pdf = md_to_pdf(md, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
@@ -1522,8 +1603,11 @@ fn the_escaped_percent_sign_converts_and_compiles() {
 #[test]
 fn a_document_without_math_imports_no_prelude() {
     for (typst, what) in [
-        (md_to_typst(BASIC_MD).unwrap(), "the basic fixture"),
-        (md_to_typst(FOOTNOTES_MD).unwrap(), "the footnotes fixture"),
+        (md_to_typst(BASIC_MD, &[]).unwrap(), "the basic fixture"),
+        (
+            md_to_typst(FOOTNOTES_MD, &[]).unwrap(),
+            "the footnotes fixture",
+        ),
     ] {
         assert!(!typst.contains("math.typ"), "{what} imports the prelude");
     }
@@ -1543,7 +1627,7 @@ fn a_document_without_math_imports_no_prelude() {
 #[test]
 fn math_in_alt_text_becomes_its_latex_source() {
     let md = "# H\n\nA ![a $x+y$ b](dot.png) here.\n";
-    let typst = md_to_typst(md).unwrap();
+    let typst = md_to_typst(md, &[]).unwrap();
     assert!(typst.contains(r#"alt: "a x+y b""#), "{typst}");
     assert!(!typst.contains("math.typ"), "{typst}");
 
@@ -1561,7 +1645,7 @@ fn math_in_alt_text_becomes_its_latex_source() {
 #[test]
 fn math_inside_a_footnote_definition_imports_the_prelude() {
     let md = "# H\n\nA claim.[^1]\n\n[^1]: Because $\\sqrt{x} \\leq x$ here.\n";
-    let typst = md_to_typst(md).unwrap();
+    let typst = md_to_typst(md, &[]).unwrap();
     assert!(typst.contains("math.typ"), "{typst}");
     assert!(typst.contains("$mitexsqrt(x ) <= x$"), "{typst}");
 
@@ -1573,7 +1657,7 @@ fn math_inside_a_footnote_definition_imports_the_prelude() {
 
 #[test]
 fn the_display_math_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(DISPLAY_MATH_MD).unwrap(), DISPLAY_MATH_TYP);
+    assert_eq!(md_to_typst(DISPLAY_MATH_MD, &[]).unwrap(), DISPLAY_MATH_TYP);
 }
 
 /// The phase's observable: a centred display equation, which is what a formula
@@ -1640,7 +1724,7 @@ fn the_display_math_golden_carries_each_form() {
 #[test]
 fn display_math_in_alt_text_becomes_its_latex_source() {
     let md = "# H\n\nA ![a $$x+y$$ b](dot.png) here.\n";
-    let typst = md_to_typst(md).unwrap();
+    let typst = md_to_typst(md, &[]).unwrap();
     assert!(typst.contains(r#"alt: "a x+y b""#), "{typst}");
     assert!(!typst.contains("math.typ"), "{typst}");
 
@@ -1657,8 +1741,11 @@ fn display_math_in_alt_text_becomes_its_latex_source() {
 #[test]
 fn a_refused_display_formula_names_its_latex_and_its_line() {
     let md = "# H\n\nA $$\\notacommand$$ here.\n";
-    match md_to_typst(md) {
-        Err(Error::Math { problem, line }) => {
+    match md_to_typst(md, &[]) {
+        Err(Error::Math {
+            problem,
+            location: Location { file: None, line },
+        }) => {
             assert_eq!(problem, r"unsupported command '\notacommand'");
             assert_eq!(line, 3);
         }
@@ -1696,7 +1783,7 @@ fn each_heading_is_anchored_at_its_own_line() {
     let md = "---\ntitle: T\n---\n\n# One\n\nText.\n\n## Two\n\nText.\n\n### Three\n\nText.\n";
 
     let rendered = md_to_pdf_with_anchors(md, &[]).unwrap();
-    let lines: Vec<usize> = rendered.anchors.iter().map(|a| a.line).collect();
+    let lines: Vec<usize> = rendered.anchors.iter().map(|a| a.location.line).collect();
     assert_eq!(lines, vec![5, 9, 13], "{:?}", rendered.anchors);
 
     let pages: Vec<usize> = rendered.anchors.iter().map(|a| a.page).collect();
@@ -1755,7 +1842,7 @@ fn a_heading_inside_a_footnote_definition_withdraws_the_anchors() {
 
     // The mismatch is real: the walk sees one heading and the document typesets
     // two.
-    let typst = md_to_typst(md).unwrap();
+    let typst = md_to_typst(md, &[]).unwrap();
     assert!(
         typst.contains("#footnote[= A heading in a note]"),
         "the definition no longer splices a heading: {typst}"
@@ -1792,7 +1879,7 @@ fn the_anchors_change_no_byte_of_the_pdf() {
 #[test]
 fn the_numbered_equations_fixture_matches_its_golden_file() {
     assert_eq!(
-        md_to_typst(NUMBERED_EQUATIONS_MD).unwrap(),
+        md_to_typst(NUMBERED_EQUATIONS_MD, &[]).unwrap(),
         NUMBERED_EQUATIONS_TYP
     );
 }
@@ -1872,8 +1959,11 @@ fn the_two_forms_of_the_default_compile_to_the_same_bytes() {
 #[test]
 fn an_equations_value_outside_the_schema_is_an_error_that_lists_the_names() {
     let md = "---\nequations: yes\n---\n\n# Heading\n";
-    match md_to_typst(md) {
-        Err(Error::Frontmatter { line, problem }) => {
+    match md_to_typst(md, &[]) {
+        Err(Error::Frontmatter {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 2);
             for needle in ["equations", "plain", "numbered"] {
                 assert!(problem.contains(needle), "problem was: {problem}");
@@ -1901,7 +1991,7 @@ fn an_equations_value_outside_the_schema_is_an_error_that_lists_the_names() {
 /// Phase 2 wrote a fixture of its own rather than extending `math.md`.
 #[test]
 fn the_captions_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(CAPTIONS_MD).unwrap(), CAPTIONS_TYP);
+    assert_eq!(md_to_typst(CAPTIONS_MD, &[]).unwrap(), CAPTIONS_TYP);
 }
 
 #[test]
@@ -1977,7 +2067,7 @@ fn the_captions_golden_carries_each_form() {
 /// absence of.
 #[test]
 fn an_uncaptioned_standalone_image_is_not_wrapped() {
-    assert_eq!(md_to_typst(IMAGES_MD).unwrap(), IMAGES_TYP);
+    assert_eq!(md_to_typst(IMAGES_MD, &[]).unwrap(), IMAGES_TYP);
     assert!(
         !IMAGES_TYP.contains("#figure("),
         "the images golden gained a figure"
@@ -2011,10 +2101,14 @@ fn each_caption_refusal_names_its_construct_and_its_line() {
             "a second caption for one figure",
         ),
     ] {
-        match md_to_typst(md) {
+        match md_to_typst(md, &[]) {
             Err(Error::UnsupportedConstruct {
                 construct: found,
-                line: found_line,
+                location:
+                    Location {
+                        file: None,
+                        line: found_line,
+                    },
             }) => {
                 assert_eq!(found, construct, "for {what}");
                 assert_eq!(found_line, line, "for {what}");
@@ -2063,7 +2157,7 @@ fn every_bundled_template_styles_a_caption() {
 #[test]
 fn the_captioned_blocks_fixture_matches_its_golden_file() {
     assert_eq!(
-        md_to_typst(CAPTIONED_BLOCKS_MD).unwrap(),
+        md_to_typst(CAPTIONED_BLOCKS_MD, &[]).unwrap(),
         CAPTIONED_BLOCKS_TYP
     );
 }
@@ -2157,8 +2251,8 @@ fn the_captioned_blocks_golden_carries_each_form() {
 /// argument puts the looser word on every golden's `template.with` line.
 #[test]
 fn an_uncaptioned_table_and_code_block_are_not_wrapped() {
-    assert_eq!(md_to_typst(TABLE_MD).unwrap(), TABLE_TYP);
-    assert_eq!(md_to_typst(BLOCKS_MD).unwrap(), BLOCKS_TYP);
+    assert_eq!(md_to_typst(TABLE_MD, &[]).unwrap(), TABLE_TYP);
+    assert_eq!(md_to_typst(BLOCKS_MD, &[]).unwrap(), BLOCKS_TYP);
 
     for (golden, what) in [(TABLE_TYP, "table"), (BLOCKS_TYP, "blocks")] {
         assert!(
@@ -2210,10 +2304,14 @@ fn each_caption_refusal_holds_over_a_table_and_a_code_block() {
             "the second caption after a code block",
         ),
     ] {
-        match md_to_typst(&md) {
+        match md_to_typst(&md, &[]) {
             Err(Error::UnsupportedConstruct {
                 construct: found,
-                line: found_line,
+                location:
+                    Location {
+                        file: None,
+                        line: found_line,
+                    },
             }) => {
                 assert_eq!(found, construct, "for {what}");
                 assert_eq!(found_line, line, "for {what}");
@@ -2233,7 +2331,7 @@ fn each_caption_refusal_holds_over_a_table_and_a_code_block() {
 /// that holds the other half.
 #[test]
 fn an_indented_code_block_takes_a_caption_too() {
-    let typst = md_to_typst("# H\n\n    x = 1\n\n: The block above.\n").unwrap();
+    let typst = md_to_typst("# H\n\n    x = 1\n\n: The block above.\n", &[]).unwrap();
     assert!(
         typst.contains(r#"#figure(raw(block: true, "x = 1"), caption: [The block above.])"#),
         "an indented block took no caption: {typst}"
@@ -2257,7 +2355,7 @@ fn an_indented_code_block_takes_a_caption_too() {
 #[test]
 fn the_cross_references_fixture_matches_its_golden_file() {
     assert_eq!(
-        md_to_typst(CROSS_REFERENCES_MD).unwrap(),
+        md_to_typst(CROSS_REFERENCES_MD, &[]).unwrap(),
         CROSS_REFERENCES_TYP
     );
 }
@@ -2388,7 +2486,7 @@ fn a_reference_stays_true_when_a_figure_is_inserted_above_it() {
         (&one, "the document without the insertion"),
         (&two, "with it"),
     ] {
-        let typst = md_to_typst(md).unwrap();
+        let typst = md_to_typst(md, &[]).unwrap();
         assert!(
             typst.contains(sentence),
             "{what} did not carry the reference as `{sentence}`: {typst}"
@@ -2451,9 +2549,13 @@ fn each_name_refusal_names_the_authors_line() {
             "a reference to a name the document does not declare",
         ),
     ] {
-        match md_to_typst(&md) {
+        match md_to_typst(&md, &[]) {
             Err(Error::Name {
-                line: found,
+                location:
+                    Location {
+                        file: None,
+                        line: found,
+                    },
                 problem,
             }) => {
                 assert_eq!(found, line, "for {what}");
@@ -2478,8 +2580,11 @@ fn each_name_refusal_names_the_authors_line() {
 fn the_undeclared_reference_reported_is_the_one_on_the_earliest_line() {
     let md = "# H\n\nA note[^n] cited early.\n\nA reference [](#early) here.\n\n[^n]: The note holds [](#late).\n";
 
-    match md_to_typst(md) {
-        Err(Error::Name { line, problem }) => {
+    match md_to_typst(md, &[]) {
+        Err(Error::Name {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 5, "the earlier of the two undeclared references");
             assert!(problem.contains("'early'"), "problem: {problem}");
         }
@@ -2499,8 +2604,11 @@ fn the_undeclared_reference_reported_is_the_one_on_the_earliest_line() {
 fn the_second_caption_refusal_survives_a_named_first_caption() {
     let md = "# H\n\n![alt](dot.png)\n\n: A caption. {#fig:one}\n\n: A second one.\n";
 
-    match md_to_typst(md) {
-        Err(Error::UnsupportedConstruct { construct, line }) => {
+    match md_to_typst(md, &[]) {
+        Err(Error::UnsupportedConstruct {
+            construct,
+            location: Location { file: None, line },
+        }) => {
             assert_eq!(construct, "second caption for one figure");
             assert_eq!(line, 7);
         }
@@ -2515,8 +2623,11 @@ fn the_second_caption_refusal_survives_a_named_first_caption() {
 /// "Figure 1:" on the page.
 #[test]
 fn a_caption_line_carrying_only_a_name_is_refused() {
-    match md_to_typst("# H\n\n![alt](dot.png)\n\n: {#fig:one}\n") {
-        Err(Error::UnsupportedConstruct { construct, line }) => {
+    match md_to_typst("# H\n\n![alt](dot.png)\n\n: {#fig:one}\n", &[]) {
+        Err(Error::UnsupportedConstruct {
+            construct,
+            location: Location { file: None, line },
+        }) => {
             assert_eq!(construct, "caption with no text");
             assert_eq!(line, 5);
         }
@@ -2553,7 +2664,7 @@ fn a_marker_line_after_a_display_equation_is_still_prose() {
     // A name written on a `: ` line beneath an equation is prose, marker and
     // all: there is no figure above it to record, and the group is a paragraph
     // away from the equation rather than adjacent to it.
-    let typst = md_to_typst("# H\n\n$$\nx = 1\n$$\n\n: A line. {#eq:one}\n").unwrap();
+    let typst = md_to_typst("# H\n\n$$\nx = 1\n$$\n\n: A line. {#eq:one}\n", &[]).unwrap();
     assert!(
         typst.contains("\n: A line. {\\#eq:one}"),
         "a name after an equation was read as a declaration: {typst}"
@@ -2568,7 +2679,10 @@ fn a_marker_line_after_a_display_equation_is_still_prose() {
 /// golden is shipped work gate (4) asserts does not move.
 #[test]
 fn the_equation_names_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(EQUATION_NAMES_MD).unwrap(), EQUATION_NAMES_TYP);
+    assert_eq!(
+        md_to_typst(EQUATION_NAMES_MD, &[]).unwrap(),
+        EQUATION_NAMES_TYP
+    );
 }
 
 #[test]
@@ -2630,8 +2744,11 @@ fn an_equation_reference_without_the_key_is_refused_naming_the_key() {
     let md =
         "---\nequations: plain\n---\n\n# H\n\n$$\nx = 1\n$$ {#eq:one}\n\nAs [](#eq:one) shows.\n";
 
-    match md_to_typst(md) {
-        Err(Error::Name { line, problem }) => {
+    match md_to_typst(md, &[]) {
+        Err(Error::Name {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 11, "the line the reference sits on");
             assert!(
                 problem.contains("equations: numbered"),
@@ -2655,7 +2772,7 @@ fn an_equation_reference_without_the_key_is_refused_naming_the_key() {
 #[test]
 fn a_name_on_an_equation_in_a_plain_document_is_not_refused() {
     assert_eq!(
-        md_to_typst(PLAIN_EQUATION_NAMES_MD).unwrap(),
+        md_to_typst(PLAIN_EQUATION_NAMES_MD, &[]).unwrap(),
         PLAIN_EQUATION_NAMES_TYP
     );
     assert!(
@@ -2735,7 +2852,7 @@ fn a_group_that_is_not_the_whole_run_names_nothing() {
             "a group a soft break away, which is no longer adjacent",
         ),
     ] {
-        let typst = md_to_typst(md).unwrap();
+        let typst = md_to_typst(md, &[]).unwrap();
         assert!(
             typst.contains(form),
             "{what} stopped reaching the page as prose: {typst}"
@@ -2770,9 +2887,11 @@ fn a_caption_holding_a_display_span_keeps_its_own_name() {
     // Emitted rather than read off the golden, for the reason above: this is
     // the case no other one covers, so it has to fail a wrong implementation on
     // its own bytes.
-    let typst =
-        md_to_typst("# H\n\n![alt](dot.png)\n\n: See $$x = 1$$ {#fig:one}\n\nAt [](#fig:one).\n")
-            .unwrap();
+    let typst = md_to_typst(
+        "# H\n\n![alt](dot.png)\n\n: See $$x = 1$$ {#fig:one}\n\nAt [](#fig:one).\n",
+        &[],
+    )
+    .unwrap();
     assert!(
         typst.contains(
             "#figure(image(\"dot.png\", alt: \"alt\"), caption: [See $ x = 1 $]) <fig:one>"
@@ -2840,9 +2959,13 @@ fn each_equation_name_refusal_names_the_authors_line() {
             "one namespace over an equation and a figure, refused where the second stands",
         ),
     ] {
-        match md_to_typst(&md) {
+        match md_to_typst(&md, &[]) {
             Err(Error::Name {
-                line: found,
+                location:
+                    Location {
+                        file: None,
+                        line: found,
+                    },
                 problem,
             }) => {
                 assert_eq!(found, line, "for {what}");
@@ -2868,10 +2991,14 @@ fn the_earliest_line_wins_across_both_reference_refusals() {
 
     // The equation reference stands first, so it is the error even though the
     // undeclared one below it is the older of the two classes.
-    match md_to_typst(&format!(
-        "{named}A [](#eq:one) here.\n\nAnd [](#missing).\n"
-    )) {
-        Err(Error::Name { line, problem }) => {
+    match md_to_typst(
+        &format!("{named}A [](#eq:one) here.\n\nAnd [](#missing).\n"),
+        &[],
+    ) {
+        Err(Error::Name {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 11);
             assert!(
                 problem.contains("equations: numbered"),
@@ -2882,10 +3009,14 @@ fn the_earliest_line_wins_across_both_reference_refusals() {
     }
 
     // Reversed, the undeclared one wins — so neither class is preferred.
-    match md_to_typst(&format!(
-        "{named}And [](#missing).\n\nA [](#eq:one) here.\n"
-    )) {
-        Err(Error::Name { line, problem }) => {
+    match md_to_typst(
+        &format!("{named}And [](#missing).\n\nA [](#eq:one) here.\n"),
+        &[],
+    ) {
+        Err(Error::Name {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 11);
             assert!(problem.contains("'missing'"), "problem: {problem}");
         }
@@ -2904,7 +3035,7 @@ fn the_earliest_line_wins_across_both_reference_refusals() {
 fn an_equation_named_inside_a_footnote_definition_still_needs_the_key() {
     let body = "# H\n\nA note[^n], and [](#eq:inside) reaches it.\n\n[^n]: The note holds a formula.\n\n    $$\n    x = 1\n    $$ {#eq:inside}\n";
 
-    let typst = md_to_typst(&format!("---\nequations: numbered\n---\n\n{body}")).unwrap();
+    let typst = md_to_typst(&format!("---\nequations: numbered\n---\n\n{body}"), &[]).unwrap();
     assert!(
         typst.contains("$ x = 1 $ <eq:inside>]<fn-1>"),
         "the label did not travel with the definition's body: {typst}"
@@ -2914,8 +3045,11 @@ fn an_equation_named_inside_a_footnote_definition_still_needs_the_key() {
         "the reference outside the definition did not resolve: {typst}"
     );
 
-    match md_to_typst(&format!("---\nequations: plain\n---\n\n{body}")) {
-        Err(Error::Name { line, problem }) => {
+    match md_to_typst(&format!("---\nequations: plain\n---\n\n{body}"), &[]) {
+        Err(Error::Name {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 7, "the line the reference sits on");
             assert!(
                 problem.contains("equations: numbered"),
@@ -2935,7 +3069,7 @@ fn an_equation_named_inside_a_footnote_definition_still_needs_the_key() {
 /// not move.
 #[test]
 fn the_groups_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(GROUPS_MD).unwrap(), GROUPS_TYP);
+    assert_eq!(md_to_typst(GROUPS_MD, &[]).unwrap(), GROUPS_TYP);
 }
 
 #[test]
@@ -3001,8 +3135,11 @@ fn the_groups_golden_carries_each_form() {
 fn a_group_caption_with_a_member_after_it_is_refused() {
     let md = "# H\n\n:::\n\n![a](dot.png)\n\n: A caption.\n\n![b](dot.png)\n\n:::\n";
 
-    match md_to_typst(md) {
-        Err(Error::UnsupportedConstruct { construct, line }) => {
+    match md_to_typst(md, &[]) {
+        Err(Error::UnsupportedConstruct {
+            construct,
+            location: Location { file: None, line },
+        }) => {
             assert_eq!(construct, "figure group caption with a member after it");
             assert_eq!(line, 7, "the line the `: ` sits on");
         }
@@ -3101,10 +3238,14 @@ fn each_group_refusal_names_its_construct_and_its_line() {
             "a heading inside a group",
         ),
     ] {
-        match md_to_typst(md) {
+        match md_to_typst(md, &[]) {
             Err(Error::UnsupportedConstruct {
                 construct: found,
-                line: found_line,
+                location:
+                    Location {
+                        file: None,
+                        line: found_line,
+                    },
             }) => {
                 assert_eq!(found, construct, "for {what}");
                 assert_eq!(found_line, line, "for {what}");
@@ -3148,7 +3289,7 @@ fn the_reservation_reaches_the_first_text_of_a_paragraph_and_nothing_else() {
             "a `:::` inside an indented code block",
         ),
     ] {
-        let typst = md_to_typst(md).unwrap();
+        let typst = md_to_typst(md, &[]).unwrap();
         assert!(
             typst.contains(form),
             "{what} stopped reaching the page unchanged: {typst}"
@@ -3220,13 +3361,13 @@ fn every_bundled_template_places_a_listing() {
 
 #[test]
 fn citations_fixture_matches_its_golden_file() {
-    assert_eq!(md_to_typst(CITATIONS_MD).unwrap(), CITATIONS_TYP);
+    assert_eq!(md_to_typst(CITATIONS_MD, &[]).unwrap(), CITATIONS_TYP);
 }
 
 #[test]
 fn citations_press_release_fixture_matches_its_golden_file() {
     assert_eq!(
-        md_to_typst(CITATIONS_PRESS_RELEASE_MD).unwrap(),
+        md_to_typst(CITATIONS_PRESS_RELEASE_MD, &[]).unwrap(),
         CITATIONS_PRESS_RELEASE_TYP
     );
 }
@@ -3349,7 +3490,7 @@ fn the_callback_claims_a_citation_and_nothing_else() {
             "a reference that resolves, which the callback never sees",
         ),
     ] {
-        let typst = md_to_typst(md).unwrap();
+        let typst = md_to_typst(md, &[]).unwrap();
         assert!(
             typst.contains(form),
             "{what} stopped reaching the page unchanged: {typst}"
@@ -3361,7 +3502,7 @@ fn the_callback_claims_a_citation_and_nothing_else() {
         HOSTILE_TYP.contains(r"an \[ open bracket, a \] close bracket"),
         "the hostile golden no longer carries its bracket pair"
     );
-    assert_eq!(md_to_typst(HOSTILE_MD).unwrap(), HOSTILE_TYP);
+    assert_eq!(md_to_typst(HOSTILE_MD, &[]).unwrap(), HOSTILE_TYP);
 }
 
 /// Each citation the dialect refuses names the author's own line.
@@ -3412,9 +3553,13 @@ fn each_refused_citation_names_the_authors_line() {
             "a citation only a footnote definition carries",
         ),
     ] {
-        match md_to_typst(&md) {
+        match md_to_typst(&md, &[]) {
             Err(Error::Citation {
-                line: found,
+                location:
+                    Location {
+                        file: None,
+                        line: found,
+                    },
                 problem,
             }) => {
                 assert_eq!(found, line, "for {what}");
@@ -3438,7 +3583,7 @@ fn each_refused_citation_names_the_authors_line() {
 /// citation inside the note must not be refused for the lack of one.
 #[test]
 fn a_citation_inside_a_footnote_definition_cites() {
-    let typst = md_to_typst(CITATIONS_MD).unwrap();
+    let typst = md_to_typst(CITATIONS_MD, &[]).unwrap();
     assert!(
         typst.contains(r#"#footnote[The definition cites #cite(label("DBLP:books/lib/Knuth86a"))"#),
         "the citation inside the note did not reach the reference site: {typst}"
@@ -3455,7 +3600,10 @@ fn a_citation_inside_a_footnote_definition_cites() {
 #[test]
 fn a_bibliography_the_caller_did_not_supply_names_the_path_and_the_line() {
     match md_to_pdf(CITATIONS_MD, &[]) {
-        Err(Error::MissingBibliography { path, line }) => {
+        Err(Error::MissingBibliography {
+            path,
+            location: Location { file: None, line },
+        }) => {
             assert_eq!(path, "refs.yml");
             assert_eq!(line, 3);
         }
@@ -3479,8 +3627,11 @@ fn a_bibliography_path_outside_the_shape_rule_refuses_the_document() {
         r"refs\bib.yml",
     ] {
         let md = format!("---\nbibliography: {value}\n---\n\n# H\n");
-        match md_to_typst(&md) {
-            Err(Error::Frontmatter { line, problem }) => {
+        match md_to_typst(&md, &[]) {
+            Err(Error::Frontmatter {
+                location: Location { file: None, line },
+                problem,
+            }) => {
                 assert_eq!(line, 2, "wrong line for {value}");
                 assert!(
                     problem.contains("beside the document"),
@@ -3509,7 +3660,10 @@ fn a_bibliography_path_outside_the_shape_rule_refuses_the_document() {
 fn an_absent_key_names_the_key_and_the_citations_line() {
     let md = "---\ntitle: T\nbibliography: refs.yml\n---\n\n# H\n\nA cite [@nosuchkey] here.\n";
     match md_to_pdf(md, &citations_assets()) {
-        Err(Error::Citation { line, problem }) => {
+        Err(Error::Citation {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 8);
             assert!(problem.contains("nosuchkey"), "problem was: {problem}");
             assert!(
@@ -3543,7 +3697,10 @@ fn a_name_the_document_and_the_bibliography_both_hold_is_refused_at_the_referenc
         &format!("{figure}\nAs [](#knuth1986) shows.\n"),
         &bib_assets(),
     ) {
-        Err(Error::Citation { line, problem }) => {
+        Err(Error::Citation {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 14);
             assert!(problem.contains("knuth1986"), "problem was: {problem}");
             assert!(
@@ -3576,7 +3733,10 @@ fn a_name_the_document_and_the_bibliography_both_hold_is_refused_at_the_referenc
 fn where_two_keys_are_absent_the_earlier_line_is_the_error() {
     let md = "---\ntitle: T\nbibliography: refs.yml\n---\n\n# H\n\nA note[^n] here.\n\nA cite [@alpha] here.\n\n[^n]: The definition cites [@omega].\n";
     match md_to_pdf(md, &citations_assets()) {
-        Err(Error::Citation { line, problem }) => {
+        Err(Error::Citation {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 10, "the error was: {problem}");
             assert!(problem.contains("alpha"), "problem was: {problem}");
         }
@@ -3597,7 +3757,10 @@ fn a_bibliography_that_does_not_parse_names_itself_and_the_frontmatter_line() {
     let md = "---\ntitle: T\nbibliography: refs.yml\n---\n\n# H\n\nA cite [@k] here.\n";
     let bad = asset("refs.yml", b"this is not a bibliography at all\n");
     match md_to_pdf(md, &[bad]) {
-        Err(Error::Citation { line, problem }) => {
+        Err(Error::Citation {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 3);
             assert!(problem.contains("refs.yml"), "problem was: {problem}");
             assert!(
@@ -3638,7 +3801,10 @@ fn both_bibliography_formats_resolve_a_key_and_a_third_is_refused() {
     // Good Hayagriva bytes under an extension neither reader is dispatched on.
     let md = "---\ntitle: T\nbibliography: refs.txt\n---\n\n# H\n\nA cite [@DBLP:books/lib/Knuth86a] here.\n";
     match md_to_pdf(md, &[asset("refs.txt", REFS_YML)]) {
-        Err(Error::Citation { line, problem }) => {
+        Err(Error::Citation {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 3);
             assert!(problem.contains("refs.txt"), "problem was: {problem}");
             assert!(
@@ -3659,14 +3825,14 @@ fn both_bibliography_formats_resolve_a_key_and_a_third_is_refused() {
 /// `Emitted` or to `emit`'s tail could move.
 #[test]
 fn phase_two_moves_no_golden() {
-    assert_eq!(md_to_typst(CITATIONS_MD).unwrap(), CITATIONS_TYP);
+    assert_eq!(md_to_typst(CITATIONS_MD, &[]).unwrap(), CITATIONS_TYP);
     assert_eq!(
-        md_to_typst(CITATIONS_PRESS_RELEASE_MD).unwrap(),
+        md_to_typst(CITATIONS_PRESS_RELEASE_MD, &[]).unwrap(),
         CITATIONS_PRESS_RELEASE_TYP
     );
-    assert_eq!(md_to_typst(HOSTILE_MD).unwrap(), HOSTILE_TYP);
+    assert_eq!(md_to_typst(HOSTILE_MD, &[]).unwrap(), HOSTILE_TYP);
     assert_eq!(
-        md_to_typst(CROSS_REFERENCES_MD).unwrap(),
+        md_to_typst(CROSS_REFERENCES_MD, &[]).unwrap(),
         CROSS_REFERENCES_TYP
     );
 }
@@ -3676,7 +3842,7 @@ fn phase_two_moves_no_golden() {
 #[test]
 fn the_sectioned_figures_fixture_matches_its_golden_file() {
     assert_eq!(
-        md_to_typst(SECTIONED_FIGURES_MD).unwrap(),
+        md_to_typst(SECTIONED_FIGURES_MD, &[]).unwrap(),
         SECTIONED_FIGURES_TYP
     );
 }
@@ -3760,13 +3926,278 @@ fn sectioned_numbering_withdraws_no_heading_anchor() {
 #[test]
 fn a_figures_value_outside_the_schema_is_an_error_that_lists_the_names() {
     let md = "---\nfigures: numbered\n---\n\n# Heading\n";
-    match md_to_typst(md) {
-        Err(Error::Frontmatter { line, problem }) => {
+    match md_to_typst(md, &[]) {
+        Err(Error::Frontmatter {
+            location: Location { file: None, line },
+            problem,
+        }) => {
             assert_eq!(line, 2);
             for needle in ["figures", "flat", "sectioned"] {
                 assert!(problem.contains(needle), "problem was: {problem}");
             }
         }
         other => panic!("expected a Frontmatter error, got {other:?}"),
+    }
+}
+
+// -- mpdf-008 Phase 1: a master and the sections it names ----------------------
+
+/// Four files, one golden.
+///
+/// The pair here is a master and three sections rather than one fixture, and the
+/// golden is the emitter's answer to what `core` joined out of them — which is
+/// the whole claim: the emitter is handed one string, exactly as it always was.
+#[test]
+fn the_multi_file_fixture_matches_its_golden_file() {
+    assert_eq!(
+        md_to_typst(MULTI_FILE_MD, &multi_file_sections()).unwrap(),
+        MULTI_FILE_TYP
+    );
+}
+
+#[test]
+fn the_multi_file_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(MULTI_FILE_MD, &multi_file_assets()).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "not a PDF");
+    assert!(pdf.len() > 1000, "suspiciously small: {} bytes", pdf.len());
+}
+
+/// Every document-wide mechanism, crossing a file boundary.
+///
+/// The equality test above pins the whole output; this says why it is right.
+/// **Not one of these needed anything added for it.** `collect_definitions` and
+/// `emit` walk one event stream, and `check_references` and `check_citations` run
+/// once after the walk over the names `declare` gathered — none of them can tell
+/// where the bytes came from, and none of them needs to.
+#[test]
+fn the_multi_file_golden_carries_each_form() {
+    let source = md_to_typst(MULTI_FILE_MD, &multi_file_sections()).unwrap();
+
+    // A figure declared in the first file and one declared in the second, each
+    // labelled, so the sectioned scheme numbers them 1.1 and 2.1.
+    assert!(
+        source.contains("caption: [The pipeline, declared in the first file.]) <fig:pipeline>")
+    );
+    assert!(source.contains("caption: [The mark, declared in the second file.]) <fig:mark>"));
+    assert!(source.contains("figures: \"sectioned\""));
+
+    // Both read from the third file.
+    assert!(source.contains("#ref(<fig:pipeline>) produced the mark of #ref(<fig:mark>)"));
+
+    // A footnote cited in the second file and defined in the third, set at the
+    // reference the way Typst takes one.
+    assert!(source.contains("A claim the third file footnotes.#footnote[The note, defined"));
+
+    // The master's frontmatter is the document's, and the sections carry none.
+    assert!(source.contains("title: \"A Report Written Across Four Files\""));
+
+    // No marker survives into the source: each was replaced by what it named.
+    assert!(
+        !source.contains("#link(\"sections/"),
+        "a marker reached the page"
+    );
+}
+
+/// **The join is a blank line, and a naive one merges two blocks silently.**
+///
+/// A file ending `Last line of part one.` concatenated straight onto one
+/// beginning `First line of part two.` is *one* paragraph, the two sentences
+/// separated by a soft break — no error, and nothing on the page to see. This is
+/// the case `cat a.md b.md` fails, so it is asserted on the shape of the output
+/// rather than on the absence of an error.
+#[test]
+fn two_sections_meeting_at_a_paragraph_stay_two_paragraphs() {
+    let master = "[](one.md)\n\n[](two.md)\n";
+    let sections = [
+        section("one.md", "Last line of part one."),
+        section("two.md", "First line of part two."),
+    ];
+
+    let source = md_to_typst(master, &sections).unwrap();
+
+    assert!(
+        source.contains("Last line of part one.\n\nFirst line of part two."),
+        "the two sections merged into one paragraph: {source:?}"
+    );
+}
+
+/// **An error inside the third section names the third section's own file and
+/// its own line**, and not a line of a document nobody wrote.
+///
+/// Measured before this phase: a `\undefinedcmd` on line 4 of a second section
+/// reported `math error at line 11` — line 11 of the joined document, naming no
+/// file at all. Asserted here on the exact string, because the phrasing is the
+/// deliverable.
+#[test]
+fn an_error_inside_a_section_names_that_sections_file_and_line() {
+    let master = "---\ntitle: A Report\n---\n\n[](one.md)\n\n[](two.md)\n\n[](three.md)\n";
+    let sections = [
+        section("one.md", "# One\n\nA paragraph.\n"),
+        section("two.md", "# Two\n\nAnother paragraph.\n"),
+        section(
+            "three.md",
+            "# Three\n\nText.\n\nA formula $\\undefinedcmd$.\n",
+        ),
+    ];
+
+    match md_to_typst(master, &sections) {
+        Err(error) => assert_eq!(
+            error.to_string(),
+            "math error in three.md at line 5: unsupported command '\\undefinedcmd'"
+        ),
+        Ok(_) => panic!("the formula compiled"),
+    }
+}
+
+/// A master may carry prose of its own, and its own lines stay its own.
+///
+/// The map covers the master's runs as well as the sections', so a construct
+/// error after a spliced section still names the master's line — where the
+/// joined line is several further down. Without that the master would be the one
+/// file whose messages were wrong.
+#[test]
+fn the_masters_own_lines_survive_a_splice_above_them() {
+    let master = "---\ntitle: A Report\n---\n\nA preface of the master's own.\n\n[](one.md)\n\n<div>a block</div>\n";
+    let sections = [section("one.md", "# One\n\nA.\n\nB.\n\nC.\n\nD.\n\nE.\n")];
+
+    match md_to_typst(master, &sections) {
+        Err(error) => assert_eq!(
+            error.to_string(),
+            "unsupported markdown construct 'raw HTML block' at line 9"
+        ),
+        Ok(_) => panic!("the block compiled"),
+    }
+}
+
+/// **A marker is a whole paragraph at the top level, and nothing else is one.**
+///
+/// `mpdf-005` reserved the empty-text link and this phase claims one further
+/// destination under it. Every other shape stays exactly the link it was: a
+/// marker inside a sentence, a link carrying text, and a lone link inside a block
+/// quote or a list item, where splicing raw bytes over the paragraph would walk
+/// the section straight out of its container.
+#[test]
+fn only_a_top_level_paragraph_of_its_own_is_a_marker() {
+    for (md, what) in [
+        (
+            "A [](one.md) inside a sentence.\n",
+            "a marker inside a sentence",
+        ),
+        ("[the section](one.md)\n", "a link carrying text"),
+        ("> [](one.md)\n", "a lone link inside a block quote"),
+        ("- [](one.md)\n", "a lone link inside a list item"),
+        ("[](one.png)\n", "a destination that is not markdown"),
+        ("[](../one.md)\n", "a destination the path rule refuses"),
+    ] {
+        assert!(
+            md2pdf_core::section_paths(md).unwrap().is_empty(),
+            "{what} was read as a marker"
+        );
+
+        // And it reaches the page as the link it has always been, with no
+        // section supplied and no refusal raised.
+        let source = md_to_typst(md, &[]).unwrap();
+        assert!(
+            source.contains("#link("),
+            "{what} stopped being a link: {source:?}"
+        );
+    }
+}
+
+/// The shopping list names the sections in the order the master reads them.
+///
+/// It runs before the other two and takes the master's own text alone, because
+/// the markers are in the master and no join is needed to see them.
+#[test]
+fn section_paths_names_every_section_in_reader_order() {
+    let named = md2pdf_core::section_paths(MULTI_FILE_MD).unwrap();
+    let paths: Vec<&str> = named.iter().map(|s| s.path.as_str()).collect();
+
+    assert_eq!(
+        paths,
+        vec![
+            "sections/introduction.md",
+            "sections/method.md",
+            "sections/results.md"
+        ]
+    );
+
+    // Each carries the master's own line, and never a file: a section may not
+    // name a section, so there is nothing for one to relocate through.
+    assert_eq!(
+        named.iter().map(|s| s.location.clone()).collect::<Vec<_>>(),
+        vec![Location::at(7), Location::at(9), Location::at(11)]
+    );
+}
+
+/// The image list names the file each image was drawn in.
+///
+/// This is what Phase 2 needs and what the CLI does not yet read: every path
+/// still resolves against the master's directory, and the file below is carried
+/// rather than used.
+#[test]
+fn the_image_list_names_the_section_that_drew_each_image() {
+    let images = image_paths(MULTI_FILE_MD, &multi_file_sections()).unwrap();
+
+    assert_eq!(
+        images,
+        vec![
+            ImageRef {
+                path: "dot.png".to_string(),
+                location: Location {
+                    file: Some("sections/introduction.md".to_string()),
+                    line: 6
+                }
+            },
+            ImageRef {
+                path: "mark.svg".to_string(),
+                location: Location {
+                    file: Some("sections/method.md".to_string()),
+                    line: 8
+                }
+            },
+        ]
+    );
+}
+
+/// An anchor names the file its heading was written in.
+///
+/// `mpdf-003` Phase 6 pairs the Nth walked heading with the Nth typeset one, and
+/// that pairing is untouched: what widens is what each half of the pair says. The
+/// app does not read the file until Phase 3, and OQ-5 is what decides what it
+/// does with it.
+#[test]
+fn an_anchor_names_the_file_its_heading_was_written_in() {
+    let rendered = md_to_pdf_with_anchors(MULTI_FILE_MD, &multi_file_assets()).unwrap();
+
+    let places: Vec<(Option<&str>, usize)> = rendered
+        .anchors
+        .iter()
+        .map(|anchor| (anchor.location.file.as_deref(), anchor.location.line))
+        .collect();
+
+    assert_eq!(
+        places,
+        vec![
+            (Some("sections/introduction.md"), 1),
+            (Some("sections/method.md"), 4),
+            (Some("sections/results.md"), 1),
+        ]
+    );
+}
+
+/// A document that names no section is joined to itself.
+///
+/// The inertness property, said at the level the join lives at: one segment, one
+/// map entry, and a translation that is the identity by arithmetic rather than by
+/// a branch. Every golden above is the same claim, one document at a time.
+#[test]
+fn a_document_with_no_marker_is_the_document_it_always_was() {
+    for md in [BASIC_MD, FOOTNOTES_MD, CROSS_REFERENCES_MD, CITATIONS_MD] {
+        assert_eq!(
+            md_to_typst(md, &[]).unwrap(),
+            md_to_typst(md, &multi_file_sections()).unwrap(),
+            "an unnamed section changed the output"
+        );
     }
 }

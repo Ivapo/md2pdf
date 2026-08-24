@@ -84,8 +84,8 @@ pub fn render_with(
     // the compile and nothing else, where this list reaches the watch filter.
     // Both exports come off one walk, so they answer or fail together — the
     // bibliography first, as `cli/src/main.rs:read_assets` orders them.
-    let assets = md2pdf_core::image_paths(markdown).ok().map(|images| {
-        md2pdf_core::bibliography_path(markdown)
+    let assets = md2pdf_core::image_paths(markdown, &[]).ok().map(|images| {
+        md2pdf_core::bibliography_path(markdown, &[])
             .ok()
             .flatten()
             .map(|named| named.path)
@@ -107,7 +107,7 @@ pub fn render_with(
                 .anchors
                 .into_iter()
                 .map(|anchor| Anchor {
-                    line: anchor.line,
+                    line: anchor.location.line,
                     page: anchor.page,
                 })
                 .collect(),
@@ -188,8 +188,12 @@ fn read_assets_with(
     directory: &Path,
     mut read: impl FnMut(&Path) -> std::io::Result<Vec<u8>>,
 ) -> Result<Vec<Asset>, String> {
-    let images = md2pdf_core::image_paths(markdown).map_err(|e| e.to_string())?;
-    let bibliography = md2pdf_core::bibliography_path(markdown).map_err(|e| e.to_string())?;
+    // **The app supplies no sections yet**, which is `mpdf-008` Phase 3's job.
+    // Until then a master opened here refuses with `MissingSection` naming the
+    // first file it could not find — an honest mid-state and a named one, and a
+    // single-file document is untouched by it.
+    let images = md2pdf_core::image_paths(markdown, &[]).map_err(|e| e.to_string())?;
+    let bibliography = md2pdf_core::bibliography_path(markdown, &[]).map_err(|e| e.to_string())?;
 
     let mut assets = Vec::new();
     let mut seen = HashSet::new();
@@ -198,9 +202,9 @@ fn read_assets_with(
         let file = directory.join(&named.path);
         let bytes = read(&file).map_err(|e| {
             format!(
-                "cannot read {} for the bibliography at line {}: {e}",
+                "cannot read {} for the bibliography {}: {e}",
                 file.display(),
-                named.line
+                named.location
             )
         })?;
 
@@ -219,9 +223,9 @@ fn read_assets_with(
         let file = directory.join(&image.path);
         let bytes = read(&file).map_err(|e| {
             format!(
-                "cannot read {} for the image at line {}: {e}",
+                "cannot read {} for the image {}: {e}",
                 file.display(),
-                image.line
+                image.location
             )
         })?;
 

@@ -79,6 +79,10 @@ fn emit_typst_prints_the_golden_file() {
         // The only fixture whose import line names a look other than the
         // default one.
         ("press_release.md", "press_release.typ"),
+        // The only fixture that is four files. `--emit-typst` reads no image and
+        // no bibliography, but it does read the sections: a master is not a
+        // document until they are joined in, so there would be nothing to emit.
+        ("multi_file.md", "multi_file.typ"),
     ] {
         let out = run(&[fixture(fixture_name).as_ref(), "--emit-typst".as_ref()]);
         assert!(out.status.success(), "{fixture_name} did not exit 0");
@@ -477,4 +481,93 @@ fn each_refused_formula_exits_non_zero_and_names_its_latex() {
         assert!(stderr.contains(named), "{name} stderr: {stderr}");
         assert!(stderr.contains("line 3"), "{name} stderr: {stderr}");
     }
+}
+
+/// A master and the three files it names, converted from the disk they sit on.
+///
+/// The library gate covers the join; this one covers the pass that finds the
+/// files. `read_sections` resolves each path against the master's directory and
+/// reads them before the images, so the whole document exists before anything is
+/// asked about it.
+#[test]
+fn a_master_and_its_sections_convert() {
+    let dir = scratch_dir("multi-file");
+    std::fs::create_dir_all(dir.join("sections")).unwrap();
+
+    let input = dir.join("multi_file.md");
+    std::fs::copy(fixture("multi_file.md"), &input).unwrap();
+    for name in ["introduction.md", "method.md", "results.md"] {
+        std::fs::copy(
+            fixture(&format!("sections/{name}")),
+            dir.join("sections").join(name),
+        )
+        .unwrap();
+    }
+    // Every path still resolves against the master's directory, a section's own
+    // images included. That is Phase 2's job, and this is what it looks like
+    // until then.
+    for name in ["dot.png", "mark.svg"] {
+        std::fs::copy(fixture(name), dir.join(name)).unwrap();
+    }
+
+    let out = run(&[input.as_ref()]);
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let pdf = std::fs::read(dir.join("multi_file.pdf")).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "not a PDF");
+}
+
+/// The same master beside no sections at all.
+///
+/// The third of the same sentence the image and the bibliography already print:
+/// the resolved path, the line the master named it on, and the message the OS
+/// gave. Not made byte-exact, for the reason the other two are not — the tail is
+/// the operating system's own words.
+#[test]
+fn a_missing_section_file_names_the_path_the_line_and_the_reason() {
+    let dir = scratch_dir("multi-file-alone");
+    let input = dir.join("multi_file.md");
+    std::fs::copy(fixture("multi_file.md"), &input).unwrap();
+
+    let out = run(&[input.as_ref()]);
+    assert!(!out.status.success(), "the run should have failed");
+
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.contains("sections/introduction.md"),
+        "stderr: {stderr}"
+    );
+    assert!(stderr.contains("line 7"), "stderr: {stderr}");
+    assert!(stderr.contains("os error"), "stderr: {stderr}");
+}
+
+/// An error inside a section reaches the terminal naming that section's file.
+///
+/// The whole sentence, because the phrasing is what the phase delivers: the
+/// author is sent to a line they can find, in a file they wrote.
+#[test]
+fn an_error_inside_a_section_reaches_stderr_naming_that_file() {
+    let dir = scratch_dir("multi-file-refused");
+    std::fs::create_dir_all(dir.join("sections")).unwrap();
+
+    let input = dir.join("master.md");
+    std::fs::write(&input, "[](sections/one.md)\n\n[](sections/two.md)\n").unwrap();
+    std::fs::write(dir.join("sections/one.md"), "# One\n\nA paragraph.\n").unwrap();
+    std::fs::write(
+        dir.join("sections/two.md"),
+        "# Two\n\nA formula $\\undefinedcmd$ here.\n",
+    )
+    .unwrap();
+
+    let out = run(&[input.as_ref()]);
+    assert!(!out.status.success(), "the run should have failed");
+
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        "error: math error in sections/two.md at line 3: unsupported command '\\undefinedcmd'\n"
+    );
 }

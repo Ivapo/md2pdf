@@ -17,7 +17,7 @@
 //! the command that leads there is off the list below. A rule here that
 //! recovered from a malformed shape instead of refusing it would open them.
 
-use crate::{Error, Result};
+use crate::{Error, Location, Result};
 
 /// Every control sequence the dialect accepts, without its backslash.
 ///
@@ -175,7 +175,10 @@ pub(crate) const ENVIRONMENTS: &[&str] = &[
 /// is returned, exactly as a code span's content travels as a string, and
 /// escaping it would break every formula.
 pub(crate) fn convert(latex: &str, line: usize) -> Result<String> {
-    let refuse = |problem: String| Error::Math { line, problem };
+    let refuse = |problem: String| Error::Math {
+        location: Location::at(line),
+        problem,
+    };
 
     scan(latex).map_err(refuse)?;
 

@@ -28,7 +28,7 @@ use unicase::UniCase;
 
 use crate::frontmatter::{self, Equations, Frontmatter};
 use crate::math;
-use crate::{BibliographyRef, Error, ImageRef, Result};
+use crate::{BibliographyRef, Error, ImageRef, Location, Result};
 
 /// Characters that Typst markup mode interprets inside a text run.
 ///
@@ -451,7 +451,7 @@ impl Walk {
         match &self.group {
             Some(open) => Err(Error::UnsupportedConstruct {
                 construct: "figure group the document never closes".to_string(),
-                line: open.line,
+                location: Location::at(open.line),
             }),
             None => Ok(()),
         }
@@ -524,6 +524,128 @@ pub(crate) type Citations<'a> = fn(BrokenLink<'a>) -> Option<(CowStr<'a>, CowStr
 /// columns coming out of one parse.
 pub(crate) fn parser(md: &str) -> Parser<'_, Citations<'_>> {
     Parser::new_with_broken_link_callback(md, options(), Some(citation_reference))
+}
+
+/// One include marker, as a master writes it.
+///
+/// **The shape is a paragraph whose entire content is one empty-text link whose
+/// destination names a markdown file** — `[](sections/method.md)`. `mpdf-005`
+/// reserved the empty-text link and claimed one destination under it, `#name`,
+/// on the rule that "the empty text is what makes it a reference"; this is the
+/// second destination claimed under that same rule, and claiming it cost no
+/// document anything. Measured before it was claimed, `[](sections/intro.md)`
+/// emitted `#link("sections/intro.md")[]` — a link with no content, which
+/// typesets as nothing at all.
+///
+/// A link carrying text is untouched whatever its destination, exactly as it has
+/// been since `mpdf-005`, so `[the method](sections/method.md)` stays the link it
+/// is today.
+pub(crate) struct Include {
+    /// The destination exactly as the master wrote it, which is the name the
+    /// caller's asset must carry.
+    pub path: String,
+    /// The 1-based line of the marker in the file this scan read.
+    pub line: usize,
+    /// The marker paragraph's byte range in that file — what the join splices
+    /// the section's own text over.
+    pub span: Range<usize>,
+}
+
+/// Every include marker in one file, in the order it wrote them.
+///
+/// **This is a scan of its own rather than a branch inside [`step`].** The walk
+/// only ever sees the *joined* document, where a master's markers have already
+/// been replaced by the text they named, so a marker surviving to the walk could
+/// only have been written inside a section — which `crate::sections::assemble`
+/// refuses by name. Nothing here touches the standalone test at the pending-image
+/// flush, which `mpdf-005` §2 calls "the one discrimination every image in the
+/// dialect flows through" and scoped a whole phase around not disturbing.
+///
+/// **A marker must be a whole paragraph, at the top level, beginning its own
+/// line.** A marker inside a sentence would splice headings and tables into the
+/// middle of a clause. A marker inside a block quote, a list item or a footnote
+/// definition would be worse still — the join copies bytes over the paragraph's
+/// range, and a chapter spliced inside a `> ` context walks straight out of it.
+/// Every link this scan declines stays exactly the link it is today.
+pub(crate) fn includes(md: &str) -> Vec<Include> {
+    let events: Vec<(Event<'_>, Range<usize>)> = parser(md).into_offset_iter().collect();
+    let mut found = Vec::new();
+    let mut depth = 0usize;
+
+    for (index, (event, range)) in events.iter().enumerate() {
+        match event {
+            // A paragraph never nests, so it is counted on neither side and
+            // `depth` is exactly the number of containers around this one.
+            Event::Start(Tag::Paragraph) => {
+                if depth == 0
+                    && at_line_start(md, range.start)
+                    && let Some(path) = lone_markdown_link(&events[index + 1..])
+                {
+                    found.push(Include {
+                        path,
+                        line: line_of(md, range.start),
+                        span: range.clone(),
+                    });
+                }
+            }
+            Event::End(TagEnd::Paragraph) => {}
+            Event::Start(_) => depth += 1,
+            Event::End(_) => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    found
+}
+
+/// The destination, where the rest of this paragraph is one empty-text link
+/// naming a markdown file and nothing else.
+///
+/// The three events are the whole test: a link start, a link end with no text
+/// event between them, and the paragraph's own end. A single `Event::Text` in
+/// the middle — which is what `[the method](x.md)` produces — fails the pattern,
+/// and so does a second inline anything.
+fn lone_markdown_link(rest: &[(Event<'_>, Range<usize>)]) -> Option<String> {
+    let [
+        (
+            Event::Start(Tag::Link {
+                dest_url, title, ..
+            }),
+            _,
+        ),
+        (Event::End(TagEnd::Link), _),
+        (Event::End(TagEnd::Paragraph), _),
+        ..,
+    ] = rest
+    else {
+        return None;
+    };
+
+    if !title.is_empty() {
+        return None;
+    }
+
+    // The same path rule the image arm and the `bibliography` key read, so a
+    // destination this dialect would refuse as a path is not a marker at all —
+    // it stays the link it has always been.
+    let dest = dest_url.as_ref();
+    if portable_path(dest).is_err() {
+        return None;
+    }
+    if !extension_of(dest).is_some_and(|extension| extension.eq_ignore_ascii_case("md")) {
+        return None;
+    }
+
+    Some(dest.to_string())
+}
+
+/// Whether a byte offset is the first byte of its line.
+///
+/// A paragraph indented by one to three spaces is still a paragraph, and
+/// splicing a section's first line in after that indent would set it apart from
+/// its own second line. Such a marker is declined instead.
+fn at_line_start(md: &str, offset: usize) -> bool {
+    offset == 0 || md.as_bytes().get(offset - 1) == Some(&b'\n')
 }
 
 /// Claim a broken shortcut reference that begins `@` or `-@`, and no other.
@@ -644,7 +766,7 @@ impl Notes<'_> {
         let refuse = |construct: &str| {
             Err(Error::UnsupportedConstruct {
                 construct: construct.to_string(),
-                line,
+                location: Location::at(line),
             })
         };
 
@@ -930,7 +1052,7 @@ fn step(
             other => {
                 return Err(Error::UnsupportedConstruct {
                     construct: describe(other).to_string(),
-                    line: line_of(md, range.start),
+                    location: Location::at(line_of(md, range.start)),
                 });
             }
         }
@@ -1198,7 +1320,7 @@ fn step(
                             construct:
                                 "figure group delimiter that is neither an opener nor a closer"
                                     .to_string(),
-                            line,
+                            location: Location::at(line),
                         });
                     };
                     match (group.is_some(), marker) {
@@ -1209,7 +1331,7 @@ fn step(
                         (true, Marker::Word) => {
                             return Err(Error::UnsupportedConstruct {
                                 construct: "figure group inside a figure group".to_string(),
-                                line,
+                                location: Location::at(line),
                             });
                         }
                         (false, _) => {
@@ -1260,7 +1382,7 @@ fn step(
                     if let Some(what) = second {
                         return Err(Error::UnsupportedConstruct {
                             construct: format!("second caption for one {what}"),
-                            line,
+                            location: Location::at(line),
                         });
                     }
                     *caption = Some(Caption {
@@ -1405,13 +1527,13 @@ fn step(
             if dest_url.is_empty() {
                 return Err(Error::UnsupportedConstruct {
                     construct: "link with an empty destination".to_string(),
-                    line: line_of(md, range.start),
+                    location: Location::at(line_of(md, range.start)),
                 });
             }
             if !title.is_empty() {
                 return Err(Error::UnsupportedConstruct {
                     construct: "link with a title".to_string(),
-                    line: line_of(md, range.start),
+                    location: Location::at(line_of(md, range.start)),
                 });
             }
 
@@ -1504,7 +1626,7 @@ fn step(
             check_image(&dest_url, &title, line)?;
             images.push(ImageRef {
                 path: dest_url.to_string(),
-                line,
+                location: Location::at(line),
             });
             *alt = Some(AltCapture {
                 opened: *para == Some(top(bufs).len()),
@@ -1528,7 +1650,7 @@ fn step(
                 Mode::Definition => {
                     return Err(Error::UnsupportedConstruct {
                         construct: "footnote definition inside a footnote definition".to_string(),
-                        line,
+                        location: Location::at(line),
                     });
                 }
             }
@@ -1549,7 +1671,7 @@ fn step(
                 // articles do not carry.
                 return Err(Error::UnsupportedConstruct {
                     construct: "footnote reference inside a footnote definition".to_string(),
-                    line: line_of(md, range.start),
+                    location: Location::at(line_of(md, range.start)),
                 });
             };
 
@@ -1603,7 +1725,7 @@ fn step(
         other => {
             return Err(Error::UnsupportedConstruct {
                 construct: describe(&other).to_string(),
-                line: line_of(md, range.start),
+                location: Location::at(line_of(md, range.start)),
             });
         }
     }
@@ -1693,7 +1815,12 @@ pub(crate) fn portable_path(dest: &str) -> std::result::Result<VirtualPath, Path
 /// so an extension it does not name leaves the format undecided, and the dialect
 /// refuses to guess.
 fn check_image(dest: &str, title: &str, line: usize) -> Result<()> {
-    let refuse = |construct: String| Err(Error::UnsupportedConstruct { construct, line });
+    let refuse = |construct: String| {
+        Err(Error::UnsupportedConstruct {
+            construct,
+            location: Location::at(line),
+        })
+    };
 
     if dest.is_empty() {
         return refuse("image with an empty destination".to_string());
@@ -1859,7 +1986,7 @@ fn caption_words(names: &mut Names, caption: &Caption, content: &str) -> Result<
     if content.is_empty() {
         return Err(Error::UnsupportedConstruct {
             construct: "caption with no text".to_string(),
-            line: caption.line,
+            location: Location::at(caption.line),
         });
     }
 
@@ -1963,7 +2090,7 @@ fn uncaptionable(line: usize) -> Error {
     Error::UnsupportedConstruct {
         construct: "block inside a figure group that is not an image, a table or a code block"
             .to_string(),
-        line,
+        location: Location::at(line),
     }
 }
 
@@ -1979,7 +2106,7 @@ fn escaped_frame(group: &Option<Group>, bufs: &[String]) -> Result<()> {
     match group {
         Some(open) if bufs.len() < open.depth => Err(Error::UnsupportedConstruct {
             construct: "figure group the document never closes".to_string(),
-            line: open.line,
+            location: Location::at(open.line),
         }),
         _ => Ok(()),
     }
@@ -2010,7 +2137,7 @@ fn take_member(
     if let Some(words) = &open.caption {
         return Err(Error::UnsupportedConstruct {
             construct: "figure group caption with a member after it".to_string(),
-            line: words.line,
+            location: Location::at(words.line),
         });
     }
 
@@ -2040,14 +2167,14 @@ fn close_group(bufs: &mut [String], open: Group) -> Result<()> {
     if open.members.is_empty() {
         return Err(Error::UnsupportedConstruct {
             construct: "figure group with no member".to_string(),
-            line: open.line,
+            location: Location::at(open.line),
         });
     }
     // The caption is what makes a figure, over one member or several.
     let Some(words) = open.caption else {
         return Err(Error::UnsupportedConstruct {
             construct: "figure group with no caption".to_string(),
-            line: open.line,
+            location: Location::at(open.line),
         });
     };
 
@@ -2088,7 +2215,12 @@ fn close_group(bufs: &mut [String], open: Group) -> Result<()> {
 /// These clauses are shared and the *finding* rule is not: a caption's group
 /// sits at the end of a line, where an equation's is the whole of a text run.
 fn check_name(name: &str, line: usize) -> Result<()> {
-    let refuse = |problem: String| Err(Error::Name { line, problem });
+    let refuse = |problem: String| {
+        Err(Error::Name {
+            location: Location::at(line),
+            problem,
+        })
+    };
 
     if name.is_empty() {
         return refuse("a name is empty".to_string());
@@ -2171,7 +2303,7 @@ fn equation_name(run: &str, line: usize) -> Result<Option<&str>> {
 fn declare(names: &mut Names, name: &str, line: usize, equation: bool) -> Result<()> {
     if names.declared.iter().any(|seen| seen.name == name) {
         return Err(Error::Name {
-            line,
+            location: Location::at(line),
             problem: format!("'{name}' is declared twice"),
         });
     }
@@ -2228,7 +2360,10 @@ fn check_references(names: &Names, equations: Equations) -> Result<()> {
         .min_by_key(|(line, _)| *line);
 
     match refusal {
-        Some((line, problem)) => Err(Error::Name { line, problem }),
+        Some((line, problem)) => Err(Error::Name {
+            location: Location::at(line),
+            problem,
+        }),
         None => Ok(()),
     }
 }
@@ -2253,7 +2388,7 @@ fn check_citations(names: &Names, bibliography: Option<&BibliographyRef>) -> Res
 
     match names.cited.iter().min_by_key(|(_, line)| *line) {
         Some((key, line)) => Err(Error::Citation {
-            line: *line,
+            location: Location::at(*line),
             problem: format!("'@{key}' is cited and the frontmatter names no bibliography"),
         }),
         None => Ok(()),
@@ -2290,7 +2425,10 @@ fn wrote_citation(frame: &LinkFrame) -> bool {
 /// write and cannot change, so a rule here would refuse real bibliographies
 /// rather than protect anyone.
 fn cite_key(payload: &str, line: usize) -> Result<&str> {
-    let refuse = |problem: String| Error::Citation { line, problem };
+    let refuse = |problem: String| Error::Citation {
+        location: Location::at(line),
+        problem,
+    };
 
     let Some(key) = payload.strip_prefix('@') else {
         return Err(refuse(format!(
@@ -2533,7 +2671,7 @@ fn line_is_all_digits(out: &str) -> bool {
 }
 
 /// The 1-based line that a byte offset falls on.
-fn line_of(md: &str, offset: usize) -> usize {
+pub(crate) fn line_of(md: &str, offset: usize) -> usize {
     md[..offset.min(md.len())]
         .bytes()
         .filter(|&b| b == b'\n')
