@@ -2,6 +2,104 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 2 only — 2026-08-24 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, five non-blocking, all five folded. **Converged in two
+rounds, under the cap** — where Phase 1 took three and reached it. Every round-1 finding
+was confirmed against the files rather than the changelog.
+
+The reviewer worked both questions it was asked. **The prefix leaves the `..` refusal
+intact**: `core/src/emit.rs:portable_path` scans `dest.split('/').any(|s| s == "..")`, a
+segment scan rather than a prefix test, so `one/../x.png` trips it exactly as `../x.png`
+does — confirmed against the binary. Two details the rewrite could have got wrong and did
+not: `core/src/emit.rs:check_image` refuses on the *shape* and interpolates no path, so
+the prefix never leaks into the sentence the author reads, and the refusal carries a
+`Location` that relocates to the section's own file. **The phase is smaller than the draft
+it replaces**: `step` has two call sites and `emit` four, so the work is one lookup, three
+widened internal signatures, one prefix, two fixture images moved, one CLI test and one
+re-blessed golden — an order of magnitude under Phase 1's counted ~180 edits.
+
+The reviewer also newly verified what the whole rewrite now rests on and no shipped test
+covers: **a nested asset path compiles end to end.** A document naming `one/figure.png`
+and `two/figure.svg` produces a PDF, exit 0 — the `image("one/figure.png")` → `file_id` →
+`VirtualRoot::Project` round trip works. The one existing subdirectory case,
+`app/src/document.rs`'s `figures/mark.svg`, asserts a *failure*.
+
+Two gate literals were re-derived rather than trusted: `tests/golden/multi_file.typ` holds
+exactly two image destinations, so gate (5)'s "two … gain `sections/`" is exact; and gate
+(2)'s string reproduces verbatim.
+
+The five folded:
+
+1. **`core/src/lib.rs:render` and `core/src/emit.rs:step` were unnamed** among the
+   signatures the map reaches. Both are compiler-forced and decision-free, and both are now
+   named.
+2. **Gate (2) did not say at which level it is asserted.** It is the library's
+   `MissingImage`; the CLI never reaches it, failing earlier at its own `std::fs::read`.
+3. **A section with no directory of its own had no gate case.** `[](chapter.md)` must
+   prefix with nothing, and a naive `format!("{dir}/{dest}")` yields `/dot.png` — refused
+   as absolute, so loud rather than silent, but wrong. Gate (3) now covers both no-prefix
+   shapes.
+4. **"Five places" did not read off a four-row table.** Corrected to four.
+5. **The close-out named a section that breaks nothing.** `rules/pipeline.md`'s §"Images
+   and their files" carries *"once per path at its first reference"*, which the prefix
+   leaves true — the prefix is what makes two paths two. Only §"Several files" goes
+   actively false; §"The CLI" stays true of the caller and needs saying beside it.
+
+### Round 1 — Phase 2 only — 2026-08-24 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 — is this the right thing to build at all?** Yes. The phase produces the
+observable — a PDF that compiles from a layout which refuses today, so a chapter folder
+holding its own figures can be moved, copied or shared whole — and it is `mpdf-002` §2's
+"a document and the files it names travel together" applied one level out. It discharges a
+promise Phase 1 shipped in writing, in `README.md` and in `cli/src/main.rs:read_assets`'
+own doc comment, rather than a want invented afterwards.
+
+Verdict: `NOT READY`, one blocking, five non-blocking. One generalist reviewer, matching
+every prior episode in this corpus. **No finding was rejected, in either round.**
+
+**The blocking finding is that the phase's stated mechanism silently corrupts its own
+headline case, and that no correct implementation existed inside its scope.** The draft
+put the change in the caller — *"an `ImageRef` already carries the file that named it, so
+`cli/src/main.rs:read_assets` joins against that file's parent rather than the input's"* —
+but **the path the author wrote is an identity, not just a lookup**, in four places:
+`core/src/emit.rs:image_call` writes it into the Typst source; `core/src/lib.rs:collect`
+keys `supplied`, dedupes `seen` and builds the world's `FileId` from it; and both
+`cli/src/main.rs:read_assets` and `app/src/document.rs:read_assets_with` dedupe on it.
+Measured against the shipped binary and confirmed independently by the author: two sections
+in different folders each naming `figure.png` emit
+
+```
+#image("figure.png", alt: "first")
+#image("figure.png", alt: "second")
+```
+
+with nothing to tell them apart. A caller resolving the two differently would read the
+first file, skip the second as already seen, and set one figure twice — no error, nothing
+on the page to see, and it lands on exactly the case the phase exists for.
+
+**The fix moved the mechanism out of the caller and into the emitter.** `core` prefixes a
+section's image destination with that section's own directory at emission, through the
+`core/src/sections.rs:Sources` map Phase 1 already builds, so the path is unique by
+construction and there is no collision to detect or refuse. `§2`'s "A section's neighbours
+are its own" was REWRITTEN in place, on the precedent Phase 1's own round 1 set. Three
+consequences worth the record: **no caller changes at all**, so the app inherits the rule
+with Phase 3's sections rather than needing a copy; `portable_path` and `check_image` are
+untouched and a section's `..` is still refused; and a single-file document has a
+one-segment map, so nothing is prefixed and every golden is byte-identical by the same
+arithmetic Phase 1's inertness rests on.
+
+The five non-blocking, all folded: **gate (2) already passed on the shipped tree** and so
+pinned nothing, since Phase 1 already names the section's own file and line — what this
+phase changes is the *resolved* path in the first slot; **the shipped fixture layout and
+`cli/tests/cli_test.rs:a_master_and_its_sections_convert` break the moment this lands**,
+and the phase now moves the images down beside the sections that name them rather than
+leaving it to be discovered, with `cargo test --workspace` added to a gate that had no
+suite item; **the rule would have been true in the CLI and false in the app**, which the
+`core`-side mechanism dissolves rather than defers; **the close-out pointed at sections
+that hold none of the sentences going stale**; and **"the folder can be moved without
+editing a path" overclaimed**, since moving it still means editing the master's marker.
+
 ### Round 3 — Phase 1 only — 2026-08-24 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, six non-blocking, all six folded. Converged in three

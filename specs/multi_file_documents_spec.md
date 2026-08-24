@@ -16,7 +16,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 2 — a section names its own neighbours"
-    reviewed: null
+    reviewed: 2026-08-24
     shipped: null
     cut: null
     by: null
@@ -455,12 +455,78 @@ stop being a folder that travels as one thing"* — and it is what lets a chapte
 folder be moved, copied or shared whole. The showcase folder this repo added on
 2026-08-23 is the single-file demonstration of the same principle.
 
-**It is Phase 2 and not Phase 1, because it needs Phase 1's mechanism and
-nothing else.** `cli/src/main.rs:read_assets` resolves every path against one
-directory — the input file's parent — so a section's own directory is knowable
-only once an `ImageRef` says which file named it, which is exactly the widening
-Phase 1 makes. Phase 1 therefore ships with every path resolved against the
-master, which is a real limitation and a named one rather than a surprise.
+**It is Phase 2 and not Phase 1, because it needs Phase 1's map and nothing
+else.** Phase 1 ships with every path resolved against the master, which is a
+real limitation and a named one rather than a surprise — `README.md` and
+`cli/src/main.rs:read_assets` both say so in as many words.
+
+**REWRITTEN 2026-08-24, by Phase 2's round 1, which found that the mechanism
+this section first carried could not deliver what it promised.** A draft said
+the caller does it: *"an `ImageRef` already carries the file that named it, so
+`cli/src/main.rs:read_assets` joins against that file's parent rather than the
+input's."* Round 1 established that this silently corrupts the phase's own
+headline case, because **the path the author wrote is an identity and not just a
+lookup**, in the four places below:
+
+| where | what it keys |
+|---|---|
+| `core/src/emit.rs:image_call` | the destination written into the Typst source |
+| `core/src/lib.rs:collect` | the `supplied` map, the `seen` dedupe, and `file_id` — the world's `FileId` |
+| `cli/src/main.rs:read_assets` | the `seen` dedupe, so a repeated path is read once |
+| `app/src/document.rs:read_assets_with` | the same dedupe again |
+
+Measured 2026-08-24 against the shipped binary: a master including `one/a.md` and
+`two/b.md`, each naming `figure.png`, emits
+
+```
+#image("figure.png", alt: "first")
+#image("figure.png", alt: "second")
+```
+
+— two byte-identical calls with nothing to tell them apart. A caller that
+resolved the two against different directories would read the first file, skip
+the second as already seen, and set one figure twice. **No error, and nothing on
+the page to see** — the silent-corruption class this spec refuses twice already,
+landing on the one case the phase exists for: two chapter folders that each hold
+a `figure.png`.
+
+**So the emitter writes the path the master would have written.** `core`
+prefixes a section's image destination with that section's own directory, at
+emission, because that is the one place that knows both the destination and the
+file it was written in. `core/src/sections.rs:Sources` already holds the map;
+`core/src/emit.rs:emit` and `core/src/emit.rs:collect_definitions` take it beside
+the markdown, and the `Tag::Image` arm of `core/src/emit.rs:step` prefixes the
+destination before `core/src/emit.rs:check_image` ever sees it. Four
+consequences, and the third is the one that makes this the smaller change as
+well as the correct one:
+
+- **The path is unique by construction**, so there is no collision to detect and
+  none to refuse. `one/figure.png` and `two/figure.png` are two files because
+  they are two names.
+- **`check_image` and `core/src/emit.rs:portable_path` are unchanged and still
+  run on what the walk sees.** A section writing `../x.png` is prefixed to
+  `one/../x.png`, which still carries a `..` segment and is still refused — so a
+  section cannot reach up out of its own folder, which is what keeps "a folder
+  travels as one thing" true at both levels.
+- **No caller changes at all.** `cli/src/main.rs:read_assets` goes on joining
+  every path against the master's directory and finds `one/figure.png` there,
+  and `app/src/document.rs:read_assets_with` inherits the rule rather than
+  needing a copy of it — which the caller-side mechanism could not have given,
+  and which is why Phase 3 has nothing to add here.
+- **A single-file document has a one-entry map whose only file is absent**, so no
+  destination is prefixed and every golden is byte-identical. That is Phase 1's
+  inertness arithmetic reused, not a second branch.
+
+The cost, recorded rather than discovered: `Error::MissingImage` names
+`one/figure.png` where the author wrote `figure.png`. That is the path relative
+to the master, which is the frame a caller supplies assets in, and the location
+beside it names the author's own file — so the sentence reads *"no image file
+supplied for 'one/figure.png' in one/a.md at line 3"*, which is longer than
+before and points at exactly one file.
+
+**Images are the only paths a section can name.** A section carries no
+frontmatter, so it cannot name a bibliography, and nesting is refused, so it
+cannot name a section. This rule therefore has one site and not a class of them.
 
 ### `core` stays OS-free, and a section rides the channel that exists (decision, recorded)
 
@@ -722,22 +788,97 @@ wrote them in.*
 
 ### Phase 2 — a section names its own neighbours
 *Produces the observable: **yes** — a PDF whose chapter folder holds its own
-figures, so the folder can be moved without editing a path.*
+figures, so the paths inside that folder survive it being moved. Moving it still
+means editing the master's marker, which is the one line that exists to say where
+a section is.*
 
-- **Scope:** a path named inside a section resolves against that section's
-  directory. The mechanism is Phase 1's: an `ImageRef` already carries the file
-  that named it, so `cli/src/main.rs:read_assets` joins against that file's
-  parent rather than the input's. `core/src/emit.rs:portable_path`'s shape rule
-  is unchanged and still refuses `..`, so a section cannot reach up out of its
-  own folder — which is what keeps "a folder travels as one thing" true at both
-  levels.
-- **Exit gate:** (1) A section in `sections/` naming `figure.png` finds
-  `sections/figure.png`, read as a converted PDF. (2) A missing one names the
-  section's own path and line. (3) A master naming an image of its own still
-  resolves against the master's directory, unchanged. (4) `..` in a section is
-  still refused. (5) No shipped golden changes.
-- **Close-out:** `rules/pipeline.md`'s asset section; `README.md`'s path rule
-  gains the second level. One push.
+- **Scope:** an image named inside a section resolves against that section's
+  directory, and it does so because **the emitter writes it that way**, per §2's
+  rewritten decision. `core/src/emit.rs:emit` and
+  `core/src/emit.rs:collect_definitions` take `core/src/sections.rs:Sources`
+  beside the markdown — both walk the joined string and both produce `ImageRef`s,
+  so a rule in one and not the other would lose every image inside a footnote
+  definition. `core/src/sections.rs:Sources` gains the lookup that answers a
+  joined line with the directory of the file it came from, which is the segment
+  it already stores. The `Tag::Image` arm of `core/src/emit.rs:step` prefixes the
+  destination there, **before `core/src/emit.rs:check_image` sees it**, so the
+  shape rule runs on what the walk will emit and a section's `..` is still
+  refused.
+
+  **Three internal signatures widen and a fourth caller moves with them**, all
+  compiler-forced and none carrying a decision: `core/src/emit.rs:emit`,
+  `core/src/emit.rs:collect_definitions` and `core/src/emit.rs:step` take the
+  map, and `core/src/lib.rs:render` — the fourth caller of `emit`, beside the
+  three entry points that already hold a `Sources` — passes the one it has.
+
+  **A section with no directory of its own prefixes with nothing.**
+  `[](chapter.md)` beside the master must leave `dot.png` as `dot.png`, exactly
+  as the master's own images are left. The idiom matters: a naive
+  `format!("{dir}/{dest}")` yields `/dot.png`, which
+  `core/src/emit.rs:portable_path` refuses as absolute — loud rather than silent,
+  but wrong, and gate (3) is what catches it.
+
+  **No caller changes**, which is the sharpest way to say what moved:
+  `cli/src/main.rs:read_assets` and `app/src/document.rs:read_assets_with` go on
+  joining every path against the master's directory, unedited, and find the file
+  there. `core/src/lib.rs:md_to_html` is untouched again — it reads no map.
+
+  **The shipped fixture layout is part of this phase and not a surprise it
+  causes.** `tests/fixtures/sections/introduction.md` names `dot.png` and
+  `method.md` names `mark.svg`, both of which sit in `tests/fixtures/`; after
+  this phase those destinations mean `tests/fixtures/sections/dot.png`. The
+  images move down beside the sections that name them, which is the layout the
+  phase is *for*, and `cli/tests/cli_test.rs:a_master_and_its_sections_convert`
+  copies them there instead of beside the master — the comment it carries today
+  says in as many words that this is Phase 2's job.
+- **Exit gate:** six cases.
+
+  (1) **The observable, read by eye:** a master and two chapter folders, each
+  folder holding its own `figure.png`, convert to one PDF in which **the two
+  figures differ**. That is the case the written-path identity made impossible,
+  and it is asserted on the source as well as read — two `#image` calls with two
+  distinct destinations.
+
+  (2) **A section naming a file that is not beside it names the resolved path,
+  not the written one** — `no image file supplied for 'sections/figure.png' in
+  sections/method.md at line 3`, asserted on the exact string **at the library
+  level**, because that is the only level that reaches it: the CLI fails earlier
+  at its own `std::fs::read` and prints the resolved path itself. Round 1 was
+  right that the draft's *"names the section's own path and line"* already passes
+  on the shipped tree, so it pinned nothing; the resolved path in the first slot
+  is what this phase changes.
+
+  (3) **Both shapes that prefix with nothing.** A master naming an image of its
+  own still resolves against the master's directory — asserted on a master that
+  names one directly, since every section in `tests/fixtures/` names one too and
+  its golden does move. And **a section beside the master**, `[](chapter.md)`,
+  leaves its `dot.png` as `dot.png` rather than as `/dot.png`, which is what the
+  wrong join idiom produces.
+
+  (4) **`..` inside a section is still refused**, naming the shape and the
+  section's own file and line — the prefix does not launder it.
+
+  (5) **Inertness, with its one named exception.** Every shipped golden is
+  unchanged except `tests/golden/multi_file.typ`, whose two image destinations
+  gain `sections/`; that one is re-blessed and the change is named here rather
+  than found. Every document that names no section compiles to identical PDF
+  bytes across the trees either side of the phase — the comparison Phase 1 used,
+  because a golden pins emitter output and cannot pin a resolution that did not
+  happen.
+
+  (6) `cargo test --workspace` passes. `web/` is checked by hand as Phase 1's
+  gate (8) had it, though nothing here changes a signature it reads.
+- **Close-out:** `rules/pipeline.md` in **three** places, named because the
+  close-out that said "the asset section" pointed at none of them. One sentence
+  goes actively false and takes the correction first: §"Several files" asserts
+  *"Every path still resolves against the master's directory, a section's own
+  images included"*. §"The CLI" says *"each path joins the parent directory of
+  the input file"*, which stays true of the caller and now needs saying beside
+  what `core` wrote into the path. §"Images and their files" breaks nothing —
+  *"once per path at its first reference"* survives, because the prefix is what
+  makes two paths two — and it is where the new rule belongs. `README.md`'s
+  §"Several files" loses its *"One limitation, for now"* paragraph and its
+  §"Images" path rule gains the second level. One push.
 
 ### Phase 3 — the desktop app opens a project
 *Produces the observable: **yes** — the app renders a multi-file document and
