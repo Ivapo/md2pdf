@@ -86,6 +86,11 @@ const BUNDLED_TEMPLATES: [(&str, &str); 2] = [
 const DOT_PNG: &[u8] = include_bytes!("../../tests/fixtures/dot.png");
 const MARK_SVG: &[u8] = include_bytes!("../../tests/fixtures/mark.svg");
 
+/// A second SVG, for the one case that needs two images with the same written
+/// name: a ring where `mark.svg` is a check, so the two figures differ by eye as
+/// well as by bytes.
+const RING_SVG: &[u8] = include_bytes!("../../tests/fixtures/ring.svg");
+
 /// The bibliography the two citation fixtures name.
 ///
 /// It rides the same `Asset` type an image does — a named blob, with nothing
@@ -134,15 +139,22 @@ fn multi_file_sections() -> Vec<Asset> {
     ]
 }
 
-/// The same three, and the two images they name between them.
+/// The two images the three sections name between them, read from where the
+/// sections name them.
 ///
-/// **Each is named under the section's own directory**, because that is the path
-/// the emitter writes now: a section's neighbours are its own, and an `Asset`'s
-/// path is the name the markdown resolves to rather than a filename on disk.
+/// **They sit in `tests/fixtures/sections/`, beside the files that draw them**,
+/// which is the layout this phase is for: `introduction.md` writes a bare
+/// `dot.png` and the emitter resolves it against the folder that file lives in.
+/// The copies beside the master stay where they are, because ten other fixtures
+/// name them from there.
+const SECTION_DOT_PNG: &[u8] = include_bytes!("../../tests/fixtures/sections/dot.png");
+const SECTION_MARK_SVG: &[u8] = include_bytes!("../../tests/fixtures/sections/mark.svg");
+
+/// The same three, and the two images they name between them.
 fn multi_file_assets() -> Vec<Asset> {
     let mut assets = multi_file_sections();
-    assets.push(asset("sections/dot.png", DOT_PNG));
-    assets.push(asset("sections/mark.svg", MARK_SVG));
+    assets.push(asset("sections/dot.png", SECTION_DOT_PNG));
+    assets.push(asset("sections/mark.svg", SECTION_MARK_SVG));
     assets
 }
 
@@ -4205,6 +4217,178 @@ fn a_document_with_no_marker_is_the_document_it_always_was() {
             md_to_typst(md, &multi_file_sections()).unwrap(),
             "an unnamed section changed the output"
         );
+    }
+}
+
+// -- mpdf-008 Phase 2: a section names its own neighbours ---------------------
+
+/// The master, and two chapter folders that each hold a `figure.svg`.
+///
+/// **This is the case the written-path identity made impossible.** Both chapters
+/// write the same three characters, and before this phase both emitted
+/// `#image("figure.svg")` — two byte-identical calls with nothing to tell them
+/// apart, so a caller resolving them against different directories would read the
+/// first, skip the second as already seen, and set one figure twice.
+fn two_chapters() -> (&'static str, Vec<Asset>) {
+    let master = "---\ntitle: Two Chapters\n---\n\n[](one/chapter.md)\n\n[](two/chapter.md)\n";
+    let sections = vec![
+        section("one/chapter.md", "# One\n\n![The first figure](figure.svg)\n"),
+        section("two/chapter.md", "# Two\n\n![The second figure](figure.svg)\n"),
+    ];
+    (master, sections)
+}
+
+/// Two folders, two figures, one written name.
+///
+/// The observable: a PDF whose chapter folders each hold their own figure, so
+/// the paths inside a folder survive it being moved. Asserted on the source as
+/// well as read, because two distinct destinations are what the compiled page
+/// showing two different images rests on.
+#[test]
+fn two_chapter_folders_each_keep_their_own_figure() {
+    let (master, sections) = two_chapters();
+
+    let source = md_to_typst(master, &sections).unwrap();
+    assert!(
+        source.contains(r#"image("one/figure.svg", alt: "The first figure")"#),
+        "{source}"
+    );
+    assert!(
+        source.contains(r#"image("two/figure.svg", alt: "The second figure")"#),
+        "{source}"
+    );
+
+    // Two files because they are two names. Nothing detects a collision, because
+    // the prefix is what stops there being one.
+    let mut assets = sections;
+    assets.push(asset("one/figure.svg", MARK_SVG));
+    assets.push(asset("two/figure.svg", RING_SVG));
+
+    let pdf = md_to_pdf(master, &assets).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "not a PDF");
+    assert!(pdf.len() > 1000, "suspiciously small: {} bytes", pdf.len());
+}
+
+/// The rule reaches an image inside a footnote definition too.
+///
+/// **This is the only case that exercises the second walk.**
+/// `collect_definitions` translates every definition before the document is
+/// written, in a walk of its own that produces `ImageRef`s of its own, so a
+/// prefix applied in `emit` and not there would lose every image inside a
+/// definition — silently, since the destination would simply stay as written.
+#[test]
+fn an_image_inside_a_footnote_definition_takes_its_sections_directory() {
+    let master = "[](one/chapter.md)\n";
+    let sections = [section(
+        "one/chapter.md",
+        "# One\n\nA claim.[^n]\n\n[^n]: The note, which draws ![a figure](figure.svg).\n",
+    )];
+
+    let source = md_to_typst(master, &sections).unwrap();
+    assert!(
+        source.contains(r#"image("one/figure.svg", alt: "a figure")"#),
+        "the definition's image kept the path it was written with: {source}"
+    );
+
+    // And the shopping list names it, so the caller opens the right file.
+    let images = image_paths(master, &sections).unwrap();
+    assert_eq!(
+        images,
+        vec![ImageRef {
+            path: "one/figure.svg".to_string(),
+            location: Location {
+                file: Some("one/chapter.md".to_string()),
+                line: 5
+            }
+        }]
+    );
+}
+
+/// A file the caller did not supply is named by the path it resolved to.
+///
+/// **Both halves of the sentence, and they answer different questions.** The
+/// quoted path is what the caller must open, in the frame it supplies assets in;
+/// the bare file after `in` is where the author would go to edit it. Asserted at
+/// the library level because that is the only level that reaches it — the CLI
+/// fails earlier at its own `std::fs::read` and prints the resolved path itself.
+#[test]
+fn a_missing_image_in_a_section_names_the_path_it_resolved_to() {
+    let master = "---\ntitle: A Report\n---\n\n[](sections/method.md)\n";
+    let sections = [section(
+        "sections/method.md",
+        "# Method\n\n![A figure](figure.png)\n",
+    )];
+
+    match md_to_pdf(master, &sections) {
+        Err(error) => assert_eq!(
+            error.to_string(),
+            "no image file supplied for 'sections/figure.png' in sections/method.md at line 3"
+        ),
+        Ok(_) => panic!("a document with no image file compiled"),
+    }
+}
+
+/// The two shapes that prefix with nothing.
+///
+/// A master's own images are already written in the frame the caller supplies
+/// assets in, and a section beside the master has no directory to give. The idiom
+/// is what is being pinned: a naive `format!("{dir}/{dest}")` yields `/dot.png`,
+/// which `portable_path` refuses as absolute — loud rather than silent, but
+/// wrong.
+#[test]
+fn a_file_with_no_directory_of_its_own_prefixes_with_nothing() {
+    // The master's own image, in a document that also names a section.
+    let master = "![A dot](dot.png)\n\n[](sections/method.md)\n";
+    let sections = [section("sections/method.md", "# Method\n\nText.\n")];
+    let source = md_to_typst(master, &sections).unwrap();
+    assert!(
+        source.contains(r#"image("dot.png", alt: "A dot")"#),
+        "the master's own image moved: {source}"
+    );
+
+    // A section beside the master.
+    let master = "[](chapter.md)\n";
+    let sections = [section("chapter.md", "# One\n\n![A dot](dot.png)\n")];
+    let source = md_to_typst(master, &sections).unwrap();
+    assert!(
+        source.contains(r#"image("dot.png", alt: "A dot")"#),
+        "a section beside the master gained a prefix: {source}"
+    );
+}
+
+/// The prefix launders no path the dialect refuses.
+///
+/// A section cannot reach up out of its own folder, which is what keeps "a folder
+/// travels as one thing" true at both levels. **The check runs on what the author
+/// wrote**, which is why the absolute row below is a refusal: prefixed first it
+/// would have become `sections//x.png`, and `typst-syntax` normalises a
+/// non-leading empty segment away — so `portable_path` would have read
+/// `/sections/x.png` and accepted it, turning an absolute path into a relative one
+/// with nothing raised.
+#[test]
+fn the_prefix_launders_no_path_the_dialect_refuses() {
+    let master = "---\ntitle: A Report\n---\n\n[](sections/method.md)\n";
+
+    for (dest, shape) in [
+        ("../x.png", "a '..' path segment"),
+        ("/x.png", "an absolute path"),
+        ("https://example.com/x.png", "a URL destination"),
+    ] {
+        let sections = [section(
+            "sections/method.md",
+            &format!("# Method\n\n![A figure]({dest})\n"),
+        )];
+
+        match md_to_typst(master, &sections) {
+            Err(error) => assert_eq!(
+                error.to_string(),
+                format!(
+                    "unsupported markdown construct 'image with {shape}' \
+                     in sections/method.md at line 3"
+                )
+            ),
+            Ok(_) => panic!("'{dest}' inside a section was accepted"),
+        }
     }
 }
 

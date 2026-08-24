@@ -509,7 +509,11 @@ fn a_master_and_its_sections_convert() {
         .unwrap();
     }
     for name in ["dot.png", "mark.svg"] {
-        std::fs::copy(fixture(name), dir.join("sections").join(name)).unwrap();
+        std::fs::copy(
+            fixture(&format!("sections/{name}")),
+            dir.join("sections").join(name),
+        )
+        .unwrap();
     }
 
     let out = run(&[input.as_ref()]);
