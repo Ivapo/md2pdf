@@ -6,26 +6,21 @@ note: >
   sections in the order they are read, `core` joins them into the one stream the
   emitter already walks, and every error, every asset and every anchor learns
   which file it came from.
-status: draft
+status: accepted
 last_updated: 2026-08-24
 
 phases:
-  - name: "Phase 1 — a location is a file and a line"
+  - name: "Phase 1 — the master reads its sections"
+    reviewed: 2026-08-24
+    shipped: null
+    cut: null
+    by: null
+  - name: "Phase 2 — a section names its own neighbours"
     reviewed: null
     shipped: null
     cut: null
     by: null
-  - name: "Phase 2 — the master reads its sections"
-    reviewed: null
-    shipped: null
-    cut: null
-    by: null
-  - name: "Phase 3 — a section names its own neighbours"
-    reviewed: null
-    shipped: null
-    cut: null
-    by: null
-  - name: "Phase 4 — the desktop app opens a project"
+  - name: "Phase 3 — the desktop app opens a project"
     reviewed: null
     shipped: null
     cut: null
@@ -34,7 +29,7 @@ phases:
 extends: null
 supersedes: null
 superseded_by: null
-related: [mpdf-001, mpdf-002, mpdf-003, mpdf-005]
+related: [mpdf-001, mpdf-002, mpdf-003, mpdf-004, mpdf-005, mpdf-006, mpdf-007]
 reference: >
   Pandoc's multi-file invocation (`pandoc a.md b.md -o out.pdf`) is the shape
   this rejects: it puts the order in the shell rather than in a file, so the
@@ -322,23 +317,132 @@ author's own line"* — and `mpdf-007` §2 did it again for a citation key. A sp
 that shipped the join without this would falsify the one rule every other spec
 in the corpus states.
 
-**So a location becomes a file and a line, everywhere one is carried today.**
-`core/src/lib.rs:Error` carries a bare `line: usize` in eight of its eleven
-variants — `UnsupportedConstruct`, `Frontmatter`, `Math`, `Name`, `Citation`,
-`MissingImage`, `MissingBibliography` and `ImageFormat` — and three public types
-carry one beside it: `core/src/lib.rs:ImageRef`, `core/src/lib.rs:BibliographyRef`
-and `core/src/lib.rs:Anchor`.
+### The line is translated at one boundary, not carried through the walk (decision, recorded)
 
-**The file is optional and its absence is the master**, which is what keeps a
-single-file document's messages byte-identical to today's. A message names a
-file only when there is more than one file to name. That is `mpdf-004` Phase 3's
-property — *"no document's output changes unless its author asks"* — carried
-into the error text, where a golden cannot see it and a test therefore must.
+**REWRITTEN 2026-08-24, by round 1, which found the design this section first
+carried could not deliver what it promised.** A draft of this spec widened the
+error types and left the walk alone, on the reasoning that a location "becomes a
+file and a line". Round 1 established that this buys nothing: **the file would
+have had no source.** Every line inside the emitter is produced by
+`core/src/emit.rs:line_of` from a byte offset into the joined string, and the
+carriers between there and the caller are bare integers —
+`core/src/emit.rs:Emitted`'s `headings: Vec<usize>` is the sharpest case, since
+`core/src/lib.rs:anchors_from` takes `lines: Vec<usize>` and could not know a
+file if it wanted one. Filling the field would have meant widening some twenty
+internal carriers, and the draft's phases named none of them.
 
-**Phase 1 does this alone and produces no observable**, and §4 argues that
-rather than assuming it. The argument is Probe D above: a phase that shipped the
-join first would ship the lie, and the lie is the kind that is discovered by an
-author rather than by a test.
+**The answer is that no internal carrier changes at all.** `core` already knows
+where each section begins in the joined string, because it did the joining. That
+is a map, and a joined line resolves through it by a single comparison:
+
+```
+joined line L  →  the last section whose start ≤ L
+                  file = that section's path
+                  line = L − start + 1
+```
+
+**So the translation is one function applied at one boundary**, not a parameter
+threaded through the walk. `core/src/emit.rs:line_of` keeps its signature, every
+one of the twenty-three `Error` construction sites in `core/src/emit.rs` keeps
+writing the joined line it writes today, and `Emitted.headings` stays a
+`Vec<usize>`. The five functions that return a location to a caller —
+`core/src/lib.rs:md_to_typst`, `core/src/lib.rs:md_to_pdf_with_anchors`,
+`core/src/lib.rs:image_paths`, `core/src/lib.rs:bibliography_path` and the new
+`section_paths` — relocate on the way out. **`section_paths` relocates to the
+identity and always will**, because it reads the master alone and nesting is
+refused, so a `SectionRef`'s file is always absent; it is in the list because a
+later phase that answered OQ-1 differently would need it there.
+
+**A single-file document has a one-entry map whose only section starts at line
+one**, so the translation is the identity and every message is what it is today,
+character for character. That is the inertness property, and it is a property of
+the arithmetic rather than of a branch an implementer has to remember.
+
+### What a widened message reads, all nine of them (decision, recorded)
+
+**APPENDED 2026-08-24, by round 1**, which found that the phase said the file
+would appear and never said where — and that three of the eight variants it then
+had already carried a `{path}`, four of the nine now, so a message with a file in
+it would carry two paths with nothing to tell them apart.
+
+**A location is one type with one `Display`.** `core/src/lib.rs:Error`'s
+line-carrying variants — eight today and nine after this phase — replace `line: usize` with a `Location` carrying an
+optional file and a line, which renders as
+
+```
+at line 12                              — no file: exactly today's phrase
+in sections/method.md at line 4         — with one
+```
+
+and every message interpolates that phrase whole:
+
+| variant | message |
+|---|---|
+| `UnsupportedConstruct` | `unsupported markdown construct '{construct}' {location}` |
+| `Frontmatter` | `frontmatter error {location}: {problem}` |
+| `Math` | `math error {location}: {problem}` |
+| `Name` | `name error {location}: {problem}` |
+| `Citation` | `citation error {location}: {problem}` |
+| `MissingImage` | `no image file supplied for '{path}' {location}` |
+| `MissingBibliography` | `no bibliography file supplied for '{path}' {location}` |
+| `ImageFormat` | `image file '{path}' {location} does not hold {format} data` |
+| `MissingSection` | `no section file supplied for '{path}' {location}` |
+
+**`MissingSection` is a ninth variant and not a reuse of `MissingImage`**, on
+`mpdf-007` §2's recorded argument for adding `MissingBibliography` beside it:
+*"the words are the only thing that differs, and they are the whole point"*. It
+has to live in `core` rather than in a wrapper, because `web/src/lib.rs:render`
+calls `md_to_pdf` directly with a fixed asset array and there is no wrapper
+there to catch it.
+
+**The phase's two other refusals are `UnsupportedConstruct`**, which carries a
+construct name and needs no problem string, and their sentences are fixed here
+so the gate can enumerate them:
+
+```
+unsupported markdown construct 'section with its own frontmatter' in sections/two.md at line 1
+unsupported markdown construct 'include inside an included section' in sections/two.md at line 8
+```
+
+**The two paths never collide, because only one of them is quoted.** An asset is
+`'fig.png'` and a source file is bare after `in`, so
+`no image file supplied for 'fig.png' in sections/two.md at line 3` reads once
+and correctly. With no file the phrase is `at line 3` and each row above is
+byte-for-byte the message that ships today — which is what gate (2) asserts
+rather than assumes.
+
+**The four types beside `Error` take the same `Location`.**
+`core/src/lib.rs:ImageRef`, `core/src/lib.rs:BibliographyRef` and
+`core/src/lib.rs:Anchor` each carry a bare `line` today and each is relocated at
+the same boundary; `SectionRef` is the fourth and is born with one. **`Anchor` loses `Copy`**, which nothing depends on —
+`app/src/document.rs` consumes `rendered.anchors` by `into_iter` and
+`web/src/lib.rs` by `iter` — and is recorded because a public type quietly
+losing a marker trait is the kind of thing a later reader finds by compile error.
+
+**What this costs, counted rather than estimated, and re-derived by round 2
+after a draft of this paragraph got it wrong:** forty-eight sites pattern-match a
+line-carrying variant — forty-three in `core/tests/golden_test.rs`, five in
+`core/src/frontmatter.rs` — of which seven use `..`. **Forty-two need editing and
+six do not**, because `core/tests/golden_test.rs`'s
+`Err(Error::UnsupportedConstruct { line, .. })` uses `..` *and* binds `line`, so
+it breaks with the exhaustive ones. Each becomes `location.line` where it reads
+`line` today.
+
+**Construction is the larger half and a draft of this section undercounted it.**
+Thirty-six sites construct a line-carrying variant — twenty-three in
+`core/src/emit.rs`, six each in `core/src/frontmatter.rs` and
+`core/src/lib.rs`, one in `core/src/math.rs`. **"Nothing inside the walk changes"
+is a claim about the *value*, not about the source**: every one of those sites
+writes the same joined line it writes today and every one of them changes
+syntactically, because the field it names is renamed. That is roughly eighty
+mechanical edits before the widened signatures are counted, and the signatures
+add about another hundred and five call-site fixups — ninety-seven of them
+`md_to_typst` in `core/tests/golden_test.rs` alone — for something near **a
+hundred and eighty in total**. Every one is compiler-driven and none changes
+behaviour, but the number is what answers "is this one plan-mode pass", so it is
+recorded rather than left to be discovered. It is the same size whichever shape
+the field takes — an exhaustive pattern breaks on a renamed field and on an
+added one alike.
 
 ### A section's neighbours are its own (decision, recorded)
 
@@ -351,11 +455,11 @@ stop being a folder that travels as one thing"* — and it is what lets a chapte
 folder be moved, copied or shared whole. The showcase folder this repo added on
 2026-08-23 is the single-file demonstration of the same principle.
 
-**It is Phase 3 and not Phase 2, because it needs Phase 1's mechanism and
+**It is Phase 2 and not Phase 1, because it needs Phase 1's mechanism and
 nothing else.** `cli/src/main.rs:read_assets` resolves every path against one
 directory — the input file's parent — so a section's own directory is knowable
 only once an `ImageRef` says which file named it, which is exactly the widening
-Phase 1 makes. Phase 2 therefore ships with every path resolved against the
+Phase 1 makes. Phase 1 therefore ships with every path resolved against the
 master, which is a real limitation and a named one rather than a surprise.
 
 ### `core` stays OS-free, and a section rides the channel that exists (decision, recorded)
@@ -374,24 +478,47 @@ reuses make it the pattern rather than the exception.
 `core` gains the shopping list beside the two it has —
 `core/src/lib.rs:image_paths` and `core/src/lib.rs:bibliography_path` — naming
 the sections in the order the master reads them, so `cli/src/main.rs:read_assets`
-opens them the way it already opens the other two.
+opens them the way it already opens the other two. **It is
+`pub fn section_paths(md: &str) -> Result<Vec<SectionRef>>`**, and
+`SectionRef` carries the path the master wrote and the line it wrote it on, as
+`core/src/lib.rs:ImageRef` does — named here because round 2 was right that the
+phase's one new public function was described and never named. It takes the
+master's text alone, per the ordering decision below.
 
-**The order of the two passes is the one thing an implementer will get wrong.**
-The section list has to be gathered *before* the images are, because a section's
-images are not knowable until the section's text is in hand. So the caller reads
-sections first, joins, and only then asks for the image list — one extra round
-trip through `core`, and no recursion in the caller.
+**The order of the two passes is the one thing an implementer will get wrong,
+and round 2 caught a draft of this paragraph saying the caller joins.** It does
+not, and it must not: `core` builds the map from the boundaries it creates, so a
+caller that joined would leave the map with no source — B4 by the back door.
+
+The order is: **`section_paths` reads the master's own text alone**, because the markers are in the master and no join is needed to see
+them; the caller reads those files; and every later entry point takes the master
+*and* the sections, joins them internally, and answers about the joined
+document. One extra round trip through `core`, no recursion in the caller, and
+one place that ever concatenates.
+
+**So three signatures widen, and round 2 was right that the spec had said they
+relocate without saying how.** `core/src/lib.rs:md_to_typst`,
+`core/src/lib.rs:image_paths` and `core/src/lib.rs:bibliography_path` each take
+`md: &str` today and can no more see a section's bytes than they can read a
+file. Each gains the sections beside the markdown, exactly as
+`core/src/lib.rs:md_to_pdf` gained `assets` in `mpdf-002` Phase 1 — *"the
+existing function gains the parameter"* — and for the same reason. `md_to_pdf`
+and `md_to_pdf_with_anchors` already take `&[Asset]` and keep their shapes.
+
+**`core/src/lib.rs:md_to_html` is deliberately untouched.** It is infallible and
+returns no location, so it has nothing to relocate; what it renders for a master
+that is only a list of markers is OQ-4's question and not this phase's.
 
 ## 3. Open questions
 
 - **OQ-1 — may a section include a section?** *(design call)* One level is what
-  Phase 2 ships and the question is whether that is the answer or the start. A
+  Phase 1 ships and the question is whether that is the answer or the start. A
   nested include needs a cycle check and a depth bound, and the caller's read
   loop stops being one round trip and becomes a fixpoint. The want is real for a
   book with parts, and the shapes available: refuse nesting permanently and say
   so at the marker; allow it with a cycle check keyed on the resolved path; or
   allow one further level and no more, which is a number nobody can defend.
-  **Blocks nothing** — Phase 2 refuses nesting by name either way, so this
+  **Blocks nothing** — Phase 1 refuses nesting by name either way, so this
   decides whether a later phase relaxes it.
 
 - **OQ-2 — is a section's frontmatter refused, ignored, or is the accumulator
@@ -401,8 +528,12 @@ trip through `core`, and no recursion in the caller.
   cheapest and names the author's file. Clearing `meta` at
   `Event::Start(Tag::MetadataBlock)` fixes the *shipped* defect independently and
   makes a second block a plain duplicate-key error at the right line. They are
-  not alternatives and the question is whether Phase 2 does both. **Blocks
-  Phase 2's gate**, which must name which failure it pins.
+  not alternatives, and round 2 was right that only one of them is this spec's.
+  **The accumulator is a code-only fix that needs no spec action at all** — §6.1
+  step 0 asks whether a decision changed and none did — so it ships in a commit
+  of its own, either side of this phase, and this spec records it rather than
+  owning it. What Phase 1 owns is the refusal, which gate (7) already pins.
+  **Blocks nothing.**
 
 - **OQ-3 — may the master carry prose of its own?** *(design call)* §1's example
   is a pure manifest, but nothing in §2 requires that: the marker is a paragraph,
@@ -412,7 +543,7 @@ trip through `core`, and no recursion in the caller.
   to the whole rather than to any section. The argument against: a master that
   is only a table of contents is legible at a glance, and one that is half prose
   is a document you have to read to find the structure of. **Blocks nothing**;
-  Phase 2 allows it unless this says otherwise.
+  Phase 1 allows it unless this says otherwise.
 
 - **OQ-4 — what does the browser demo do with a document that names sections?**
   *(needs-input)* `mpdf-006` made the page the project's front door and
@@ -432,7 +563,7 @@ trip through `core`, and no recursion in the caller.
   the pane holds one file while the PDF holds all of them, so an anchor needs its
   file and the pane needs to know which file it is showing. Whether that is one
   editor per section, a single pane that follows the master, or no sync at all in
-  the first cut is Phase 4's central call. **Blocks Phase 4**, and nothing
+  the first cut is Phase 3's central call. **Blocks Phase 3**, and nothing
   earlier.
 
 - **OQ-6 — what does the observable become, and who edits it?**
@@ -441,88 +572,140 @@ trip through `core`, and no recursion in the caller.
   against that sentence. The replacement has to stay one sentence and stay
   falsifiable — *"one markdown file, or a master and the sections it names, plus
   the images they name, single PDF out"* is the obvious candidate and is already
-  clumsy. **Blocks Phase 2's close-out**, which is where the stanza would change,
+  clumsy. **Blocks Phase 1's close-out**, which is where the stanza would change,
   and it is a question for the human rather than for a review round.
 
 ## 4. Implementation phases
 
-Strictly sequential; each is one plan-mode pass. Phase 1 is the only one that
-produces no observable and it is argued for below rather than assumed. The order
-is set by §2's error decision: the location widening comes first, because a join
-shipped ahead of it is a join that lies about where a mistake is.
+Strictly sequential; each is one plan-mode pass. **All three produce the
+observable**, which is a change round 1 forced rather than a property the draft
+had: it carried a Phase 1 that produced none, and §2's rewritten location
+decision dissolved it — the widening it described had no source for the field it
+added, and the translation that replaces it has nothing to do until there are
+sections to translate between. The two are one phase because neither is wanted
+without the other.
 
-### Phase 1 — a location is a file and a line
-*Produces the observable: **no**, and this is the argument. Nothing an author can
-see changes: no new syntax is accepted, no document converts differently, and
-every message on every single-file document is byte-for-byte what it is today.
-What it buys is that Phase 2 cannot ship the measurement §2 recorded — an error
-in a second file naming line 11 of a document nobody wrote. `mpdf-002` Phase 1
-set the precedent for a phase that lands a channel before the construct that
-uses it; this is narrower still, being a widening whose whole content is that it
-changes nothing yet.*
-
-- **Scope:** `core/src/lib.rs:Error`'s eight line-carrying variants gain an
-  optional file, as do `core/src/lib.rs:ImageRef`,
-  `core/src/lib.rs:BibliographyRef` and `core/src/lib.rs:Anchor`. The absent file
-  is the master, and `Display` omits it entirely — so every message a
-  single-file document can produce is unchanged, character for character.
-  `core/src/emit.rs:line_of` keeps its signature; what changes is what the
-  callers wrap around it. `cli/src/main.rs` and `app/src` are read for
-  compilation only: neither formats an error itself, both reaching `Error`
-  through `Display`, which is the property `mpdf-005` §2 recorded and this phase
-  depends on.
-- **Exit gate:** (1) Every error shape in the existing suite produces a message
-  **byte-identical** to the one it produces today, asserted as string equality
-  rather than as a `contains`. (2) `cargo test --workspace` passes with **no
-  golden file changed** — the emitter's output is not in this phase's blast
-  radius. (3) A unit case constructs each widened variant *with* a file and
-  asserts the file appears in the message. (4) `cli/src` and `app/src` diffs are
-  empty but for whatever the type change forces, checked as a diff.
-- **Close-out:** `rules/pipeline.md`'s error section, which states the shape of
-  every message. No README change: nothing an author can see has moved. One push.
-
-### Phase 2 — the master reads its sections
+### Phase 1 — the master reads its sections
 *Produces the observable: **yes** — a PDF compiled from a master and three
 section files, whose figure numbers, cross-references and footnotes run
-continuously across all four.*
+continuously across all four, and whose errors name the section file the author
+wrote them in.*
 
 - **Scope:** `core/src/emit.rs` reads the marker: a paragraph whose entire
   content is one empty-text link whose destination passes
   `core/src/emit.rs:portable_path` and ends `.md`. **The standalone test is read,
-  not changed.** A new `core/src/lib.rs` shopping list names the sections in
-  order; `core` joins their text with a blank line per §2 and walks the result.
-  A section that opens a `---` block is refused by name, per OQ-2's answer, and
-  a nested include is refused by name per OQ-1. `cli/src/main.rs:read_assets`
-  reads the sections before the images, per §2's ordering note. Every path still
-  resolves against the master's directory — Phase 3's limitation, named in the
-  README rather than left to be discovered.
-- **Exit gate:** (1) The observable, read by eye: a master and three sections
-  convert to one PDF, in both bundled looks, with continuous numbering and a
-  cross-reference from the third section to a figure in the first. (2) The
-  paragraph-merge hazard is pinned: a section ending in a paragraph and the next
-  beginning with one are **two** paragraphs in the output, which is the case a
-  `cat` join fails silently. (3) An error inside section three names **section
-  three's own file and its own line** — the direct answer to §2's Probe D, and
-  the case Phase 1 exists for. (4) A section carrying frontmatter is refused
-  naming the file; a nested include is refused naming the file. (5) **Inertness**:
-  every shipped golden is unchanged and a document with no marker compiles to
-  identical PDF bytes across the trees either side of the phase, the comparison
-  `mpdf-005` Phase 7 used, because a golden cannot see a look and cannot see a
-  join that did not happen. (6) `[](x.md)` inside a sentence, and
-  `[text](x.md)` anywhere, are still the links they are today.
-- **Close-out:** `rules/pipeline.md` — the dialect gains the marker, and the
-  shopping lists become three. `README.md` gains a multi-file section, and its
-  "one markdown file" framing moves. **`CLAUDE.md`'s observable stanza changes**,
-  on OQ-6's answer — the one close-out in this corpus that edits the sentence
-  every other phase is measured against. One push.
+  not changed.** A shopping list in `core/src/lib.rs` names the sections in
+  order, beside `core/src/lib.rs:image_paths` and
+  `core/src/lib.rs:bibliography_path`; `core` joins their text with a blank line
+  per §2 and walks the result.
 
-### Phase 3 — a section names its own neighbours
+  `core/src/lib.rs:Error`'s eight line-carrying variants and the three types
+  beside them take §2's `Location`, and the four functions that return one to a
+  caller relocate on the way out through §2's map. **Nothing inside the walk
+  changes** — not `core/src/emit.rs:line_of`, not the twenty-three construction
+  sites, not `core/src/emit.rs:Emitted`'s `headings: Vec<usize>`.
+
+  **Three signatures widen** — `core/src/lib.rs:md_to_typst`,
+  `core/src/lib.rs:image_paths` and `core/src/lib.rs:bibliography_path` each take
+  the sections beside the markdown, per §2's ordering decision;
+  `core/src/lib.rs:md_to_html` is untouched. **`Error` gains a ninth variant**,
+  `MissingSection`, for a marker naming a section the caller did not supply.
+
+  A section that opens a `---` block, and a nested include, are each
+  `UnsupportedConstruct` with the construct name §2 fixes, located at the
+  section's own file and line.
+
+  **Two sentences belong to the CLI rather than to `Error`, and are named here
+  because §2's table cannot reach them.** `cli/src/main.rs` hand-builds
+  *"cannot read {} for the bibliography at line {}"* and the image equivalent; a
+  section it cannot open needs the third, on the same pattern. And **a section
+  whose bytes are not UTF-8 is a new failure mode**, with its precedent already
+  set at `core/src/bibliography.rs` for the one other file `core` is handed and
+  must read as text. `cli/src/main.rs:read_assets`
+  reads the sections before the images, per §2's ordering note. Every path still
+  resolves against the master's directory — Phase 2's limitation, named in the
+  README rather than left to be discovered. **`cli/src/main.rs:read_assets` and
+  `app/src/document.rs:read_assets_with` each build a message that formats an
+  `ImageRef` or `BibliographyRef` line by hand**; both become `location.line`.
+  **That is not the only edit either wrapper takes, and a draft of this scope
+  said it was.** The three widened signatures reach them too:
+  `cli/src/main.rs` takes four edits — its `md_to_typst`, `image_paths` and
+  `bibliography_path` calls, and the new section pass — and
+  `app/src/document.rs` four, at its two `image_paths` and two
+  `bibliography_path` calls. All are compiler-driven and none changes
+  behaviour.
+
+  **The desktop app's mid-state is named rather than left to be found**, as
+  `mpdf-002` Phase 1 named its own: the app supplies no sections until Phase 3,
+  so a master opened in it refuses with `MissingSection` naming the first section
+  it could not find. That is an honest mid-state and a named one, and it is what
+  Phase 3 exists to close.
+- **Exit gate:** eight cases. The first three are the phase; the rest are what
+  keeps it from moving a document that did not ask.
+
+  (1) **The observable, read by eye, one PDF per look:** a master and three
+  sections convert to one PDF, with continuous figure numbering, a
+  cross-reference from the third section to a figure in the first, and a
+  footnote defined in one section and cited in another.
+
+  (2) **An error inside section three names section three's own file and its own
+  line** — the direct answer to §2's measurement, which reports line 11 of a
+  document nobody wrote. Asserted on the exact string.
+
+  (3) **The paragraph-merge hazard is pinned:** a section ending in a paragraph
+  and the next beginning with one are **two** paragraphs in the output, which is
+  the case a `cat` join fails silently.
+
+  (4) **Every message with no file is byte-identical to today's**, enumerated
+  rather than gestured at, because round 1 established that "every error shape"
+  had no referent in this suite. Two artifacts, and they are different tests.
+  **`core/tests/page_examples_test.rs:every_refusal_prints_the_sentence_beside_it`
+  passes unchanged** — the repo's only byte-exact `Display` assertion, and it
+  covers three rows across two of the nine variants. Beside it, **a new test
+  constructs one of each of the nine variants with an absent file and asserts
+  its exact sentence**, one row per variant, which is what makes "every error
+  shape" enumerable — the nine are listed in §2's table and again in the test.
+  **The phase's own two new `UnsupportedConstruct` refusals join that
+  enumeration** with the sentences §2 fixes, so nothing this phase adds falls
+  outside the gate its own fix built.
+  A third set of rows constructs each with a file present and asserts the
+  widened sentence, so the `in FILE at line N` phrasing is pinned in both
+  directions.
+
+  (5) **`cli/tests/cli_test.rs`'s stderr assertions pass unchanged**, with two
+  named exceptions that are deliberately not made byte-exact: the two asserting
+  `"os error"` carry text the operating system supplies and the CLI formats
+  itself, which is neither `Error`'s `Display` nor reproducible across
+  platforms.
+
+  (6) **Inertness:** every shipped golden is unchanged, and a document with no
+  marker compiles to identical PDF bytes across the trees either side of the
+  phase — the comparison `mpdf-005` Phase 7 used, because a golden pins emitter
+  output and cannot pin a join that did not happen.
+
+  (7) **`[](x.md)` inside a sentence, and `[text](x.md)` anywhere, are still the
+  links they are today.** A section carrying frontmatter is refused naming the
+  file; a nested include is refused naming the file.
+
+  (8) `cargo test --workspace` passes. **`web/src/lib.rs` is checked by hand and
+  not by that command** — `Cargo.toml` lists `members = ["core", "cli", "app"]`
+  and `web` is deliberately outside it, so the gate says explicitly that `web`
+  reads `Error` through `Display` and an anchor through its fields, and compiles
+  against the widened types.
+- **Close-out:** `rules/pipeline.md` — the dialect gains the marker, the shopping
+  lists become three, and the error section takes §2's nine messages.
+  `README.md` gains a multi-file section, and its "one markdown file" framing
+  moves. **`CLAUDE.md`'s observable stanza changes**, on OQ-6's answer — the one
+  close-out in this corpus that edits the sentence every other phase is measured
+  against. One push.
+
+### Phase 2 — a section names its own neighbours
 *Produces the observable: **yes** — a PDF whose chapter folder holds its own
 figures, so the folder can be moved without editing a path.*
 
 - **Scope:** a path named inside a section resolves against that section's
-  directory. The mechanism is Phase 1's: `core/src/lib.rs:ImageRef` already says
-  which file named it, so `cli/src/main.rs:read_assets` joins against that file's
+  directory. The mechanism is Phase 1's: an `ImageRef` already carries the file
+  that named it, so `cli/src/main.rs:read_assets` joins against that file's
   parent rather than the input's. `core/src/emit.rs:portable_path`'s shape rule
   is unchanged and still refuses `..`, so a section cannot reach up out of its
   own folder — which is what keeps "a folder travels as one thing" true at both
@@ -535,7 +718,7 @@ figures, so the folder can be moved without editing a path.*
 - **Close-out:** `rules/pipeline.md`'s asset section; `README.md`'s path rule
   gains the second level. One push.
 
-### Phase 4 — the desktop app opens a project
+### Phase 3 — the desktop app opens a project
 *Produces the observable: **yes** — the app renders a multi-file document and
 re-renders when any section changes.*
 
