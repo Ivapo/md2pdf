@@ -3,6 +3,7 @@ title: web-demo
 sources:
   - web/index.html
   - web/src/lib.rs
+  - core/tests/page_examples_test.rs
   - .github/workflows/pages.yml
 covers: >
   the published browser demo: the one page and what it costs, the two exports
