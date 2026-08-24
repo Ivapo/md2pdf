@@ -4,11 +4,12 @@
 // change to the parser or the emitter.
 //
 // The emitter names every argument on every call, so every bundled look takes
-// title, author, columns, date and equations. That is the contract a third look
-// has to meet. The defaults below are the fallback for a hand-written call;
-// core/src/frontmatter.rs holds the ones a document actually gets.
+// title, author, columns, date, equations and figures. That is the contract a
+// third look has to meet. The defaults below are the fallback for a
+// hand-written call; core/src/frontmatter.rs holds the ones a document actually
+// gets.
 
-#let template(title: none, author: none, columns: 2, date: none, equations: "plain", doc) = {
+#let template(title: none, author: none, columns: 2, date: none, equations: "plain", figures: "flat", doc) = {
   set page(paper: "a4", margin: 2.5cm, columns: columns)
   set text(font: "Libertinus Serif", size: 10pt, lang: "en")
   set par(justify: true, leading: 0.65em)
@@ -28,9 +29,44 @@
   // source draws with its delimiter row.
   show table.cell.where(y: 0): strong
 
-  set heading(numbering: none)
+  // Whether a heading advances a counter of its own. Under `sectioned` a figure
+  // number is built off `counter(heading)`, and that counter does not advance
+  // while its own numbering is `none` — a figure numbered off it would read
+  // `Table 0.1` and `Table 0.2` across two sections. A numbering function
+  // returning `none` advances it and still puts nothing on the page.
+  //
+  // This *replaces* the plain `set heading(numbering: none)` rather than
+  // joining it. Two set rules over one field resolve to the later one, so the
+  // old line standing below this one would win and the whole scheme would
+  // silently no-op back to `Table 0.1`.
+  //
+  // `show heading: it => it.body` reaches the same page and is refused: it
+  // leaves the block rule below nothing to apply to, so a sectioned document's
+  // headings lose their spacing and read as ordinary paragraphs.
+  set heading(numbering: if figures == "sectioned" { (..n) => none } else { none })
   show heading: set text(weight: "bold")
   show heading: set block(above: 1.4em, below: 0.8em)
+
+  // A section restarts every kind's counter. All three are named, because this
+  // look numbers images, tables and listings on counters of their own — a reset
+  // naming one would hand the other two the advancing prefix with no restart.
+  //
+  // Scoped to level 1, because an unscoped rule restarts at a `##` as well and
+  // two tables either side of a subheading would both read `Table 1.1`.
+  //
+  // The condition sits *inside* the closure and the rule is installed
+  // unconditionally. That is not the shape `equations` takes below, and the
+  // difference is the rule kind rather than a style: a `set` takes its
+  // condition in its argument because a `set` inside a scoped `if` dies with
+  // the block, and a `show` rule has no such form at all.
+  show heading.where(level: 1): it => {
+    if figures == "sectioned" {
+      counter(figure.where(kind: image)).update(0)
+      counter(figure.where(kind: table)).update(0)
+      counter(figure.where(kind: raw)).update(0)
+    }
+    it
+  }
 
   // The author asks for numbers in the frontmatter and this look decides what
   // one looks like: `(1)`, which is what an article carries. The set rule sits
@@ -52,6 +88,19 @@
   // Beneath the figure is Typst's own default, and it is written out rather
   // than inherited: a look that owns the format owns the position with it, and
   // the other bundled look answers this same question for itself.
+  // What a figure's number says. The author asks for the scheme in the
+  // frontmatter and this look builds it: `1.1`, the section then the figure,
+  // off the heading counter the rule above keeps advancing. `flat` is Typst's
+  // own `"1"`, written out rather than inherited, for the same reason the
+  // caption's position below is.
+  //
+  // An equation is deliberately not reached here. Typst numbers one through
+  // `math.equation`, so a `$$…$$` under `equations: numbered` keeps `(1)` and
+  // takes no section.
+  set figure(numbering: if figures == "sectioned" {
+    (..n) => numbering("1.1", counter(heading).get().first(), n.pos().first())
+  } else { "1" })
+
   set figure.caption(position: bottom, separator: [. ])
   show figure: set block(above: 1.4em, below: 1.4em)
   show figure.caption: set text(size: 9pt)

@@ -3,7 +3,7 @@
 // does, and the parser and the emitter know nothing about either.
 //
 // The emitter names every argument on every call, so this file takes the same
-// five the article look takes. It sets only what the frontmatter supplied and
+// six the article look takes. It sets only what the frontmatter supplied and
 // prints no fixed text of its own: the look is this file's job, and the words
 // on the page are the author's.
 
@@ -17,7 +17,7 @@
 
 // `divider` is defined above because a Typst closure captures the scope it is
 // written in. The masthead calls it, so it has to exist by this line.
-#let template(title: none, author: none, columns: 1, date: none, equations: "plain", doc) = {
+#let template(title: none, author: none, columns: 1, date: none, equations: "plain", figures: "flat", doc) = {
   // A press release runs in one column by convention, and the frontmatter
   // resolves the count to 1 where the document left the key out. An author who
   // writes `columns: 2` still gets two.
@@ -35,9 +35,39 @@
   show raw: set text(font: "Libertinus Mono", size: 9.5pt)
   show table.cell.where(y: 0): strong
 
-  set heading(numbering: none)
+  // Whether a heading advances a counter of its own, answered here as
+  // everything else is. Under `sectioned` a figure number is built off
+  // `counter(heading)`, which does not advance while its own numbering is
+  // `none` — every figure would read `Table 0.1`. A numbering function
+  // returning `none` advances it and puts nothing on the page, where
+  // `show heading: it => it.body` would leave the block rule below nothing to
+  // apply to and cost this look its heading spacing.
+  //
+  // It *replaces* the plain `set heading(numbering: none)` rather than joining
+  // it: the later of two set rules over one field wins, so the old line left
+  // below would silently no-op the whole scheme.
+  set heading(numbering: if figures == "sectioned" { (..n) => none } else { none })
   show heading: set text(weight: "bold", size: 12pt)
   show heading: set block(above: 1.8em, below: 0.85em)
+
+  // A section restarts every kind's counter. All three are named — this look
+  // numbers images, tables and listings separately, so a reset naming one hands
+  // the other two an advancing prefix with no restart — and it is scoped to
+  // level 1, or a `##` would restart them inside their own section.
+  //
+  // The condition sits inside the closure and the rule is installed
+  // unconditionally. That is not the shape `equations` takes below, and the
+  // difference is the rule kind: a `set` carries its condition in its argument
+  // because a `set` inside a scoped `if` dies with the block, and a `show` rule
+  // has no such form at all.
+  show heading.where(level: 1): it => {
+    if figures == "sectioned" {
+      counter(figure.where(kind: image)).update(0)
+      counter(figure.where(kind: table)).update(0)
+      counter(figure.where(kind: raw)).update(0)
+    }
+    it
+  }
 
   // A press release rarely numbers a formula, but the author asks rather than
   // the look, so this file answers the same question the article look answers
@@ -55,6 +85,19 @@
   //
   // The caption still sets beneath the figure. A press release runs one wide
   // column and a caption above the thing it names would read as a heading.
+  // What a figure's number says. A press release rarely runs long enough to
+  // want a section in one, but the author asks and the look answers, so this
+  // file answers the same question the article look answers and reaches the
+  // same convention: `1.1`, the section then the figure. `flat` is Typst's own
+  // `"1"`, written out rather than inherited.
+  //
+  // An equation is deliberately not reached here. Typst numbers one through
+  // `math.equation`, so a `$$…$$` under `equations: numbered` keeps `(1)` and
+  // takes no section.
+  set figure(numbering: if figures == "sectioned" {
+    (..n) => numbering("1.1", counter(heading).get().first(), n.pos().first())
+  } else { "1" })
+
   set figure.caption(position: bottom, separator: [ — ])
   show figure: set block(above: 1.2em, below: 1.2em)
   show figure.caption: set text(size: 9.5pt)

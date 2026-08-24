@@ -1332,7 +1332,7 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 
 /// Every bundled look meets the call contract the emitter writes.
 ///
-/// `header` names all five arguments on every call and imports both names, so a
+/// `header` names all six arguments on every call and imports both names, so a
 /// look missing one would fail the compile with an error naming neither the
 /// document nor the key. Golden files pin emitter output only, so the
 /// templates' side of the contract needs an artifact of its own.
@@ -1344,6 +1344,17 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 /// call, which is the seam the phase rests on. A rule that reaches the element
 /// but from inside a scoped block satisfies both needles and still numbers
 /// nothing, which is why one PDF per look is read by eye as well.
+///
+/// `figures` brings its own pair on that precedent, and the second is
+/// `counter(figure.where(kind:` — the per-section counter reset, which is the
+/// one line no look can carry while ignoring the key. `set figure(numbering:`
+/// would not do: a look may set that and never section anything. The format
+/// stays off the list for the same reason `equations`' does.
+///
+/// These needles join the contract test rather than taking one of their own,
+/// where a caption, a gutter and a listing's alignment each took one: those
+/// cross no argument at all, and this is a call-contract parameter, which is
+/// what `equations` established here.
 #[test]
 fn every_bundled_template_meets_the_call_contract() {
     for (file, source) in BUNDLED_TEMPLATES {
@@ -1356,6 +1367,8 @@ fn every_bundled_template_meets_the_call_contract() {
             "date:",
             "equations",
             "math.equation",
+            "figures",
+            "counter(figure.where(kind:",
         ] {
             assert!(source.contains(needle), "{file} does not carry `{needle}`");
         }
