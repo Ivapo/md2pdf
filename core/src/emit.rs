@@ -337,9 +337,19 @@ struct Walk {
     table: Option<TableFrame>,
     /// Whether the walk is inside the frontmatter block.
     in_metadata: bool,
-    /// That block's text, as its events deliver it.
+    /// The frontmatter text, laid out at the lines the author wrote it on.
+    ///
+    /// **The layout is why this is padded rather than concatenated.** The
+    /// accumulator is never cleared, so a document carrying a second `---` block
+    /// hands `frontmatter::parse` both blocks at once — which is what makes a key
+    /// repeated across them a duplicate, and the behaviour a document may rely
+    /// on. Concatenated end to end, the second block's keys sit at the first
+    /// block's line numbers and every message about them names a line the author
+    /// cannot find. Padded with the blank lines that stood between them — which
+    /// `frontmatter::parse` skips without consuming a key — every key is reported
+    /// where it was written.
     meta: String,
-    /// Where that text starts, so its errors name the user's own lines.
+    /// Where that text starts, which is the line `meta`'s first line stands on.
     meta_offset: Option<usize>,
     /// The frontmatter this document carries.
     front: Frontmatter,
@@ -1292,7 +1302,11 @@ fn step(
                 // Typst as a string literal, like inline code before it.
                 content.push_str(&text);
             } else if *in_metadata {
-                meta_offset.get_or_insert(range.start);
+                let first = line_of(md, *meta_offset.get_or_insert(range.start));
+                let line = line_of(md, range.start);
+                while lines_in(meta) < line.saturating_sub(first) + 1 {
+                    meta.push('\n');
+                }
                 meta.push_str(&text);
             } else {
                 let opens = *para == Some(top(bufs).len());
@@ -2671,6 +2685,11 @@ fn line_is_all_digits(out: &str) -> bool {
 }
 
 /// The 1-based line that a byte offset falls on.
+/// How many lines a buffer holds — the line its next character would land on.
+fn lines_in(text: &str) -> usize {
+    text.bytes().filter(|&byte| byte == b'\n').count() + 1
+}
+
 pub(crate) fn line_of(md: &str, offset: usize) -> usize {
     md[..offset.min(md.len())]
         .bytes()

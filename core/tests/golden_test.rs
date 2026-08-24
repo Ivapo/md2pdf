@@ -4201,3 +4201,43 @@ fn a_document_with_no_marker_is_the_document_it_always_was() {
         );
     }
 }
+
+// -- a defect fix, owned by no phase: the accumulator's own lines -------------
+
+/// A key repeated across two frontmatter blocks is reported where it was
+/// written.
+///
+/// **A latent defect in shipped code, reachable by any single document carrying
+/// two `---` blocks**, and recorded by `mpdf-008` §2 rather than owned by it —
+/// which is why this test sits under no phase. The accumulator is never cleared,
+/// so the second block's parse sees both blocks; before the fix it also saw them
+/// concatenated end to end and against the *first* block's starting line, so the
+/// document below reported `duplicate key 'title' at line 3` — the master's
+/// closing `---`, where the offending key is on line 8.
+///
+/// What the fix does not change is what the two blocks *mean*. Keys that do not
+/// collide still merge, exactly as they did, because that is a decision and this
+/// is a line number.
+#[test]
+fn a_key_repeated_across_two_frontmatter_blocks_names_its_own_line() {
+    let md = "---\ntitle: Master\n---\n\nSome text.\n\n---\ntitle: Section\n---\n\nMore text.\n";
+
+    match md_to_typst(md, &[]) {
+        Err(Error::Frontmatter {
+            location: Location { file: None, line },
+            problem,
+        }) => {
+            assert_eq!(line, 8, "the key 'title' is on line 8");
+            assert!(problem.contains("duplicate key 'title'"), "{problem}");
+        }
+        other => panic!("expected a Frontmatter error, got {other:?}"),
+    }
+
+    // Two blocks whose keys do not collide still merge, and both reach the look.
+    let merged = "---\ntitle: Master\n---\n\nSome text.\n\n---\nauthor: Someone\n---\n";
+    let source = md_to_typst(merged, &[]).unwrap();
+    assert!(
+        source.contains("title: \"Master\", author: \"Someone\""),
+        "{source}"
+    );
+}
