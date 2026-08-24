@@ -12,7 +12,7 @@ last_updated: 2026-08-24
 phases:
   - name: "Phase 1 — the master reads its sections"
     reviewed: 2026-08-24
-    shipped: null
+    shipped: 2026-08-24
     cut: null
     by: null
   - name: "Phase 2 — a section names its own neighbours"
@@ -535,6 +535,20 @@ that is only a list of markers is OQ-4's question and not this phase's.
   owning it. What Phase 1 owns is the refusal, which gate (7) already pins.
   **Blocks nothing.**
 
+  **CORRECTED 2026-08-24, by Phase 1's implementation, which measured the fix
+  this entry proposed and found it does something else.** Clearing `meta` does
+  *not* make a second block "a plain duplicate-key error at the right line": it
+  makes each block parse alone, so a key repeated across two blocks stops being a
+  duplicate at all and the second block silently replaces the first — where the
+  shipped code merges them. Measured on the shipped binary: two blocks naming
+  different keys produce a document carrying both. That merge is a decision this
+  spec has no standing to change under §6.1 step 0, so the fix that shipped
+  **pads** the accumulator instead — each block's text is laid out at the lines
+  the author wrote it on, and the never-cleared buffer stays never-cleared. The
+  duplicate now reports line 8 rather than line 3 in §2's own example, and
+  nothing else moves. The sentence above is kept because it is what was thought
+  at the time.
+
 - **OQ-3 — may the master carry prose of its own?** *(design call)* §1's example
   is a pure manifest, but nothing in §2 requires that: the marker is a paragraph,
   so a master could open with a preface and put a page of its own between two
@@ -566,14 +580,21 @@ that is only a list of markers is OQ-4's question and not this phase's.
   the first cut is Phase 3's central call. **Blocks Phase 3**, and nothing
   earlier.
 
-- **OQ-6 — what does the observable become, and who edits it?**
-  *(needs-input)* `CLAUDE.md`'s stanza says *"One markdown file plus the images
+- **OQ-6 — what does the observable become, and who edits it? — RESOLVED
+  2026-08-24, by the human, in Phase 1's plan-mode pass.** The candidate below
+  was taken as written, and it landed in `CLAUDE.md`'s workflow stanza in Phase
+  1's close-out. The stanza now reads: *"One markdown file, or a master and the
+  sections it names, plus the images they name, single PDF out."* It stays one
+  sentence, and it stays falsifiable in both halves — a phase either produces a
+  PDF from those inputs or it does not.
+
+  ~~*(needs-input)* `CLAUDE.md`'s stanza says *"One markdown file plus the images
   it names in, single PDF out"*, and every phase in seven specs is measured
   against that sentence. The replacement has to stay one sentence and stay
   falsifiable — *"one markdown file, or a master and the sections it names, plus
   the images they name, single PDF out"* is the obvious candidate and is already
   clumsy. **Blocks Phase 1's close-out**, which is where the stanza would change,
-  and it is a question for the human rather than for a review round.
+  and it is a question for the human rather than for a review round.~~
 
 ## 4. Implementation phases
 

@@ -3,6 +3,7 @@ title: pipeline
 sources:
   - core/src/lib.rs
   - core/src/emit.rs
+  - core/src/sections.rs
   - core/src/frontmatter.rs
   - core/src/bibliography.rs
   - core/src/math.rs
@@ -12,8 +13,10 @@ sources:
   - cli/src/main.rs
 covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
-  escape rule, the rejection rule, the two walks footnotes need, the two asset
-  channels, the caption that makes an image, a table or a code block a figure and
+  escape rule, the rejection rule, the two walks footnotes need, the three asset
+  channels, the marker a master names a section with, the join that makes several
+  files one stream and the map that translates a line of it back, the location
+  every message carries, the caption that makes an image, a table or a code block a figure and
   the splice that attaches it, the `:::` group that makes several of them one figure,
   the name a caption or a display equation declares and
   the reference that points at it, the citation the broken-link callback claims, the
@@ -23,8 +26,8 @@ covers: >
   the author asks for and the look formats, the figure numbering a document may
   section by, the heading anchors a compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 850
-generated: 2026-08-23
+max_lines: 930
+generated: 2026-08-24
 ---
 
 # Pipeline
@@ -39,11 +42,20 @@ list that names those files, in the order a reader meets them, which puts an ima
 a footnote definition at the first reference to that footnote.
 `core/src/lib.rs:bibliography_path` is the shopping list's second half — the one file a
 document names in its frontmatter rather than in its body, with the line it was named on.
+`core/src/lib.rs:section_paths` is its third — every markdown file a master names, in the
+order it names them — and it runs *first*, because the other two can only answer about a
+document that has already been assembled out of them.
 `core/src/lib.rs:md_to_pdf_with_anchors` returns those same bytes and, beside them, the
 page each heading landed on. `core/src/lib.rs:md_to_html` returns the same parse written
-as HTML. None of the six touches
+as HTML. None of the seven touches
 the filesystem, the clock, or the network; `cli/src/main.rs` does all file I/O and all
-terminal output, the image files and the bibliography included.
+terminal output, the image files, the bibliography and the sections included.
+
+**`md_to_typst`, `image_paths` and `bibliography_path` each take the sections beside the
+markdown**, because a document written in several files is not one document until they
+are joined in. `md_to_pdf` and `md_to_pdf_with_anchors` take them in the same `Asset`
+slice as the images and the bibliography and ignore an asset the document never names.
+`md_to_html` takes none, and is the one entry point a master is not fully answered by.
 
 **`md_to_pdf` is a wrapper over `md_to_pdf_with_anchors`**, not a second route to the
 same bytes — two paths over one input that could disagree eventually do — so a caller
@@ -61,12 +73,12 @@ one.
 
 ## The dialect
 
-Twenty-three things are supported: headings at levels 1–6, paragraph text, soft breaks,
+Twenty-four things are supported: headings at levels 1–6, paragraph text, soft breaks,
 emphasis, strong emphasis, strikethrough, inline code, math in both its forms, hard line
-breaks, thematic breaks, links, cross-references, citations, images, captions, figure
-groups, bullet lists, ordered lists, code blocks, block quotes, pipe tables, footnotes,
-and a leading YAML frontmatter block. Heading levels map to Typst headings of the same
-level.
+breaks, thematic breaks, links, cross-references, citations, include markers, images,
+captions, figure groups, bullet lists, ordered lists, code blocks, block quotes, pipe
+tables, footnotes, and a leading YAML frontmatter block. Heading levels map to Typst
+headings of the same level.
 
 The inline constructs reach Typst as function calls, not as its own markup.
 `#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
@@ -177,7 +189,23 @@ HTML. Every other error, in either walk's territory, still surfaces where it sta
 `core/src/lib.rs:collect` gathers every refusal it can raise and answers with one, by
 `min_by_key` over the line: a document with a missing image on line 3 and an absent
 citation key on line 9 reports the image, because the later one would send the author past
-the first thing that is wrong. One rule over every class it raises, not one per class.
+the first thing that is wrong. One rule over every class it raises, not one per class. The
+line it sorts on is the *joined* document's, which is document order however many files the
+document was written in — the translation to a file and a line happens after, on the way
+out.
+
+**Every error the pipeline raises names a place, and a place is a
+`core/src/lib.rs:Location`.** Nine of the twelve `core/src/lib.rs:Error` variants carry
+one; `Compile`, `PdfExport` and `Internal` do not. A location renders `at line 12` where it
+carries no file, which is every message a single-file document produces, and
+`in sections/method.md at line 4` where it carries one. **A source file is never quoted and
+an asset path always is**, so `no image file supplied for 'fig.png' in sections/two.md at
+line 3` reads once. `core/src/lib.rs:ImageRef`, `core/src/lib.rs:BibliographyRef`,
+`core/src/lib.rs:SectionRef` and `core/src/lib.rs:Anchor` carry one apiece.
+
+**An assemble-time refusal precedes every other**: nothing can be walked that could not be
+joined, so a master carrying both a bad frontmatter key and a marker naming a file the
+caller did not supply reports the missing section.
 
 **Everything else is an error** — raw HTML and a task list marker.
 `core/src/emit.rs:describe` names the construct, `Error::UnsupportedConstruct` carries
@@ -199,6 +227,52 @@ whose compile error names neither construct nor line; the test is on the resolve
 destination, so a reference definition with an empty destination is caught with it. A
 non-empty link title is something neither `link` nor the PDF can carry, so passing the link
 on would drop it. An empty title is not a title, and the link stays in-dialect.
+
+## Several files
+
+A document may be written as a master and the sections it names.
+**The marker is a paragraph whose whole content is an empty-text link naming a markdown
+file** — `[](sections/method.md)`. `mpdf-005` reserved the empty-text link on the rule that
+the empty text is what makes it a reference, and claimed `#name` under it; this is the
+second destination claimed under the same rule, and before it was claimed the shape emitted
+`#link("…")[]`, a link with no content that typeset as nothing at all. A link carrying text
+is untouched whatever its destination.
+
+`core/src/emit.rs:includes` reads them, in a scan of its own rather than a branch inside
+`core/src/emit.rs:step`: the walk only ever sees the joined document, where the master's
+markers have already been replaced by what they named. **A marker must be a whole paragraph
+at the top level, beginning its own line.** Depth is counted, so a lone link inside a block
+quote, a list item or a footnote definition is not a marker — the join copies bytes over the
+paragraph's range, and a chapter spliced inside a `> ` context would walk out of it. Every
+link the scan declines stays the link it was.
+
+`core/src/sections.rs:assemble` does the joining, and **the joining is never the caller's**,
+because the map is built out of the boundaries the join creates. It splices each section's
+text over its marker's paragraph and **pads the seam to a blank line on both sides**: a file
+ending `Last line of part one.` concatenated straight onto one beginning `First line of part
+two.` is *one* paragraph, the two sentences separated by a soft break, with nothing raised
+and nothing on the page to see. It records a `Segment` per run — master, section, master —
+and `core/src/sections.rs:Sources` resolves a joined line to a file and a line by one binary
+search over them. **A document naming no section has a one-entry map**, so the translation is
+the identity and every message is exactly what it was: a property of the arithmetic, not of a
+branch.
+
+The emitter is handed one string, which is why **every document-wide mechanism crosses a file
+boundary with nothing added for it**: the figure numbering, the cross-references, the footnote
+two-walk and the citation namespace were all written against an event stream and none of them
+can tell where the bytes came from.
+
+**Only the master carries frontmatter**, which is what makes the title, the look, the column
+count, the numbering scheme and the bibliography one set of answers. Four refusals, each
+naming the section's own file: a section that opens with a `---` line, a section that is not
+UTF-8 text and a section naming a section of its own are each `Error::UnsupportedConstruct`
+with the construct named; a marker naming a file the caller did not supply is
+`Error::MissingSection`, located at the master's own line. Nesting is refused by name;
+`core/src/lib.rs:SectionRef`'s location therefore never carries a file.
+
+**Every path still resolves against the master's directory**, a section's own images
+included, and `core/src/lib.rs:md_to_html` is the one entry point that takes no sections —
+it renders a master's markers as the empty links they parse to.
 
 ## Math
 
@@ -852,14 +926,20 @@ path with a `.pdf` extension. `--emit-typst` prints the Typst source and ignores
 output imports the selected look, which exists only inside the world, so it serves inspection
 and not a standalone `typst compile`.
 
-`cli/src/main.rs:read_assets` fills the shopping list, on both channels: each path joins
-the parent
+`cli/src/main.rs:read_sections` runs first and on every path, `--emit-typst` included: the
+markers are in the master's own text, so the sections are read before anything is asked
+about the document they assemble into. A section that will not read is exit 1 naming the
+resolved path, the line the master named it on, and the message the OS gave.
+
+`cli/src/main.rs:read_assets` fills the rest of the shopping list, on both remaining
+channels, and carries the sections out on the same array: each path joins the parent
 directory of the input file, so a figure is found beside the document and not beside the
 current directory, and a repeated path is read once. The asset keeps the path the
 markdown wrote, never the resolved one, because that is the name the generated source
 asks for. A file that will not read is exit 1 naming the resolved path, the line, and the
 message the OS gave. The bibliography is read first, from `bibliography_path` rather than
 from the image list, because it is one frontmatter value that no walk would ever meet and
-the line it names is the earliest in the file. `--emit-typst` returns before that call, so
+the line it names is the earliest in the file. `--emit-typst` returns before that call but
+after the sections, so
 emission reads no file on either channel and works on a document whose figures and whose
 bibliography are absent.

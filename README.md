@@ -1,7 +1,7 @@
 # md2pdf
 
-Convert one markdown file into one typeset PDF. Everything happens on your machine —
-no server, no SaaS, and no LaTeX toolchain.
+Convert one markdown file — or a master and the sections it names — into one typeset
+PDF. Everything happens on your machine: no server, no SaaS, and no LaTeX toolchain.
 
 `pulldown-cmark` parses the markdown, a small emitter maps it to [Typst](https://typst.app)
 markup, and an embedded Typst compiler produces the PDF. The fonts ship inside the binary,
@@ -85,7 +85,9 @@ it serves inspection rather than a standalone `typst compile`.
 
 There is a second front end: a macOS window that shows the PDF while you write it. It
 wraps the same core crate, so it converts exactly what the command converts and refuses
-exactly what the command refuses, in the same words.
+exactly what the command refuses, in the same words. **One exception, for now: it does
+not yet open a document written in several files** — a master opened here says which
+section it could not find. Convert one from the command line until it does.
 
 ```console
 $ cargo tauri dev
@@ -139,8 +141,8 @@ the one thing an unsigned bundle cannot do.
 ## What the markdown may contain
 
 This release supports **headings, paragraph text, the inline constructs, the block
-constructs, links, cross-references, citations, tables, images, captions, figure groups,
-footnotes, strikethrough, and math in both its forms**:
+constructs, links, cross-references, citations, include markers, tables, images, captions,
+figure groups, footnotes, strikethrough, and math in both its forms**:
 
 ````markdown
 # Introduction
@@ -317,6 +319,60 @@ Bytes that disagree with their extension are an error too. So are four destinati
 a URL and a `data:` URI, because nothing is fetched over the network; an absolute path,
 which converts on one machine only; and a path with a `..` segment, which escapes the
 document's own folder.
+
+## Several files
+
+A document long enough that one file has stopped being comfortable can be written as
+several. A **master** carries the frontmatter and names its sections in the order they
+are read:
+
+```markdown
+---
+title: A Long Report
+author: Iva Po
+figures: sectioned
+---
+
+[](sections/introduction.md)
+
+[](sections/method.md)
+
+[](sections/results.md)
+```
+
+The sections are ordinary markdown files with no frontmatter of their own:
+
+```console
+$ md2pdf report.md          # writes report.pdf, out of all four files
+```
+
+**A link with no text pointing at a `.md` file is an include**, and it has to be a
+paragraph of its own. That is the same shape a cross-reference uses — `[](#fig:one)` —
+and the empty text is what makes it one. A link that carries text is an ordinary link
+whatever it points at, so `[the method](sections/method.md)` still links.
+
+**It is one document, not three PDFs stapled together.** The files are joined before
+anything is parsed, so a figure declared in the first is *Figure 1.1*, a `[](#fig:it)`
+in the third reads its number, and a footnote defined anywhere lands at the foot of the
+column that cites it. Numbering, references, footnotes and citations run continuously
+because nothing in the pipeline was ever written against a file.
+
+**Only the master carries frontmatter.** That is what makes the title, the look, the
+column count, the numbering scheme and the bibliography one set of answers rather than
+several to reconcile. A section that opens with a `---` line is an error naming that
+file, and so is a section that names a section of its own — the master is the one place
+the order lives.
+
+Every error names the file you wrote it in:
+
+```console
+$ md2pdf report.md
+error: math error in sections/method.md at line 12: unsupported command '\includegraphics'
+```
+
+**One limitation, for now: every path resolves against the master's directory.** An
+image named inside `sections/method.md` is looked for beside the master, not beside the
+section. Keep the figures next to the master until that changes.
 
 ## Captions
 
