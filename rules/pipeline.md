@@ -15,7 +15,8 @@ covers: >
   the markdown-to-PDF pipeline: the supported dialect, the frontmatter schema, the
   escape rule, the rejection rule, the two walks footnotes need, the three asset
   channels, the marker a master names a section with, the join that makes several
-  files one stream and the map that translates a line of it back, the location
+  files one stream and the map that translates a line of it back, the directory a
+  section's own images resolve against, the location
   every message carries, the caption that makes an image, a table or a code block a figure and
   the splice that attaches it, the `:::` group that makes several of them one figure,
   the name a caption or a display equation declares and
@@ -270,9 +271,11 @@ with the construct named; a marker naming a file the caller did not supply is
 `Error::MissingSection`, located at the master's own line. Nesting is refused by name;
 `core/src/lib.rs:SectionRef`'s location therefore never carries a file.
 
-**Every path still resolves against the master's directory**, a section's own images
-included, and `core/src/lib.rs:md_to_html` is the one entry point that takes no sections —
-it renders a master's markers as the empty links they parse to.
+**A section's neighbours are its own**: an image named inside `sections/method.md` means
+`sections/figure.png`, so a chapter folder holding its own figures can be moved or shared
+whole. `core/src/sections.rs:Sources::resolve` answers a joined line with its file's
+directory, and §"Images and their files" holds the prefix that reads it.
+`core/src/lib.rs:md_to_html` takes no sections, rendering a master's markers as empty links.
 
 ## Math
 
@@ -369,6 +372,19 @@ after it: a caller that checked the first three and then resolved would hand
 build rather than bad input. Last, the extension must sit in Typst's own table — `png`, `jpg`, `jpeg`, `gif`,
 `webp`, `svg`, `svgz`, `pdf` — read case-sensitively through `VirtualPath::extension`,
 the function Typst's own detection reads.
+
+**A destination written inside a section is prefixed with that section's own directory**, by the
+`Tag::Image` arm of `core/src/emit.rs:step` — the one place that knows both the destination and
+the file it was written in. It is the emitter's because the written path is an *identity*:
+`core/src/emit.rs:image_call` writes it into the source, `core/src/lib.rs:collect` keys
+`supplied`, `seen` and the world's `FileId` on it, and both wrappers dedupe on it, so two
+sections each naming `figure.png` would emit two identical calls and a caller resolving them
+differently would set one figure twice, silently. `core/src/emit.rs:collect_definitions` takes
+the map beside `core/src/emit.rs:emit`, or an image inside a footnote definition would keep its
+written path. **The shape is checked on what the author wrote and the prefix applied after**,
+since `typst-syntax` drops a non-leading empty segment and `/x.png` prefixed to `one//x.png`
+would read as `/one/x.png`. **A file with no directory of its own prefixes with nothing**, where
+`format!("{dir}/{dest}")` yields `/dot.png`.
 
 `core/src/lib.rs:collect` then checks the bytes before the compile, once per path at its
 first reference: no asset is `Error::MissingImage`, bytes that disagree with the extension
@@ -934,7 +950,8 @@ resolved path, the line the master named it on, and the message the OS gave.
 `cli/src/main.rs:read_assets` fills the rest of the shopping list, on both remaining
 channels, and carries the sections out on the same array: each path joins the parent
 directory of the input file, so a figure is found beside the document and not beside the
-current directory, and a repeated path is read once. The asset keeps the path the
+current directory, and a repeated path is read once — **a section's own images included**,
+since `core` wrote the folder into the path before this saw it. The asset keeps the path the
 markdown wrote, never the resolved one, because that is the name the generated source
 asks for. A file that will not read is exit 1 naming the resolved path, the line, and the
 message the OS gave. The bibliography is read first, from `bibliography_path` rather than

@@ -291,10 +291,11 @@ An image points at a file that travels with the document:
 A small icon ![a check mark](check.svg) sits inside this sentence.
 ```
 
-The path is relative to the markdown file, and `md2pdf` reads the file from there. An
-image alone in its paragraph is set as a block and scales down to the column; an image
-with text beside it stays in the line. Eight formats work, and the extension decides
-which one a file holds:
+The path is relative to the markdown file that names it, and `md2pdf` reads the file from
+there — in a document written across several files, that is the section the image was drawn in
+and not the master. An image alone in its paragraph is set as a block and scales down to the
+column; an image with text beside it stays in the line. Eight formats work, and the extension
+decides which one a file holds:
 
 ```
 png  jpg  jpeg  gif  webp  svg  svgz  pdf
@@ -318,7 +319,8 @@ error: cannot read figures/pipeline.svg for the image at line 12: No such file o
 Bytes that disagree with their extension are an error too. So are four destinations:
 a URL and a `data:` URI, because nothing is fetched over the network; an absolute path,
 which converts on one machine only; and a path with a `..` segment, which escapes the
-document's own folder.
+document's own folder — a section's included, so a section cannot reach up out of the
+folder it sits in.
 
 ## Several files
 
@@ -370,9 +372,11 @@ $ md2pdf report.md
 error: math error in sections/method.md at line 12: unsupported command '\includegraphics'
 ```
 
-**One limitation, for now: every path resolves against the master's directory.** An
-image named inside `sections/method.md` is looked for beside the master, not beside the
-section. Keep the figures next to the master until that changes.
+**A section's neighbours are its own.** An image named inside `sections/method.md` is
+looked for beside *that file*, so `![A figure](figure.png)` there means
+`sections/figure.png`. A chapter folder holding its own figures can be moved, copied or
+shared whole — moving it means editing one line, the master's marker, which is the line
+that exists to say where a section is.
 
 ## Captions
 

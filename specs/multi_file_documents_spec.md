@@ -17,7 +17,7 @@ phases:
     by: null
   - name: "Phase 2 — a section names its own neighbours"
     reviewed: 2026-08-24
-    shipped: null
+    shipped: 2026-08-24
     cut: null
     by: null
   - name: "Phase 3 — the desktop app opens a project"
@@ -527,6 +527,29 @@ before and points at exactly one file.
 **Images are the only paths a section can name.** A section carries no
 frontmatter, so it cannot name a bibliography, and nesting is refused, so it
 cannot name a section. This rule therefore has one site and not a class of them.
+
+**CORRECTED 2026-08-24, by Phase 2's implementation, which measured the ordering
+this section states and found it launders a path the dialect refuses.** The
+sentence above says the prefix goes on *before* `core/src/emit.rs:check_image`
+ever sees the destination, and argues it from `..`: `one/../x.png` still carries
+a `..` segment and is still refused, which is true and which round 2 confirmed
+against the binary. **The case neither round worked is the absolute path.** Read
+in `typst-syntax` 0.15.1 `src/path.rs`, `components()` maps a non-leading empty
+segment to `Component::Current`, whose `push_component` arm is documented "has no
+effect" — so a section writing `/x.png` is prefixed to `one//x.png`, which
+`core/src/emit.rs:portable_path` normalises to `/one/x.png` and **accepts**. An
+absolute path becomes a relative one with nothing raised: the silent-corruption
+class this spec refuses twice already, reintroduced by the fix for the third.
+
+**So the shipped order is reversed: the shape is checked on what the author
+wrote, and the prefix is applied after.** Every refusal keeps the words it has
+always used — `..`, absolute, a URL, an empty destination — and each still names
+the section's own file and line, which is what gate (4) asks for. Nothing slips
+through the other way, because a section's directory came from a marker path that
+`portable_path` had already accepted, so a destination this check passes is still
+portable once it is prefixed. `check_image` and `portable_path` are unchanged, as
+this section says; it is only which string reaches them that moved. The paragraph
+above is kept because it is what was thought at the time.
 
 ### `core` stays OS-free, and a section rides the channel that exists (decision, recorded)
 

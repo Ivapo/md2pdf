@@ -87,9 +87,12 @@ fn run() -> Result<(), String> {
 /// until the document they belong to has been assembled, which is why
 /// `read_sections` is a pass of its own and this one takes its result.
 ///
-/// **Every path still resolves against the master's directory**, a section's
-/// own images included. That is `mpdf-008` Phase 2's job and a named limitation
-/// rather than an oversight.
+/// **Every path joins the master's directory, a section's own images included**,
+/// and that is not the limitation it once was: `core` writes a section's own
+/// folder into the destination before the list reaches here, so an image drawn
+/// in `sections/method.md` arrives as `sections/figure.png` and is found beside
+/// the file that drew it. This function needed nothing for that, which is why
+/// the app inherits the rule rather than carrying a copy of it.
 ///
 /// `core` reads nothing itself, on any of the three channels. That split is what
 /// lets the same crate compile natively and to `wasm32`.
