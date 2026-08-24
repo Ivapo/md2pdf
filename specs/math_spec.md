@@ -6,7 +6,7 @@ note: >
   closed list of LaTeX commands, mitex converts them in process, and a command
   outside the list is an error naming the command and its line.
 status: accepted
-last_updated: 2026-08-15
+last_updated: 2026-08-24
 
 phases:
   - name: "Phase 1 — inline math on the page"
@@ -116,6 +116,27 @@ than stopped at the first step that disposes of an objection.
   > and naming needs syntax. `\label{…}` is still refused by §2's scan, on the
   > same grounds as before. OQ-7 carries what is left. See §4's Phase 3;
   > `rules/pipeline.md` is what tracks the code.
+
+  > **CORRECTED 2026-08-24, by `mpdf-005` Phase 4, which shipped 2026-08-18.**
+  > The note above says labels and cross-references are still refused and points
+  > at OQ-7 for what is left. Both were true when written and stopped being true
+  > six days later: **a display equation may be named and pointed at** —
+  > `$$…$$ {#eq:one}` declares the name on the closing fence, because an equation
+  > has no caption line to carry one, and `[](#eq:one)` reads *"Equation 1"*.
+  > OQ-7 is resolved rather than outstanding. **All three of this bullet's items
+  > are now things the dialect carries** — numbering since Phase 3, a name and a
+  > reference since `mpdf-005` Phase 4 — so nothing it lists is refused any
+  > longer. What is still refused is the *mechanism* this spec is about, and only
+  > that.
+  >
+  > **What this bullet decided is unchanged, and that is the point.** `\label{…}`
+  > is still refused by §2's scan on exactly the grounds above. The mechanism
+  > that landed is markdown's own syntax *outside* the math span rather than a
+  > command inside it, which is why it could arrive without reopening the allowed
+  > list or putting a symbol table behind `convert`. The reason recorded here
+  > was never wrong; it was a reason about LaTeX commands, and the answer came
+  > from somewhere a spec about LaTeX commands does not reach. `mpdf-005` §2 owns
+  > the syntax and `rules/pipeline.md` tracks the code.
 - **No macro definitions that outlive a span.** A definition in one span visible
   from the next is a document-wide symbol table, which is a different subject.
 - **No LaTeX outside math.** `mitex::convert_text` is not called.
@@ -546,7 +567,7 @@ phases check it as a diff.
   dialect will not accept**, so this is the first candidate for the list's growth
   rather than one deferral among many.
 
-- **OQ-7** — how does an author *reference* a numbered equation? Phase 3 puts a
+- **OQ-7** — ~~how does an author *reference* a numbered equation? Phase 3 puts a
   number on the page and stops there, so "see equation (1)" is prose the author
   types and keeps true by hand — which goes stale the moment an equation is
   inserted above it. §1.2 refuses labels and cross-references on the grounds that
@@ -559,7 +580,38 @@ phases check it as a diff.
   manual reference is the answer permanently. **The last is a real candidate**,
   because a document that numbers its equations to reference three of them is a
   different document from one that numbers them for the reader's convenience.
-  Design call. Blocks nothing; it is a phase to append if the answer is yes.
+  Design call. Blocks nothing; it is a phase to append if the answer is yes.~~
+  **RESOLVED (2026-08-18) by `mpdf-005` Phase 4, and recorded here 2026-08-24:
+  the second shape, and it was a phase appended to another spec rather than to
+  this one.**
+
+  **The answer is markdown's own link syntax pointed at an equation** —
+  `$$…$$ {#eq:one}` to declare the name, `[](#eq:one)` to point at it. The
+  question priced that shape as "which invents dialect", and what shipped is
+  narrower than the price: it is the *empty text* that makes a reference, so
+  `[the identity](#eq:one)` and every other link that carries text is the link
+  it always was. That is what kept it a phase rather than a supersession.
+
+  **The first shape's objection was right and did not have to be paid.** A
+  `\label{…}`/`\ref{…}` pair would have put a document-wide symbol table behind
+  `core/src/math.rs:convert`, which §1.2's macro non-goal refuses. The name rides
+  the closing `$$` instead, outside the span, so §2's allowed list never
+  reopened. A collection of declared names *did* land in `core`, and it is
+  smaller than the thing refused here: one pass after the walk, existing only so
+  that an unknown name is an error naming the author's line rather than Typst
+  reporting a label the author never typed.
+
+  **The third shape — nothing, manual forever — is refused**, and the question's
+  own argument for it is what bounds the answer instead: pointing at an equation
+  needs `equations: numbered`, because an unnumbered equation has no number for
+  a sentence to say, and `mpdf-005` refuses the reference by name when it is
+  missing. A document that numbers for the reader's convenience is untouched.
+
+  **Why it is not a phase of this spec.** `mpdf-005` §1.1 worked §6.1's ordered
+  test and landed on a new document: the subject spans four constructs owned by
+  three specs — images by `mpdf-002`, tables and code blocks by `mpdf-001`,
+  equations by this one — and no subject spec has standing over the others.
+  This entry naming its own successor is what that step read as the hook.
 
 ## 4. Implementation phases
 
