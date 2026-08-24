@@ -16,3 +16,5 @@
   The published browser demo becomes the project's front door: the page says what the dialect adds to markdown, every claim it makes is a snippet the workspace suite compiles, and one click sets that snippet as a PDF in the reader's own browser.
 - **[citations-and-bibliography](citations_spec.md)** — `mpdf-007` · accepted · done
   A document cites its sources and prints their reference list: the frontmatter names a bibliography file, the caller supplies it as bytes beside the images, `[@key]` becomes a citation, and Typst renders both the marks and the list.
+- **[multi-file-documents](multi_file_documents_spec.md)** — `mpdf-008` · draft · pending
+  A document may be written as several markdown files: a master names its sections in the order they are read, `core` joins them into the one stream the emitter already walks, and every error, every asset and every anchor learns which file it came from.
