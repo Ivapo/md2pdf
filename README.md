@@ -38,8 +38,18 @@ adds to markdown, and every example on it is one this repository's tests compile
 click away from a PDF in your own browser, the three refusals included. Nothing is sent
 anywhere, and there is no server to send it to.
 
-Locally, `samples/article.md` is a ready-made document that exercises everything the tool
-supports. Convert it and open the result:
+Locally, **`samples/showcase/` is one document that uses every construct in the dialect** —
+every inline and block form, captions, groups, names and cross-references, both forms of
+math, footnotes, and citations against the fake bibliography beside it, under all eight
+frontmatter keys. It is the fastest way to see the whole surface set on a page:
+
+```console
+$ ./target/release/md2pdf samples/showcase/showcase.md
+$ open samples/showcase/showcase.pdf
+```
+
+`samples/article.md` is a shorter ready-made document, and the one to start from. Convert
+it and open the result:
 
 ```console
 $ ./target/release/md2pdf samples/article.md

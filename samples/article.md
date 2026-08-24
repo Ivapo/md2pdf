@@ -16,8 +16,8 @@ it again, and the same text runs across the full width of the page instead.
 
 # What the frontmatter controls
 
-The block at the top of this file carries four of the six keys, and all six
-are optional. The title and the author become the block centred at the top of
+The block at the top of this file carries four of the eight keys, and all
+eight are optional. The title and the author become the block centred at the top of
 the first page. That block spans every column, whatever the column count is,
 because it is placed outside the column grid rather than inside the first
 column. A date key joins them there, set beneath the author line.
@@ -36,9 +36,13 @@ is why the two display formulas further down carry a number each. Leave it out
 and you get plain, so nothing is numbered and the page reads as it did before
 the key existed. You decide whether; the look decides what a number looks like.
 
-A key outside those six is an error rather than a silent omission. So is a
-columns value of 3, a template name outside the two, and an equations name
-outside the two. The tool names
+The three keys this file leaves out are date, figures and bibliography. The
+document under samples/showcase names all eight at once, and uses every
+construct the dialect carries besides.
+
+A key outside those eight is an error rather than a silent omission. So is a
+columns value of 3, a template name outside the two, and an equations or
+figures name outside its own two. The tool names
 the key and the line, and exits with code 1, because a PDF that quietly
 ignored half of its own frontmatter would be lying about its source.
 

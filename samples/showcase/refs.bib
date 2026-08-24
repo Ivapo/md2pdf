@@ -1,0 +1,46 @@
+% A bibliography for the showcase document beside it. Every entry here is
+% invented: the people, the titles, the journals and the publishers are all
+% made up, so that nothing in this folder claims anything about a real work.
+%
+% Typst reads BibLaTeX `.bib` and Hayagriva `.yml`/`.yaml` alike, through the
+% same `hayagriva` version it uses itself, and md2pdf dispatches on the
+% extension. Nothing here is a format md2pdf owns.
+%
+% The keys are deliberately plain names. A bibliography key and a figure name
+% share one namespace, so `{#quill2019}` on a caption beside an entry keyed
+% `quill2019` would leave `[](#quill2019)` with no way to mean one rather than
+% the other — and md2pdf refuses that rather than guessing. Keeping the two
+% apart is the whole of the discipline it asks for.
+
+@book{quill2019,
+  author    = {Quill, Marguerite},
+  title     = {The Shape of a Printed Page},
+  year      = {2019},
+  publisher = {Fenwick and Sons},
+  address   = {Bristol},
+}
+
+@article{arden2021,
+  author  = {Arden, Tobias and Vance, Priya},
+  title   = {Markers, Delimiters and the Documents That Hold Them},
+  journal = {Journal of Invented Typography},
+  year    = {2021},
+  volume  = {14},
+  number  = {2},
+  pages   = {88--117},
+}
+
+@inproceedings{olsson2023,
+  author    = {Olsson, Ingrid},
+  title     = {Numbering Things That Move},
+  booktitle = {Proceedings of the Imaginary Symposium on Layout},
+  year      = {2023},
+  pages     = {1--12},
+}
+
+@misc{harlow2024,
+  author = {Harlow, Desmond},
+  title  = {A Note on Captions},
+  year   = {2024},
+  note   = {Unpublished manuscript},
+}
