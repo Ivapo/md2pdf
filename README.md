@@ -85,9 +85,8 @@ it serves inspection rather than a standalone `typst compile`.
 
 There is a second front end: a macOS window that shows the PDF while you write it. It
 wraps the same core crate, so it converts exactly what the command converts and refuses
-exactly what the command refuses, in the same words. **One exception, for now: it does
-not yet open a document written in several files** — a master opened here says which
-section it could not find. Convert one from the command line until it does.
+exactly what the command refuses, in the same words — a document written across several
+files included.
 
 ```console
 $ cargo tauri dev
@@ -105,10 +104,11 @@ unsaved work. `⌘S`, or the Save button, writes the pane back to the file. Drag
 divider to give either side more room.
 
 **Save the file in another program and the page redraws too** — with one exception. The
-window watches the folder the document sits in, so editing a figure or the bibliography
-elsewhere redraws it as well. If the pane holds unsaved edits when the file changes
-underneath, the app keeps your text and says so rather than choosing for you: save to
-write the pane over the file, or open the file again to take it. It never merges the two.
+window watches the folder the document sits in, so editing a section, a figure or the
+bibliography elsewhere redraws it as well. If the pane holds unsaved edits when the file
+changes underneath, the app keeps your text and says so rather than choosing for you:
+save to write the pane over the file, or open the file again to take it. It never merges
+the two.
 
 A document that will not compile leaves the last good page on screen, dimmed, with the
 error above it — the same sentence the command prints — and the page comes back when you
@@ -117,7 +117,10 @@ fix it.
 **A redraw opens the page on the heading you are writing under.** The pane is a real PDF
 view and tells the app nothing about where you scrolled it, so it follows your cursor
 instead — to the nearest heading above it, which is as close as it can get without one.
-Opening a file, and taking one that changed underneath, still start you at page 1.
+Opening a file, and taking one that changed underneath, still start you at page 1. In a
+document written across several files it follows the headings in the file the pane is
+showing; a heading inside a section belongs to a file you are not editing, so a master
+that is only a list of sections opens at page 1 too.
 
 The header says where the page stands — `current` with the time the compile took, or
 `stale` when the last one failed and the page you are looking at is the older one.
@@ -135,8 +138,10 @@ double-clicking still opens your editor, pick a markdown file, press `⌘I`, and
 the window to it, and **unsaved edits in the pane are lost** — the same as reopening
 from the Open dialog. Save first if you want to keep them.
 
-The app opens one file at a time. The Install section above has the build command and
-the one thing an unsigned bundle cannot do.
+The pane holds one file — the one you opened. A master's sections are read from disk
+and drawn on the page, not edited here, so save a section in your own editor and the
+window redraws. The Install section above has the build command and the one thing an
+unsigned bundle cannot do.
 
 ## What the markdown may contain
 

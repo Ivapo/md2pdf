@@ -22,7 +22,7 @@ phases:
     by: null
   - name: "Phase 3 — the desktop app opens a project"
     reviewed: 2026-08-24
-    shipped: null
+    shipped: 2026-08-24
     cut: null
     by: null
 

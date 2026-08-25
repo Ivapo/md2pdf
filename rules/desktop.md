@@ -12,15 +12,16 @@ sources:
 covers: >
   the desktop app: the crate and its files, the window and its menu, the
   commands and the signal between them, the text pane and the blob frame that
-  draws the artifact, the file I/O the app owns, the watch loop and the filter
-  and the two debounces it runs on, the buffer that compiles and the rule an
-  external change runs, the state the loop writes and the four states it
-  reports, the export and its two refusals, the errors it puts on the page, the
-  bundle and the document association that launches it, the anchor path that
-  opens the pane on the author's own page, and the configuration facts a build
-  enforces
-max_lines: 455
-generated: 2026-08-15
+  draws the artifact, the file I/O the app owns and the two read passes one
+  closure serves, the three answers the asset list gives and the filter reads,
+  the watch loop and the filter and the two debounces it runs on, the buffer
+  that compiles and the rule an external change runs, the state the loop writes
+  and the four states it reports, the export and its two refusals, the errors it
+  puts on the page, the bundle and the document association that launches it,
+  the anchor path that opens the pane on the author's own page and the one file
+  it is filtered to, and the configuration facts a build enforces
+max_lines: 500
+generated: 2026-08-24
 ---
 
 # Desktop
@@ -29,17 +30,20 @@ A macOS window that shows the PDF while you write it. `md2pdf-app` is the second
 wrapper around `md2pdf-core`, beside `md2pdf-cli`, and it calls no other code of
 this project's own; **`core` gained one function for it, in Phase 6, and nothing
 in any other phase** — `core/src/lib.rs:md_to_pdf_with_anchors`, which is
-additive and left every existing signature alone. Today it opens one
-file at a time, holds that file's text in a pane beside the page, recompiles when
-the typing stops, opens the page on the heading the caret is under, says what
-state the page is in, saves the text back, and writes
-the page to a file the user names. It bundles into an `.app` and a `.dmg`, and a
-`.md` double-clicked in Finder launches it on that document. **The bundle is
+additive and left every existing signature alone. Today it opens one *document*
+at a time — one file, or a master and the sections it names — holds that
+document's own text in a pane beside the page, recompiles when the typing stops,
+opens the page on the heading the caret is under, says what state the page is
+in, saves the text back, and writes the page to a file the user names. It
+bundles into an `.app` and a `.dmg`, and a `.md` double-clicked in Finder
+launches it on that document. **The bundle is
 unsigned**, which is a credential this machine does not hold rather than a step
 skipped; `specs/desktop_app_spec.md`'s OQ-8 carries what that costs.
 
 **The pane's text is what compiles**, and several claims below turn on it. The
-file beside it need never have held that text.
+file beside it need never have held that text. **The pane holds exactly one
+file** — the master, where there is one — and the sections come off the disk;
+that is what the anchor rule below turns on.
 
 ## The crate
 
@@ -165,6 +169,14 @@ the same branch and ask for no page, which is where an unfragmented frame opens
 anyway. The precision is the document's heading density, and it follows the
 *author* rather than the reader.
 
+**The list it walks holds only the headings written in the file the pane holds**,
+and `app/src/document.rs:render_with` drops the rest. A line means something in
+exactly one buffer, so an anchor from a section is not a worse match but a number
+about a document the pane is not showing — and this lookup breaks at the first
+anchor past the caret rather than searching for a best one. A pure manifest
+therefore yields none and opens at page 1, which is already the no-heading case
+above; a master carrying a preface syncs on its own headings, correctly.
+
 `report` places the status: the line in the header, the message in a bar above
 the pane, the divergence in a bar of its own, and the dimming a stale page wears
 — with no page under it the message takes the whole pane instead. **Every word it
@@ -185,37 +197,69 @@ the pane holds is what compiles; `md2pdf_core::md_to_pdf` already took a `&str`,
 so `core` gained nothing for *that* change. It returns a `Render`, which carries the
 asset paths **even when the compile failed** — emission reads the text and not
 the disk, so a document whose figures are all missing still names them, and that
-is what keeps the watch filter alive while nothing compiles. `assets` is `None`
-only when the document did not parse, and the caller then keeps the list it had.
+is what keeps the watch filter alive while nothing compiles.
+
+**`Render::assets` has three answers, and the section paths go in first and
+unconditionally**: `Some(sections ++ bibliography ++ images)` when the two walks
+answer, `Some(sections)` when they do not and the master names any, `None`
+otherwise — and on `None` the caller keeps the list it had, which is what stops a
+transient out-of-dialect edit from dropping the images the app knows about. The
+first branch is what this returned before sections existed, in the same order,
+with an empty list in front of it. **The middle branch is why the sections are
+unconditional**: `section_paths` cannot fail where both shopping lists now fail
+with `Error::MissingSection` for a section that does not exist yet, and
+`Preview::compile` replaces the list only when it is `Some` — so without it the
+list would stay empty, `classify` would drop the section's creation event, and
+the window would never recover. It *replaces* the list with a shorter one, so
+such a document stops watching its figures until the section returns: a
+deliberate trade, since recovering the section beats watching figures through a
+window in which nothing compiles anyway.
 
 **A file the document names makes two journeys through this app, and they are
-independent.** The bytes travel `read_assets_with` → `md_to_pdf_with_anchors` and
-reach nothing else; the paths are built separately in
-`app/src/document.rs:render_with`, which calls `md2pdf_core::image_paths` and
-`md2pdf_core::bibliography_path` for itself, and travel `Render::assets` → the
-watch filter. **The bytes are what make the document compile; the paths are what
-make a change to one of them redraw.** Both exports come off one walk, so they
-answer or fail together, and the paths arrive even when a read failed — which is
-what an asset named before it exists depends on.
+independent.** The bytes travel `read_sections_with` → `read_assets_with` →
+`md_to_pdf_with_anchors` and reach nothing else; the paths are built separately
+in `app/src/document.rs:render_with`, which calls all three exports for itself,
+and travel `Render::assets` → the watch filter. **The bytes are what make the
+document compile; the paths are what make a change to one of them redraw.** The
+image and bibliography exports come off one walk, so they answer or fail
+together, and the paths arrive even when a read failed — which is what an asset
+named before it exists depends on.
 
 The compile itself is `md2pdf_core::md_to_pdf_with_anchors`, and `Render` carries
 its `anchors` beside the bytes. **They go the other way from `assets`**: a failed
 compile has none, because they describe the *page* where the asset list describes
 the text. `app/src/document.rs:Anchor` is `md2pdf_core::Anchor` again, and the
 duplication is the one `read_assets_with` already makes — this copy crosses to
-the page inside `Status`, so it must serialize, and `core` carries no serde.
+the page inside `Status`, so it must serialize, and `core` carries no serde. It
+is also a line and a page where `core`'s carries a whole `md2pdf_core::Location`,
+because **`render_with` keeps only the anchors whose location names no file** and
+drops every one written in a section; §"The page" argues why.
 
-`app/src/document.rs:read_assets_with` mirrors `cli/src/main.rs:read_assets` —
-resolve each path against `app/src/document.rs:directory`, read each once, and
-keep the path the markdown wrote. **The bibliography is read first**, and its
-path seeds the same `seen` set the images are deduplicated against, because the
-line it names is the frontmatter's and is therefore earlier than every image's.
-The duplication is deliberate: the two wrappers report their errors differently.
-Its read is a parameter, so a caller counting its own reads can check that a
-path named twice is read once, and
-`app/src/document.rs:render_with` is the same seam one level up. Both classes of
-failure reach the page in the terminal's words: a `md2pdf_core::Error` through
-its `Display`, and a file that will not read through the sentence this builds.
+**The reading is two passes and it mirrors the CLI's.**
+`app/src/document.rs:read_sections_with` runs first, as
+`cli/src/main.rs:read_sections` does and for the reason that function records:
+the markers are in the master's own text, so the sections can be read with no
+join, where neither shopping list can answer about a document that has not been
+assembled. `app/src/document.rs:read_assets_with` then mirrors
+`cli/src/main.rs:read_assets` — it takes the sections, seeds `seen` with their
+paths, carries them out on the same array, resolves each remaining path against
+`app/src/document.rs:directory`, reads each once, and keeps the path the markdown
+wrote. **The bibliography is read first of the two remaining channels**, because
+the line it names is the frontmatter's and is therefore earlier than every
+image's. A section's own images are found beside it with nothing added here:
+`core` wrote the folder into the destination before the list arrived, so an image
+drawn in `sections/method.md` reaches this as `sections/figure.png` and still
+joins the master's directory. The duplication with the CLI is deliberate: the two
+wrappers report their errors differently — and **the app owes the terminal three
+hand-built sentences**, one per channel, because a file that will not read is no
+`md2pdf_core::Error` at all.
+
+**One closure serves both passes**, borrowed by the first and handed to the
+second in `app/src/document.rs:render_with`. The read is a parameter so a caller
+counting its own reads can check that a path named twice is read once, and a
+second closure would leave half of them outside that counter. Both classes of
+failure reach the page in the terminal's words: an `Error` through its `Display`,
+and a file that will not read through the sentence this builds.
 
 `app/src/document.rs:default_output` is where an export lands unless the user
 says otherwise: the document's path with a `.pdf` extension. It duplicates
@@ -234,9 +278,14 @@ the document's path alone, so a document the dialect refuses is
 watched too. The limit: an asset that is a symlink out of the directory is not
 watched, because a watch follows the tree and not the targets.
 
-`app/src/watch.rs:classify` is the filter, and the one list `image_paths` and
-`bibliography_path` fill is what it filters against — the list is not the set, and
-it follows the buffer, because the buffer is the document now. **It sorts rather
+`app/src/watch.rs:classify` is the filter, and the one list `section_paths`,
+`image_paths` and `bibliography_path` fill is what it filters against — the list
+is not the set, and it follows the buffer, because the buffer is the document
+now. **A section changes nothing about the watch set**: `root` is already
+recursive and `sections/` sits under it, so a section is one more string in that
+one list, and it arrives as `Change::Asset` and never `Change::Document` —
+`Preview::reload`'s rule is about the buffer the pane holds, which is never a
+section. **It sorts rather
 than admits**: an event is `Change::Document` or `Change::Asset` or neither,
 because the two no longer mean the same thing. **A bibliography is one more string in that one list**
 rather than an arm of its own: the split is the open document against everything
