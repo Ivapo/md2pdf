@@ -5,10 +5,11 @@
     <title>md2pdf</title>
     <style>
       /*
-        The whole front end is this one file. `withGlobalTauri` puts the API
-        on `window.__TAURI__`, so there is no bundler and no npm toolchain
-        here: `frontendDist` is a directory of static files, and the app is
-        one Cargo build.
+        The whole front end is this one file, plus the two `pdf.js` modules
+        vendored beside it. `withGlobalTauri` puts the API on
+        `window.__TAURI__` and `pdfjs-dist` ships browser-ready ES modules, so
+        there is still no bundler and no npm toolchain here: `frontendDist` is
+        a directory of static files, and the app is one Cargo build.
       */
       :root {
         color-scheme: light dark;
@@ -300,31 +301,50 @@
         flex-direction: column;
         min-width: 0;
         min-height: 0;
-        /*
-          The frame is laid out wider or taller than this column while it is
-          scaled down into it, so the overflow is clipped rather than allowed
-          to put a scrollbar on the window.
-        */
+        /* The pages scroll in their own container, never in this column. */
         overflow: hidden;
       }
-      #pane {
+
+      /*
+        The scroll container the pages sit in, and the element every width in
+        this file is measured from. **The fit is its `clientWidth`**, not the
+        column's: on a machine set to show classic scrollbars its content box
+        is some 15 px narrower, which is the difference between a page that
+        fits and a page clipped at its right edge.
+
+        `overflow-y: scroll` rather than `auto`, so that width cannot move
+        under the fit. With `auto` a document sitting just under the scroll
+        threshold gains a scrollbar the moment the canvases widen, the content
+        box narrows by the track, and the pages clip.
+
+        `position: relative` makes each canvas's `offsetTop` a measurement
+        from this box, which is what the reader's place is read against.
+      */
+      #pages {
         flex: 1;
-        width: 100%;
+        min-width: 0;
         min-height: 0;
-        border: 0;
-        display: block;
-        /* Scaling grows the frame right and down, never off its own corner. */
-        transform-origin: 0 0;
+        position: relative;
+        overflow-y: scroll;
+        overflow-x: hidden;
       }
-      #pane[hidden] {
+      #pages[hidden] {
         display: none;
+      }
+      /*
+        The canvases sit flush to the container's content box: no gutter
+        between pages and none at the sides. A phase that wants one changes
+        `mpdf-009` §2 and its exit gate with it.
+      */
+      #pages canvas {
+        display: block;
       }
       /*
         The mark a stale page wears. A page that belongs to older text than the
         file on disk may not pass for the current one, and the error above it
         says why. No word spells "stale" here: that chrome is Phase 3's.
       */
-      #pane.stale {
+      #pages.stale {
         opacity: 0.5;
       }
 
@@ -400,25 +420,70 @@
         <p id="message">Open a markdown file to see its PDF. ⌘O</p>
         <p id="divergence" hidden></p>
         <p id="error" hidden></p>
-        <iframe id="pane" title="The compiled PDF" hidden></iframe>
+        <div
+        id="pages"
+        hidden
+        tabindex="0"
+        role="region"
+        aria-label="The compiled PDF"
+      ></div>
       </section>
     </main>
 
-    <script>
+    <script type="module">
+      /*
+        **`pdf.js` is vendored, not built**: two static ES modules under
+        `pdfjs/`, loaded straight from a module script. No npm at build time,
+        no bundler, no node — which is the whole of what `withGlobalTauri`
+        bought and what this must not spend.
+
+        **The worker is a second file and is not optional.** Parsing and
+        rasterisation happen off the main thread, because this pane re-renders
+        every time the typing stops and rasterising on the main thread would
+        freeze the text the author is typing into.
+      */
+      import * as pdfjs from './pdfjs/pdf.min.mjs'
+      pdfjs.GlobalWorkerOptions.workerSrc =
+        new URL('./pdfjs/pdf.worker.min.mjs', import.meta.url).href
+
       const { open, save } = window.__TAURI__.dialog
       const { invoke } = window.__TAURI__.core
       const { listen } = window.__TAURI__.event
 
-      const pane = document.getElementById('pane')
+      const pages = document.getElementById('pages')
       const text = document.getElementById('text')
       const message = document.getElementById('message')
       const divergence = document.getElementById('divergence')
       const error = document.getElementById('error')
       const status = document.getElementById('status')
 
-      // The object URL the pane is showing, so the previous one can be
-      // released once the frame has left it.
-      let drawn = null
+      /*
+        The document the canvases were drawn from, held between renders, and
+        the loading task it came from.
+
+        **A re-render caused by geometry alone draws from this and asks Rust
+        for nothing.** That is not an optimisation: `current_pdf` refuses while
+        the preview is stale, so a pane that re-fetched on a resize could not
+        re-fit a stale page — which is the case a fit that cannot go stale is
+        strongest about.
+
+        **The task is held because it is what can be destroyed.** A
+        `PDFDocumentProxy` has no `destroy` of its own; the loading task does,
+        and it takes the worker with it. Every open starts a worker, and this
+        pane re-opens every time the typing stops, so dropping one without
+        destroying it leaks a thread and its copy of the document per compile.
+      */
+      let loading = null
+      let doc = null
+
+      /*
+        The generation of the render now wanted, and the tasks the last one
+        left running. A render in flight is cancelled before the next begins,
+        and every await inside a render checks it is still the wanted one
+        before it touches the page.
+      */
+      let renderSeq = 0
+      const inflight = new Set()
 
       /*
         What this page has already taken from Rust. Both are counters Rust
@@ -583,7 +648,7 @@
 
         try {
           const bytes = await invoke('current_pdf')
-          draw(bytes, tookReload ? null : caretPage(state.anchors))
+          await openPdf(bytes, tookReload ? null : caretPage(state.anchors))
           drawnRevision = state.revision
         } catch (problem) {
           fail(problem)
@@ -638,7 +703,7 @@
 
         message.hidden = state.state !== 'empty'
         text.disabled = state.state === 'empty'
-        pane.classList.toggle('stale', state.error !== null && state.page)
+        pages.classList.toggle('stale', state.error !== null && state.page)
 
         parts(state)
       }
@@ -696,44 +761,153 @@
       }
 
       /*
-        The pane draws the artifact itself, not a picture of it. WebKit builds
-        its own PDF document view inside a frame fed a blob of the bytes, so a
-        link stays a live annotation, the text stays selectable, and the
-        accessibility tagging survives. The blob is same-origin, and the bytes
-        never touch the disk.
+        **The pane draws the page itself.** One canvas per page in a container
+        this app owns and scrolls, rasterised by `pdf.js` off the main thread.
+        Nothing here hands the bytes to a viewer somebody else wrote, so the
+        fit is an expression this file evaluates rather than a parameter a
+        loader reads once.
 
-        WebKit's PDF view leaks nothing about where the reader was, so a
-        re-render cannot restore their place. It can set one: `#page=N` on a
-        *fresh* object URL is honoured at load, which is why `page` goes on the
-        one minted here and never on a URL already in the frame. The app follows
-        the author's caret with it, and opens on page 1 when asked for nothing.
+        The bytes cross raw and **`getDocument` transfers the buffer to the
+        worker**, so they cannot be read twice. The proxy is kept, because a
+        re-render caused by geometry alone must not need new ones — and the
+        one it replaces is destroyed, or its worker-side document leaks on
+        every compile.
+
+        Where the reader lands is by cause, and the causes are the ones
+        `refresh` already distinguishes: a compile that took a text from disk
+        opens at page 1, a compile after the author's own edit opens at the
+        caret's page, and a compile landing while a width is still moving
+        keeps the reader where the gesture left them — that one for that
+        compile only, because the page must never move out from under a hand
+        that is on it.
       */
-      function draw(bytes, page) {
-        const url = URL.createObjectURL(
-          new Blob([bytes], { type: 'application/pdf' })
-        )
-        /*
-          The fragment goes on the frame and not on `drawn`: what is revoked
-          below has to be the object URL itself.
+      async function openPdf(bytes, page) {
+        const seq = ++renderSeq
+        cancelRenders()
 
-          `view=FitH` is the PDF open parameter for fit-to-width, and it rides
-          beside the page rather than replacing it — both are read at load, and
-          a page without a width is the frame the reader has to zoom by hand.
-        */
-        const at = page === null ? 'view=FitH' : `page=${page}&view=FitH`
+        const next = pdfjs.getDocument({ data: new Uint8Array(bytes) })
+        const opened = await next.promise
+        if (seq !== renderSeq) {
+          next.destroy()
+          return
+        }
+        loading?.destroy()
+        loading = next
+        doc = opened
 
-        /*
-          The loader fits this one itself, so the scale starts over: the styles
-          come off before the width is read, or the frame would be measured at
-          whatever size the last scale left it laid out.
-        */
+        // Before the width is read: an element that is `display: none`
+        // measures zero, and the scale is that measurement.
+        pages.hidden = false
+        if (!(await renderPages(seq))) return
+
+        if (anchor !== null) applyAnchor(anchor)
+        else if (page === null) pages.scrollTop = 0
+        else applyAnchor({ page: page - 1, fraction: 0 })
+      }
+
+      /*
+        Draw every page of the retained document at the width the container
+        has now, and answer whether the drawing finished.
+
+        **The scale is recomputed here and held nowhere**, so a fit cannot go
+        stale: it is `paneWidth / naturalWidth`, evaluated when the page is
+        drawn. **The backing store is that viewport at the display's own pixel
+        ratio** and the CSS size is left at the logical one — which is the
+        thing a transform over a committed raster could never do, and the
+        report that produced this renderer.
+
+        **A canvas is swapped in only once it holds pixels.** Setting
+        `canvas.width` clears it, so re-rendering in place would flash six
+        empty pages at every rest. The outgoing canvas at its gesture size and
+        the incoming one at its logical size occupy the same layout box, so
+        nothing jumps as they are exchanged.
+      */
+      async function renderPages(seq) {
+        const ratio = window.devicePixelRatio
+        const paneWidth = box().width
+        if (!(paneWidth > 0)) return false // a pane with no width to fit to
+
+        // Held rather than re-read: `clear` and a re-open both replace `doc`,
+        // and this loop must find out by its own generation check rather than
+        // by starting to draw a different document halfway down.
+        const from = doc
+
+        for (let n = 1; n <= from.numPages; n++) {
+          let canvas
+          let task
+          try {
+            const page = await from.getPage(n)
+            if (seq !== renderSeq) return false
+
+            const scale = paneWidth / page.getViewport({ scale: 1 }).width
+            const viewport = page.getViewport({ scale })
+
+            /*
+              The logical size is taken to whole CSS pixels and the backing
+              store is derived from it, so that the backing store is exactly
+              `floor(cssWidth × devicePixelRatio)`. The two are one number in
+              exact arithmetic — `naturalWidth × (paneWidth / naturalWidth)`
+              is the pane width — but in floating point it lands an ulp under,
+              and flooring that costs a device pixel the CSS size still
+              claims. Rounding here also makes the fit exact rather than an
+              ulp short of the pane.
+            */
+            const cssWidth = Math.round(viewport.width)
+            const cssHeight = Math.round(viewport.height)
+
+            canvas = document.createElement('canvas')
+            canvas.width = Math.floor(cssWidth * ratio)
+            canvas.height = Math.floor(cssHeight * ratio)
+            // What the CSS size is written from, here and through a gesture.
+            canvas.logical = { w: cssWidth, h: cssHeight }
+            size(canvas, 1)
+
+            task = page.render({
+              canvas,
+              viewport,
+              transform: [ratio, 0, 0, ratio, 0, 0]
+            })
+            inflight.add(task)
+            await task.promise
+          } catch (problem) {
+            /*
+              Superseded — by another render, by a re-open, or by `clear`
+              destroying this document out from under the loop. None of those
+              is news, and the generation check is what tells them from a real
+              failure, which is re-thrown for `refresh` to put on the page.
+            */
+            if (seq !== renderSeq) return false
+            if (problem instanceof pdfjs.RenderingCancelledException) {
+              return false
+            }
+            throw problem
+          } finally {
+            if (task) inflight.delete(task)
+          }
+          if (seq !== renderSeq) return false
+
+          const old = pages.children[n - 1]
+          if (old) pages.replaceChild(canvas, old)
+          else pages.append(canvas)
+        }
+
+        // A document that lost pages leaves canvases behind it.
+        while (pages.children.length > from.numPages) {
+          pages.lastElementChild.remove()
+        }
+
+        // Every canvas above was inserted at its logical size already; this is
+        // the function that owns the rule, and it is what closes a gesture.
         unscale()
-        pane.src = `${url}#${at}`
-        pane.hidden = false
-        fitted = box().width
+        fitted = paneWidth
+        return true
+      }
 
-        if (drawn) URL.revokeObjectURL(drawn)
-        drawn = url
+      // What the next render cancels. A task cancelled here rejects inside
+      // `renderPages`, which returns rather than touching the page.
+      function cancelRenders() {
+        for (const task of inflight) task.cancel()
+        inflight.clear()
       }
 
       /*
@@ -751,10 +925,10 @@
         error.textContent = String(problem)
         error.hidden = false
 
-        const drawing = !pane.hidden
+        const drawing = !pages.hidden
         error.classList.toggle('alone', !drawing)
         message.hidden = true
-        if (drawing) pane.classList.add('stale')
+        if (drawing) pages.classList.add('stale')
       }
 
       // Back to the empty state, holding no document's page and no text.
@@ -767,136 +941,166 @@
         text.value = ''
         text.disabled = true
         relines()
-        pane.hidden = true
-        pane.classList.remove('stale')
-        pane.removeAttribute('src')
-        if (drawn) {
-          URL.revokeObjectURL(drawn)
-          drawn = null
-        }
+        renderSeq++
+        cancelRenders()
+        pages.hidden = true
+        pages.classList.remove('stale')
+        pages.replaceChildren()
+        loading?.destroy()
+        loading = null
+        doc = null
+        fitted = null
+        anchor = null
         drawnRevision = -1
         takenReload = -1
       }
 
       /*
-        PROTOTYPE — hold the page at the width of a pane that is changing.
+        **A gesture is carried by CSS size; a rest is answered by a render.**
 
-        `view=FitH` is read once, at load: WebKit's PDF view keeps the scale it
-        computed and does not reflow when the frame resizes, and no script
-        reaches inside a native PDF view to ask it to. Drawing it again would
-        re-fit it — a fresh object URL is what every compile already mints — but
-        a redraw cannot restore where the reader was, since WebKit leaks
-        nothing about it, and it would land them on the caret's page every time
-        they touched the divider.
+        A width that is moving cannot be answered by re-rendering. The
+        divider's drag sets a flex basis on every `pointermove`, six pages cost
+        some 94 ms against a frame's 16.7 ms, and every render would be
+        cancelled by the next — so nothing would complete until the hand came
+        off, and a cancelled render on a just-resized canvas leaves it cleared.
+        The literal reading blanks the pane through the drag.
 
-        **So the frame is scaled rather than redrawn.** The frame keeps the
-        pixel width its page was fitted to and a transform maps it onto the
-        width the pane now has, which is exactly fit-to-width by construction:
-        scale the frame by `s` and the page inside it is `s` times as wide. It
-        composites, so it holds every frame of a drag, and the reader keeps
-        their place because nothing reloaded.
+        So while a width is changing the canvases are resized by CSS and the
+        browser resamples bitmaps it already has; when the width rests they are
+        re-rendered at the new scale, which is sharp because the raster is made
+        for that width. The cost of a step is a relayout and a repaint, far
+        under what a render costs, which is what the gesture exists to avoid.
 
-        **The cost is sharpness, and it is temporary by the shape of the app.**
-        A page scaled up is a page rendered for a narrower frame, and it softens
-        until something re-mints it — which the next compile does, at the pane's
-        new width, for free. In an app that recompiles when the typing stops, a
-        soft page is what you have between a drag and the next keystroke. A
-        reader who never types keeps it, and that is the trade to judge.
-
-        The height compensates: laying the frame out `h / s` tall makes it
-        exactly `h` after scaling, so the page's viewport still fills the pane
-        instead of leaving a band under it.
+        **The rest costs nothing it used to.** A redraw through WebKit could
+        not restore the reader's place, because that view leaks none; a
+        renderer this project owns re-rasterises into canvases it already
+        positions, so a rest is the same page at the same place in it, sharper.
       */
-      const preview = document.getElementById('preview')
 
-      // The pane width the page in the frame was fitted to. Null when the frame
-      // is holding nothing, which is the only time there is nothing to hold.
+      // The pane width the raster now in the canvases was made for. Null when
+      // nothing is drawn, which is the only time there is nothing to hold.
       let fitted = null
 
       /*
-        What the frame has to fill: the column, less whatever bars are sitting
-        above it. `#message` is not among them — it is only ever up when no page
-        is drawn, which is when this does not run.
+        Where the reader is, taken when a gesture starts and held until the
+        render that ends it: a page index and a fraction within that page.
+
+        **Not a pixel offset.** The scale changes with the width, so every
+        canvas's height and the container's `scrollHeight` change with it — an
+        offset held across that moves the reader, and clamps at the bottom when
+        a pane widens and then narrows. An index and a fraction survive both a
+        scale change and a document that gained a page.
+
+        **Non-null is what "a gesture is open" means**, which is why nothing
+        here keys on `pointerdown`: a window drag-resize has no pointer event
+        to mark a start, and a control taking width out of the column has none
+        either. A width arriving while it differs from `fitted` opens a
+        gesture; one arriving while a gesture is open continues it.
       */
+      let anchor = null
+
+      // What the pages have to fill. The container's own box, not the column's
+      // — it is a flex child, so the bars above it are already out of its
+      // height, and its content box is already less whatever scrollbar track
+      // the machine reserves.
       function box() {
-        let height = preview.clientHeight
-        for (const bar of [divergence, error]) {
-          if (!bar.hidden) height -= bar.offsetHeight
-        }
-        return { width: preview.clientWidth, height }
+        return { width: pages.clientWidth, height: pages.clientHeight }
       }
 
       /*
-        Back to the flex-sized frame the stylesheet describes — the four
-        properties the scale sets, and only those. Not a whole-style reset,
-        which would also take the `pointer-events` the divider hangs on the
-        frame for the length of a drag: a compile landing mid-drag would hand
-        the pointer back to WebKit's PDF view and stick the divider.
+        A canvas's CSS size is its logical size times the gesture's scale.
+
+        **Which property carries a gesture is a decision and not a style.** A
+        transform leaves layout alone, so the container's `scrollHeight` would
+        hold its pre-gesture extent and the anchor above would be read against
+        a stale one. CSS width makes the extent track the gesture — and makes
+        the backing store and the CSS size diverge during one and agree again
+        at rest, so a rest that never came is visible.
       */
-      function unscale() {
-        pane.style.flex = ''
-        pane.style.width = ''
-        pane.style.height = ''
-        pane.style.transform = ''
+      function size(canvas, scale) {
+        canvas.style.width = `${canvas.logical.w * scale}px`
+        canvas.style.height = `${canvas.logical.h * scale}px`
       }
 
+      /*
+        **The factor is read per canvas, not once for the list.** They are
+        normally all made for the same width, so this is `width / fitted` for
+        every one of them — but a compile landing mid-gesture swaps its pages
+        in one at a time, and for those few frames the list holds rasters from
+        two different widths. Each canvas carries the width its own raster was
+        made for, so each one lands at the container's width regardless.
+      */
       function fit() {
-        if (pane.hidden || fitted === null) return
+        const width = box().width
+        if (!(width > 0)) return
+        for (const canvas of pages.children) {
+          size(canvas, width / canvas.logical.w)
+        }
+      }
 
-        const { width, height } = box()
-        const scale = width / fitted
+      /*
+        Back to the size the raster was made for. It **writes** the logical
+        size rather than clearing it: a canvas with no CSS size lays out at its
+        backing store, which at a pixel ratio of 2 is a page twice the pane's
+        width.
+      */
+      function unscale() {
+        for (const canvas of pages.children) size(canvas, 1)
+      }
 
-        // The state a fresh draw is in, and every path here can return to it.
-        if (!Number.isFinite(scale) || Math.abs(scale - 1) < 0.002) {
-          unscale()
+      // Which page the container is scrolled into, and how far through it.
+      function readAnchor() {
+        const kids = pages.children
+        if (kids.length === 0) return null
+
+        const top = pages.scrollTop
+        let i = kids.length - 1
+        for (let k = 0; k < kids.length; k++) {
+          if (kids[k].offsetTop + kids[k].offsetHeight > top) {
+            i = k
+            break
+          }
+        }
+        const height = kids[i].offsetHeight || 1
+        return { page: i, fraction: (top - kids[i].offsetTop) / height }
+      }
+
+      function applyAnchor(at) {
+        const kids = pages.children
+        if (at === null || kids.length === 0) return
+        const i = Math.min(at.page, kids.length - 1)
+        pages.scrollTop = kids[i].offsetTop + at.fraction * kids[i].offsetHeight
+      }
+
+      /*
+        Draw the pages again at the width they ended up with, and put the
+        reader back where the gesture started.
+
+        It draws from the retained document and invokes nothing. Skipped when
+        the width did not move — a window resized by its height alone changes
+        no scale — and that is also where a gesture that never changed anything
+        is closed.
+
+        Cosmetic, so it swallows what it fails at: the canvases keep the size
+        the gesture left them at, soft rather than absent, and the next compile
+        re-renders them anyway.
+      */
+      async function rerender() {
+        if (pages.hidden || doc === null) return
+        if (box().width === fitted) {
+          anchor = null
           return
         }
 
-        // `flex` has to go with it: in a column it sizes the height, and the
-        // height is being set here.
-        pane.style.flex = 'none'
-        pane.style.width = `${fitted}px`
-        pane.style.height = `${height / scale}px`
-        pane.style.transform = `scale(${scale})`
-      }
-
-      /*
-        PROTOTYPE — draw the page again at the width it ended up with.
-
-        The scale above holds the page at the right width through a drag, and
-        it holds a page rendered for a different one: scaled far enough, the
-        type visibly softens. So the transform carries the *movement* and a
-        fresh render ends it — `view=FitH` is read at load, so a new object URL
-        at the new width is a page fitted properly and rendered sharp.
-
-        **A re-mint reloads, and a reload lands on the caret's page**, because
-        WebKit leaks nothing about where the reader was and a redraw can only
-        set a place, never restore one. That is not a new rule being introduced
-        here: it is what every compile already does, so an author who types at
-        all meets it constantly. What is new is a *reader* meeting it — scroll
-        away from the caret, drag the divider, and the page comes back at the
-        caret rather than where it was. Phase 4 owns whether that is the right
-        trade against type that stays soft until the next keystroke.
-
-        Only when the width actually moved. A window resized by its height
-        alone changes nothing about the fit, and re-minting for it would move
-        the reader for no reason at all.
-
-        Cosmetic, so it swallows what it fails at: a stale pane keeps the page
-        and the scale it has, `current_pdf` having refused to serve one.
-      */
-      async function remint() {
-        if (pane.hidden || fitted === null || box().width === fitted) return
-
+        const seq = ++renderSeq
+        cancelRenders()
         try {
-          const state = await invoke('status')
-          if (state.state !== 'current') return
-
-          const bytes = await invoke('current_pdf')
-          draw(bytes, caretPage(state.anchors))
+          if (!(await renderPages(seq))) return
         } catch {
-          // Left scaled, deliberately. See above.
+          return // left scaled, deliberately. See above.
         }
+        applyAnchor(anchor)
+        anchor = null
       }
 
       /*
@@ -909,7 +1113,7 @@
       const settle = () => {
         clearTimeout(settling)
         settling = setTimeout(() => {
-          remint()
+          rerender()
           relines()
         }, 200)
       }
@@ -918,23 +1122,27 @@
         **What the page watches is the pane, not the events that resize it.**
 
         A window resize is one cause among several and it was the only one
-        wired: folding the section panel, and showing the line gutter, both take
-        their width out of this column, and a scaled frame holds an explicit
-        pixel width — so it kept the width it was fitted to and hung off the
-        right of a column that had narrowed under it. Listing the causes is how
-        that bug happened, and the next control added to the row would have
-        reintroduced it.
+        wired: folding the section panel, and showing the line gutter, both
+        take their width out of this column. Listing the causes is how that bug
+        happened twice, and the next control added to the row would have
+        reintroduced it. The rule outlived the renderer it was found in.
 
-        Height changes reach this too, which is correct rather than merely
-        harmless: the frame's height compensation is `h / s`, so a bar appearing
-        above it changes the number. `remint` holds its own guard on the width,
-        so a change in height alone re-fits without redrawing and the reader is
-        not moved for it.
+        **The anchor is read before `fit` reflows.** The canvases still hold
+        their pre-gesture CSS size at this point, so this is where the reader
+        actually was. Resizing by CSS reflows, so a gesture of factor `s` maps
+        a content offset `T` to `T·s` while the browser holds `scrollTop` at
+        `T` — the reader is displaced continuously through the drag unless the
+        anchor is put back on every step, and WebKit implements no scroll
+        anchoring that would compensate.
       */
       new ResizeObserver(() => {
-        fit()
+        if (!pages.hidden && fitted !== null && box().width !== fitted) {
+          if (anchor === null) anchor = readAnchor()
+          fit()
+          applyAnchor(anchor)
+        }
         settle()
-      }).observe(preview)
+      }).observe(pages)
 
       /*
         PROTOTYPE — number the lines the buffer has.
@@ -1091,14 +1299,14 @@
       })
 
       /*
-        Drag the divider. The frame stops taking pointer events for the length
-        of the drag: WebKit's PDF view swallows them otherwise, and the divider
-        would stick the moment the pointer crossed the page.
+        Drag the divider. Nothing is done to the pane for the length of the
+        drag any more: the `pointer-events` this used to hang on the frame
+        existed to stop WebKit's PDF view swallowing the pointer, and the frame
+        is gone.
       */
       const divider = document.getElementById('divider')
       divider.addEventListener('pointerdown', (down) => {
         divider.setPointerCapture(down.pointerId)
-        pane.style.pointerEvents = 'none'
 
         /*
           Where the text pane starts, taken once at the grab. `clientX` is
@@ -1122,7 +1330,6 @@
         const up = () => {
           divider.removeEventListener('pointermove', move)
           divider.removeEventListener('pointerup', up)
-          pane.style.pointerEvents = ''
           settle()
         }
 
