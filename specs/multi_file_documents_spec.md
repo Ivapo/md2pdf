@@ -26,7 +26,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 4 — the document shows its parts"
-    reviewed: null
+    reviewed: 2026-08-25
     shipped: null
     cut: null
     by: null
@@ -757,6 +757,14 @@ added, and the translation that replaces it has nothing to do until there are
 sections to translate between. The two are one phase because neither is wanted
 without the other.
 
+> **CORRECTED 2026-08-25, by Phase 4.** "All three" was true of the three
+> phases this section had when it was written, and a fourth has since been
+> appended under §6.1 whose header reads *Produces the observable: **no***.
+> The sentence is kept as it stood — the claim it was making, that no phase of
+> the original three was a scaffolding phase, is untouched — and the count is
+> not to be read as a rule the section enforces. Phase 4 argues its own case
+> where §1 requires, which is what the rule actually is.
+
 ### Phase 1 — the master reads its sections
 *Produces the observable: **yes** — a PDF compiled from a master and three
 section files, whose figure numbers, cross-references and footnotes run
@@ -1102,21 +1110,19 @@ the observable from a file to *a master and the sections it names*, and Phase 3
 taught the app to open one. Nothing lets the author see what the document is
 made of. The master's list is the document's structure — its parts, in the order
 they are read — and the app was the only front end that could not show it: the
-CLI's author has the master open in their editor, and this app's author has it
-open in the pane and still cannot see the list without scrolling to find the
-markers.
+CLI's author has the master open in an editor, and this app's author has it open
+in the pane and still cannot see the list without hunting for the markers.
 
-- **Scope:** The window gains a panel naming the document's parts.
+- **Scope:** `app/src/document.rs`, `app/src/preview.rs` and
+  `app/dist/index.html`. No new command, and `core` gains nothing.
 
   **`Render` gains `sections`, and it is the list that was already there.**
   `app/src/document.rs:render_with` computes `named` before either shopping list
   can be asked anything — that is Phase 3's ordering, and it does not change.
   What changes is that the list is kept rather than only folded into
-  `Render::assets`. **It is a plain `Vec` where `assets` is an `Option`**, and
-  the difference is the point: `assets` is `None` exactly when the caller must
-  keep the list it already has, which is a sentence about a watch filter and not
-  a thing a panel can draw. A panel draws what the text names now, and the text
-  names nothing when it names nothing.
+  `Render::assets`. **It is a plain `Vec` where `assets` is an `Option`**: a
+  panel draws what the text names, and `assets`' `None` says something about a
+  watch filter that a panel cannot draw.
 
   **It reaches the page through `Status`, beside the anchors and for their
   reason** — the status is already fetched on the path that draws, so this needs
@@ -1124,56 +1130,115 @@ markers.
   document the pane holds: the panel lists the master above the sections it
   names, and the master is the one row this page could not otherwise name. The
   name and not the path, because the panel is a list of one document's parts and
-  where that document sits on the disk is the window title's business.
+  where that document sits is the window title's business.
 
   **Taken whether or not the compile succeeded**, as `assets` is and for the
   same recorded reason: it is read off the text rather than the page, so a
   document that will not compile still names its sections.
 
-  **The section list is read off the text, and that has a consequence worth
-  deciding rather than discovering.** `md2pdf_core::section_paths` reads the
-  master's own markers, so a marker half-typed names nothing and the panel would
-  collapse and reappear as the author edits it. **The list therefore keeps its
-  last non-empty answer** while the master names none, which is exactly
-  `Render::assets`' third branch and the reason recorded there: a transient
-  out-of-dialect edit must not drop what the app already knows. A document that
-  genuinely stops naming sections is indistinguishable from one mid-edit until
-  it compiles, and the panel is not the place to resolve that.
+  **The list tracks the text exactly, and this reverses what the draft of this
+  phase decided.** The draft had it keep its last non-empty answer while the
+  master named none, by analogy with `Render::assets`' third branch. **Round 1
+  found the analogy unsound and the code already right.** `assets` is `None`
+  when `image_paths` *fails* — a transient out-of-dialect edit — where
+  `core/src/lib.rs:section_paths` **cannot fail**, so an empty section list is
+  never a failure to answer. It is the answer: this text names no marker. Under
+  keep-last a master whose markers are genuinely deleted would hold a phantom
+  panel for the life of the open document, because no later compile could ever
+  restore the empty list. `app/src/preview.rs:Preview::compile` therefore
+  assigns unconditionally, as it already does.
+
+  **The cost is a panel that flickers while a marker is being typed**, since a
+  half-written `[](sections/…)` names nothing. That is accepted here as the
+  price of a panel that is never lying. If it proves unbearable in use the
+  answer is to damp the panel's *redraw* — not to retain a list the text has
+  stopped naming.
+
+  **The panel is a left column, before the text pane**, at `max-width: 40%`,
+  listing the master first and then the sections in master order, with the row
+  the pane is holding marked. A single-file document draws none of it.
+  Placement is load-bearing rather than taste: `mpdf-003` Phase 7 records two
+  geometry bugs caused by this panel taking width from the row, and the
+  divider's grab point is computed from the text pane's own left edge because
+  of it.
 
   **A section is named as the master writes it** — `sections/method.md`, not
-  `method.md`. It is the master's own words, it is what the author would edit to
-  change it, and two sections of the same name in different folders are two rows
-  that must not read alike.
+  `method.md`. It is the master's own words, it is what the author would edit,
+  and two sections of the same name in different folders are two rows that must
+  not read alike.
+
+  **Absent and folded are two states, and the header carries a `Sections`
+  toggle.** `hidden` is a document that names no section, and it takes the
+  toggle with it — a dead control on a single-file window is worse than none.
+  `.collapsed` is a reader who folded the panel away, and the toggle stays,
+  because it is the only thing that brings it back.
+
+  **The fold lives in the page and is not persisted, which is this phase's call
+  to make** — `app/dist/index.html` says so in as many words, and round 1
+  found the phase had left it unanswered. §2's rule is that state lives in Rust
+  where a test can reach it, and the rule is about state that *decides
+  behaviour*; a fold decides nothing but its own drawing, and nothing else
+  reads it. Moving it to `Preview` would buy nothing either: both die with the
+  process, this app persists nothing to disk, and a fold already survives an
+  Open where it lives now.
 
   **The rows do not load, and this phase decides that rather than deferring
   it.** Phase 3 recorded that **the pane holds exactly one file — the master**,
   and four things turn on it: `render_with` keeps only the anchors whose
   location names no file, `Session::on_change` runs the external-change rule on
   the buffer the pane holds and never on a section, `save` writes to the
-  document's own path, and the join reads every section off the disk. A row that
-  loaded a section would invert the first, fork the second, redirect the third
-  and require the fourth to take the buffer for one file from memory. **That is
-  a phase, not a detail of this one**, and this phase's contribution is to state
+  document's own path, and the join reads every section off the disk. A row
+  that loaded a section would invert the first, fork the second, redirect the
+  third and require the fourth to take one file's text from memory. **That is a
+  phase, not a detail of this one**, and this phase's contribution is to state
   the invariant it keeps and name the four things a later one must answer.
 
 - **Non-goals:** Not a file browser. It lists the parts the *master names*, in
   the order it names them — not the directory the master sits in, not the files
   it does not name, and nothing is created, renamed or deleted. A panel over the
   directory is a different object with a different job and would need a project
-  concept this project has never defined; `mpdf-003` parks it.
+  concept this project has never defined; `mpdf-003` §1.1 parks it.
 
-- **Exit gate:** `render_with` over a master naming N sections returns those N
+- **Exit gate:** Two halves, because this phase has two.
+
+  In the suite: `render_with` over a master naming N sections returns those N
   paths in `Render::sections`, in the order the master reads them, and returns
   them for a master whose sections are missing from the disk; a document naming
-  none returns an empty list; and both new fields survive `Status`'s
-  serialization. **The panel's drawing is not reachable by this repository's
-  suite** — `mpdf-003` OQ-10 carries that, and the two fields added here are two
-  more that nothing checks the page against.
+  none returns an empty list.
 
-- **Close-out:** `rules/desktop.md` gains `Render::sections` and the two
-  `Status` fields; its claim that the pane holds exactly one file stays true and
-  is worth saying so beside them. The panel itself is a pane and belongs in the
-  `rules/desktop-panes.md` that `mpdf-003` Phase 7 splits out. One push.
+  And **at `Preview::compile`, not at `render_with`** — round 2's catch, the
+  distinction being the whole point of the clause: a master whose markers are
+  then deleted leaves `Preview`'s own list empty on the next compile, and the
+  panel loses the rows. `render_with` is stateless, so at *that* surface a
+  deleted marker and a document that never had one are the same call and the
+  clause would pass under either decision. It is the retained state that the
+  reversed decision above is about, and the only place keep-last could have
+  lived.
+
+  By eye, against `samples/showcase/showcase.md` and `samples/article.md` —
+  `mpdf-003` OQ-10 records that nothing in this repository reaches the page,
+  and the phase's visible deliverable cannot go ungated for it:
+
+  1. The master and its five sections are listed, in the order the master reads
+     them, with the master's row marked as the one the pane holds.
+  2. **`samples/article.md` draws no panel and no toggle**, and the window is
+     otherwise the one Phase 3 shipped. This is the phase's own opening claim
+     and the reason it belongs to `mpdf-008`.
+  3. The `Sections` toggle folds the panel and brings it back, and the toggle
+     itself is absent for `article.md`.
+  4. A marker is deleted from the master: the row leaves the panel on the next
+     compile rather than persisting.
+
+- **Close-out:** **`rules/desktop.md`** gains `Render::sections` and the two
+  `Status` fields, which its `Render` and `Status` paragraphs do not yet
+  mention; its claim that the pane holds exactly one file stays true and is
+  worth saying so beside them. **`rules/desktop-panes.md` is verified against
+  the code and regenerated where it disagrees**, not written afresh — it
+  already carries a `## The panel` section written from the same prototype, and
+  round 1 found this close-out describing it as a file some other phase would
+  create. `README.md`'s app section describes a window of two panes and names
+  neither the third region nor the `Sections` control, so it gains a sentence.
+  **Its own push**: nothing here depends on another phase's.
 
 <!--
 The review record is a sibling file, not a section: it lives at

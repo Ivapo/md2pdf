@@ -2,6 +2,90 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 4 only — 2026-08-25 — same reviewer, resumed with the author's changelog — **READY (converged)**
+
+All three blockers confirmed resolved against the file, with each new claim
+re-verified against the prototype: `#files` is `max-width: 40%` and its `<nav>`
+precedes the gutter and the text pane in the flex row; `hidden` takes the
+toggle with it while `.collapsed` keeps it; the master's row carries `.here`.
+Both gate literals re-derived independently — the showcase names exactly five
+sections and `samples/article.md` contains zero include markers, so the
+inertness clause is a real check rather than an assumed one. The fold answer's
+supporting claim was checked too: `folded` is module-scope, an Open reloads no
+page, and `parts()` reapplies `.collapsed` on every status, so a fold does
+survive an Open where it lives.
+
+Two non-blocking folded in on convergence. **The discriminating clause named
+the wrong surface**: it read as a `render_with` assertion, and `render_with` is
+stateless, so there a deleted marker and a document that never had one are the
+same call — the clause would have passed under keep-last too. It bites at
+`Preview::compile`, which is the retained state the reversed decision is about
+and the only place keep-last could have lived; the gate now says so. And a
+pointer to `mpdf-003` §1.2 is corrected to §1.1, that spec having no §1.2.
+
+**Rejected, with reason:** spec text for `parts()`'s `?? 'the document'`
+fallback label. The branch is unreachable — a non-empty section list implies an
+open document — and the reviewer agreed on the re-review: spec text for an
+unreachable branch is one more thing to keep true.
+
+### Round 1 — Phase 4 only — 2026-08-25 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode): yes, with a flag.** Phase 4 produces no observable and
+argues it: the master's list *is* the document's structure, and this app was the
+only front end that could not show it. The flag is not the one the draft
+recorded. The draft asked whether a read-only panel earns its place if rows
+never load; **the sharper question is that the author has since said a file
+explorer is what they actually want**, which would supersede this panel's
+subject wholesale rather than extend it, and may make this phase short-lived.
+Reviewed anyway: the code is running today, the explorer is unspecced, and a
+phase describing running code should be accurate for as long as it is the
+record.
+
+One generalist rather than a panel. The reviewer was told the code was already
+on `main`, written as a prototype before the phase was drafted, and that the
+author believed at least one place in the phase specified behaviour the code
+did not have — without being told which.
+
+Three blocking findings, all accepted:
+
+1. **The "keeps its last non-empty answer" rule was the author's, was not in
+   the code, and was wrong.** The reviewer found the analogy it rested on
+   unsound: `Render::assets` is `None` when `image_paths` *fails*, where
+   `core/src/lib.rs:section_paths` **cannot fail**, so an empty section list is
+   never a failure to answer — it is the answer. Under keep-last a master whose
+   markers are genuinely deleted would hold a phantom panel for the life of the
+   open document, no later compile being able to restore an empty list. **The
+   code was right and the spec was wrong**, and the spec was changed to match.
+   The panel's flicker while a marker is half-typed stands as the accepted
+   cost, with the note that the remedy is to damp the redraw and never to
+   retain a list the text has stopped naming.
+2. **The phase described neither the toggle, nor the two states, nor the
+   placement** — and the shipped page carries a comment addressing the
+   fold-persistence question *to this phase*, which the phase left unanswered.
+   The author had believed all of this was written and it was not: the scope
+   said only "The window gains a panel naming the document's parts". Now
+   stated, with placement argued as load-bearing (it is the panel `mpdf-003`
+   Phase 7 records two geometry bugs against) and the fold answered — it stays
+   in the page, §2's rule being about state that decides behaviour, and
+   `Preview` buying nothing when both die with the process.
+3. **The gate checked two Rust fields and nothing about the window**, including
+   the phase's own opening claim that a single-file document gets nothing from
+   it. Now two halves, with four named by-eye clauses against named sample
+   files.
+
+Non-blocking also folded in: §4's preamble "All three produce the observable"
+took a dated `CORRECTED` note in place, a fourth phase having been appended
+since; the close-out gained its user-facing half, the README describing a
+two-pane window and naming neither the third region nor the control; the
+close-out's `rules/desktop-panes.md` pointer was corrected from "the file
+Phase 7 splits out" to a file that already exists and already carries a
+`## The panel` section, so the instruction is to verify and regenerate rather
+than to write; and the `Status`-serialization gate clause was **dropped**
+rather than fixed — it cost a dev-dependency the phase never named and asserted
+what `derive(Serialize)` already guarantees, where the check with real value is
+the `state.<field>` scrape `mpdf-003` OQ-10 proposes, which is not this phase's
+to build.
+
 ### Round 2 — Phase 3 only — 2026-08-24 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, two non-blocking, both folded. **Converged in two rounds**,
