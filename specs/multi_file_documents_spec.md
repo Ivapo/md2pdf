@@ -7,7 +7,7 @@ note: >
   emitter already walks, and every error, every asset and every anchor learns
   which file it came from.
 status: accepted
-last_updated: 2026-08-24
+last_updated: 2026-08-25
 
 phases:
   - name: "Phase 1 — the master reads its sections"
@@ -23,6 +23,11 @@ phases:
   - name: "Phase 3 — the desktop app opens a project"
     reviewed: 2026-08-24
     shipped: 2026-08-24
+    cut: null
+    by: null
+  - name: "Phase 4 — the document shows its parts"
+    reviewed: null
+    shipped: null
     cut: null
     by: null
 
@@ -1081,6 +1086,94 @@ re-renders when any section changes.*
   `app/src/document.rs:read_assets_with` names this phase as its closer and goes
   with them. `CLAUDE.md`'s stanza is unchanged — OQ-6 landed it in Phase 1. One
   push.
+
+### Phase 4 — the document shows its parts
+*Produces the observable: **no** — the PDF is unchanged. The argument is below.*
+
+Appended 2026-08-25, after Phase 3 shipped, per §6.1 step 2. **The subject is
+this spec's and not `mpdf-003`'s**, and the test is that a document of one file
+gets nothing from this phase: no panel is drawn, no byte of the window changes.
+It is a phase about what a document made of several files looks like, which is
+this spec's whole subject, and Phase 3 already took the ground where that meets
+the app.
+
+**Why a phase that produces no observable.** This spec widened the first noun of
+the observable from a file to *a master and the sections it names*, and Phase 3
+taught the app to open one. Nothing lets the author see what the document is
+made of. The master's list is the document's structure — its parts, in the order
+they are read — and the app was the only front end that could not show it: the
+CLI's author has the master open in their editor, and this app's author has it
+open in the pane and still cannot see the list without scrolling to find the
+markers.
+
+- **Scope:** The window gains a panel naming the document's parts.
+
+  **`Render` gains `sections`, and it is the list that was already there.**
+  `app/src/document.rs:render_with` computes `named` before either shopping list
+  can be asked anything — that is Phase 3's ordering, and it does not change.
+  What changes is that the list is kept rather than only folded into
+  `Render::assets`. **It is a plain `Vec` where `assets` is an `Option`**, and
+  the difference is the point: `assets` is `None` exactly when the caller must
+  keep the list it already has, which is a sentence about a watch filter and not
+  a thing a panel can draw. A panel draws what the text names now, and the text
+  names nothing when it names nothing.
+
+  **It reaches the page through `Status`, beside the anchors and for their
+  reason** — the status is already fetched on the path that draws, so this needs
+  no command of its own. `Status` also gains `master`, the file *name* of the
+  document the pane holds: the panel lists the master above the sections it
+  names, and the master is the one row this page could not otherwise name. The
+  name and not the path, because the panel is a list of one document's parts and
+  where that document sits on the disk is the window title's business.
+
+  **Taken whether or not the compile succeeded**, as `assets` is and for the
+  same recorded reason: it is read off the text rather than the page, so a
+  document that will not compile still names its sections.
+
+  **The section list is read off the text, and that has a consequence worth
+  deciding rather than discovering.** `md2pdf_core::section_paths` reads the
+  master's own markers, so a marker half-typed names nothing and the panel would
+  collapse and reappear as the author edits it. **The list therefore keeps its
+  last non-empty answer** while the master names none, which is exactly
+  `Render::assets`' third branch and the reason recorded there: a transient
+  out-of-dialect edit must not drop what the app already knows. A document that
+  genuinely stops naming sections is indistinguishable from one mid-edit until
+  it compiles, and the panel is not the place to resolve that.
+
+  **A section is named as the master writes it** — `sections/method.md`, not
+  `method.md`. It is the master's own words, it is what the author would edit to
+  change it, and two sections of the same name in different folders are two rows
+  that must not read alike.
+
+  **The rows do not load, and this phase decides that rather than deferring
+  it.** Phase 3 recorded that **the pane holds exactly one file — the master**,
+  and four things turn on it: `render_with` keeps only the anchors whose
+  location names no file, `Session::on_change` runs the external-change rule on
+  the buffer the pane holds and never on a section, `save` writes to the
+  document's own path, and the join reads every section off the disk. A row that
+  loaded a section would invert the first, fork the second, redirect the third
+  and require the fourth to take the buffer for one file from memory. **That is
+  a phase, not a detail of this one**, and this phase's contribution is to state
+  the invariant it keeps and name the four things a later one must answer.
+
+- **Non-goals:** Not a file browser. It lists the parts the *master names*, in
+  the order it names them — not the directory the master sits in, not the files
+  it does not name, and nothing is created, renamed or deleted. A panel over the
+  directory is a different object with a different job and would need a project
+  concept this project has never defined; `mpdf-003` parks it.
+
+- **Exit gate:** `render_with` over a master naming N sections returns those N
+  paths in `Render::sections`, in the order the master reads them, and returns
+  them for a master whose sections are missing from the disk; a document naming
+  none returns an empty list; and both new fields survive `Status`'s
+  serialization. **The panel's drawing is not reachable by this repository's
+  suite** — `mpdf-003` OQ-10 carries that, and the two fields added here are two
+  more that nothing checks the page against.
+
+- **Close-out:** `rules/desktop.md` gains `Render::sections` and the two
+  `Status` fields; its claim that the pane holds exactly one file stays true and
+  is worth saying so beside them. The panel itself is a pane and belongs in the
+  `rules/desktop-panes.md` that `mpdf-003` Phase 7 splits out. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

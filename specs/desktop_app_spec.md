@@ -5,7 +5,7 @@ note: >
   A macOS desktop app that shows the PDF while you write: a Tauri window wraps
   the same core crate, watches the document and its images, and re-renders.
 status: accepted
-last_updated: 2026-08-15
+last_updated: 2026-08-25
 
 phases:
   - name: "Phase 1 — the window, and one compile on screen"
@@ -36,6 +36,16 @@ phases:
   - name: "Phase 6 — the page the author is on"
     reviewed: 2026-08-15
     shipped: 2026-08-15
+    cut: null
+    by: null
+  - name: "Phase 7 — the page fits the pane it is given"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
+  - name: "Phase 8 — the text pane shows its lines"
+    reviewed: null
+    shipped: null
     cut: null
     by: null
 
@@ -104,6 +114,27 @@ core crate. It is not a rewrite."
   platform-specific, so a later port is a packaging job rather than a rewrite,
   and saying that here is what keeps this spec from designing for three
   platforms it cannot test.
+
+  > **CORRECTED 2026-08-25, by Phase 7.** The bullet above is kept as it was
+  > written, and one clause of it is no longer true: **a port is not a packaging
+  > job.** The claim was made about `core`, and about `core` it still holds —
+  > pure Rust, its fonts bundled, no platform call anywhere, and the CLI really
+  > would travel by being compiled. What the claim did not account for is that
+  > **this app's preview pane is not code this project wrote.** It is WebKit's
+  > own PDF view, handed a blob and addressed through PDF open parameters, and
+  > that view is a property of the webview rather than of the app. Windows runs
+  > WebView2, whose PDF view is Chromium's: it exists, but the `view=FitH` and
+  > `#page=N` behaviour Phase 6 and Phase 7 both build on is tuned to WebKit's
+  > and would need re-establishing. Linux runs WebKitGTK, which ships **no
+  > built-in PDF viewer at all** — a frame fed a PDF blob renders nothing — so
+  > the pane does not merely behave differently there, it is absent. Both claims
+  > are stated from documentation rather than from a build on either platform,
+  > and the port is where they get tested.
+  >
+  > **What the bullet was really about survives**: this spec should not design
+  > for platforms it cannot test, and it has not. Read the clause as *`core`
+  > forces no rewrite*, which is true, and not as *the app is a recompile away*,
+  > which it is not. **The pane is the port**, and OQ-9 carries it.
 - **Not the browser build.** `mpdf-001` §1.1 parks a `wasm32` build, and it
   stays parked. It is a different front end with a different file story, so it
   is a later spec rather than a phase here.
@@ -674,6 +705,59 @@ list to one item.
   certificate and notarisation credentials — external input, none of it on this
   machine on 2026-08-11. Blocks nothing; it is a phase to append when the
   credentials exist.
+
+- **OQ-9** — what does the preview pane become on a platform whose webview does
+  not draw PDFs? Raised on 2026-08-25 by Phase 7, which established that
+  `view=FitH` is read once at load and built a transform around that fact, and
+  in doing so made plain how much of this pane is **not code this project
+  wrote**. The frame is handed a blob and addressed through PDF open
+  parameters; everything between those two things is the webview's own PDF
+  view. Windows runs WebView2, whose view is Chromium's — it exists, and the
+  open-parameter behaviour Phases 6 and 7 both build on would have to be
+  re-established against it rather than assumed. Linux runs WebKitGTK, which
+  ships no built-in PDF viewer, so a frame fed a blob renders nothing and the
+  pane is absent rather than different. Both are read from documentation, not
+  from a build on either platform.
+
+  **The candidate answer is to stop borrowing a viewer and draw the pages in
+  the page**: `pdfjs-dist` ships browser-ready ES modules, so vendoring two
+  static files keeps `withGlobalTauri`'s whole point — no bundler, no node
+  toolchain, one Cargo build. It would also answer three things this pane
+  cannot do today: fit-to-width as a *mode* that survives a resize rather than
+  a transform standing in for one, a zoom the reader controls, and a click in
+  the page that names the source line it came from. What it costs is the
+  property Phase 1 recorded — that the pane "draws the artifact itself, not a
+  picture of it", with live annotations, selectable text and the tagging that
+  rides them. `pdf.js` rebuilds the first two and is weaker at the third.
+
+  **Blocks nothing today and gates every port.** It is a spec of its own rather
+  than a phase here: it would supersede this spec's decision about what draws
+  the page, and §6.1 step 1 says a phase never removes shipped work.
+
+- **OQ-10** — what checks `app/dist/index.html`? Raised on 2026-08-25 by Phase
+  7, which could not write an exit gate that this repository's suite could run.
+  OQ-2's `withGlobalTauri` bought the app one Cargo build and no node toolchain,
+  and the price recorded there was that there is no JavaScript test harness
+  here. That price was small while the page only placed what Rust chose. It is
+  larger now: Phases 7 and 8 put the pane's geometry, the fit, the gutter's
+  measurement and the caret's mark in that file, and every one of them is
+  checked by eye.
+
+  **The sharpest edge is narrower than the whole file, and it is worth naming
+  separately: nothing checks that the page and `Status` agree.** `invoke` returns
+  an untyped value and the page reads ten fields off it by name; a field renamed
+  in Rust breaks the window silently, at runtime, with no console anyone reads.
+  Phase 4 of `mpdf-008` adds two more such fields.
+
+  **A candidate answer that costs no toolchain**: `core/tests/page_examples_test.rs`
+  already `include_str!`s `web/index.html` and enforces claims about a
+  hand-written page from the Rust suite, so the idiom exists in this repository.
+  A test in `app/` that reads `dist/index.html`, scrapes its `state.<field>`
+  accesses and asserts each against a serialized `Status` would close the
+  narrow edge. The wide one — geometry, measurement, layout — is not reachable
+  that way and would need a webview driver, which is a different decision with
+  OQ-2's price attached to it. Blocks nothing; the narrow half is a phase to
+  append.
 
 ## 4. Implementation phases
 
@@ -1537,6 +1621,164 @@ phase to append if the answer is yes."
   `app/dist/index.html:draw`**, which the implementation touches anyway, so it is
   corrected there in the same pass. The README's app section gains one sentence.
   One push.
+
+### Phase 7 — the page fits the pane it is given
+*Produces the observable: **no** — the PDF is byte-for-byte the one Typst
+already compiled. The argument for building it anyway is below.*
+
+Appended 2026-08-25, after Phase 6 shipped, per §6.1 step 2: the preview pane is
+this spec's subject, which is the same ground Phase 6 took and for the same
+reason. Nothing here is about multi-file documents; a document of one file gets
+every line of it.
+
+**Why a phase that produces no observable.** §1 made the observable stop being a
+file you open and start being *a page you watch*. A page drawn at whatever scale
+WebKit last chose, half of it past the right edge of the pane, is not being
+watched — it is the same artifact and not the same document to a reader. The
+phase changes no byte of the PDF and changes whether the PDF can be read at the
+width the reader gave it.
+
+- **Scope:** The page is held at the width of the pane, through a change and
+  after it.
+
+  **The page opens fitted.** `view=FitH` is the PDF open parameter for
+  fit-to-width and rides the fragment beside Phase 6's `page=N`, both read at
+  load. A page opened at the author's own page and at a width they must then set
+  by hand is half an answer.
+
+  **WebKit reads it once, and that is the fact the rest follows from.**
+  Measured in use on this machine: the view keeps the scale it computed at load
+  and does not reflow when the frame around it resizes. No script reaches inside
+  a native PDF view to ask it to — the pane's whole design, since Phase 1, is
+  that the view is WebKit's and not this project's. OQ-9 carries what that
+  costs beyond this phase.
+
+  **So a width that is changing is answered by scaling the frame, not by drawing
+  it again.** The frame keeps the pixel width its page was fitted to, and a
+  transform maps it onto the width the pane now has: scale by `s` and the page
+  inside is `s` times as wide, which is fit-to-width by construction rather than
+  by arithmetic anyone has to trust. It composites, so it holds every frame of a
+  drag. **The reader keeps their place, because nothing reloaded.** The frame is
+  laid out `h / s` tall so that it is exactly `h` after scaling, or the page's
+  viewport would leave a band under it.
+
+  **And a width that has settled is answered by drawing it again.** A scaled
+  page is a page rendered for a different width, and far enough from `1` the
+  type visibly softens — reported in use, which is how the split between the two
+  halves was found. A fresh object URL at the settled width is fitted by the
+  loader and rendered sharp. It fires on `pointerup` and, through one 200ms
+  timer, on a window resize: **a drag ends on an event and a window resize does
+  not**, and the timer is what gives the second one an ending. Skipped when the
+  width did not move, so a window resized by its height alone re-fits without
+  redrawing.
+
+  **A redraw lands on the caret's page, and this phase does not introduce that
+  rule — Phase 6 did.** WebKit leaks nothing about where the reader was, so a
+  fresh blob can only *set* a place, never restore one, and Phase 6 answered
+  that with the author's caret. What is new is that a **reader** now meets it: a
+  reader on page 12 who drags the divider is put back on the caret's page. The
+  redraw is deliberately at rest rather than during the drag so that the gesture
+  itself never moves them.
+
+  **The pane's geometry is observed, not inferred from the events believed to
+  change it.** A `ResizeObserver` on the preview column, not a list of
+  listeners. This is stated as a rule because **two bugs in one session came from
+  the other approach**, and both had the same shape — a control added to the
+  window changed a geometry that something else had already measured. The
+  divider's grab point read `clientX`, which is measured from the window, and
+  matched the pane's own width right up until the section panel sat to the left
+  of it. The scaled frame held an explicit pixel width and kept it while the
+  panel and the line gutter each took width out of the column beside it. Neither
+  was a bug in the code that broke; both were bugs in the assumption that the
+  causes of a resize can be enumerated.
+
+- **Rejected:** *redrawing on every pointermove.* It reloads the frame, which
+  cannot be done sixty times a second and could not restore the reader's place
+  if it could. *Not redrawing at all, and letting the next compile re-mint.* True
+  that in an app which recompiles when typing stops the soft state is usually
+  transient, and false for a reader who never types — measured, and the reason
+  the settled redraw exists.
+
+- **Exit gate:** **This phase's behaviour lives entirely in
+  `app/dist/index.html`, which no test in this repository reaches**, and saying
+  so is part of the gate rather than an excuse for not having one. The suite's
+  contribution is that `cargo test --workspace` still passes and that the page's
+  script parses. The behaviour itself is a named manual check, run on a master
+  and on a single-file document: open a document and confirm the page arrives
+  fitted; drag the divider and confirm the page stays fitted through the drag
+  and sharpens when the hand comes off; toggle every control in the header and
+  confirm the page follows each one; resize the window by its height alone and
+  confirm the page does not jump. **The absence of a reachable test here is the
+  phase's own finding**, and OQ-10 below is where it goes.
+
+- **Close-out:** `rules/desktop.md` is at 497 of its declared 500 body lines and
+  cannot hold this. The rule is split rather than uncapped — `rules/desktop.md`
+  keeps the crate, the commands, the file I/O and the watch, and a new
+  `rules/desktop-panes.md` takes the two panes and their geometry, with its own
+  `sources` and `covers`. Raising the cap defers the same decision at a file
+  that is already at the length its cap was chosen to prevent. The README's app
+  section is untouched: nothing here changes what the app is for. One push.
+
+### Phase 8 — the text pane shows its lines
+*Produces the observable: **no** — nothing here reaches the PDF at all.*
+
+Appended 2026-08-25, per §6.1 step 2: the text pane is this spec's subject and
+Phase 4 is the phase that made it, whose "a plain textarea and nothing more"
+this phase is careful not to overturn.
+
+**Why a phase that produces no observable.** The app's errors name lines. A line
+number the author cannot see is a message that names a place they then have to
+count to, and the pane was the only front end that could not show it — the CLI
+prints the line beside the error in a terminal that numbers nothing, but the
+author reading it has the file open elsewhere. This closes that.
+
+- **Scope:** A `Lines` control in the header. Off, the pane is exactly Phase 4's
+  textarea. On, it gains a gutter and a mark on the caret's line.
+
+  **The textarea stays the editor**, and that is the decision the rest depends
+  on. A second editor would fork every seam that assumes a `<textarea>` — the
+  buffer sent to `edit`, the reload that replaces `value`, `caretPage`'s
+  `selectionStart`, the disabled state, and the divider's geometry — and this
+  repository's tests reach none of them. The gutter is drawn beside the pane and
+  changes nothing about it.
+
+  **A row is as tall as its line renders, not one line-height.** A textarea
+  soft-wraps and will not say where, so a gutter that gave every number one
+  line-height would drift further out of true with every wrapped paragraph until
+  the numbers meant nothing. The heights are measured off a hidden mirror: the
+  same text, the same font, laid out at the same content width, one element per
+  logical line. **What the browser did to the mirror is what it did to the
+  textarea.** Rebuilt when the text or the width changed and skipped when
+  neither did; taken at a drag's end rather than per pointermove, because the
+  measurement is a layout.
+
+  **The caret's line is counted the way `caretPage` counts it**, off
+  `selectionStart`. A second way of finding that line would be a second thing
+  that can disagree with the page Phase 6 opens the frame on, and the
+  disagreement would be invisible until it was not.
+
+  **The band behind that line is the textarea's own background** — one colour,
+  sized and placed from the measured row, with `background-attachment: local`,
+  which is what scrolls it with the text instead of pinning it to the border
+  box. Drawing it as an element would mean wrapping the textarea, making it
+  transparent and layering over it — and the divider's geometry reads the
+  textarea's own box, so the wrapper would move it. Phase 7 records what that
+  class of change costs.
+
+- **Rejected:** *a code editor component.* CodeMirror 6 needs a bundler, which
+  is what `withGlobalTauri` exists to avoid, and it would overturn Phase 4's
+  recorded "no highlighting, no autocomplete, no formatting commands" for a
+  dialect small enough that highlighting earns much less here than in LaTeX.
+
+- **Exit gate:** As Phase 7: the behaviour is in the page and no test reaches
+  it. `cargo test --workspace` passes, the script parses, and a named manual
+  check — with `Lines` on, type into a long wrapped paragraph and confirm the
+  numbers stay against their lines; move the caret by arrow, click and drag and
+  confirm the mark follows; toggle `Lines` off and confirm the pane is Phase 4's
+  textarea again, band and all.
+
+- **Close-out:** The text pane's half of `rules/desktop.md`, which Phase 7's
+  split leaves in place, gains the gutter and the mark. One push, with Phase 7.
 
 <!--
 The review record is a sibling file, not a section: it lives at
