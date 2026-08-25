@@ -2,6 +2,96 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 8 only — 2026-08-25 — same reviewer, resumed with the author's changelog — **READY (converged)**
+
+All four blockers confirmed resolved against the file, with the reviewer
+re-deriving the gate's document itself: `samples/showcase/showcase.md` is 96
+lines with 22 blank ones and a longest line of 82 characters — tall enough to
+scroll, blank enough for the zero-width-space clause, and as a master it also
+puts the Sections panel in the row beside the gutter, which is the
+two-controls-take-width case. It also confirmed the suite clause: the `.rs`
+half of `6fb21a7` is entirely `mpdf-008`'s panel work, so "no `.rs` file
+touched" is true of this phase.
+
+**A live defect found, not a spec one.** With `Lines` on, `clear()` empties the
+buffer and calls `relines()`, which returns early before reaching `markLine()`
+— and the two other things that move the mark both need a focused, enabled
+textarea, which a cleared pane is not. So closing a document left the previous
+document's band painted across an empty, disabled pane until something opened.
+**Fixed in `app/dist/index.html` in the same pass**, the early return now
+clearing the mark on its way out; recorded in the scope and gated by a new
+clause 7. This is a review of already-shipped code earning its keep.
+
+Other non-blocking folded in on convergence: the close-out gained a *verb* —
+`rules/desktop-panes.md` is **verified and regenerated where it disagrees**,
+not written afresh, since the rule was written from the same prototype and
+"gains the gutter" would read as an instruction to duplicate a section that
+exists; gate clause 1 now narrows the pane before typing, the showcase's 82
+character longest line meaning it would otherwise pass at a wide window without
+testing anything; and the zero-width-space failure is restated as
+**accumulating**, the rows being a running sum, where the scope had understated
+it as one line's height.
+
+**Rejected, with reason:** raising `web/index.html`'s identical missing-line-
+numbers gap as an `OQ-N` here. It is `mpdf-006`'s subject, that spec's rollup
+is `done`, and an open question filed against `mpdf-003` for another spec's
+gap is a question no phase of this spec will ever force. The prose note stays.
+
+### Round 1 — Phase 8 only — 2026-08-25 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode): yes.** Phase 8 produces no observable and says so, and
+its argument holds — the app's errors name lines, and a line number the author
+cannot see names a place they must count to. It is also the rare phase with
+direct evidence: the author used it through a working session and confirmed the
+numbers hold against wrapped prose and read correctly. Recorded caveat: **the
+gutter's value compounds with the one-sentence-per-line reflow that does not
+exist yet**, so today a wrapped paragraph is one number spanning several rows,
+and the strongest form of the argument is not available until that ships.
+
+One generalist rather than a panel — a gutter is low blast radius and §7.1's
+panel is for the other case. The reviewer was told the code was **already on
+`main`**, written as a prototype before the phase was drafted, so its question
+had two halves: could an implementer build this from the spec alone, and does
+the phase describe what shipped.
+
+Four blocking findings, all accepted, none rejected:
+
+1. The close-out named `rules/desktop.md` "which Phase 7's split leaves in
+   place" — but that split had happened, the pane content is in
+   `rules/desktop-panes.md`, and `rules/desktop.md`'s `covers` no longer admits
+   a pane. An implementer would have written the gutter into the wrong file.
+2. "One push, with Phase 7" made shipping contingent on a phase that is
+   unreviewed and scheduled to be cut by `mpdf-009` Phase 1 — and §7's gate
+   forbids implementing a phase whose `cut` is set, so the joint push could not
+   happen.
+3. **The gutter's scroll-follow was shipped, load-bearing and absent from the
+   phase.** The code holds `#lines` in a non-scrolling box and drives its
+   `scrollTop` from the textarea's; the phase carried only the *band's* half of
+   that contrast — "the band needs none of this" — without the half being
+   contrasted against. Built from the spec alone, the numbers part company with
+   their lines on any document taller than the pane, which is every document.
+   **The clearest instance of the failure mode of writing a spec after the
+   code**: what is written is what the author remembers deciding, not what was
+   built.
+4. The exit gate could not catch the two rules the scope's longest paragraph
+   states. Its three by-eye checks were typing, caret movement and the
+   off-toggle — none scrolled the pane and none touched the divider, which is
+   the only path that exercises either the width-change rebuild or the
+   not-per-pointermove timing. Now six clauses, three of them owed to this
+   finding.
+
+Non-blocking also folded in: the phase now names `app/dist/index.html`, which
+it had never cited; "the only front end that could not show it" corrected, as
+`web/index.html` is a third with the same gap; the caret's line stated as
+marked **twice**, the gutter row and the band, where the scope described only
+the band; the zero-width space for empty logical lines and
+`background-repeat: no-repeat` both recorded as facts that cost a build; "taken
+at a drag's end" corrected to `settle`'s 200 ms timer, with the note that this
+hook is why `mpdf-009` Phase 1 keeps `settle` whole; the by-eye departure
+argued in its own paragraph rather than borrowed from a phase being cut; and
+the close-out given its user-facing half, the README gaining the `Lines`
+toggle.
+
 ### Round 3 — Phase 6 only — 2026-08-15 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, and the round exists only because §7.4 requires one

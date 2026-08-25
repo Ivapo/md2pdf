@@ -44,7 +44,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 8 — the text pane shows its lines"
-    reviewed: null
+    reviewed: 2026-08-25
     shipped: null
     cut: null
     by: null
@@ -1728,12 +1728,15 @@ this phase is careful not to overturn.
 
 **Why a phase that produces no observable.** The app's errors name lines. A line
 number the author cannot see is a message that names a place they then have to
-count to, and the pane was the only front end that could not show it — the CLI
-prints the line beside the error in a terminal that numbers nothing, but the
-author reading it has the file open elsewhere. This closes that.
+count to. The CLI prints the line into a terminal that numbers nothing, but its
+author has the file open in an editor that does; this pane *is* the editor, and
+had no numbers of its own. (`web/index.html` is a third front end with the same
+gap and no such excuse — out of scope here, and `mpdf-006`'s to close.)
 
-- **Scope:** A `Lines` control in the header. Off, the pane is exactly Phase 4's
-  textarea. On, it gains a gutter and a mark on the caret's line.
+- **Scope:** All of it is in **`app/dist/index.html`**. A `Lines` control in the
+  header; off, the pane is exactly Phase 4's textarea; on, it gains a gutter
+  beside the text and marks the caret's line **twice** — the row's number in the
+  gutter, and a band behind the line itself.
 
   **The textarea stays the editor**, and that is the decision the rest depends
   on. A second editor would fork every seam that assumes a `<textarea>` — the
@@ -1748,9 +1751,33 @@ author reading it has the file open elsewhere. This closes that.
   the numbers meant nothing. The heights are measured off a hidden mirror: the
   same text, the same font, laid out at the same content width, one element per
   logical line. **What the browser did to the mirror is what it did to the
-  textarea.** Rebuilt when the text or the width changed and skipped when
-  neither did; taken at a drag's end rather than per pointermove, because the
-  measurement is a layout.
+  textarea.** **An empty logical line is mirrored as a zero-width space**: an
+  empty line still occupies one and an empty element does not, and markdown is
+  mostly blank lines. Without it the error **accumulates** — the rows are a
+  running sum over the measured heights, so every blank line above a row
+  shifts it by one line more.
+
+  Rebuilt when the text or the width changed and skipped when neither did.
+  **The width-change rebuild rides `settle`'s 200 ms timer**, not a
+  `pointermove` and not the `pointerup` itself — the measurement is a layout,
+  and a layout per frame for numbers nobody reads mid-drag is waste. That hook
+  is why `mpdf-009` Phase 1 keeps `settle` whole when it removes the rest of
+  what that timer once served.
+
+  **An emptied pane loses its band as well as its rows.** The path that clears
+  the document rebuilds the gutter and returns early, and the two other things
+  that move the mark both need a focused, enabled textarea — which a cleared
+  pane is not. Round 1 found the shipped code leaving the previous document's
+  band painted across an empty one until something opened; the early return
+  clears the mark on its way out.
+
+  **The gutter does not scroll; it follows.** It sits in a box that does not
+  scroll itself and its `scrollTop` is driven from the textarea's, on the
+  textarea's own `scroll` event and again whenever the rows are rebuilt.
+  Without it the numbers part company with their lines the moment a document is
+  taller than the pane, which is every document. **The band needs none of
+  this** — `background-attachment: local` scrolls it with the text — and that
+  contrast is the reason the two are built differently.
 
   **The caret's line is counted the way `caretPage` counts it**, off
   `selectionStart`. A second way of finding that line would be a second thing
@@ -1760,25 +1787,64 @@ author reading it has the file open elsewhere. This closes that.
   **The band behind that line is the textarea's own background** — one colour,
   sized and placed from the measured row, with `background-attachment: local`,
   which is what scrolls it with the text instead of pinning it to the border
-  box. Drawing it as an element would mean wrapping the textarea, making it
-  transparent and layering over it — and the divider's geometry reads the
-  textarea's own box, so the wrapper would move it. Phase 7 records what that
-  class of change costs.
+  box, and **`background-repeat: no-repeat`, without which the one-row gradient
+  tiles down the whole pane**. Drawing it as an element would mean wrapping the
+  textarea, making it transparent and layering over it — and the divider's
+  geometry reads the textarea's own box, so the wrapper would move it.
 
 - **Rejected:** *a code editor component.* CodeMirror 6 needs a bundler, which
   is what `withGlobalTauri` exists to avoid, and it would overturn Phase 4's
   recorded "no highlighting, no autocomplete, no formatting commands" for a
   dialect small enough that highlighting earns much less here than in LaTeX.
 
-- **Exit gate:** As Phase 7: the behaviour is in the page and no test reaches
-  it. `cargo test --workspace` passes, the script parses, and a named manual
-  check — with `Lines` on, type into a long wrapped paragraph and confirm the
-  numbers stay against their lines; move the caret by arrow, click and drag and
-  confirm the mark follows; toggle `Lines` off and confirm the pane is Phase 4's
-  textarea again, band and all.
+- **Exit gate:** **Every clause here is checked by eye, and that is a departure
+  this phase argues rather than borrows.** §2's rule is that the app's logic
+  lives where a test can reach it, and all of this lives in
+  `app/dist/index.html`, which nothing in this repository reads —
+  OQ-2's `withGlobalTauri` bought one Cargo build and no node toolchain, and
+  this is the bill. OQ-10 carries the general problem. What the suite
+  contributes is that `cargo test --workspace` still passes, no `.rs` file
+  being touched.
 
-- **Close-out:** The text pane's half of `rules/desktop.md`, which Phase 7's
-  split leaves in place, gains the gutter and the mark. One push, with Phase 7.
+  With `Lines` on, against `samples/showcase/showcase.md`:
+
+  1. **Narrow the pane until a paragraph wraps**, then type into it: the
+     numbers stay against their lines. The narrowing is the point — the
+     showcase's longest line is 82 characters, so at a wide enough window
+     nothing wraps and the clause would pass without testing anything.
+  2. **Scroll the pane**: the numbers stay against their lines. Nothing else in
+     this gate can see the gutter's scroll-follow, and a document taller than
+     the pane is every document.
+  3. **Drag the divider**, which rewraps the text: the numbers are against
+     their lines when it rests, and the gutter is *not* rebuilt on every
+     pointermove — the rows change once, not per frame.
+  4. **A document with blank lines between paragraphs** numbers correctly to
+     the last line, which is the zero-width-space rule and fails by one row per
+     blank line without it.
+  5. Move the caret by arrow, click and drag: **both** marks follow — the
+     gutter's row and the band.
+  6. Toggle `Lines` off: the pane is Phase 4's textarea again, band and all.
+  7. **Close the document with `Lines` on**: the gutter empties and the band
+     goes with it. Round 1's find, and it was a live defect rather than a
+     hypothetical one.
+
+- **Close-out:** **`rules/desktop-panes.md`** — **verified against the code and
+  regenerated where it disagrees**, not written afresh: its `## The gutter`
+  section and its `covers` already name this, the rule having been written from
+  the same prototype. The verb matters because the code and the rule are both
+  already on `main`, and "gains the gutter" would read as an instruction to
+  duplicate a section that exists. Not `rules/desktop.md`, which no longer
+  documents a pane at all and whose `covers` would not admit one; the draft of
+  this close-out said otherwise and round 1 caught it.
+
+  **Its own push, and not Phase 7's.** The draft said "one push, with Phase 7";
+  `mpdf-009` is `accepted` and its Phase 1 cuts Phase 7 on shipping, and §7's
+  gate forbids implementing a phase whose `cut` is set — so a joint push cannot
+  happen, and nothing in this phase's reconciliation may depend on Phase 7's.
+
+  `README.md`'s app section names the window's controls, so it gains the
+  `Lines` toggle in one sentence — a visible control the reader will otherwise
+  meet undocumented.
 
 <!--
 The review record is a sibling file, not a section: it lives at

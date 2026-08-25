@@ -984,6 +984,14 @@
 
         if (text.value === '') {
           lines.replaceChildren()
+          rows = null
+          marked = -1
+          // And the band with them. `clear()` reaches here, and this is the
+          // only path to it: the two other callers of `markLine` need a
+          // focused, enabled textarea, which a cleared pane is not. Without
+          // this the previous document's band stays painted across an empty
+          // one until something opens.
+          markLine()
           return
         }
 
