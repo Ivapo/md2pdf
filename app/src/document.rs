@@ -63,6 +63,18 @@ pub struct Render {
     /// while the compile does not.
     pub assets: Option<Vec<String>>,
 
+    /// The sections the master names, in the order it reads them.
+    ///
+    /// The same names [`Render::assets`] puts in front of everything else, kept
+    /// on their own because the panel names *files* where that list names paths
+    /// to watch — and because that list is `None` exactly when the caller must
+    /// keep the one it has, which is not a thing a panel can draw.
+    ///
+    /// Empty for a document that names no section, and empty while the marker
+    /// naming them is mid-edit: `md2pdf_core::section_paths` reads the text, so
+    /// this says what the buffer names now and not what is on the disk.
+    pub sections: Vec<String>,
+
     /// The bytes, or the sentence the terminal would print.
     pub pdf: Result<Vec<u8>, String>,
 
@@ -189,6 +201,7 @@ pub fn render_with(
 
     Render {
         assets,
+        sections: named,
         pdf,
         anchors,
     }

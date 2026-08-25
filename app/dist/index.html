@@ -18,6 +18,7 @@
         --ink: #2b3140;
         --quiet: #6b7280;
         --alarm: #a03323;
+        --band: #e9e9e4;
       }
       @media (prefers-color-scheme: dark) {
         :root {
@@ -27,6 +28,7 @@
           --ink: #e6e6e2;
           --quiet: #9aa1ae;
           --alarm: #e08573;
+          --band: #242833;
         }
       }
 
@@ -89,6 +91,161 @@
       }
 
       /*
+        PROTOTYPE — the section panel. Not yet specified; mpdf-008 Phase 4 owns
+        it. It lists the parts of the open document: the master first, then the
+        sections it names in the order it reads them. A document naming no
+        section draws no panel at all, so a single-file window is unchanged.
+
+        The rows do not load anything yet. Loading a section into the pane
+        breaks "the pane holds exactly one file", which the anchor filter, the
+        external-change rule and the save all turn on — so the rows are a list
+        and are deliberately not dressed as buttons.
+      */
+      #files {
+        flex: 0 0 auto;
+        min-width: 0;
+        max-width: 40%;
+        overflow-y: auto;
+        box-sizing: border-box;
+        padding: 10px 0;
+        background: var(--chrome);
+        border-right: 1px solid var(--edge);
+      }
+      #files[hidden] {
+        display: none;
+      }
+      /*
+        Collapsed is not hidden, and the two are different states. A document
+        naming no section has no panel and no toggle — `hidden`. A document that
+        has one the reader has folded away keeps its toggle — `.collapsed`.
+      */
+      #files.collapsed {
+        display: none;
+      }
+
+      /*
+        The toggle. Leftmost in the header because it works the leftmost pane,
+        and text rather than an icon because every other control here is text.
+        The chevron turns; it does not redraw.
+      */
+      #toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      #toggle[hidden] {
+        display: none;
+      }
+      #toggle::before {
+        content: '';
+        width: 0;
+        height: 0;
+        border: 4px solid transparent;
+        border-left-color: currentColor;
+        border-right: 0;
+        transform-origin: 25% 50%;
+        transition: transform 120ms ease;
+      }
+      #toggle[aria-expanded='true']::before {
+        transform: rotate(90deg);
+      }
+      #files h2 {
+        margin: 0 0 6px;
+        padding: 0 12px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--quiet);
+      }
+      #files ol {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      #files li {
+        padding: 4px 12px;
+        white-space: nowrap;
+        color: var(--quiet);
+        font:
+          12px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      /* The one the pane is actually holding. */
+      #files li.here {
+        color: var(--ink);
+        box-shadow: inset 2px 0 0 var(--ink);
+      }
+
+      /*
+        PROTOTYPE — the line gutter. Not yet specified.
+
+        A view and nothing else: it numbers the lines the buffer already has and
+        changes not one byte of it. What it is *not* is a second editor — the
+        textarea stays the editor, so the caret, the reload rule and the divider
+        all keep the single implementation they have.
+
+        **A row is as tall as its line renders, not one line-height**, because a
+        soft-wrapped paragraph occupies several rows on screen and a gutter that
+        assumed otherwise would drift a number further out of true with every
+        wrap. The heights come off a hidden mirror of the text laid out at the
+        pane's own width; `relines` argues it.
+      */
+      #lines {
+        flex: none;
+        overflow: hidden;
+        box-sizing: border-box;
+        padding: 12px 8px 12px 12px;
+        text-align: right;
+        background: var(--chrome);
+        border-right: 1px solid var(--edge);
+        color: var(--quiet);
+        font:
+          12px/1.6 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        user-select: none;
+        cursor: default;
+      }
+      #lines[hidden] {
+        display: none;
+      }
+      #lines div {
+        /* Set per row from the measured height; this is the unwrapped case. */
+        line-height: 1.6;
+      }
+      /* The row the caret is in. */
+      #lines div.here {
+        color: var(--ink);
+        background: var(--band);
+      }
+
+      /* The mirror. Never seen; only measured. */
+      #mirror {
+        position: absolute;
+        top: -99999px;
+        left: 0;
+        visibility: hidden;
+        box-sizing: border-box;
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+        font:
+          12px/1.6 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        tab-size: 4;
+      }
+
+      /* A view toggle that is on. The panel's chevron turns; this one fills. */
+      #numbers[aria-pressed='true'] {
+        background: var(--edge);
+      }
+
+      /*
         The text pane. A plain textarea and nothing more: no highlighting, no
         autocomplete, no formatting commands. Its text is what compiles — the
         file beside it need never have held that text — and every change is
@@ -104,6 +261,20 @@
         resize: none;
         background: var(--ground);
         color: var(--ink);
+        /*
+          The band under the caret's line is painted as this element's own
+          background — a gradient of one colour, sized and placed from the
+          measured row. **`local` is what makes it scroll with the text**: the
+          default would pin it to the border box and it would sit still while
+          the lines moved under it.
+
+          A band drawn as an element would need the textarea wrapped, made
+          transparent, and layered over — and the divider's geometry, which
+          reads this element's own box, would move with it. The background
+          costs none of that.
+        */
+        background-attachment: local;
+        background-repeat: no-repeat;
         font:
           12px/1.6 ui-monospace,
           SFMono-Regular,
@@ -129,6 +300,12 @@
         flex-direction: column;
         min-width: 0;
         min-height: 0;
+        /*
+          The frame is laid out wider or taller than this column while it is
+          scaled down into it, so the overflow is clipped rather than allowed
+          to put a scrollbar on the window.
+        */
+        overflow: hidden;
       }
       #pane {
         flex: 1;
@@ -136,6 +313,8 @@
         min-height: 0;
         border: 0;
         display: block;
+        /* Scaling grows the frame right and down, never off its own corner. */
+        transform-origin: 0 0;
       }
       #pane[hidden] {
         display: none;
@@ -192,12 +371,24 @@
   </head>
   <body>
     <header>
+      <button id="toggle" type="button" aria-expanded="true" aria-controls="files" hidden>
+        Sections
+      </button>
+      <button id="numbers" type="button" aria-pressed="false" aria-controls="lines">
+        Lines
+      </button>
       <button id="open" type="button">Open…</button>
       <button id="save" type="button">Save</button>
       <button id="export" type="button">Save a Copy…</button>
       <span id="status"></span>
     </header>
     <main>
+      <div id="mirror" aria-hidden="true"></div>
+      <nav id="files" hidden aria-label="The document's files">
+        <h2>Document</h2>
+        <ol id="parts"></ol>
+      </nav>
+      <div id="lines" hidden aria-hidden="true"></div>
       <textarea
         id="text"
         spellcheck="false"
@@ -382,6 +573,7 @@
           takenReload = state.reloaded
           try {
             text.value = await invoke('document_text')
+            relines()
           } catch (problem) {
             fail(problem)
           }
@@ -447,6 +639,60 @@
         message.hidden = state.state !== 'empty'
         text.disabled = state.state === 'empty'
         pane.classList.toggle('stale', state.error !== null && state.page)
+
+        parts(state)
+      }
+
+      /*
+        PROTOTYPE — draw the file list. The master is marked as the one the pane
+        holds, because today it always is.
+
+        It is rebuilt on every status, which is every compile. That is fine
+        while the rows are inert and would not be once they hold a selection —
+        one more thing Phase 4 decides.
+      */
+      const files = document.getElementById('files')
+      const list = document.getElementById('parts')
+      const toggle = document.getElementById('toggle')
+
+      /*
+        PROTOTYPE — folded or not, held in the page.
+
+        It does not survive a restart, and that is on purpose rather than an
+        omission: this app keeps its state in Rust where a test can reach it,
+        and a flag kept in `localStorage` here would be the one piece of window
+        state no test could hold. Whether the fold is worth a field in `Preview`
+        is Phase 4's call, not a thing to settle by reflex.
+      */
+      let folded = false
+
+      toggle.addEventListener('click', () => {
+        folded = !folded
+        toggle.setAttribute('aria-expanded', String(!folded))
+        files.classList.toggle('collapsed', folded)
+      })
+
+      function parts(state) {
+        files.hidden = state.sections.length === 0
+        toggle.hidden = files.hidden
+        if (files.hidden) {
+          list.replaceChildren()
+          return
+        }
+
+        files.classList.toggle('collapsed', folded)
+
+        const row = (name, here) => {
+          const li = document.createElement('li')
+          li.textContent = name
+          li.className = here ? 'here' : ''
+          return li
+        }
+
+        list.replaceChildren(
+          row(state.master ?? 'the document', true),
+          ...state.sections.map((section) => row(section, false))
+        )
       }
 
       /*
@@ -466,10 +712,25 @@
         const url = URL.createObjectURL(
           new Blob([bytes], { type: 'application/pdf' })
         )
-        // The fragment goes on the frame and not on `drawn`: what is revoked
-        // below has to be the object URL itself.
-        pane.src = page === null ? url : `${url}#page=${page}`
+        /*
+          The fragment goes on the frame and not on `drawn`: what is revoked
+          below has to be the object URL itself.
+
+          `view=FitH` is the PDF open parameter for fit-to-width, and it rides
+          beside the page rather than replacing it — both are read at load, and
+          a page without a width is the frame the reader has to zoom by hand.
+        */
+        const at = page === null ? 'view=FitH' : `page=${page}&view=FitH`
+
+        /*
+          The loader fits this one itself, so the scale starts over: the styles
+          come off before the width is read, or the frame would be measured at
+          whatever size the last scale left it laid out.
+        */
+        unscale()
+        pane.src = `${url}#${at}`
         pane.hidden = false
+        fitted = box().width
 
         if (drawn) URL.revokeObjectURL(drawn)
         drawn = url
@@ -505,6 +766,7 @@
         status.className = ''
         text.value = ''
         text.disabled = true
+        relines()
         pane.hidden = true
         pane.classList.remove('stale')
         pane.removeAttribute('src')
@@ -517,6 +779,310 @@
       }
 
       /*
+        PROTOTYPE — hold the page at the width of a pane that is changing.
+
+        `view=FitH` is read once, at load: WebKit's PDF view keeps the scale it
+        computed and does not reflow when the frame resizes, and no script
+        reaches inside a native PDF view to ask it to. Drawing it again would
+        re-fit it — a fresh object URL is what every compile already mints — but
+        a redraw cannot restore where the reader was, since WebKit leaks
+        nothing about it, and it would land them on the caret's page every time
+        they touched the divider.
+
+        **So the frame is scaled rather than redrawn.** The frame keeps the
+        pixel width its page was fitted to and a transform maps it onto the
+        width the pane now has, which is exactly fit-to-width by construction:
+        scale the frame by `s` and the page inside it is `s` times as wide. It
+        composites, so it holds every frame of a drag, and the reader keeps
+        their place because nothing reloaded.
+
+        **The cost is sharpness, and it is temporary by the shape of the app.**
+        A page scaled up is a page rendered for a narrower frame, and it softens
+        until something re-mints it — which the next compile does, at the pane's
+        new width, for free. In an app that recompiles when the typing stops, a
+        soft page is what you have between a drag and the next keystroke. A
+        reader who never types keeps it, and that is the trade to judge.
+
+        The height compensates: laying the frame out `h / s` tall makes it
+        exactly `h` after scaling, so the page's viewport still fills the pane
+        instead of leaving a band under it.
+      */
+      const preview = document.getElementById('preview')
+
+      // The pane width the page in the frame was fitted to. Null when the frame
+      // is holding nothing, which is the only time there is nothing to hold.
+      let fitted = null
+
+      /*
+        What the frame has to fill: the column, less whatever bars are sitting
+        above it. `#message` is not among them — it is only ever up when no page
+        is drawn, which is when this does not run.
+      */
+      function box() {
+        let height = preview.clientHeight
+        for (const bar of [divergence, error]) {
+          if (!bar.hidden) height -= bar.offsetHeight
+        }
+        return { width: preview.clientWidth, height }
+      }
+
+      /*
+        Back to the flex-sized frame the stylesheet describes — the four
+        properties the scale sets, and only those. Not a whole-style reset,
+        which would also take the `pointer-events` the divider hangs on the
+        frame for the length of a drag: a compile landing mid-drag would hand
+        the pointer back to WebKit's PDF view and stick the divider.
+      */
+      function unscale() {
+        pane.style.flex = ''
+        pane.style.width = ''
+        pane.style.height = ''
+        pane.style.transform = ''
+      }
+
+      function fit() {
+        if (pane.hidden || fitted === null) return
+
+        const { width, height } = box()
+        const scale = width / fitted
+
+        // The state a fresh draw is in, and every path here can return to it.
+        if (!Number.isFinite(scale) || Math.abs(scale - 1) < 0.002) {
+          unscale()
+          return
+        }
+
+        // `flex` has to go with it: in a column it sizes the height, and the
+        // height is being set here.
+        pane.style.flex = 'none'
+        pane.style.width = `${fitted}px`
+        pane.style.height = `${height / scale}px`
+        pane.style.transform = `scale(${scale})`
+      }
+
+      /*
+        PROTOTYPE — draw the page again at the width it ended up with.
+
+        The scale above holds the page at the right width through a drag, and
+        it holds a page rendered for a different one: scaled far enough, the
+        type visibly softens. So the transform carries the *movement* and a
+        fresh render ends it — `view=FitH` is read at load, so a new object URL
+        at the new width is a page fitted properly and rendered sharp.
+
+        **A re-mint reloads, and a reload lands on the caret's page**, because
+        WebKit leaks nothing about where the reader was and a redraw can only
+        set a place, never restore one. That is not a new rule being introduced
+        here: it is what every compile already does, so an author who types at
+        all meets it constantly. What is new is a *reader* meeting it — scroll
+        away from the caret, drag the divider, and the page comes back at the
+        caret rather than where it was. Phase 4 owns whether that is the right
+        trade against type that stays soft until the next keystroke.
+
+        Only when the width actually moved. A window resized by its height
+        alone changes nothing about the fit, and re-minting for it would move
+        the reader for no reason at all.
+
+        Cosmetic, so it swallows what it fails at: a stale pane keeps the page
+        and the scale it has, `current_pdf` having refused to serve one.
+      */
+      async function remint() {
+        if (pane.hidden || fitted === null || box().width === fitted) return
+
+        try {
+          const state = await invoke('status')
+          if (state.state !== 'current') return
+
+          const bytes = await invoke('current_pdf')
+          draw(bytes, caretPage(state.anchors))
+        } catch {
+          // Left scaled, deliberately. See above.
+        }
+      }
+
+      /*
+        A drag ends on an event and a window resize does not, so the timer is
+        what gives the second one an end. It is not the compile's debounce —
+        nothing about the document turns on it, and it only decides when a
+        picture is drawn again.
+      */
+      let settling = null
+      const settle = () => {
+        clearTimeout(settling)
+        settling = setTimeout(() => {
+          remint()
+          relines()
+        }, 200)
+      }
+
+      /*
+        **What the page watches is the pane, not the events that resize it.**
+
+        A window resize is one cause among several and it was the only one
+        wired: folding the section panel, and showing the line gutter, both take
+        their width out of this column, and a scaled frame holds an explicit
+        pixel width — so it kept the width it was fitted to and hung off the
+        right of a column that had narrowed under it. Listing the causes is how
+        that bug happened, and the next control added to the row would have
+        reintroduced it.
+
+        Height changes reach this too, which is correct rather than merely
+        harmless: the frame's height compensation is `h / s`, so a bar appearing
+        above it changes the number. `remint` holds its own guard on the width,
+        so a change in height alone re-fits without redrawing and the reader is
+        not moved for it.
+      */
+      new ResizeObserver(() => {
+        fit()
+        settle()
+      }).observe(preview)
+
+      /*
+        PROTOTYPE — number the lines the buffer has.
+
+        **A row is as tall as its line renders.** A textarea soft-wraps, so one
+        logical line can occupy three rows on screen, and a gutter that gave
+        every number one line-height would drift further out of true with every
+        wrap until the numbers meant nothing. There is no way to ask a textarea
+        where its wraps fell, so the heights are measured off a mirror: the same
+        text, the same font, laid out at the same content width, one element per
+        logical line. What the browser does to the mirror is what it did to the
+        textarea.
+
+        Rebuilt when the text changes or the width does, and skipped when
+        neither has — a drag fires this at its end rather than per move, since
+        the measurement is a layout and a layout per pointermove is a reflow per
+        frame for a column of numbers nobody is reading mid-drag.
+      */
+      const lines = document.getElementById('lines')
+      const mirror = document.getElementById('mirror')
+      const numbers = document.getElementById('numbers')
+
+      // What the gutter was last built for, so an event that changed neither
+      // costs nothing.
+      let linedText = null
+      let linedWidth = null
+
+      // Where each row starts, plus the heights beside it. Null until measured.
+      let rows = null
+
+      // Which gutter row currently wears the mark, so clearing it is one
+      // element rather than a walk.
+      let marked = -1
+
+      function relines() {
+        if (lines.hidden) return
+
+        const style = getComputedStyle(text)
+        const width =
+          text.clientWidth -
+          parseFloat(style.paddingLeft) -
+          parseFloat(style.paddingRight)
+
+        if (text.value === linedText && width === linedWidth) return
+        linedText = text.value
+        linedWidth = width
+
+        if (text.value === '') {
+          lines.replaceChildren()
+          return
+        }
+
+        mirror.style.width = `${width}px`
+        mirror.replaceChildren(
+          ...text.value.split('\n').map((line) => {
+            const row = document.createElement('div')
+            // An empty line still occupies one, and an empty element does not.
+            row.textContent = line === '' ? '\u200b' : line
+            return row
+          })
+        )
+
+        // One read of the whole mirror, then one write of the whole gutter.
+        const heights = Array.from(mirror.children, (row) => row.offsetHeight)
+        lines.replaceChildren(
+          ...heights.map((height, i) => {
+            const row = document.createElement('div')
+            row.style.height = `${height}px`
+            row.textContent = String(i + 1)
+            return row
+          })
+        )
+
+        // Kept for the band, which needs where each row starts and how tall it
+        // is — the same measurement, so it is taken once and read twice.
+        rows = heights.reduce(
+          (at, height) => (at.push(at[at.length - 1] + height), at),
+          [0]
+        )
+        rows.heights = heights
+        marked = -1 // the rows above are new elements; none of them wears it
+
+        lines.scrollTop = text.scrollTop
+        markLine()
+      }
+
+      /*
+        PROTOTYPE — the line the caret is in, marked twice: its number in the
+        gutter, and a band behind the line itself.
+
+        The line is counted the way `caretPage` counts it, off `selectionStart`,
+        because a second way of finding the caret's line would be a second thing
+        that can disagree with the page the frame opens on.
+
+        Only in Lines mode. The band is placed from the measured rows, and the
+        rows are only measured when the gutter is drawing them — so the mode
+        that pays for the measurement is the mode that gets the band.
+      */
+      function markLine() {
+        if (lines.hidden || rows === null || text.value === '') {
+          text.style.backgroundImage = ''
+          return
+        }
+
+        const line = text.value.slice(0, text.selectionStart).split('\n').length
+        const i = Math.min(line - 1, rows.heights.length - 1)
+
+        // Only the two rows that change. Walking the gutter to clear it would
+        // be a pass over every line in the document on every arrow key.
+        if (marked !== i) {
+          lines.children[marked]?.classList.remove('here')
+          lines.children[i]?.classList.add('here')
+          marked = i
+        }
+
+        // Placed from the padding box, which is where a background starts, so
+        // the pane's own top padding is added to the row's offset.
+        const top = parseFloat(getComputedStyle(text).paddingTop) + rows[i]
+        text.style.backgroundImage =
+          'linear-gradient(var(--band), var(--band))'
+        text.style.backgroundSize = `100% ${rows.heights[i]}px`
+        text.style.backgroundPosition = `0 ${top}px`
+      }
+
+      // The gutter does not scroll itself; it follows. The band does not need
+      // this: `background-attachment: local` scrolls it with the text.
+      text.addEventListener('scroll', () => {
+        lines.scrollTop = text.scrollTop
+      })
+
+      // A caret moves without the text changing — an arrow key, a click, a
+      // drag — and `relines` returns early on exactly those, so the mark needs
+      // its own event rather than a ride on that one.
+      document.addEventListener('selectionchange', () => {
+        if (document.activeElement === text) markLine()
+      })
+      text.addEventListener('keyup', markLine)
+      text.addEventListener('click', markLine)
+
+      numbers.addEventListener('click', () => {
+        const on = numbers.getAttribute('aria-pressed') !== 'true'
+        numbers.setAttribute('aria-pressed', String(on))
+        lines.hidden = !on
+        relines()
+        markLine()
+      })
+
+      /*
         Drag the divider. The frame stops taking pointer events for the length
         of the drag: WebKit's PDF view swallows them otherwise, and the divider
         would stick the moment the pointer crossed the page.
@@ -526,17 +1092,30 @@
         divider.setPointerCapture(down.pointerId)
         pane.style.pointerEvents = 'none'
 
+        /*
+          Where the text pane starts, taken once at the grab. `clientX` is
+          measured from the window and the width being set is the pane's own,
+          so the two differ by whatever sits to the left — which was nothing
+          until the section panel did. Setting one from the other unconverted
+          moved the divider to the panel's width the moment it was touched.
+
+          Once per drag rather than once per move: the panel cannot be folded
+          while the pointer is held here, so this does not change under the
+          drag, and reading layout in a pointermove costs a reflow each time.
+        */
+        const from = text.getBoundingClientRect().left
+        const room = document.body.clientWidth - from
+
         const move = (at) => {
-          const width = Math.min(
-            Math.max(at.clientX, 120),
-            document.body.clientWidth - 160
-          )
+          const width = Math.min(Math.max(at.clientX - from, 120), room - 160)
           text.style.flexBasis = `${width}px`
+          fit()
         }
         const up = () => {
           divider.removeEventListener('pointermove', move)
           divider.removeEventListener('pointerup', up)
           pane.style.pointerEvents = ''
+          settle()
         }
 
         divider.addEventListener('pointermove', move)
@@ -548,6 +1127,7 @@
       // typing at the window, and no test could hold it.
       text.addEventListener('input', () => {
         invoke('edit', { text: text.value })
+        relines()
       })
 
       document.getElementById('open').addEventListener('click', openDocument)
@@ -571,6 +1151,7 @@
         if it is ever reached is a document that opens late rather than one that
         opens wrong.
       */
+
 
       // The launch state is a state like the others, and Rust names it too.
       refresh()

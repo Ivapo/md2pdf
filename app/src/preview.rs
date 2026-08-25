@@ -135,6 +135,19 @@ pub struct Status {
     /// there. It rides the status because the status is already fetched on the
     /// path that draws, so this needs no command of its own.
     pub anchors: Vec<document::Anchor>,
+    /// The sections the open master names, in the order it reads them.
+    ///
+    /// It rides the status for the reason the anchors do: the status is already
+    /// fetched on the path that draws, so the panel needs no command of its own.
+    /// Empty for a document that names no section, which is what draws no panel.
+    pub sections: Vec<String>,
+    /// The file name of the document the pane is holding, if one is open.
+    ///
+    /// The panel lists the master above the sections it names, and the master
+    /// is the one file in that list this page could not otherwise name. The
+    /// *name* and not the path: the panel is a list of one document's parts,
+    /// and where that document sits on the disk is the title bar's business.
+    pub master: Option<String>,
 }
 
 /// The pane's state, as Rust holds it.
@@ -153,6 +166,7 @@ pub struct Preview {
     buffer: String,
     saved: String,
     assets: Vec<String>,
+    sections: Vec<String>,
     pdf: Option<Vec<u8>>,
     anchors: Vec<document::Anchor>,
     elapsed: Option<Duration>,
@@ -220,6 +234,12 @@ impl Preview {
             revision: self.revision,
             reloaded: self.reloaded,
             anchors: self.anchors.clone(),
+            sections: self.sections.clone(),
+            master: self
+                .document
+                .as_ref()
+                .and_then(|path| path.file_name())
+                .map(|name| name.to_string_lossy().into_owned()),
         }
     }
 
@@ -373,6 +393,11 @@ impl Preview {
         if let Some(assets) = render.assets {
             self.assets = assets;
         }
+
+        // Taken whether or not the compile succeeded, as the asset list above
+        // is and for the same reason: it is read off the text rather than the
+        // page, so a document that will not compile still names its sections.
+        self.sections = render.sections;
 
         match render.pdf {
             Ok(pdf) => {
