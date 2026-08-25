@@ -11,17 +11,15 @@ sources:
   - app/dist/index.html
 covers: >
   the desktop app: the crate and its files, the window and its menu, the
-  commands and the signal between them, the text pane and the blob frame that
-  draws the artifact, the file I/O the app owns and the two read passes one
+  commands and the signal between them, the file I/O the app owns and the two read passes one
   closure serves, the three answers the asset list gives and the filter reads,
   the watch loop and the filter and the two debounces it runs on, the buffer
   that compiles and the rule an external change runs, the state the loop writes
   and the four states it reports, the export and its two refusals, the errors it
   puts on the page, the bundle and the document association that launches it,
-  the anchor path that opens the pane on the author's own page and the one file
-  it is filtered to, and the configuration facts a build enforces
+  and the configuration facts a build enforces
 max_lines: 500
-generated: 2026-08-24
+generated: 2026-08-25
 ---
 
 # Desktop
@@ -113,80 +111,6 @@ Eight of the nine commands are wrappers over a plain function.
 `app/src/main.rs:pending_open` is the ninth and is not: it reads no session and
 **takes** a slot the run event filled, which the section on the bundle below
 explains.
-
-## The page
-
-`app/dist/index.html` is the whole front end — one file, inline CSS and JS.
-
-Two panes: a `<textarea>` at 40% of the width, a divider the reader drags, and
-the frame. **The text pane is plain** — no highlighting, no autocomplete, no
-formatting commands — and every change goes straight to Rust, which holds the
-buffer. The frame stops taking pointer events for the length of a drag, because
-WebKit's PDF view swallows them otherwise and the divider would stick the moment
-the pointer crossed the page.
-
-It draws the artifact, not a picture of it: the bytes go into a `Blob` of type
-`application/pdf`, and an iframe's `src` is the object URL, so WebKit builds its
-own PDF document view inside the frame. No JavaScript PDF viewer is bundled and
-none is wanted. The route is same-origin — a blob URL inherits the page's origin,
-where a custom URI scheme does not — and the bytes never touch the disk. The
-previous object URL is released once the frame has left it. **`draw` takes a page
-as well as the bytes** and puts a `#page=N` fragment on the object URL it just
-minted; the fragment goes on the frame's `src` and not on the URL it keeps, so
-what it revokes next time is the object URL itself.
-
-**A re-render moves the reader, and the app chooses where to.** WebKit's PDF view
-leaks nothing about where the reader was, so a position can never be *learned* —
-but `#page=N` on a **fresh** blob URL is honoured at load, so one can be set, and
-a redraw following the author's own edit is opened on the heading above their
-caret. A redraw that took a text from disk opens on page 1, as every redraw did
-before Phase 6.
-
-`refresh` asks for the status first, and for the bytes only when the state is
-`current` **and** the status's `revision` is one it has not drawn — so the page
-never draws a frame it has been told is out of date, and never redraws one the
-reader has scrolled for a signal that compiled nothing, which the app's own save
-now is. It re-reads the document's text on the `reloaded` count and on nothing
-else, so a fetch cannot race a keystroke still in flight.
-
-**It captures whether it took a reload *before* it advances `takenReload`**, and
-hands `draw` no page on that pass. This is load-bearing rather than tidy:
-assigning a textarea's `value` moves its caret to the end of the control, so a
-pass that replaced the text would read the document's last line and open it on
-its last page. An open, an external reload over a clean buffer and a Finder
-launch therefore all still draw page 1. The rule is "took no reload", not "the
-author typed" — an external *figure* change carries a fragment though no
-keystroke caused it, which is left as it falls, since the caret is still where
-the author put it.
-
-`caretPage` is the lookup: the caret's line is the newlines before
-`text.selectionStart`, and the target is the last anchor at or below it, or
-nothing when there is none. **Counting newlines is not parsing markdown** — the
-page owns no knowledge of the dialect — and it is the one quantity both sides
-agree on, `selectionStart` being a UTF-16 offset where a line in Rust is counted
-from bytes. A caret above the first heading and a document with no headings take
-the same branch and ask for no page, which is where an unfragmented frame opens
-anyway. The precision is the document's heading density, and it follows the
-*author* rather than the reader.
-
-**The list it walks holds only the headings written in the file the pane holds**,
-and `app/src/document.rs:render_with` drops the rest. A line means something in
-exactly one buffer, so an anchor from a section is not a worse match but a number
-about a document the pane is not showing — and this lookup breaks at the first
-anchor past the caret rather than searching for a best one. A pure manifest
-therefore yields none and opens at page 1, which is already the no-heading case
-above; a master carrying a preface syncs on its own headings, correctly.
-
-`report` places the status: the line in the header, the message in a bar above
-the pane, the divergence in a bar of its own, and the dimming a stale page wears
-— with no page under it the message takes the whole pane instead. **Every word it
-places was chosen in Rust**, so the page composes none of it and the four states
-are checked by tests rather than by eye. It survives a failure, because an author
-mid-edit passes
-through broken states constantly and blanking the pane would lose their place.
-`fail` is for the refusals that are not a compile status — an open that will not
-read, an export the pane cannot serve — and the next status replaces what it
-wrote.
 
 ## The file I/O
 
