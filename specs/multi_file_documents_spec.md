@@ -455,6 +455,18 @@ stop being a folder that travels as one thing"* — and it is what lets a chapte
 folder be moved, copied or shared whole. The showcase folder this repo added on
 2026-08-23 is the single-file demonstration of the same principle.
 
+**CORRECTED 2026-08-24, by the sample rewrite that followed Phase 3: the
+showcase is no longer single-file, so the sentence above now points at the
+opposite of what it describes.** It was rewritten as a master and five sections
+in `3c12f7f`, later the same day, on the argument that a folder whose own README
+calls it *"one document that uses every construct md2pdf supports"* could not be
+the one document not using the marker. So it demonstrates this section's rule
+rather than standing beside it: its four figures moved into `sections/`, and the
+bare `mark.svg` written in `sections/text.md` now means `sections/mark.svg`.
+**The example moved and the rule did not** — which is the whole of the
+correction, and is why the paragraph above is otherwise untouched. It is kept
+because it is what was true when it was written.
+
 **It is Phase 2 and not Phase 1, because it needs Phase 1's map and nothing
 else.** Phase 1 ships with every path resolved against the master, which is a
 real limitation and a named one rather than a surprise — `README.md` and
