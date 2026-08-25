@@ -66,20 +66,28 @@ temporary.
   pane "draws the artifact, not a picture of it", that "no JavaScript PDF viewer
   is bundled and none is wanted", and Phase 7 decided that a width that changes
   is answered by a transform. This reverses all three.
-- **Step 1 — does it remove or contradict shipped work?** **Yes, and that is
-  the landing.** `mpdf-003` Phase 7 exists only to work around a view this spec
-  removes; every line of its mechanism — the transform, the height
-  compensation, the settle timer, the re-mint, the caret-page jump a redraw
-  costs — is answered by a renderer that recomputes its scale per render.
-  Phase 1's own frame goes too. A phase of `mpdf-003` cannot do this: §6.1 step
-  1 says a phase never removes what another phase shipped, and a phase that
-  removed Phase 7 would read as if Phase 7 had never been built, when in fact
-  it was built, used, and taught this project what it needed to know.
+- **Step 1 — does it remove or contradict shipped work?** **Yes, and it is
+  `mpdf-003` Phase 1 that makes it so** — corrected in round 1, which found the
+  draft resting this on Phase 7 instead. Phase 1 shipped on 2026-08-10 and
+  decided that the pane hands its bytes to WebKit through a `blob:` URL in an
+  iframe, under a constraint it stated as **no bundled JavaScript PDF viewer**.
+  This spec bundles one. That is a contradiction of shipped work, step 1
+  matches, and a phase of `mpdf-003` is therefore not available however the
+  rest of the argument goes.
+
+  **`mpdf-003` Phase 7 is a separate question and is not what makes this a new
+  spec.** Its `shipped` and `reviewed` are both `null` and no round for it
+  exists in `specs/reviews/mpdf-003.md`; its mechanism is on `main` as
+  prototype, labelled so in `app/dist/index.html`. The draft called it shipped
+  work, which the record contradicts. What is true of it is narrower and still
+  matters: it is the one phase of `mpdf-003` whose *whole subject* this spec
+  replaces, which is why it is the phase the edge names.
 - **Steps 2–4 are not reached**, step 1 having matched. The edge is
   `supersedes: [{id: mpdf-003, phases: ["Phase 7 — the page fits the pane it is
   given"]}]`, against which `mpdf-003` sets `cut` and `by: mpdf-009` on that
   phase, keeps `status: accepted`, and has its rollup become `partial` by rule
-  4.
+  6, which it already reads for Phases 7 and 8 being unshipped — the draft said
+  rule 4 and round 1 corrected it.
 
   **The edge is not in this document's frontmatter yet, and that is
   deliberate.** It is declared when the cut happens — on Phase 1 shipping —
@@ -102,8 +110,10 @@ it.
 - **Not reverse sync.** A click on the page reporting the source line it came
   from is the feature this most obviously unlocks, and it is a different
   subject: the click is the easy half, and turning a page coordinate into a
-  markdown line needs a position map through the generated Typst, which
-  `mpdf-003` OQ-7 already parks as a `core` question. A later spec.
+  markdown line needs a position map through the generated Typst — the general
+  answer `mpdf-003` Phase 6 §2 rejected in favour of the ordinal heading
+  correspondence it shipped. Round 1 caught the draft citing `mpdf-003` OQ-7
+  for this, which is resolved and asks the opposite direction. A later spec.
 - **Not the port.** This removes the reason Windows and Linux are blocked; it
   does not attempt either, and `mpdf-003` OQ-9 stays open until there are
   machines to test on. Nothing here may be designed for a platform this project
@@ -123,33 +133,89 @@ it.
 ### The renderer is vendored, not built (decision, recorded)
 
 Two files copied into `app/dist/`: `pdf.min.mjs` and `pdf.worker.min.mjs`,
-about 1.67 MB together. **No npm at build time, no bundler, no node** — which
+1,717,067 bytes together — 1.72 MB decimal, 1.64 MiB, and round 1 re-derived
+both. **No npm at build time, no bundler, no node** — which
 is the whole of what `mpdf-003` OQ-2's `withGlobalTauri` bought and what this
 spec must not spend. `pdfjs-dist` ships browser-ready ES modules precisely so
-they can be loaded from a `<script type="module">`, and **measured in this
-window on 2026-08-25: version 6.2.108 imports in 26–31 ms** from
-`tauri://`-served static files, with no CSP change and no capability added.
+they can be loaded from a `<script type="module">`.
+
+**Measured, and re-measured after round 1 found the first attempt taken in the
+wrong place.** The draft's 26–31 ms was the *unminified* `pdf.mjs` over
+`tauri dev`'s `http://127.0.0.1:1430` static server — not the file this
+vendors, and not the scheme the app ships on. Retaken on 2026-08-25 against
+`cargo run -p md2pdf-app`, whose assets are embedded by
+`tauri::generate_context!` and served over the custom scheme, with the
+**minified** build and the worker enabled:
+
+| | |
+|---|---|
+| origin | `tauri://localhost`, protocol `tauri:` |
+| `pdf.min.mjs` imported | 29 ms, version 6.2.108 |
+| six-page showcase opened | 59 ms |
+| worker | real, not the main-thread fallback |
+| page 1 rendered | 42 ms at `devicePixelRatio` 2 |
+| all six pages | 94 ms |
+| `streamTextContent` | 190 items on page 1 |
+
+No CSP change and no capability added: `app/tauri.conf.json` declares no
+`security` key and `app/capabilities/default.json` carries only `core:default`
+and the two dialogs. **The scheme was the risk and it is retired**; OQ-5 carries
+the one thing that run did surface.
 
 **The files are committed.** The repository refuses to commit `web/pkg/` — a
 25.7 MB wasm module — and the reasoning there was that git history is permanent
 and the artifact is enormous. This is fifteen times smaller and, unlike that
 one, it is *required for the app to build at all*: fetching it in the build
 would put a network and a package manager back in a path that is one Cargo
-command. The `LICENSE` and `NOTICE` travel beside it, Apache-2.0 requiring
-attribution.
+command. **`pdfjs-dist` 6.2.108 ships a `LICENSE` and no `NOTICE`** — round 1 checked,
+against a draft that promised both — so the `LICENSE` travels beside the two
+modules and `README.md`'s `## Licence` section, which already enumerates the
+bundled fonts' licences, gains the Apache-2.0 entry.
 
 ### Fit-to-width is a scale, recomputed (decision, recorded)
 
 `scale = paneWidth / page.getViewport({scale: 1}).width`, taken **on every
-render**. That is the whole of what `mpdf-003` Phase 7 spent a transform, a
-height compensation, a settle timer and a redraw on: a fit that survives a
-resize because it is not a state that can go stale, it is an expression
-evaluated when the page is drawn.
+render**. A fit that survives a resize because it is not a state that can go
+stale — it is an expression evaluated when the page is drawn.
+
+**`paneWidth` is `clientWidth` of the scroll container the pages sit in, not of
+the column around it.** Round 1 found the draft naming neither. The container is
+a child of `#preview`, six A4 pages make it scroll, and on a machine set to
+show classic scrollbars its content box is some 15 px narrower than the
+column's — fifteen times the tolerance the gate asks for, and the difference
+between a page that fits and a page clipped at its right edge. The canvases sit
+flush to that container's content box; a phase that wants a gutter between
+pages must change this sentence and the gate with it.
 
 **The pane's geometry is observed and not inferred** — `mpdf-003` Phase 7's
-rule survives its own mechanism, and a `ResizeObserver` on the preview column
-is what triggers a re-render. Two bugs came from listing the causes of a resize
+rule survives its own mechanism, and a `ResizeObserver` on that container is
+what triggers the re-render. Two bugs came from listing the causes of a resize
 and both had one shape.
+
+### A gesture is carried by a transform; a rest is answered by a render (decision, recorded)
+
+**Round 1's sharpest finding, and it reverses part of what the draft claimed.**
+The draft deleted "every line of `mpdf-003` Phase 7's mechanism" and left a
+`ResizeObserver` wired straight to a full re-render. The divider's drag sets a
+flex basis on every `pointermove`, so that observer fires once per frame, and
+six pages cost 94 ms against a frame's 16.7 ms — every render cancelled by the
+next, nothing completing until the hand comes off, and a cancelled render on a
+just-resized canvas leaves it *cleared*, so the literal reading blanks the pane
+through the drag. `mpdf-003` Phase 7 rejected redrawing per pointermove for
+exactly this reason.
+
+**So the split Phase 7 found is kept, and only its reason changes.** While a
+width is changing the canvases are scaled by CSS — their backing stores
+untouched, the browser resampling a bitmap it already has, which composites and
+holds every frame. When the width rests, they are re-rendered at the new scale,
+which is sharp because the raster is made for that width.
+
+What is different is what the rest costs. Phase 7's redraw re-minted a blob and
+so **could not restore the reader's place**, because WebKit leaks none — the
+whole reason a drag put the reader on the caret's page. A renderer this project
+owns re-rasterises into canvases it already positions, so the rest is invisible:
+same scroll offset, same page, sharper type. **The mechanism looks like Phase
+7's and costs nothing it cost.**
 
 ### Sharpness is the device's pixel ratio, and it is the thing a transform could
 not do (decision, recorded)
@@ -157,7 +223,10 @@ not do (decision, recorded)
 The canvas backing store is `floor(viewport.width * devicePixelRatio)` by the
 same in height, with the context transformed by that ratio and the CSS size
 left at the logical one. **Measured: page 1 of the six-page showcase renders in
-33–46 ms at `devicePixelRatio` 2.** A CSS transform can only resample a raster
+42 ms at `devicePixelRatio` 2**, and all six in 94 ms — the same run as the
+table above, so the two figures are one measurement and not two. The draft
+quoted 33–46 ms from the dev-server probe; round 1 caught that the per-page and
+whole-document numbers were being read as if they described the same thing. A CSS transform can only resample a raster
 that was already committed, which is what made `mpdf-003` Phase 7's scaled page
 visibly soften and is the report that produced this spec.
 
@@ -206,13 +275,42 @@ bookmarks that nothing in this project currently reads.
   so a document of this size needs no virtualisation and Phase 1 will not build
   any. A thesis will. The threshold is unmeasured and the answer is a page
   budget rather than a document one. *(deferred by evidence)*
-- **OQ-2** — what happens to the reader's scroll position across a re-render?
-  The current pane cannot restore it and sets the caret's page instead, which
-  `mpdf-003` Phase 6 decided and Phase 7 inherited. **A renderer this project
-  owns knows the scroll offset**, so for the first time restoring it is
-  possible — and "restore where they were" and "follow the author's caret" are
-  now two answers that both exist, where before only one did. Phase 1 must
-  choose, and the choice is a use question. *(needs-input)*
+- ~~**OQ-2** — what happens to the reader's scroll position across a
+  re-render?~~ **RESOLVED 2026-08-25, in round 1**, which found the draft
+  calling it resolved in Phase 1 while leaving it `needs-input` here and
+  offering a recommendation in place of a decision. **The answer is by cause,
+  and the causes are the ones `app/dist/index.html:refresh` already
+  distinguishes:**
+
+  1. **A compile that took a text from disk** — an open, or an external change
+     over a clean buffer, which `refresh` already knows as `tookReload` — opens
+     at **page 1**. Unchanged from `mpdf-003` Phase 6, which argues it: an open
+     is not a cursor movement.
+  2. **A compile after the author's own edit** opens at **the caret's page**,
+     by `caretPage` and the anchors. Unchanged from Phase 6, whose whole
+     subject this is.
+  3. **A re-render caused by geometry alone** — a divider drag, a window
+     resize, a control taking width out of the column — **restores where the
+     reader was**, because no new bytes arrived and nothing about the document
+     moved. This is the case that could not be served before and is the reason
+     the question was open.
+
+  **The restored quantity is a page index and a fraction within that page, not
+  a pixel offset.** Round 1 caught the draft naming the raw `scrollTop`: the
+  scale changes with the width, so every canvas's height and the container's
+  `scrollHeight` change with it, and a pixel offset held across that moves the
+  reader — and clamps at the bottom when a pane widens and then narrows. Taken
+  before the re-render and reapplied after, an anchor of *(page, fraction)*
+  survives both a scale change and a document that gained a page.
+- **OQ-5** — does a window that is not frontmost render at all? Raised
+  2026-08-25 by the re-measurement, which **stalled before its first render and
+  sat for fourteen minutes** in a window that was behind another; the identical
+  probe completed in 42 ms when the window was in front. One observation each
+  way, unexplained, and not chased because it blocks nothing in Phase 1 —
+  WebKit throttles occluded windows, and a preview that only stalls while
+  nobody is looking at it may be correct behaviour. **It stops being harmless
+  if the pane is still stale when the author comes back**, which is the thing
+  to watch for in use. *(deferred by evidence)*
 - **OQ-3** — what does a canvas cost a reader using a screen reader, and what
   can be given back? `pdf.js` exposes `getStructTree`, and Typst's own tagging
   is what would feed it. Unmeasured, and nobody has tested this app with a
@@ -230,44 +328,99 @@ bookmarks that nothing in this project currently reads.
 *Produces the observable: **yes** — the same PDF Typst compiled, rasterised by
 this app instead of by WebKit, and fitted to the pane at every width.*
 
-- **Scope:** The iframe and its blob go. In their place a scroll container the
-  pane owns, one canvas per page, and a module that opens the bytes and renders
-  them.
+- **Scope:** Everything here is in **`app/dist/index.html`**, plus two files
+  copied into `app/dist/pdfjs/`. No `.rs` file is edited.
 
-  **The bytes reach it as they do now.** `current_pdf` already crosses raw as a
-  `tauri::ipc::Response`; `pdf.js` takes a `Uint8Array`, so nothing about the
-  command, the `revision` guard or the signal changes. The object URL, its
-  revocation, and the `#page=N` and `view=FitH` fragments all go, and with them
-  every line of `mpdf-003` Phase 7's mechanism.
+  **Vendored first**: `pdf.min.mjs` and `pdf.worker.min.mjs` from `pdfjs-dist`
+  6.2.108, with its `LICENSE`, into `app/dist/pdfjs/`. §2 argues the choice; the
+  phase is where they arrive, and the draft named them only in §2 — round 1's
+  catch.
 
-  **The scale is `paneWidth / naturalWidth`, per render**, and the canvas is
-  sized at `devicePixelRatio` with the context transformed to match. A
-  `ResizeObserver` on the column re-renders, which is Phase 7's surviving rule.
+  **The iframe and its blob go**, and a scroll container the pane owns takes
+  their place with one canvas per page. The bytes reach it as they do now:
+  `app/src/main.rs:current_pdf` already crosses raw as a `tauri::ipc::Response`,
+  which reaches the page as an `ArrayBuffer` — `pdf.js` takes a `Uint8Array`
+  over it, and **`getDocument` transfers that buffer to the worker**, so it
+  cannot be read twice. `app/dist/index.html:refresh`'s `revision` guard, the
+  payload-less `rendered` signal and `Status` are untouched.
 
-  **OQ-2 is resolved in this phase and not deferred past it**: a re-render
-  either restores the scroll offset it took before it started, or opens on the
-  caret's page as `mpdf-003` Phase 6 decided. The recommendation is *both, by
-  cause* — an author's own keystroke follows the caret, and a resize restores
-  the offset — because the two are now distinguishable, where the old pane had
-  one answer for every cause.
+  **The `PDFDocumentProxy` is retained between renders**, and a geometry-only
+  re-render draws from it without a second `invoke`. This is not an
+  optimisation: `current_pdf` refuses while `Preview::is_stale`, so a pane that
+  re-fetched on resize could not re-fit a stale page — the one case §2's
+  "a fit that cannot go stale" is strongest about. Round 1's catch.
 
-  **A render in flight is cancelled before the next begins.** `pdf.js` returns
-  a task with `cancel()`, and a pane that re-renders whenever typing stops will
-  overlap them.
+  **The scale is §2's**, read from the scroll container, with the canvas backing
+  store at `devicePixelRatio` and the context transformed to match. A
+  `ResizeObserver` on that container drives it, per §2's gesture-versus-rest
+  split: CSS-scale while the width is moving, re-render when it rests. A render
+  in flight is cancelled before the next begins.
 
-- **Exit gate:** A document of six pages draws all six; the page's width equals
-  the pane's content width at three divider positions and after a window
-  resize, within a pixel; the canvas backing store is `devicePixelRatio` times
-  the CSS size. `cargo test --workspace` passes unchanged — **`core` and the
-  Rust side are untouched by this phase**, which is itself checkable and worth
-  checking. The rendering is in the page and `mpdf-003` OQ-10 still applies.
+  **OQ-2's three cases are built as §3 resolves them**, including the
+  *(page, fraction)* anchor for the geometry case.
+
+  **What `mpdf-003` Phase 7 leaves behind is removed by name, and one part of
+  it is kept** — round 1 found the draft deleting a shared mechanism blind.
+  `draw`, `fit`, `unscale`, `remint`, `box` and the `fitted` variable go, with
+  the `#page=N` and `view=FitH` fragments and the object URL's minting and
+  revocation. **`settle` does not go**: it runs `remint()` *and* `relines()`,
+  and it is the **only** width-change path that rebuilds `mpdf-003` Phase 8's
+  line gutter — its other four callers are a disk reload, `clear()`, the `Lines`
+  toggle and a text `input`. Its `remint` half goes and its `relines` half
+  stays. The divider's `pointerdown` handler calls `fit()` per move and hangs
+  `pane.style.pointerEvents` on the iframe **to stop WebKit's PDF view
+  swallowing the drag** — a workaround whose reason this phase removes, so the
+  property goes with the element it was set on.
+
+  **The four states keep working**, and they are named because they ride on the
+  element being replaced: `report` toggles the dimming a stale page wears,
+  `fail` reads whether a page is drawn to decide whether the error takes the
+  whole pane, and `clear` empties it for a second Open.
+
+- **Exit gate:** Run against **`samples/showcase/showcase.md`**, which the CLI
+  compiles to six pages — checkable independently as `/Count 6` on the compiled
+  PDF's page tree, so the literal survives the sample gaining a page.
+
+  1. All six pages draw, in order.
+  2. **With the machine set to always-show scrollbars**, no page is clipped at
+     its right edge at three divider positions and after a window resize. This
+     is the clause that has content: `scale = paneWidth / naturalWidth` makes
+     any width-equality check pass by construction, so what is tested is that
+     `paneWidth` was read from the scroll container's content box and not the
+     column's. Round 1's catch.
+  3. The canvas backing store is `floor(cssWidth × devicePixelRatio)` **to the
+     device pixel**, checked in the Web Inspector, which a `cargo tauri dev`
+     build has.
+  4. Each of OQ-2's three causes lands where §3 says: an open on page 1, a
+     keystroke on the caret's page, a divider drag on the same page and
+     fraction the reader was at.
+  5. The page is not blank or flickering *during* a divider drag, only after —
+     §2's gesture rule, and the thing no clause of the draft's gate reached.
+  6. Every control in the header is toggled and the page follows each: the
+     `Sections` panel and `Lines`, which are the two that caused the bugs
+     "geometry is observed" exists for.
+  7. The empty, failed and stale states are each entered once, and a second
+     document is opened over the first.
+  8. `cargo test --workspace` passes unchanged — **no `.rs` file is edited by
+     this phase**, which is itself the check. The binary's embedded assets do
+     change, `generate_context!` embedding `frontendDist`.
+
+  Clauses 1–7 are manual: `mpdf-003` OQ-10 records that nothing in this
+  repository reaches this file, and this phase does not change that.
 
 - **Close-out:** `rules/desktop-panes.md`'s "The frame's width" is replaced
   rather than corrected — it describes a mechanism that no longer exists — and
-  "The page" loses the blob and the fragment. `mpdf-003` Phase 7 takes `cut`
-  and `by: mpdf-009` on this phase shipping, and `mpdf-003` §2's "no JavaScript
-  PDF viewer is bundled and none is wanted" takes a dated `CORRECTED` note.
-  The README's app section gains a line about what draws the page. One push.
+  "The page" loses the blob, the fragment and the `pointer-events` workaround.
+  **`rules/desktop.md` changes too**, which the draft missed: it counts the
+  app's files, calls `frontendDist` a directory of static files, and says no
+  policy blocks the `blob:` frame. `mpdf-003` §2's "Why the pane is a `blob:`
+  URL in an iframe" and its **no bundled JavaScript PDF viewer** constraint each
+  take a dated `CORRECTED` note, and `mpdf-003` Phase 7 takes `cut` and
+  `by: mpdf-009` — this spec's `supersedes` edge being written in the same pass,
+  per §1.1. In `README.md`, the sentence "**The pane is a real PDF view and
+  tells the app nothing about where you scrolled it, so it follows your cursor
+  instead**" is replaced rather than supplemented — OQ-2 reverses exactly the
+  thing it states — and `## Licence` gains the Apache-2.0 entry. One push.
 
 ### Phase 2 — the text it can select and the links it can follow
 *Produces the observable: **yes** — the same page, with the text selectable and
