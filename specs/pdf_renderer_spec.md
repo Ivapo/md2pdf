@@ -37,7 +37,7 @@ reference: >
   takes. Its collaborative editing, its server-side compile and its file
   explorer are out of scope permanently — `mpdf-001` §2 keeps this app local and
   fetching nothing. Mozilla's `pdf.js` is the renderer itself, Apache-2.0, whose
-  licence and NOTICE travel with the vendored files.
+  LICENSE travels with the vendored files.
 ---
 
 # pdf renderer
@@ -193,7 +193,7 @@ rule survives its own mechanism, and a `ResizeObserver` on that container is
 what triggers the re-render. Two bugs came from listing the causes of a resize
 and both had one shape.
 
-### A gesture is carried by a transform; a rest is answered by a render (decision, recorded)
+### A gesture is carried by CSS size; a rest is answered by a render (decision, recorded)
 
 **Round 1's sharpest finding, and it reverses part of what the draft claimed.**
 The draft deleted "every line of `mpdf-003` Phase 7's mechanism" and left a
@@ -206,17 +206,31 @@ through the drag. `mpdf-003` Phase 7 rejected redrawing per pointermove for
 exactly this reason.
 
 **So the split Phase 7 found is kept, and only its reason changes.** While a
-width is changing the canvases are scaled by CSS — their backing stores
-untouched, the browser resampling a bitmap it already has, which composites and
-holds every frame. When the width rests, they are re-rendered at the new scale,
+width is changing the canvases are resized by CSS — their backing stores
+untouched, the browser resampling a bitmap it already has. §4 fixes *which*
+property does it and argues the choice; the cost is a relayout and a repaint
+per step rather than a composite, which is far under the 94 ms a render costs
+and is what the gesture exists to avoid. When the width rests, they are re-rendered at the new scale,
 which is sharp because the raster is made for that width.
 
 What is different is what the rest costs. Phase 7's redraw re-minted a blob and
 so **could not restore the reader's place**, because WebKit leaks none — the
 whole reason a drag put the reader on the caret's page. A renderer this project
-owns re-rasterises into canvases it already positions, so the rest is invisible:
-same scroll offset, same page, sharper type. **The mechanism looks like Phase
-7's and costs nothing it cost.**
+owns re-rasterises into canvases it already positions, so the rest is
+invisible: same page, same place in it, sharper type. **The mechanism looks
+like Phase 7's and costs nothing it cost.**
+
+**The gesture moves the reader unless it is held, and round 3 found the spec
+silent on it.** Resizing by CSS reflows, so page *k*'s top offset is the sum of
+the heights above it and a gesture of factor *s* maps a content offset `T` to
+`T·s` — while the browser holds `scrollTop` at `T`. The reader is displaced by
+`T(s−1)` continuously through the drag, some 600 px on page 5 of the showcase
+for a 20% widen, and WebKit implements no scroll anchoring that would
+compensate. So **OQ-2 case 3's anchor is taken when the gesture starts, not
+when the render begins**, and it is reapplied on every step of the gesture as
+well as after the render that ends it. Taken at the render, as the draft of
+this section had it, the anchor would faithfully preserve a position the drag
+had already ruined.
 
 ### Sharpness is the device's pixel ratio, and it is the thing a transform could
 not do (decision, recorded)
@@ -297,13 +311,20 @@ bookmarks that nothing in this project currently reads.
      moved. This is the case that could not be served before and is the reason
      the question was open.
 
+  **The anchor is taken when the gesture starts and held throughout**, not
+  taken when the render begins — round 3's catch, and §2's "A gesture is
+  carried by CSS size" argues it: a CSS resize reflows, so the reader drifts
+  through the drag itself unless the anchor is reapplied on every step. A
+  capture at the re-render would preserve the displaced position faithfully and
+  restore nothing.
+
   **The restored quantity is a page index and a fraction within that page, not
   a pixel offset.** Round 1 caught the draft naming the raw `scrollTop`: the
   scale changes with the width, so every canvas's height and the container's
   `scrollHeight` change with it, and a pixel offset held across that moves the
-  reader — and clamps at the bottom when a pane widens and then narrows. Taken
-  before the re-render and reapplied after, an anchor of *(page, fraction)*
-  survives both a scale change and a document that gained a page.
+  reader — and clamps at the bottom when a pane widens and then narrows. An
+  anchor of *(page, fraction)* survives both a scale change and a document that
+  gained a page.
 - **OQ-5** — does a window that is not frontmost render at all? Raised
   2026-08-25 by the re-measurement, which **stalled before its first render and
   sat for fourteen minutes** in a window that was behind another; the identical
@@ -369,7 +390,8 @@ this app instead of by WebKit, and fitted to the pane at every width.*
   by name:
 
   - **`fitted`** — the width the raster now in the canvases was made for. Kept;
-    it is what tells a gesture from a rest.
+    it is what tells a gesture from a rest. **The render writes it**, `draw()`
+    being its only writer today and going with the blob.
   - **`box()`** — kept, reading the scroll container per §2 rather than the
     column it sits in.
   - **`fit()`** — kept as the gesture, but it sets each canvas's **CSS `width`
@@ -381,7 +403,11 @@ this app instead of by WebKit, and fitted to the pane at every width.*
     is also what makes gate clause 3 discriminating — backing store and CSS
     size diverge during a gesture and agree again at rest, so a rest that never
     came is visible.
-  - **`unscale()`** — kept, as what a completed render resets the canvases to.
+  - **`unscale()`** — kept, but it **writes** the CSS size to the logical one
+    rather than clearing it. Clearing is what it does today, and a canvas with
+    no CSS size lays out at its backing store — at dpr 2 that is a page twice
+    the pane's width. §2's "the CSS size left at the logical one" is the rule;
+    this is the function that keeps it.
   - **`settle()`** — kept **whole, both halves, at its 200 ms**, and the
     divider's `pointerup` keeps calling it. Phase 7's finding is untouched by
     this spec: *a drag ends on an event and a window resize does not*, so the
@@ -421,8 +447,11 @@ this app instead of by WebKit, and fitted to the pane at every width.*
      the next compile, and every other clause passes on it. The instrument is a
      `cargo tauri dev` build, whose origin does not bear on a backing store.
   4. Each of OQ-2's three causes lands where §3 says: an open on page 1, a
-     keystroke on the caret's page, a divider drag on the same page and
-     fraction the reader was at.
+     keystroke on the caret's page, and a divider drag on the same page and
+     fraction **the reader was at before the drag was started** — read then,
+     not after, which is what makes the clause test anything. The reader must
+     also not drift *during* the drag, which is the same anchor doing the same
+     job and is why one clause covers both.
   5. The page is not blank or flickering *during* a divider drag, only after —
      §2's gesture rule, and the thing no clause of the draft's gate reached.
   6. Every control in the header is toggled and the page follows each: the
@@ -431,10 +460,14 @@ this app instead of by WebKit, and fitted to the pane at every width.*
   7. The empty, failed and stale states are each entered once, and a second
      document is opened over the first.
   8. **A section is edited in another editor while the md2pdf window is behind
-     it**, and the window is then brought forward: the page is current, not
-     stale. This is `README.md`'s own "save the file in another program and the
-     page redraws too", which is by construction the not-frontmost condition
-     OQ-5 describes — one line, and it is the only clause that can see it.
+     it**, and the window is then brought forward: **the page on screen shows
+     the edit**. Keyed to the drawn canvas and deliberately not to the header's
+     word — round 3's catch, and the clause passed on its own defect before it.
+     `current` and `stale` are set in Rust from the compile alone, on the watch
+     loop's own thread, which window occlusion does not stop; a pane that never
+     rasterised a pixel still reads `current`. This is `README.md`'s own "save
+     the file in another program and the page redraws too", which is by
+     construction the not-frontmost condition OQ-5 describes.
   9. `cargo test --workspace` passes unchanged — **no `.rs` file is edited by
      this phase**, which is itself the check. The binary's embedded assets do
      change, `generate_context!` embedding `frontendDist`.
