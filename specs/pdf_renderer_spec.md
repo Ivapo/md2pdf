@@ -6,12 +6,12 @@ note: >
   rasterises each page onto a canvas the pane owns, so fit-to-width is a mode
   rather than a transform, the type is sharp at the display's own resolution,
   and the text and links come back with it.
-status: draft
+status: accepted
 last_updated: 2026-08-25
 
 phases:
   - name: "Phase 1 — the page is drawn here"
-    reviewed: null
+    reviewed: 2026-08-25
     shipped: null
     cut: null
     by: null
@@ -224,9 +224,15 @@ like Phase 7's and costs nothing it cost.**
 silent on it.** Resizing by CSS reflows, so page *k*'s top offset is the sum of
 the heights above it and a gesture of factor *s* maps a content offset `T` to
 `T·s` — while the browser holds `scrollTop` at `T`. The reader is displaced by
-`T(s−1)` continuously through the drag, some 600 px on page 5 of the showcase
-for a 20% widen, and WebKit implements no scroll anchoring that would
-compensate. So **OQ-2 case 3's anchor is taken when the gesture starts, not
+`T(s−1)` continuously through the drag. Re-derived from the app's own default
+geometry — a 900 px window, the text pane at 40%, so a ~540 px preview, and A4
+at 763.7 px a page — page 5's top is 3055 px and a 20% widen displaces the
+reader **611 px**; and WebKit implements no scroll anchoring that would
+compensate. **What marks a start, for the causes that have no pointer event
+to mark one — a window resize, a control taking width out of the column — is
+`fitted` itself**: a width change arriving while `box().width === fitted` opens
+a gesture, and one arriving while they already differ continues the gesture
+already open. So **OQ-2 case 3's anchor is taken when the gesture starts, not
 when the render begins**, and it is reapplied on every step of the gesture as
 well as after the render that ends it. Taken at the render, as the draft of
 this section had it, the anchor would faithfully preserve a position the drag
@@ -317,6 +323,13 @@ bookmarks that nothing in this project currently reads.
   through the drag itself unless the anchor is reapplied on every step. A
   capture at the re-render would preserve the displaced position faithfully and
   restore nothing.
+
+  **A compile landing mid-gesture keeps the reader's place and skips case 2's
+  caret jump**, for that compile only. It takes a keystroke's debounce expiring
+  in the instant between grabbing the divider and letting go, so it is rare;
+  both answers are defensible and this is the one that never moves the page out
+  from under a hand that is on it. The next compile after the gesture ends
+  follows case 2 as usual.
 
   **The restored quantity is a page index and a fraction within that page, not
   a pixel offset.** Round 1 caught the draft naming the raw `scrollTop`: the
@@ -451,7 +464,11 @@ this app instead of by WebKit, and fitted to the pane at every width.*
      fraction **the reader was at before the drag was started** — read then,
      not after, which is what makes the clause test anything. The reader must
      also not drift *during* the drag, which is the same anchor doing the same
-     job and is why one clause covers both.
+     job and is why one clause covers both. **Run again for a window
+     drag-resize**, which reflows by the same arithmetic and is the path with
+     no pointer event to mark a start — an implementation keyed to
+     `pointerdown` rather than to the width moving drifts the reader there and
+     passes every other clause.
   5. The page is not blank or flickering *during* a divider drag, only after —
      §2's gesture rule, and the thing no clause of the draft's gate reached.
   6. Every control in the header is toggled and the page follows each: the

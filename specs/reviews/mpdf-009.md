@@ -2,6 +2,49 @@
 
 Append-only. Newest round first. One heading per round.
 
+### Round 4 — Phase 1 only — 2026-08-25 — panel of three, resumed — **READY (converged)**
+
+**Past the loop's three-round cap, by the human's explicit decision** at the
+escalation. All three lenses READY, zero blocking. `status` set to `accepted`
+and Phase 1's `reviewed` set to 2026-08-25; Phases 2 and 3 remain `null` and
+are not cleared to build.
+
+Round 3's two blockers resolved, both in the shape their raisers prescribed.
+**The gesture's drift**: the *(page, fraction)* anchor is now taken when the
+gesture *starts* and reapplied on every step, not taken at the render, where it
+would have preserved a displaced position faithfully and restored nothing.
+§2, §3 and gate clause 4 were brought into agreement, and clause 4 now reads
+the anchor "before the drag was started", which is what makes it able to fail.
+**Gate clause 8** is re-keyed to the drawn canvas showing the edit rather than
+to the header's word, `current`/`stale` being set in Rust from the compile
+alone on a thread occlusion does not stop — the old clause passed on the
+defect it existed to find.
+
+**The drift figure was re-derived independently** from the app's default
+geometry — a 900 px window, the text pane at 40%, A4 at 763.7 px a page — giving
+611 px of displacement on page 5 for a 20% widen, against the draft's "some
+600 px". The spec now carries the derivation.
+
+Non-blocking folded in on convergence: what marks a gesture's *start* for a
+cause with no pointer event is now stated — `box().width === fitted` opens one,
+a difference continues one — which also closes the window-resize hole in clause
+4; clause 4 runs again for a window drag-resize; and a compile landing
+mid-gesture is decided to keep the reader's place and skip case 2's caret jump
+for that compile, on the grounds that it never moves the page out from under a
+hand that is on it.
+
+**The pattern across four rounds, recorded because it is the finding about this
+phase rather than in it: every round's blockers were introduced by the previous
+round's fix.** Eleven blocking findings, all accepted, none rejected — seven
+latent in the draft, four created by fixing them. It is a mechanism whose parts
+are tightly coupled enough that each correction shifts load onto the next, and
+a fifth round would not have been surprising.
+
+One author error worth its own line: the `NOTICE` correction was reported as
+folded in when an unguarded string replace had matched nothing across a line
+break. A reviewer caught it, not the author. Every edit since has been
+assert-guarded.
+
 ### Round 3 — Phase 1 only — 2026-08-25 — panel of three, resumed — **NOT READY (escalated at the cap)**
 
 Two of three READY; the grounding and exit-gate lenses each returned one

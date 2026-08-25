@@ -18,5 +18,5 @@
   A document cites its sources and prints their reference list: the frontmatter names a bibliography file, the caller supplies it as bytes beside the images, `[@key]` becomes a citation, and Typst renders both the marks and the list.
 - **[multi-file-documents](multi_file_documents_spec.md)** — `mpdf-008` · accepted · partial
   A document may be written as several markdown files: a master names its sections in the order they are read, `core` joins them into the one stream the emitter already walks, and every error, every asset and every anchor learns which file it came from.
-- **[pdf-renderer](pdf_renderer_spec.md)** — `mpdf-009` · draft · pending
+- **[pdf-renderer](pdf_renderer_spec.md)** — `mpdf-009` · accepted · pending
   The app draws the page itself: `pdf.js` is vendored as two static modules and rasterises each page onto a canvas the pane owns, so fit-to-width is a mode rather than a transform, the type is sharp at the display's own resolution, and the text and links come back with it.
