@@ -38,7 +38,8 @@ the key existed. You decide whether; the look decides what a number looks like.
 
 The three keys this file leaves out are date, figures and bibliography. The
 document under samples/showcase names all eight at once, and uses every
-construct the dialect carries besides.
+construct the dialect carries besides — including being written across several
+files, which this one is not.
 
 A key outside those eight is an error rather than a silent omission. So is a
 columns value of 3, a template name outside the two, and an equations or

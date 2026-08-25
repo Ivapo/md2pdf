@@ -41,7 +41,8 @@ anywhere, and there is no server to send it to.
 Locally, **`samples/showcase/` is one document that uses every construct in the dialect** —
 every inline and block form, captions, groups, names and cross-references, both forms of
 math, footnotes, and citations against the fake bibliography beside it, under all eight
-frontmatter keys. It is the fastest way to see the whole surface set on a page:
+frontmatter keys, and written across six files because that is a construct too. It is the
+fastest way to see the whole surface set on a page:
 
 ```console
 $ ./target/release/md2pdf samples/showcase/showcase.md
