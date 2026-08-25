@@ -485,6 +485,12 @@
       let renderSeq = 0
       const inflight = new Set()
 
+      // How many renders are running, so a rest can wait for one rather than
+      // cancel it. A count and not a flag: a render being superseded overlaps
+      // the one superseding it, and a flag would be cleared by the loser on
+      // its way out.
+      let rendering = 0
+
       /*
         What this page has already taken from Rust. Both are counters Rust
         keeps, and both exist to stop this page doing work that would cost the
@@ -648,8 +654,17 @@
 
         try {
           const bytes = await invoke('current_pdf')
-          await openPdf(bytes, tookReload ? null : caretPage(state.anchors))
-          drawnRevision = state.revision
+          /*
+            **Only a render that drew may advance this.** `openPdf` returns
+            false when it was superseded or could not measure the pane, and
+            recording the revision anyway would tell the next signal that a
+            page nobody ever drew is already on screen — after which
+            `refresh` returns at the guard above forever, with no error and
+            no way back.
+          */
+          if (await openPdf(bytes, tookReload ? null : caretPage(state.anchors))) {
+            drawnRevision = state.revision
+          }
         } catch (problem) {
           fail(problem)
         }
@@ -789,7 +804,7 @@
         const opened = await next.promise
         if (seq !== renderSeq) {
           next.destroy()
-          return
+          return false
         }
         loading?.destroy()
         loading = next
@@ -798,11 +813,12 @@
         // Before the width is read: an element that is `display: none`
         // measures zero, and the scale is that measurement.
         pages.hidden = false
-        if (!(await renderPages(seq))) return
+        if (!(await renderPages(seq))) return false
 
         if (anchor !== null) applyAnchor(anchor)
         else if (page === null) pages.scrollTop = 0
         else applyAnchor({ page: page - 1, fraction: 0 })
+        return true
       }
 
       /*
@@ -823,6 +839,15 @@
         nothing jumps as they are exchanged.
       */
       async function renderPages(seq) {
+        rendering++
+        try {
+          return await drawPages(seq)
+        } finally {
+          rendering--
+        }
+      }
+
+      async function drawPages(seq) {
         const ratio = window.devicePixelRatio
         const paneWidth = box().width
         if (!(paneWidth > 0)) return false // a pane with no width to fit to
@@ -1089,6 +1114,19 @@
         if (pages.hidden || doc === null) return
         if (box().width === fitted) {
           anchor = null
+          return
+        }
+
+        /*
+          **A rest never cancels a render that is still running.** On an open
+          the pane is unhidden, which is a resize, which arms this timer — so
+          it can come due while the first render is still drawing. Cancelling
+          there would leave the pane empty and `fitted` unset, and the render
+          that was going to fix it is the one just cancelled. The width is
+          still wrong, so the timer is re-armed and this returns to it.
+        */
+        if (rendering > 0) {
+          settle()
           return
         }
 
