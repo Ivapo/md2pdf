@@ -28,20 +28,57 @@ pub struct Anchor {
 
 /// What one compile produced, and what the document named while producing it.
 pub struct Render {
-    /// The asset paths the document names: the images in reader order, and
-    /// the bibliography it declares.
+    /// The paths the document names: its sections in the order the master
+    /// reads them, then the bibliography it declares, then the images in
+    /// reader order.
     ///
-    /// `None` when the document did not parse, and the caller then keeps the
-    /// list it already had. Otherwise it arrives even when the compile failed,
-    /// because emission reads the text and not the disk: a document whose
-    /// figures are all missing still names them. That is what keeps the watch
-    /// filter working while the compile does not.
+    /// **The sections go in first and unconditionally**, and that is the one
+    /// thing this list could not be built without.
+    /// `md2pdf_core::section_paths` reads the master's own text and cannot
+    /// fail, where the other two answer about the assembled document and now
+    /// fail with `MissingSection` for a section that does not exist yet — and
+    /// `crate::preview::Preview::compile` replaces this list only when it is
+    /// `Some`. A list built the way it was built before this phase would stay
+    /// empty, `crate::watch::classify` would drop the section's creation
+    /// event, and the app would never recover.
+    ///
+    /// **Three answers, and each says a different thing.**
+    ///
+    /// - `Some(sections ++ bibliography ++ images)` when both walks answer.
+    ///   For a document naming no section that is the vector this returned
+    ///   before the sections existed, in the same order, with an empty list in
+    ///   front of it.
+    /// - `Some(sections)` when they do not and the master names any. This
+    ///   *replaces* the list with a shorter one, so a multi-file document with
+    ///   a missing section stops watching its figures until that section comes
+    ///   back. The trade is deliberate: recovering the section beats watching
+    ///   figures through a window in which nothing compiles anyway.
+    /// - `None` when neither answers and no section is named. The caller keeps
+    ///   the list it already had, which is what stops a transient
+    ///   out-of-dialect edit from dropping the images the app knows about.
+    ///
+    /// Either `Some` arrives even when the compile failed, because emission
+    /// reads the text and not the disk: a document whose figures are all
+    /// missing still names them. That is what keeps the watch filter working
+    /// while the compile does not.
     pub assets: Option<Vec<String>>,
 
     /// The bytes, or the sentence the terminal would print.
     pub pdf: Result<Vec<u8>, String>,
 
     /// Where each heading landed, for the pane to open on.
+    ///
+    /// **Only the headings written in the file the pane holds**, which is the
+    /// master. A line means something in exactly one buffer and the pane holds
+    /// one, so an anchor from a section is not a worse match — it is a number
+    /// about a document the pane is not showing, and
+    /// `app/dist/index.html:caretPage` walks a flat list and breaks at the
+    /// first anchor past the caret. Left in, three sections numbered 1, 4 and 1
+    /// would open the frame on whatever page the last of them landed on.
+    ///
+    /// A pure manifest therefore yields none and the frame opens at page 1,
+    /// which `caretPage` already documents as its no-anchor case; a master
+    /// carrying a preface syncs on its own headings and syncs correctly.
     ///
     /// Empty when the compile failed, and empty when `core`'s own count guard
     /// declined to answer. Unlike [`Render::assets`] this describes the *page*
@@ -74,38 +111,73 @@ pub fn render(directory: &Path, markdown: &str) -> Render {
 /// The seam is Phase 1's [`read_assets_with`], one level up, and it exists for
 /// the same reason: a caller that counts its own reads can check a claim about
 /// them rather than argue it from the loop.
+///
+/// **One closure serves both passes**, and that is what keeps the claim worth
+/// checking. [`read_sections_with`] borrows it and [`read_assets_with`] takes
+/// what is left, so every file this app opens for one compile goes through the
+/// counter — a second closure would leave half the reads unwatched.
 pub fn render_with(
     directory: &Path,
     markdown: &str,
-    read: impl FnMut(&Path) -> std::io::Result<Vec<u8>>,
+    mut read: impl FnMut(&Path) -> std::io::Result<Vec<u8>>,
 ) -> Render {
+    // **The sections come first**, exactly as `cli/src/main.rs:run` orders
+    // them: a master is not a document until they are joined in, so neither
+    // shopping list can be asked anything before they are read. The names are
+    // taken separately from the bytes because the list below needs them whether
+    // or not the files are there yet.
+    let named: Vec<String> = md2pdf_core::section_paths(markdown)
+        .map(|sections| sections.into_iter().map(|section| section.path).collect())
+        .unwrap_or_default();
+
+    let sections = read_sections_with(markdown, directory, &mut read);
+    let supplied: &[Asset] = match &sections {
+        Ok(sections) => sections.as_slice(),
+        Err(_) => &[],
+    };
+
     // The path travels separately from the bytes, and this is the only place
     // it is built: `read_assets_with` below returns a `Vec<Asset>` that reaches
     // the compile and nothing else, where this list reaches the watch filter.
-    // Both exports come off one walk, so they answer or fail together — the
-    // bibliography first, as `cli/src/main.rs:read_assets` orders them.
-    let assets = md2pdf_core::image_paths(markdown, &[]).ok().map(|images| {
-        md2pdf_core::bibliography_path(markdown, &[])
-            .ok()
-            .flatten()
-            .map(|named| named.path)
-            .into_iter()
-            .chain(images.into_iter().map(|image| image.path))
-            .collect()
-    });
+    // The two walks answer or fail together — the bibliography first, as
+    // `cli/src/main.rs:read_assets` orders them — and the sections go in front
+    // of both whatever they answer. [`Render::assets`] argues the three
+    // branches.
+    let assets: Option<Vec<String>> = md2pdf_core::image_paths(markdown, supplied)
+        .ok()
+        .map(|images| {
+            named
+                .iter()
+                .cloned()
+                .chain(
+                    md2pdf_core::bibliography_path(markdown, supplied)
+                        .ok()
+                        .flatten()
+                        .map(|named| named.path),
+                )
+                .chain(images.into_iter().map(|image| image.path))
+                .collect()
+        })
+        .or_else(|| (!named.is_empty()).then(|| named.clone()));
 
-    let rendered = read_assets_with(markdown, directory, read).and_then(|supplied| {
-        md2pdf_core::md_to_pdf_with_anchors(markdown, &supplied).map_err(|e| e.to_string())
-    });
+    let rendered = sections
+        .and_then(|sections| read_assets_with(markdown, sections, directory, read))
+        .and_then(|supplied| {
+            md2pdf_core::md_to_pdf_with_anchors(markdown, &supplied).map_err(|e| e.to_string())
+        });
 
     // The anchors describe the bytes, so a failure has none — where `assets`
-    // above survives one, because it describes the text.
+    // above survives one, because it describes the text. An anchor carrying a
+    // file was written in a section, and the pane is not showing that file;
+    // [`Render::anchors`] argues why dropping it is the only answer that is
+    // true by construction.
     let (pdf, anchors) = match rendered {
         Ok(rendered) => (
             Ok(rendered.pdf),
             rendered
                 .anchors
                 .into_iter()
+                .filter(|anchor| anchor.location.file.is_none())
                 .map(|anchor| Anchor {
                     line: anchor.location.line,
                     page: anchor.page,
@@ -178,25 +250,37 @@ pub fn default_output(document: &Path) -> PathBuf {
 /// The image list arrives in document order and may name one path twice, so
 /// this reads each file once. The bibliography is one frontmatter value rather
 /// than something the walk finds, so it comes from an export of its own — and
-/// it is read first, since the line it names is the earliest one in the file.
+/// it is read first of the two, since the line it names is the earliest one in
+/// the file.
+///
+/// **The sections are already read when this runs**, and they arrive here so
+/// they ride out on the same array: neither list above can be asked for until
+/// the document they belong to has been assembled, which is why
+/// [`read_sections_with`] is a pass of its own and this one takes its result.
+/// Their paths seed the same `seen` set, so no file is opened twice across the
+/// two passes.
+///
+/// **Every path joins the master's directory, a section's own images
+/// included.** `core` writes a section's own folder into the destination before
+/// the list reaches here, so an image drawn in `sections/method.md` arrives as
+/// `sections/figure.png` and is found beside the file that drew it — the rule
+/// this app inherits rather than carries a copy of.
 ///
 /// The read is a parameter for one gate. Phase 1 asks that a path the document
 /// names twice is read *once*, and a caller that counts its own reads is the
 /// only way to check that rather than argue it from the loop below.
 fn read_assets_with(
     markdown: &str,
+    sections: Vec<Asset>,
     directory: &Path,
     mut read: impl FnMut(&Path) -> std::io::Result<Vec<u8>>,
 ) -> Result<Vec<Asset>, String> {
-    // **The app supplies no sections yet**, which is `mpdf-008` Phase 3's job.
-    // Until then a master opened here refuses with `MissingSection` naming the
-    // first file it could not find — an honest mid-state and a named one, and a
-    // single-file document is untouched by it.
-    let images = md2pdf_core::image_paths(markdown, &[]).map_err(|e| e.to_string())?;
-    let bibliography = md2pdf_core::bibliography_path(markdown, &[]).map_err(|e| e.to_string())?;
+    let images = md2pdf_core::image_paths(markdown, &sections).map_err(|e| e.to_string())?;
+    let bibliography =
+        md2pdf_core::bibliography_path(markdown, &sections).map_err(|e| e.to_string())?;
 
-    let mut assets = Vec::new();
-    let mut seen = HashSet::new();
+    let mut seen: HashSet<String> = sections.iter().map(|s| s.path.clone()).collect();
+    let mut assets = sections;
 
     if let Some(named) = bibliography {
         let file = directory.join(&named.path);
@@ -237,6 +321,47 @@ fn read_assets_with(
     Ok(assets)
 }
 
+/// Read every section file the master names, in the order it names them.
+///
+/// This mirrors `cli/src/main.rs:read_sections`, and it runs **before** either
+/// shopping list for the reason that function records: the markers are in the
+/// master's own text, so the sections can be read with no join, where every
+/// later question is about the document they assemble into. One extra round
+/// trip through `core`, no recursion here, and one place that ever
+/// concatenates — which is `core`, because it is the joining that builds the
+/// map every message is translated through.
+///
+/// The read is borrowed rather than taken, so [`read_assets_with`] goes on to
+/// use the same closure. A section that will not open is the third of the
+/// sentence the image and the bibliography already print, and the third this
+/// app owes the terminal.
+fn read_sections_with(
+    markdown: &str,
+    directory: &Path,
+    mut read: impl FnMut(&Path) -> std::io::Result<Vec<u8>>,
+) -> Result<Vec<Asset>, String> {
+    let named = md2pdf_core::section_paths(markdown).map_err(|e| e.to_string())?;
+
+    let mut sections = Vec::with_capacity(named.len());
+    for section in named {
+        let file = directory.join(&section.path);
+        let bytes = read(&file).map_err(|e| {
+            format!(
+                "cannot read {} for the section {}: {e}",
+                file.display(),
+                section.location
+            )
+        })?;
+
+        sections.push(Asset {
+            path: section.path,
+            bytes,
+        });
+    }
+
+    Ok(sections)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -271,7 +396,8 @@ mod tests {
         std::fs::copy(fixture("mark.svg"), dir.join("figures/mark.svg")).unwrap();
 
         let markdown = std::fs::read_to_string(fixture("figure.md")).unwrap();
-        let assets = read_assets_with(&markdown, &dir, |file| std::fs::read(file)).unwrap();
+        let assets =
+            read_assets_with(&markdown, Vec::new(), &dir, |file| std::fs::read(file)).unwrap();
 
         let paths: Vec<&str> = assets.iter().map(|a| a.path.as_str()).collect();
         assert_eq!(paths, ["dot.png", "figures/mark.svg"]);
@@ -284,8 +410,10 @@ mod tests {
     #[test]
     fn a_missing_image_names_the_path_the_line_and_the_reason() {
         let markdown = std::fs::read_to_string(fixture("figure.md")).unwrap();
-        let error =
-            read_assets_with(&markdown, &fixture(""), |file| std::fs::read(file)).unwrap_err();
+        let error = read_assets_with(&markdown, Vec::new(), &fixture(""), |file| {
+            std::fs::read(file)
+        })
+        .unwrap_err();
 
         assert!(error.contains("figures/mark.svg"), "{error}");
         assert!(error.contains("line 5"), "{error}");
@@ -306,7 +434,7 @@ mod tests {
         let markdown = "![the first](dot.png)\n\nText between them.\n\n![the second](dot.png)\n";
 
         let mut reads = Vec::new();
-        let assets = read_assets_with(markdown, &dir, |file| {
+        let assets = read_assets_with(markdown, Vec::new(), &dir, |file| {
             reads.push(file.to_path_buf());
             std::fs::read(file)
         })
@@ -331,7 +459,7 @@ mod tests {
 
         let markdown = std::fs::read_to_string(fixture("citations.md")).unwrap();
         let mut reads = Vec::new();
-        let assets = read_assets_with(&markdown, &dir, |file| {
+        let assets = read_assets_with(&markdown, Vec::new(), &dir, |file| {
             reads.push(file.to_path_buf());
             std::fs::read(file)
         })
@@ -355,7 +483,8 @@ mod tests {
         let _ = std::fs::remove_file(dir.join("refs.yml"));
 
         let markdown = std::fs::read_to_string(fixture("citations.md")).unwrap();
-        let error = read_assets_with(&markdown, &dir, |file| std::fs::read(file)).unwrap_err();
+        let error =
+            read_assets_with(&markdown, Vec::new(), &dir, |file| std::fs::read(file)).unwrap_err();
 
         assert!(error.contains("refs.yml"), "{error}");
         assert!(error.contains("for the bibliography"), "{error}");
@@ -405,6 +534,127 @@ mod tests {
         assert_eq!(
             render.assets,
             Some(vec!["dot.png".to_string(), "figures/mark.svg".to_string()])
+        );
+    }
+
+    /// A master beside no sections at all, in the words the terminal uses for
+    /// the same file.
+    ///
+    /// The third of this app's hand-built sentences, beside the image's and the
+    /// bibliography's, and word for word the one `cli/src/main.rs:read_sections`
+    /// prints. A `SectionRef`'s location never carries a file — a section may
+    /// not name a section — so the phrase is `at line N` and the line is the
+    /// master's own.
+    #[test]
+    fn a_missing_section_names_the_path_the_line_and_the_reason() {
+        let dir = scratch_dir("section-absent");
+        let markdown = std::fs::read_to_string(fixture("multi_file.md")).unwrap();
+        let error = read_sections_with(&markdown, &dir, |file| std::fs::read(file)).unwrap_err();
+
+        assert!(error.contains("sections/introduction.md"), "{error}");
+        assert!(error.contains("for the section"), "{error}");
+        assert!(error.contains("at line 7"), "{error}");
+        assert!(error.contains("os error"), "{error}");
+    }
+
+    /// Every file a master names is opened once, across both passes.
+    ///
+    /// [`a_path_named_twice_is_read_once`] extended to the channel that added a
+    /// second pass over the same directory. One closure serves both, so a
+    /// second one — or a section read again as an asset — shows up as an extra
+    /// entry here rather than as an argument about the loops.
+    ///
+    /// The two images are named bare inside the sections and reach the list as
+    /// `sections/dot.png` and `sections/mark.svg`, which is Phase 2's rule
+    /// arriving in this wrapper with nothing added for it.
+    #[test]
+    fn every_file_a_master_names_is_read_once_across_both_passes() {
+        let dir = fixture("");
+        let markdown = std::fs::read_to_string(fixture("multi_file.md")).unwrap();
+
+        let mut reads = Vec::new();
+        let rendered = render_with(&dir, &markdown, |file| {
+            reads.push(file.to_path_buf());
+            std::fs::read(file)
+        });
+
+        assert!(rendered.pdf.is_ok(), "{:?}", rendered.pdf.as_ref().err());
+        assert_eq!(
+            reads,
+            [
+                dir.join("sections/introduction.md"),
+                dir.join("sections/method.md"),
+                dir.join("sections/results.md"),
+                dir.join("sections/dot.png"),
+                dir.join("sections/mark.svg"),
+            ]
+        );
+        assert_eq!(
+            rendered.assets,
+            Some(vec![
+                "sections/introduction.md".to_string(),
+                "sections/method.md".to_string(),
+                "sections/results.md".to_string(),
+                "sections/dot.png".to_string(),
+                "sections/mark.svg".to_string(),
+            ])
+        );
+    }
+
+    /// Only the headings written in the file the pane holds become anchors.
+    ///
+    /// Both directions, because an unasserted absence is what
+    /// `md2pdf_core::anchors_from`'s count guard punishes silently.
+    /// `tests/fixtures/multi_file.md` is a pure manifest and `core` answers it
+    /// with three anchors — `(sections/introduction.md, 1)`,
+    /// `(sections/method.md, 4)` and `(sections/results.md, 1)`, pinned by
+    /// `core/tests/golden_test.rs:an_anchor_names_the_file_its_heading_was_written_in`
+    /// — so an empty list here is the filter working rather than `core`
+    /// declining to answer. Left in, those three numbers would send
+    /// `app/dist/index.html:caretPage`, which walks a flat list, to whatever
+    /// page the last of them landed on.
+    #[test]
+    fn only_the_headings_the_pane_holds_become_anchors() {
+        let manifest = render_fixture("multi_file.md");
+        assert!(manifest.pdf.is_ok(), "{:?}", manifest.pdf.as_ref().err());
+        assert!(manifest.anchors.is_empty(), "{:?}", manifest.anchors);
+
+        let dir = scratch_dir("master-with-a-heading");
+        std::fs::create_dir_all(dir.join("sections")).unwrap();
+        std::fs::write(
+            dir.join("sections/one.md"),
+            "# A heading the pane does not hold\n\nText.\n",
+        )
+        .unwrap();
+
+        let markdown = "# A preface of the master's own\n\nText.\n\n[](sections/one.md)\n";
+        let rendered = render(&dir, markdown);
+
+        assert!(rendered.pdf.is_ok(), "{:?}", rendered.pdf.as_ref().err());
+        assert_eq!(rendered.anchors, [Anchor { line: 1, page: 1 }]);
+    }
+
+    /// A single-file document is what it always was: the same anchors, and the
+    /// same bytes.
+    ///
+    /// [`render_with`] now calls `md2pdf_core::section_paths` and threads a
+    /// section array on *every* compile. A document naming no section has a
+    /// one-entry map, so nothing is joined, nothing is prefixed and no anchor
+    /// carries a file — arithmetic rather than a branch, and asserted here
+    /// rather than assumed. The bytes are compared against a compile this test
+    /// asked for itself, so an app that quietly agreed with itself could not
+    /// pass.
+    #[test]
+    fn a_single_file_document_keeps_its_anchors_and_its_bytes() {
+        let markdown = std::fs::read_to_string(fixture("basic.md")).unwrap();
+        let rendered = render(&fixture(""), &markdown);
+
+        let lines: Vec<usize> = rendered.anchors.iter().map(|anchor| anchor.line).collect();
+        assert_eq!(lines, [1, 5, 10, 14, 16, 18]);
+        assert_eq!(rendered.assets, Some(Vec::new()));
+        assert_eq!(
+            rendered.pdf.unwrap(),
+            md2pdf_core::md_to_pdf(&markdown, &[]).unwrap()
         );
     }
 

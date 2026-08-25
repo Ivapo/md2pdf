@@ -652,6 +652,33 @@ mod tests {
         document
     }
 
+    /// A copy of `tests/fixtures/multi_file.md`, the three sections it names
+    /// and the two figures those sections name.
+    ///
+    /// The figures go into `sections/` and not beside the master, which is the
+    /// layout Phase 2 shipped: `introduction.md` writes a bare `dot.png` and
+    /// the emitter resolves it against the folder that file lives in.
+    fn multi_file_in(dir: &Path) -> PathBuf {
+        let document = dir.join("multi_file.md");
+        std::fs::copy(fixture("multi_file.md"), &document).unwrap();
+
+        std::fs::create_dir_all(dir.join("sections")).unwrap();
+        for name in [
+            "introduction.md",
+            "method.md",
+            "results.md",
+            "dot.png",
+            "mark.svg",
+        ] {
+            std::fs::copy(
+                fixture(&format!("sections/{name}")),
+                dir.join("sections").join(name),
+            )
+            .unwrap();
+        }
+        document
+    }
+
     /// A preview holding one document, read from disk and compiled, built
     /// without a session.
     fn compiled(document: &Path) -> Preview {
@@ -844,6 +871,109 @@ mod tests {
             wait_for(&compiles, 2) >= 2,
             "creating the bibliography compiles"
         );
+        assert!(session.preview().pdf().unwrap().starts_with(b"%PDF"));
+        assert!(!session.preview().is_stale());
+    }
+
+    /// A section changes and the page comes back, and it is a real one.
+    ///
+    /// The multi-file sibling of
+    /// [`a_replaced_bibliography_compiles_again_and_the_page_is_good`], and its
+    /// warning applies here too: [`Session::on_change`] announces whenever the
+    /// asset mark is set, a failed compile included, so a counter alone would
+    /// pass an app that published the section's path to the filter and never
+    /// supplied its bytes. The bytes and the stale mark tell the two apart.
+    ///
+    /// **It is a bounded wait and not a latency.** Two intervals sit under it —
+    /// [`watch::DEBOUNCE`] at 100 ms for the filesystem and
+    /// [`watch::TYPING_DEBOUNCE`] at 300 ms for the pane — and neither is
+    /// asserted end to end anywhere, as [`wait_for`]'s own comment says.
+    #[test]
+    fn a_section_that_changes_compiles_again_and_the_page_is_good() {
+        let dir = scratch_dir("watch-section");
+        let document = multi_file_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1, "opening compiles once");
+        assert!(session.preview().pdf().unwrap().starts_with(b"%PDF"));
+
+        // Appended rather than replaced: this section declares `#fig:mark` and
+        // cites the footnote the third file defines, so a rewrite that dropped
+        // either would fail on the name and never reach the bytes.
+        let section = dir.join("sections/method.md");
+        let mut text = std::fs::read_to_string(&section).unwrap();
+        text.push_str("\nA paragraph this test added to the second file.\n");
+        std::fs::write(&section, text).unwrap();
+
+        assert_eq!(
+            wait_for(&compiles, 2),
+            2,
+            "editing a section compiles again"
+        );
+        assert!(session.preview().pdf().unwrap().starts_with(b"%PDF"));
+        assert!(!session.preview().is_stale());
+    }
+
+    /// An error inside a section names that section's own file and its own
+    /// line, on the exact string.
+    ///
+    /// That string is `md2pdf_core::Error`'s `Display`, so this is the
+    /// `in FILE at line N` phrase Phase 1 shipped, arriving at the window
+    /// unaltered. The author wrote the block on line 3 of a file of their own;
+    /// the joined document it was refused in exists nowhere.
+    #[test]
+    fn an_error_in_a_section_names_that_file_and_its_own_line() {
+        let dir = scratch_dir("error-in-a-section");
+        let document = dir.join("report.md");
+        std::fs::write(&document, "[](sections/one.md)\n").unwrap();
+        std::fs::create_dir_all(dir.join("sections")).unwrap();
+        std::fs::write(
+            dir.join("sections/one.md"),
+            "# A section\n\n<div>a raw HTML block</div>\n",
+        )
+        .unwrap();
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        assert_eq!(
+            session.preview().error(),
+            Some("unsupported markdown construct 'raw HTML block' in sections/one.md at line 3")
+        );
+    }
+
+    /// A section the master names minutes before anyone creates it.
+    ///
+    /// The sibling of
+    /// [`a_bibliography_that_does_not_exist_yet_is_watched_and_then_compiles`],
+    /// and the case the unconditional section list in `document::Render::assets`
+    /// exists for. Both shopping lists fail with `MissingSection` here, and
+    /// [`Preview::compile`] replaces the list only when it is `Some` — so an app
+    /// that published the path out of a successful read would leave the list
+    /// empty, `watch::classify` would drop the creation event, and the window
+    /// would never recover on its own.
+    #[test]
+    fn a_section_that_does_not_exist_yet_is_watched_and_then_compiles() {
+        let dir = scratch_dir("section-to-come");
+        let document = dir.join("report.md");
+        std::fs::write(&document, "[](sections/one.md)\n").unwrap();
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        let error = session.preview().error().unwrap().to_string();
+        assert!(error.contains("sections/one.md"), "{error}");
+        assert!(error.contains("for the section"), "{error}");
+        assert!(error.contains("at line 1"), "{error}");
+        assert!(session.preview().pdf().is_none());
+
+        std::fs::create_dir_all(dir.join("sections")).unwrap();
+        std::fs::write(dir.join("sections/one.md"), "# One\n\nText.\n").unwrap();
+
+        assert!(wait_for(&compiles, 2) >= 2, "creating the section compiles");
         assert!(session.preview().pdf().unwrap().starts_with(b"%PDF"));
         assert!(!session.preview().is_stale());
     }
