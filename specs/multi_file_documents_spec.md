@@ -21,7 +21,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 3 — the desktop app opens a project"
-    reviewed: null
+    reviewed: 2026-08-24
     shipped: null
     cut: null
     by: null
@@ -659,15 +659,60 @@ that is only a list of markers is OQ-4's question and not this phase's.
   `web/` — but it decides whether `mpdf-006`'s "every claim the page makes is a
   snippet the suite compiles" still holds over the whole dialect.
 
-- **OQ-5 — does the desktop app's scroll sync follow the caret across files?**
-  *(design call)* `core/src/lib.rs:Anchor` is a line and a page, and
+- **OQ-5 — does the desktop app's scroll sync follow the caret across files? —
+  RESOLVED 2026-08-24, by Phase 3's round 1**, which found that leaving it to
+  Phase 3's plan-mode pass is the shape this corpus has refused twice in this same
+  subsystem — `mpdf-007` Phase 3 and Phase 4 each recorded *"a phase that leaves
+  this open is a phase that forces a guess"* — and that the gate keyed to it had
+  no referent.
+
+  **The answer: the pane holds one file, and an anchor syncs only when it was
+  written in that file.** `app/src/document.rs:render_with` keeps an anchor whose
+  `location.file` is `None` and drops the rest. `app/src/document.rs:Anchor` stays
+  a line and a page, and `app/dist/index.html:caretPage` is not touched.
+
+  **It is the only one of the three that is true by construction.** A line means
+  something in exactly one buffer and the pane holds one, so an anchor from
+  another file is not a worse match — it is a number about a document the pane is
+  not showing. A pure manifest has no headings of its own, so it yields no anchors
+  and the frame opens at page 1, which `caretPage` already documents as its
+  no-anchor case; a master carrying a preface — which OQ-3 allows — syncs on its
+  own headings and syncs correctly. And a later phase that put a section in the
+  pane would change which file is kept, not the rule.
+
+  **The other two are rejected, and the second is rejected on a measurement.**
+  *One editor per section* is a second pane and a file switcher, where `mpdf-003`
+  built one text pane; that is a phase of its own and not one plan-mode pass.
+  *No sync at all in the first cut* is not reachable by doing nothing:
+  `app/dist/index.html:caretPage` walks a flat list and breaks at the first
+  `anchor.line > line`, and since Phase 1 a heading inside a section carries that
+  **section's** own 1-based line — so a master whose caret sits on line 7 is
+  matched against anchors numbered 1, 4, 1 and the pane opens on whatever page the
+  *last* of them landed on. **Those three numbers are not an argument — they are a
+  shipped assertion**, `core/tests/golden_test.rs:an_anchor_names_the_file_its_heading_was_written_in`,
+  which pins today's anchors for `tests/fixtures/multi_file.md` as
+  `(sections/introduction.md, 1)`, `(sections/method.md, 4)` and
+  `(sections/results.md, 1)`. Doing nothing ships confidently wrong sync rather
+  than absent sync, which is why the filter is named in Phase 3's scope and gated.
+
+  **CORRECTED in the same pass: this entry's premise was already false when it was
+  written.** It says *"`core/src/lib.rs:Anchor` is a line and a page … so an
+  anchor needs its file"*, but §2 of this document gave `core`'s `Anchor` a
+  `Location` carrying an optional file, Phase 1 shipped it, and §2 records that it
+  lost `Copy` in the same change. What is still line-only is
+  **`app/src/document.rs:Anchor`**, which is what the app serializes to its page —
+  and neither this entry nor Phase 3's draft named it, so resolving the question as
+  written would have mis-scoped the work. `core/src/lib.rs:anchors_from`'s silent
+  empty vector on a count mismatch is unrelated to sections and is unchanged.
+
+  ~~*(design call)* `core/src/lib.rs:Anchor` is a line and a page, and
   `core/src/lib.rs:anchors_from` returns an empty vector on a count mismatch —
   silently, which `mpdf-005` Phase 7's gate had to assert against. With sections
   the pane holds one file while the PDF holds all of them, so an anchor needs its
   file and the pane needs to know which file it is showing. Whether that is one
   editor per section, a single pane that follows the master, or no sync at all in
   the first cut is Phase 3's central call. **Blocks Phase 3**, and nothing
-  earlier.
+  earlier.~~
 
 - **OQ-6 — what does the observable become, and who edits it? — RESOLVED
   2026-08-24, by the human, in Phase 1's plan-mode pass.** The candidate below
@@ -907,19 +952,123 @@ a section is.*
 *Produces the observable: **yes** — the app renders a multi-file document and
 re-renders when any section changes.*
 
-- **Scope:** `app/src/document.rs` supplies the sections beside the images, the
-  way `mpdf-007` Phase 4 taught it to supply the bibliography.
-  `app/src/watch.rs` watches every section as well as the master and its assets.
-  The scroll-sync answer is OQ-5's and is scoped here rather than assumed; the
-  minimum that ships is that a multi-file document renders and re-renders, with
-  sync left explicitly at whatever OQ-5 chooses.
-- **Exit gate:** (1) Opening a master renders the whole document. (2) Editing a
-  section re-renders, within the debounce `mpdf-003` already gates. (3) An error
-  in a section reaches the app's error pane naming that section's file and line.
-  (4) Whatever OQ-5 decides for anchors is asserted, including "no sync across
-  files" if that is the answer — an unasserted absence is what
+- **Scope, REWRITTEN 2026-08-24 by round 1**, which found that the draft named
+  the wrong file for the watch change, cited the wrong precedent for the read, and
+  deferred its own central design call into the plan-mode pass it was meant to
+  make possible. OQ-5 is now resolved, and the four decisions below are its
+  consequences plus the three the reviewer found unmade.
+
+  **The read is a pass of its own, on this spec's own CLI shape and not
+  `mpdf-007` Phase 3's.** That phase added a file the walk already named, so it
+  fell out of the existing list; a section must be read *before* either shopping
+  list can answer anything, which is the ordering §2 records. So
+  `app/src/document.rs` gains `read_sections_with` beside
+  `app/src/document.rs:read_assets_with`, and the latter takes the sections as a
+  parameter and seeds `seen` with them — exactly as `cli/src/main.rs:read_assets`
+  takes `read_sections`' result. **One closure serves both passes**: `read` is an
+  `impl FnMut`, so the sections pass takes `&mut read` and the assets pass takes it
+  by value. A second closure, or a second read of the same file, breaks the one
+  property that seam exists to check —
+  `app/src/document.rs`'s `a_path_named_twice_is_read_once`.
+
+  **The watch list is `Render::assets`, and `app/src/watch.rs` is not edited.**
+  `app/src/watch.rs:root` is one *recursive* watch on the document's own
+  directory, computed from the path alone, and `sections/` already sits under it;
+  `app/src/watch.rs:classify` filters on the `assets` slice it is handed, which
+  `app/src/document.rs:render_with` builds and `app/src/preview.rs:Preview::compile`
+  copies. So what changes is the list. **A section arrives as `Change::Asset`**,
+  never `Change::Document`: `app/src/preview.rs:Session::on_change` runs
+  `Preview::reload`'s external-change rule on `changed.document`, and that rule is
+  about the buffer the pane holds, which is never a section.
+
+  **The section paths go into that list first and unconditionally, and this is the
+  decision an implementer would get wrong.** `core/src/lib.rs:section_paths` cannot
+  fail — it returns `Ok` over `core/src/emit.rs:includes`' bare `Vec` — where
+  `core/src/lib.rs:image_paths` and `core/src/lib.rs:bibliography_path` both can,
+  and after this phase both fail with `MissingSection` for a section that does not
+  exist yet. `Preview::compile` replaces `self.assets` only when the list is
+  `Some`, so a list built the way it is built today would stay empty, `classify`
+  would drop the section's creation event, and the app would never recover. The
+  rule: the list is `Some(sections ++ bibliography ++ images)` when the shopping
+  lists answer, `Some(sections)` when they do not and the master names any, and
+  `None` otherwise. **Each branch earns its own sentence, because round 2 caught a
+  draft giving all three the middle one's.** The first is today's behaviour
+  character for character for a document that names no section — an empty section
+  list prepended to the same vector in the same order. The third is what keeps a
+  transient out-of-dialect edit from dropping the images the app already knows
+  about, since `Preview::compile` keeps the previous list on `None`. The second
+  *replaces* the list with a shorter one, so a multi-file document with a missing
+  section stops watching its figures until that section returns — **a real
+  behaviour change, for multi-file documents only, and the trade is deliberate**:
+  recovering the section beats watching figures through a window in which nothing
+  compiles anyway.
+
+  **The anchors are OQ-5's answer and one filter**: `render_with` keeps an anchor
+  whose `location.file` is `None` and drops the rest. Nothing else moves —
+  `app/src/document.rs:Anchor` stays a line and a page, and
+  `app/dist/index.html:caretPage` is untouched.
+
+  **The third hand-built sentence is the app's to owe.**
+  `cli/src/main.rs:read_sections` prints *"cannot read {} for the section {}: {e}"*
+  and `render_with`'s own doc comment records that a file which will not read is no
+  `Error` at all and that this app owes the CLI the sentence. The section pass
+  builds the third, beside the image and bibliography ones `read_assets_with`
+  already builds.
+- **Exit gate:** eight cases, matching the density Phases 1 and 2 converged at.
+  **Seven are automated and one needs the window.** `app` is a workspace member and
+  its tests live in the bin target, so all of them run under
+  `cargo test --workspace`; `app/src/preview.rs` already ships the harness —
+  `counted()`, `wait_for()`, `scratch_dir()` — and
+  `a_bibliography_that_does_not_exist_yet_is_watched_and_then_compiles` is the
+  direct template for (5). The fixture is in the tree:
+  `tests/fixtures/multi_file.md` beside `tests/fixtures/sections/`.
+
+  (1) **The observable, read by eye, once:** opening that fixture in the window
+  renders all four files as one PDF.
+
+  (2) **Editing a section recompiles.** Phrased as the precedent phrases it —
+  *produces a recompile within a bounded wait* — and not as a latency: there are
+  **two** debounces, `app/src/watch.rs:DEBOUNCE` at 100 ms for the filesystem path
+  and `app/src/watch.rs:TYPING_DEBOUNCE` at 300 ms for the pane, neither is
+  asserted end to end anywhere, and `app/src/preview.rs:wait_for`'s own doc comment
+  calls its bound *"a bound on wiring, not a measurement"*.
+
+  (3) **An error in a section reaches `session.preview().error()` naming that
+  section's file and line**, on the exact string, which is `Error`'s `Display` and
+  therefore the `in sections/… at line N` phrase Phase 1 shipped.
+
+  (4) **The anchors, both directions.** A render of `tests/fixtures/multi_file.md`
+  yields **no** anchors, because every heading in it was written in a section and
+  the master is a pure manifest; a master carrying a heading of its own yields
+  exactly that one, at the master's own line. An unasserted absence is what
   `core/src/lib.rs:anchors_from` already punishes silently.
-- **Close-out:** `rules/desktop.md` — the watch set and the file story. One push.
+
+  (5) **A section that does not exist yet is watched and then compiles** — the case
+  `mpdf-003` Phase 2 gate (3) and `mpdf-007` Phase 3 each pinned for their own
+  channel, and the one the unconditional list above exists for.
+
+  (6) **Each file is read exactly once across both passes**, on a counted closure —
+  the existing property extended to the channel that added a second pass over the
+  same directory.
+
+  (7) **Inertness:** a single-file document opened in the app produces the same PDF
+  bytes and the same anchors as it did before the phase. `render_with` now calls
+  `section_paths` and threads a section array on *every* compile, so this is the
+  third time this document has written that arithmetic and the third time it is
+  asserted rather than assumed.
+
+  (8) `cargo test --workspace` passes.
+- **Close-out:** `rules/desktop.md` — **the filter's list, not the watch set**,
+  which is the noun round 2 corrected: nothing about what is watched changes, and
+  what goes stale is §"The watch loop"'s *"the one list `image_paths` and
+  `bibliography_path` fill is what it filters against"*, which after this phase
+  holds three kinds. The file story and the anchor rule go with it. **`max_lines: 455` against 449 body lines, so the cap moves with the
+  section.** `README.md` §"The desktop app" loses its *"One exception, for now: it
+  does not yet open a document written in several files"* paragraph and its *"The
+  app opens one file at a time."* sentence; the mid-state comment inside
+  `app/src/document.rs:read_assets_with` names this phase as its closer and goes
+  with them. `CLAUDE.md`'s stanza is unchanged — OQ-6 landed it in Phase 1. One
+  push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

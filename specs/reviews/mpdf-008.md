@@ -2,6 +2,107 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 3 only — 2026-08-24 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, two non-blocking, both folded. **Converged in two rounds**,
+as Phase 2 did. Every round-1 finding was accepted; **none was rejected in either round**,
+and all six blockers were confirmed resolved against the files rather than the changelog.
+
+The reviewer worked both questions it was asked. **The three-branch `Render::assets` rule is
+today's behaviour character for character for a document that names no section**: today's
+expression is `Some(bibliography ++ images)` when the walk answers and `None` when it does
+not, and with zero sections the first branch prepends an empty list to the same vector in the
+same order — order being irrelevant downstream anyway, since `app/src/watch.rs:classify` uses
+`assets.iter().any(…)`. The two shopping lists answer or fail together, because both run the
+same `assemble` + `emit` over the same inputs. **Gate (4)'s "no anchors" is reproducible and
+not vacuous**: `tests/fixtures/multi_file.md` is a pure manifest and its three headings live
+in the sections, so the filter drops exactly three — and the before-state is already pinned in
+the tree by `core/tests/golden_test.rs:an_anchor_names_the_file_its_heading_was_written_in`,
+which means the gate cannot pass by a count-guard withdrawal. The second half holds too:
+`core/src/sections.rs:assemble` resumes each master segment at its own `source_line`, so a
+heading the master carries relocates to the master's own line with no file.
+
+Every literal the rewritten gate is keyed to was re-derived: `a_path_named_twice_is_read_once`;
+`a_bibliography_that_does_not_exist_yet_is_watched_and_then_compiles`, `counted`, `wait_for`,
+`scratch_dir`, `Session::preview`, `Preview::error`; `DEBOUNCE` 100 ms and `TYPING_DEBOUNCE`
+300 ms; and `rules/desktop.md` at 449 body lines against `max_lines: 455`. All correct. It
+also confirmed that `&mut read` for the sections pass and by-value for the assets pass
+compiles, under the blanket `impl FnMut for &mut F`.
+
+The two folded:
+
+1. **The middle branch's rationale did not cover the middle branch.** *"…keeps a transient
+   out-of-dialect edit from dropping the images the app already knows about"* is true of the
+   `None` branch, which is what makes `Preview::compile` keep the previous list. `Some(sections)`
+   *replaces* it with a shorter one, so a multi-file document with a missing section stops
+   watching its figures until that section returns. Each branch now has its own sentence, and
+   the trade is recorded as deliberate rather than implied.
+2. **The close-out said "the watch set", and nothing about the watch set changes.** What goes
+   stale in `rules/desktop.md` is §"The watch loop"'s *"the one list `image_paths` and
+   `bibliography_path` fill is what it filters against"*, which after this phase holds three
+   kinds. The target section was right and only the noun was loose.
+
+### Round 1 — Phase 3 only — 2026-08-24 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 — is this the right thing to build at all?** Yes. The phase produces the observable —
+the app renders a PDF from a master and its sections and re-renders when any of them changes —
+and it is the right one, because Phase 1 shipped a *named* mid-state in which
+`app/src/document.rs:render_with` passes `&[]` for sections, so a master opened in the app
+refuses with `MissingSection`. Phase 3 closes a hole the corpus knowingly opened rather than a
+want invented afterwards, and `README.md`, `cli/src/main.rs` and `read_assets_with`' own doc
+comment all name it in writing as the closer.
+
+Verdict: `NOT READY`, **six blocking**, six non-blocking. One generalist reviewer, matching
+every prior episode in this corpus. No finding was rejected.
+
+**The blocking findings cluster on one root: the phase deferred its own central design call
+and then keyed a gate to it.** The scope said *"the scroll-sync answer is OQ-5's and is scoped
+here rather than assumed"* and gate (4) said *"whatever OQ-5 decides for anchors is asserted"*,
+while OQ-5 was unresolved and said in terms that it **blocks Phase 3** — so an implementer had
+to make the call and then build it, which §3 forbids and which this corpus has refused twice in
+this same subsystem, `mpdf-007` Phase 3 and Phase 4 each recording *"a phase that leaves this
+open is a phase that forces a guess."*
+
+Three findings followed from it. **"No sync at all" is not reachable by doing nothing:**
+`app/src/document.rs:render_with` discards `location.file`, and `app/dist/index.html:caretPage`
+walks a flat list and breaks at the first `anchor.line > line` — so with sections the list is
+non-monotonic in the master's coordinates and the pane opens on an arbitrary page. Shipping the
+draft would have shipped confidently wrong sync. And **OQ-5's own premise was stale**: it said
+`core/src/lib.rs:Anchor` needs its file, but §2 of this very document gave it one and Phase 1
+shipped it; what is still line-only is `app/src/document.rs:Anchor`, which neither OQ-5 nor the
+phase named. OQ-5 is now RESOLVED — the pane holds one file and an anchor syncs only when it was
+written in that file — with both rejections argued and the stale premise corrected in place.
+
+Three more were independent. **The scope named the wrong file:** `app/src/watch.rs:root` is one
+*recursive* watch on the document's directory and `sections/` already sits under it, so
+`watch.rs` needs no edit at all; what changes is the filter's input list, `Render::assets` — the
+same mistake `mpdf-007` Phase 3's round 1 caught, *"'watches it beside the images' was the wrong
+verb … what changes is the filter."* **The cited precedent was the wrong shape:** `mpdf-007`
+Phase 4 is the *browser*, which supplies its bibliography as two scalar arguments and needs no
+ordering; a section must be read before either shopping list can answer, so the precedent is
+this spec's own CLI Phase 1, and the ordering forces two decisions the draft did not make — a
+read pass of its own, and one `FnMut` closure serving both passes or `a_path_named_twice_is_read_once`
+stops meaning what it says. **And the gate omitted the case both shipped precedents pinned:**
+`Preview::compile` replaces `self.assets` only when the list is `Some`, and after this phase
+both shopping lists fail with `MissingSection` for a section that does not exist yet — so the
+filter would stay empty, `classify` would drop the creation event, and the app would never
+recover. `core/src/lib.rs:section_paths` cannot fail, which is what makes the fix available.
+
+The six non-blocking, all folded: the scope cited **`mpdf-007` Phase 4 where it meant Phase 3**,
+which the document's own OQ-4 cites correctly; gate (2) named **one of two debounces** and
+phrased it as a latency nothing asserts end to end, now *"produces a recompile within a bounded
+wait"*; the close-out named **no user-facing documentation** though `README.md` carries two
+sentences that go actively false; it did not say whether `rules/desktop.md`'s **cap moves** with
+six lines of headroom; **the app's third hand-built sentence** was unnamed and ungated; and
+**gate density was well below Phases 1 and 2** — four cases against eight and six, with no suite
+item and no inertness item. The gate is now eight cases with both.
+
+The reviewer also established, as fact rather than as a finding, that the gate is better served
+than the phase implied: `app` is a workspace member whose tests live in the bin target, so all
+34 run under `cargo test --workspace`, and `app/src/preview.rs` already ships the harness this
+phase needs. Seven of the eight cases are automated; only "the right pixels reached the glass"
+needs a human, which `mpdf-003` §2 already caps at one item.
+
 ### Round 2 — Phase 2 only — 2026-08-24 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, five non-blocking, all five folded. **Converged in two
