@@ -2,6 +2,99 @@
 
 Append-only. Newest round first. One heading per round.
 
+### Round 3 — Phase 5 only — 2026-08-26 — panel of three, fresh, against a phase rewritten from a prototype — **NOT READY (at the cap; escalated)**
+
+**The design converged and the gate did not, which is a different failure from
+round 2's and worth separating.** All three lenses confirmed the mechanism, and
+the correctness lens confirmed the claims about the shipped file line by line:
+`rendering > 0` genuinely holds across an await inside `renderPages` and
+`rerender` checks it *before* `++renderSeq`, so a `settle` firing during an open
+cannot bump the generation; a band render that neither bumps `renderSeq` nor
+calls `cancelRenders` is safe because the per-await checks abort it before it
+touches the DOM; `drawLayers` composes with a `DocumentFragment` verbatim;
+placeholders satisfy every shipped consumer of a `#pages` child; and
+`rootMargin: '100% 0px'` is well-founded, the initial observation reporting an
+entry for every newly observed target.
+
+**The arithmetic is mutually consistent rather than merely re-derivable**, which
+is the strongest thing this round established. 71 × (735 + 16) + 16 = **53,337
+exactly** — the pane width, the page height, Phase 4's gap and `#pages::after`
+all agreeing on one number that no single figure could have been
+reverse-engineered from. The consistency lens and the correctness lens reached
+it independently.
+
+**Eighteen blocking findings. Three are design, and the rest are the gate.**
+
+1. **The budget's evaluation moment, found by all three lenses**, and round 2's
+   finding 4 undischarged — the only one of that round's eight still open.
+   `whole ≤ 128 MiB` is a function of pane width, and four shipped causes move
+   it, none of them an open. Solved for the gate's own fixture, the boundary sits
+   at a **289 px pane**, which the divider permits, so `long.md` crosses the
+   budget in ordinary use in both directions. Whether an observer is created
+   mid-life, whether canvases are released on whole → band, and whether the
+   observer is disconnected on band → whole all have no answer in the text, and
+   the retention consequences differ by five to seven times.
+2. **What the drainer renders is never stated, and one reading loses the
+   author's edit.** A compile goes through `openPdf`, wrappers are reconciled
+   rather than replaced, so at a recompile the band's wrappers already hold the
+   *previous* document's canvases. "Render only the wanted pages that hold no
+   canvas" — the natural reading, and the one consistent with the phase's own
+   five-render measurement — then renders nothing, and **an edit never reaches
+   the screen on exactly the documents this phase exists for.** The missing rule
+   is that a canvas belongs to the document generation that produced it.
+3. **The 120 ms rest's scope is unstated, and a programmatic scroll fires a
+   scroll event.** `applyAnchor` and `goToDestination` both write `scrollTop`, so
+   a rest that gates every scroll costs the open path 120 ms it claims not to
+   pay; and if the open path bypasses the drainer instead, then at a width rest
+   the band pass inside `drawPages` and the observer's own drainer run
+   **concurrently at the same `renderSeq`**, neither generation check aborting
+   either. Round 2's finding 5 fixed drainer-versus-drainer; this is the
+   uncovered half.
+
+**The gate's two central quantities are measured by an instrument that cannot see
+the defect and by no instrument at all.** Clause 2 sums over `#pages`, which
+counts *attached* canvases — and the scope's own release paragraph says a canvas
+detached first is invisible to exactly that measurement, so an implementation
+that never zeroes passes at 17.5 MiB while holding 414. Clause 6 counts "renders
+started", which is module-scoped and unreadable from the console; so are clauses
+3 and 9. **Clause 3 is inverted**: it fails a correct implementation, since with
+the await a slow delivery costs latency and not correctness, and passes the
+non-awaiting defect, which measures the same interval. **Clause 4's stated
+discriminator is false** — a per-page append still ends at 53,337 — so the
+one-mutation commit, which the scope calls a decision rather than a style, is
+checked by nothing. **Clause 7 names no landing coordinate**, which is verbatim
+the defect Phase 2's clause 3 was written against.
+
+**And the fixture defeats the gate on two ordinary machines.** At
+`devicePixelRatio` 1 a page costs 1.458 MiB and `long.md` is **103.5 MiB, under
+the budget** — it renders whole, no observer, and clauses 2, 3, 6 and 8 have
+nothing to measure. With macOS's default overlay scrollbars the pane is 535 px
+rather than 520, `scrollHeight` reads 54,899, and **clause 4 fails a correct
+implementation outright**. Phase 1 and Phase 4 both pin the scrollbar setting;
+Phase 5 inherited their geometry without inheriting the pin.
+
+**One inherited error propagated into a new literal.** The showcase names five
+sections, so `#files` is shown by default, and the showcase's pane at the default
+window is roughly **300 px, not 520** — six pages at ~12.3 MiB rather than 34.99.
+Clause 1's verdict is unaffected either way, but the gate instructs a tester to
+record a threefold disagreement as a finding.
+
+**The headline latency claim is wrong in a third way, in its third draft.** "Its
+first page is on screen 27–147 ms after the layout instead of 1,182 ms" — but
+`drawPages` appends each wrapper inside its own loop iteration, so page 1 is on
+screen after page 1's own render today, which Phase 1 measured at 42 ms. What
+waits 1,182 ms is the page the reader is *taken to*, because `applyAnchor` runs
+after the loop. The claim is right for an edit compile and wrong for an open from
+disk, which is the flagship scenario. The consistency lens separately found that
+the sentence promising to re-take the per-page render in the app points at clause
+9, which times `getPage` — the page fetch, not the raster.
+
+**Escalated at the cap per §7.6.** `reviewed` stays `null`. What the round
+established is that the mechanism is sound and the remaining work is of two
+kinds: three questions the prototype can answer by observation as it answered the
+last three, and a gate that needs rebuilding around instruments that exist,
+preconditions that are asserted, and a fixture that is pinned.
+
 ### Round 2 — Phase 5 only — 2026-08-26 — two fresh reviewers standing in for round 1's — **NOT READY (escalated below the cap, with a diagnosis)**
 
 **§7.4's same-agent resume was unavailable, not skipped, and this round is
