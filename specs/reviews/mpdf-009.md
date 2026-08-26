@@ -2,6 +2,74 @@
 
 Append-only. Newest round first. One heading per round.
 
+### Round 4 — Phase 5 only — 2026-08-26 — panel of two, fresh, past the cap by the human's call — **NOT READY (folded in; the phase is not cleared)**
+
+**Past §7.6's cap of three, authorised by the human**, as Phases 1 and 2 of this
+same spec each went to four. Between round 3 and this one the human directed that
+round 3's three design findings be put to a **running prototype** rather than
+answered in prose; that harness also found a fourth defect nobody had raised, and
+the phase was rewritten from it.
+
+**The fourth defect is the one worth recording, because no reviewer produced it
+and the design it broke reads correctly on the page.** A freshness test keyed on
+document generation alone — which is exactly what round 3 asked for — left
+whole-mode pages holding a canvas made for the *old* width after a rest: **six
+pages at a 1120 backing store where 1400 was wanted, every one soft.** That is
+Phase 1's own *comes back sharp when you let go*, and its gate clause 3,
+regressed. Freshness is (generation, width), and the round-trip 520 → 700 → 520
+now returns to 116.64 MiB, sharp, where it opened.
+
+**Sixteen blocking findings, and both lenses agree none needs a design change.**
+The exit-gate lens: "none of the nine needs a design change. Seven are one added
+or amended sentence." The correctness lens named the pattern that produced its
+seven, and it is the finding this round exists for:
+
+> **the prototype settled these questions in code and the write-up recorded the
+> measurement instead of the rule.**
+
+Checked against the harness, three sentences described something never built.
+**"Awaits the observer's first delivery"** — it waits one animation frame; the
+promise version hangs if the observer is disconnected first, stranding
+`rendering` above zero and deferring every future width rest for the life of the
+window. **"Disconnected by every open"** — it disconnects only on a mode
+crossing, which is why a band→band recompile works: the reused wrappers are still
+the right targets, and disconnecting without re-establishing freezes the wanted
+set. **"Leaving the band frees the backing store"** — it sweeps after every
+rendered page, without which a page dropped while its render is in flight has no
+canvas to release at that moment and is never revisited. Each was folded in by
+reading the harness rather than by reasoning again.
+
+**Two implementations passed every clause of the previous gate and were wrong in
+the way the prototype had been wrong.** One renders a band page only when it
+holds no canvas — round 3's warning, design fixed and gate never written — and
+**loses the author's edit on every long document**. The other leaves `openPdf`'s
+positioning where it is, drains the band for `scrollTop` 0, jumps the reader and
+shows a placeholder until the rest fires, reaching an identical end state — which
+is the phase's **headline claim**, ungated. Both now have clauses.
+
+**The gate goes from thirteen clauses to sixteen** and stops depending on
+instruments that do not exist: `__pane` gains `renderMs`, and `made`/`released`
+replace a "canvas allocation" reading that Safari's memory timeline does not
+present — clause 2's blind instrument reproduced in its own replacement.
+Preconditions are asserted with a single-file fixture open, `#pages` shipping
+`hidden` and the showcase's own pane being ~305 px rather than 520, because
+`#files` shows for a document naming sections.
+
+**Every number re-derived clean, by both lenses independently**, and the
+misattribution defect of rounds 1–3 did not recur: clause 15's 12 ms is genuinely
+OQ-7's raster median and not the text-layer row. One correction came with it —
+that median was taken at a **619 px** pane and the gate pins 520, so the
+comparison is against ~8.5 ms, and it is a WKWebView number already rather than
+a Chromium one to re-take.
+
+**`reviewed` stays `null`.** What four rounds and two prototypes have established
+is that the mechanism is sound and observed, and that this phase's remaining risk
+is no longer design but the distance between a document and the program it
+describes. **The next decision is the human's**, and the honest options are a
+fifth round scoped to whether the scope now matches the harness, or building it
+against the harness as a reference and letting the gate do the work it was
+written for.
+
 ### Round 3 — Phase 5 only — 2026-08-26 — panel of three, fresh, against a phase rewritten from a prototype — **NOT READY (at the cap; escalated)**
 
 **The design converged and the gate did not, which is a different failure from
