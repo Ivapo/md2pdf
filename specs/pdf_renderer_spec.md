@@ -32,7 +32,7 @@ phases:
     by: null
   - name: "Phase 5 — the pane holds what the reader is near"
     reviewed: 2026-08-26
-    shipped: null
+    shipped: 2026-08-26
     cut: null
     by: null
 
@@ -455,13 +455,33 @@ positioned text layer does not, and `pdf.js`'s `getStructTree` is a partial
 answer this spec does not pretend closes the gap. That is the price, it is paid
 knowingly, and OQ-3 carries what could be done about it.
 
+> **CORRECTED 2026-08-26, by Phase 5.** The sentence above is kept as it was
+> written and its first clause is no longer true without a qualification.
+> **The first two are rebuilt by Phase 2 only inside the budget.** For a document
+> past 128 MiB the pane holds the pages the reader is near and releases the rest,
+> and a released page has neither layer — so a selection cannot span pages that
+> are not drawn, and a link on one of them is not there to click. What a reader
+> can *see* is inside that set by construction, which is why the loss is bounded
+> and why it is recorded here rather than treated as a reversal. Under the budget
+> nothing changes and the sentence stands exactly as written.
+
 **Measured and regained beside it**: the annotation API answers, and
 `getOutline` returns **six entries** for the showcase — Typst emits document
 bookmarks that nothing in this project currently reads.
 
 ## 3. Open questions
 
-- **OQ-1** — does the pane render every page, or the pages near the reader?
+- ~~**OQ-1** — does the pane render every page, or the pages near the reader?~~
+  **RESOLVED 2026-08-26, by Phase 5**, which answers *the pages near the reader,
+  and only once a budget says it must*. The threshold this question asked for is
+  a quantity and not a page count, exactly as the measurement below concluded:
+  `whole ≤ 128 MiB` of canvas backing store, evaluated at an open and at a width
+  rest, with the pane's width a term in it. Under it the document is drawn whole
+  and nothing a reader sees changes; over it the pane retains the pages
+  intersecting the scrollport plus one scrollport either side. **128 MiB is
+  chosen and not derived**, and OQ-8 is still what would ground it. The
+  question's own record follows, unaltered.
+
   Measured in the same `tauri://` run as §2, and not the retired dev-server
   one: six pages in 94 ms against 42 ms for the first, so the pages after it
   cost around 10 ms each and a document of this size needs no virtualisation and Phase 1 will not build
@@ -968,7 +988,8 @@ for.*
   fit-page shows a whole page at the pane's shorter dimension; the explicit
   scale survives a re-render after a compile.
 
-- **Close-out:** `rules/desktop-panes.md`'s width section gains the modes. The
+- **Close-out:** `rules/desktop-geometry.md`'s width section gains the modes —
+  the file that section moved to when Phase 5 split it out. The
   README gains nothing — a zoom is not what the app is for. One push.
 
 ### Phase 4 — the pages are told apart

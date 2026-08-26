@@ -129,8 +129,9 @@ the document moved, so nothing about your place in it does either — the page j
 to the width you gave it and comes back sharp when you let go.
 
 **The page is text, not a picture of text.** Select and copy from it as you would in any
-PDF reader, and click a cross-reference to jump to the figure, table, equation, footnote or
-reference it names. A link out to the web does not open: the app fetches nothing and opens
+PDF reader — on a long document, from the pages around the one you are reading, which are
+the ones the app keeps drawn — and click a cross-reference to jump to the figure, table,
+equation, footnote or reference it names. A link out to the web does not open: the app fetches nothing and opens
 nothing, so those links are inert on the page.
 
 The header says where the page stands — `current` with the time the compile took, or
