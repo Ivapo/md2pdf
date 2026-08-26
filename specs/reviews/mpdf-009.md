@@ -2,6 +2,111 @@
 
 Append-only. Newest round first. One heading per round.
 
+### Round 3 — Phase 4 only — 2026-08-25 — panel of two, resumed — **READY (converged)**
+
+Both lenses READY, zero blocking, within the three-round cap. Phase 4's
+`reviewed` set to 2026-08-25. Phases 2 and 3 remain `null` and are not cleared
+to build.
+
+Narrow by design: round 2 had already converged, and this round existed only
+because folding round 2's non-blocking findings re-keyed a gate clause to a new
+measurement — §7.3's warning that a fix is how a blocker gets introduced.
+
+**Both lenses independently sharpened clause 1 in the same direction**, and the
+author's own sentence was the thing wrong: the hedge "16 or 32 depending on
+whether the engine carries a scroll container's last margin into `scrollHeight`"
+understates the test. With `#pages::after` present the last canvas's bottom
+margin is not a last-child margin at all — it collapses with the pseudo-element's
+zero top margin and contributes a real 16 px of advance — so a stray
+`margin: 16px 0` reads **32 on any engine**. The check is more deterministic than
+the draft claimed, which is the harmless direction for a gate to be wrong in.
+
+**A tester trap was caught and is now in the clause**: clause 1's three
+measurements must be taken at a *settled* width. `fit()` writes fractional
+heights while a width is moving, so the rounded differences can read 15 or 17
+with the margin still exactly 16.
+
+Measured by the panel this round, on six canvases rather than argued: correct
+`margin-top: 16px` gives 16 / 16,16,16,16,16 / 16; the `margin: 16px 0` failure
+gives 16 / 16,16,16,16,16 / **32** while a declaration read still reports
+`16px`; `margin-top: 3%` at a narrow pane gives **9 / 8,9,8,9,8** / 16 with the
+declaration resolving to `8.54688px`. So expression 3 alone carries the
+shorthand discrimination, and clause 5 catches the percentage on expressions 1
+and 2. 16/535 = 2.99%, re-derived.
+
+**Won't do**: the scope says "some 535 px" where §2 carries "~540 px" and the
+763.7 px A4 figure keyed to it. §2 is shipped prose no gate reads, and §6.1's
+rule on stale figures says to fix one only in a section the new phase touches.
+Recorded so a later round does not read the two as a contradiction.
+
+### Round 2 — Phase 4 only — 2026-08-25 — panel of two, resumed — **READY**
+
+Both lenses READY, zero blocking. Both had raised round 1's blocker
+independently, and both verified the fix against the files rather than the
+changelog.
+
+Non-blocking findings folded on convergence: `#pages::after` needs `content: ''`
+and `display: block` to generate a box at all; 16 px was the one value in the
+phase carrying no argument; and — the finding that forced round 3 — gate clause 1
+read *declarations* where it should read *rendered geometry*.
+
+The correctness lens **withdrew its own round-1 suggestion**: it had offered
+`inset` as one escape from the blocker, and confirmed on re-review that an inset
+shadow paints beneath a replaced element's content, so an ink ring under an
+opaque `pdf.js`-filled bitmap would be invisible. That is now recorded in the
+phase so a later round does not propose it.
+
+### Round 1 — Phase 4 only — 2026-08-25 — panel of two, fresh — **NOT READY**
+
+**Round 0 (this episode — one appended phase): yes, with the weakness named.**
+The phase changes no byte of the compiled PDF, but Phase 1 put the artifact on
+screen as one uninterrupted white strip, so its *pagination* — a property of the
+artifact, not of the chrome — was invisible. The phase argues the observable
+explicitly rather than claiming a clean yes, which is what §3 asks of a thin
+claim; a clean yes would have been the finding.
+
+Two blockers, thirteen non-blocking. **Every finding accepted, none rejected.**
+
+**Blocker 1, found independently by both lenses with independent browser
+probes.** The scope prescribed `box-shadow: 0 0 0 1px` and gate clause 1 demanded
+a hairline "on all four sides" — unpassable. A fit-to-width canvas is exactly
+`pages.clientWidth` wide and `#pages` ships `overflow-x: hidden`, so a 1 px
+spread paints at x ∈ [−1, 0) and [W, W+1), both outside the clip. Measured:
+canvas border-box right edge and container clip edge coincide at x=285, and
+`scrollWidth` stayed at `clientWidth`. **The requirement was wrong, not the
+mechanism**: a page flush to the pane's own side edges has no background beside
+it to separate it from, so a side hairline carries no information. Resolved to a
+top-and-bottom hairline painted into the gap.
+
+**Blocker 2.** Clause 6 read "visible in light and not obtrusive in dark" —
+§3's "looks done" verbatim — and no colour was named anywhere, so `box-shadow`
+would resolve to `currentColor` and inherit `--ink`: an ink ring in light, a
+near-white one on white paper in dark. Resolved to `var(--edge)` with the
+computed value pinned per palette.
+
+**The sharpest non-blocking finding was about the argument, not the code**: the
+§6.1 preamble asserted step 1 did not match *while the close-out performed one
+of step 1's own bullets*. The conclusion held — nothing shipped is removed, no
+phase is cut, and §2 pre-authorised a phase for exactly this — but the argument
+was self-serving as written. It now says step 1's phase-removing bullets do not
+match, step 1's prose bullet does, and the close-out discharges it.
+
+Also caught: §6.1's correction rule was cited as the third when it is the
+second; clause 2 added a width-equality check that Phase 1 itself records as
+passing by construction; clause 3 dropped Phase 1's named instrument; clause 4
+re-ran one of OQ-2's three causes while claiming all of Phase 1's clause 4;
+clause 5 named no measurement method; the gap constant and the carrying property
+were never stated; the anchor's "reproduces it exactly" overstated the in-gap
+case across a scale change; the side-padding argument was weaker than the fact
+(`clientWidth` *includes* padding, so padding would not reduce `paneWidth` at
+all — the canvases would be sized past the content box and clipped silently);
+and `rules/desktop-panes.md`'s `covers:` was unnamed by the close-out.
+
+**A third copy of the corrected sentence lives in the stylesheet**, in the very
+block this phase edits. The author's grep for it missed on a line break — the
+same unguarded-match failure this record noted at Phase 1's round 3, recurring
+in the pass that was checking for it.
+
 ### Round 4 — Phase 1 only — 2026-08-25 — panel of three, resumed — **READY (converged)**
 
 **Past the loop's three-round cap, by the human's explicit decision** at the
