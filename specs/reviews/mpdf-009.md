@@ -2,6 +2,135 @@
 
 Append-only. Newest round first. One heading per round.
 
+### Round 2 — Phase 5 only — 2026-08-26 — two fresh reviewers standing in for round 1's — **NOT READY (escalated below the cap, with a diagnosis)**
+
+**§7.4's same-agent resume was unavailable, not skipped, and this round is
+weaker for it.** Round 1's three agents could not be resumed — no transcript —
+so round 2 ran two fresh reviewers, one carrying the correctness lens and one
+carrying scope and exit-gate together, each handed round 1's findings verbatim
+and asked to verify them against the files. That recovers the checklist and not
+the memory. Phase 2's round 4 recorded that two of its eight blockers "would not
+have been caught by a fresh reviewer"; this round had no way to reproduce that
+property and the record should not pretend otherwise.
+
+**Eight distinct blocking findings, and every one of them was introduced by
+round 1's fixes.** §3 of the loop names this pattern — *a fix can introduce a
+blocker* — and this is the sharpest instance in the corpus.
+
+1. **The retention expression was a ceiling written where a value was meant**,
+   found independently by both reviewers, which is the round's strongest
+   finding. The rule says *whole ≤ budget ⇒ render every page, otherwise the
+   band*, so retention is `whole ≤ budget ? whole : band`. The phase wrote
+   `min(whole, max(band, budget))` and the gate compared retained bytes to it.
+   Worked at the gate's own geometry, a **correct** implementation retains
+   17.5–29.2 MiB where the clause predicts 128 — off by four to seven times —
+   and read as an inequality instead the clause tolerates an implementation
+   holding four to seven times the design. That is round 1's own "100 MB admits
+   a 3× leak" reproduced with a different literal.
+2. **Fixing clause 1 emptied it.** The budget rule made "the showcase is
+   unchanged" true rather than false, which was right — and by construction the
+   showcase now never exercises a band render, a release or a re-entry, while no
+   other clause looks at a layer at all. Releasing a canvas and leaving both
+   layers attached passes all ten clauses, and so does appending a second text
+   layer on every re-entry, which is the leak Phase 2's clause 7 exists for.
+3. **`.view` on a placeholder is ungated and unreachable.** Round 1 forced it
+   into the design; it is read only by `goToDestination`, no clause on the long
+   document follows a link, and the fixture is specified by `/Count 71` alone, so
+   nothing requires it to contain a cross-page destination. An implementer who
+   sets `.logical` and `.natural` and skips `.view` passes the whole gate and
+   ships a viewer that throws on any cross-reference into an unrendered page.
+4. **When the budget is evaluated is unstated.** Once at open, a twenty-page
+   document dragged to twice the width retains some 470 MiB — the phase's subject
+   failing in the scenario it cites as its own urgency — and no clause can tell
+   the two answers apart.
+5. **Nothing serialises band passes.** The observer's callback fires repeatedly
+   through a scroll; the phase's only guard skips pages that have *left* the
+   band and says nothing about a second pass finding a page whose render is in
+   flight. The same page reaches `page.render()` several times on one throw, and
+   clause 7's own counter is what breaks.
+6. **"The canvas is what is swapped inside a stable wrapper" drops the layers.**
+   `drawLayers` *appends*, which is safe today only because the wrapper is new on
+   every pass. Under reconciled wrappers the literal reading yields two text
+   layers and two annotation layers per page on every compile — which contradicts
+   clause 1's own claim that Phase 2's clause 7 re-runs and passes verbatim.
+7. **The reordered open asks the observer for a band it has not reported yet.**
+   `IntersectionObserver` delivers its first records asynchronously, so at step
+   three the band is empty; and the phase forecloses the workaround itself by
+   deciding the band is observed and not computed. The remaining option adds an
+   await inside `openPdf` — the one function round 1 blocked on for exactly this
+   reason — needing a generation re-check and a statement about `rendering`.
+8. **Clause 4 fails a correct implementation** unless the sizing pass commits its
+   wrappers in one mutation, which the scope does not say and today's `drawPages`
+   does the opposite of.
+
+**Both reviewers re-derived every byte figure and found them right** — 5.832 MiB
+at a 520 px pane, 8.264 at 619, 35.0 for the showcase, 414.1 and 586.8 for the
+long document, 21 and 15 pages admitted, 4.59× — confirming that the probe's
+"MB" can only have been MiB. **The one wrong quantity was the retention
+expression itself**, which no amount of arithmetic checking would have caught,
+because it was a modelling error rather than a slip.
+
+**Escalated to the human at round 2 rather than spending round 3, and the reason
+is a diagnosis rather than fatigue.** Twenty-three blocking findings across two
+rounds, with round 2's eight all generated by round 1's fixes, is the signature
+of a phase being *designed* in the review loop rather than reviewed in it. The
+three questions that keep producing blockers — how band passes serialise, how
+the layers swap under a stable wrapper, whether the observer's first delivery
+lands before the band pass needs it — are questions a running prototype settles
+in an afternoon and that no reviewer can settle from prose. The project's own
+practice is that UI work is prototyped before it is specced; this phase was
+drafted from first principles instead, and the loop has been paying for it.
+**`reviewed` stays `null`.**
+
+### Round 1 — Phase 5 only — 2026-08-26 — panel of three, fresh — **NOT READY**
+
+**Round 0, answered before the panel and recorded here per §7.0.** *Does this
+phase produce the observable, and is it the right one?* Yes, conditionally, and
+the condition is the phase's weakest point: for a document the pane can already
+show, nothing a reader sees changes; the stronger claim, that a long enough
+document would otherwise not be shown at all, rests on OQ-8, which is
+unmeasured. It is the right thing to build before Phase 3 on an argument that
+does not depend on OQ-8 — a canvas is 8.26 MiB at fit and 33 at 200%, so the
+zoom knob multiplies the quantity quadratically. **The qualification is recorded
+rather than resolved**, and round 2 did not disturb it.
+
+**Three fresh reviewers with repo access, one lens each — correctness and
+grounding, scope/YAGNI/§6.1, exit-gate testability — fifteen blocking findings
+between them.** All fifteen were accepted; the fold-in is `da46677` and the
+arithmetic it shipped wrong is `f80c6a5`.
+
+**Two were design changes rather than wording.** The correctness lens re-derived
+the draft's premise that "six pages is inside any band this phase can choose"
+and found it **false** at the app's own default window, where a correct
+implementation would have left the last pages blank and failed the very Phase 2
+clauses the draft told it to re-run — which forced the budget rule that decides
+whether to virtualise at all. And nothing said how the band is seeded at open:
+`openPdf` renders and then scrolls, so on a long document every compile at the
+caret's page would have swapped in a blank wrapper, which forced the layout →
+position → render ordering. Round 2 then found that ordering cannot execute.
+
+**Two claims were withdrawn rather than repaired.** The "some 5 ms a page"
+`getPage` figure and the 355 ms sizing budget derived from it were OQ-7's
+*text-layer* median read as something else — the probe's table has no page-fetch
+row at all — so they went, along with the header's "some 100 ms" latency claim,
+and a gate clause now measures the sizing pass instead. And §6.1's step-1 prose
+bullet **does** match: §2's "the first two are rebuilt by Phase 2" stops being
+true for a page outside the band, which the draft's own "two costs" paragraph
+said four paragraphs after claiming no shipped prose went misleading. **That is
+the shape Phase 4's round 1 caught, recurring two phases later**, and it is now
+discharged by a dated `CORRECTED` note in the close-out.
+
+**One rejection, recorded.** The exit-gate lens read `rules/desktop-panes.md` at
+375 body lines, at its cap; `spec-lint` reports 374/375 and the scope lens read
+374 independently, so the close-out's figure stands.
+
+**Three confirmations worth keeping**, since they cost a round to establish: the
+`IntersectionObserver` root genuinely works given `#pages`'s `overflow-y:
+scroll` and `position: relative`; `canvas.width = canvas.height = 0` is the
+right release idiom and the vendored bundle uses it for the same purpose; and
+the phase is one plan-mode pass rather than two, the `#[ignore]`d generator
+notwithstanding.
+
 ### Round 4 — Phase 2 only — 2026-08-25 — same reviewer, resumed with the author's changelog — **READY (converged)**
 
 **Run past the loop's cap, which a person decided.** §7.6 escalates at three and
