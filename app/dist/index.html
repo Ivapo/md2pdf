@@ -199,18 +199,31 @@
       }
 
       /*
-        PROTOTYPE — the line gutter. Not yet specified.
+        The line gutter. A view and nothing else: it numbers the lines the
+        buffer already has and changes not one byte of it.
 
-        A view and nothing else: it numbers the lines the buffer already has and
-        changes not one byte of it. What it is *not* is a second editor — the
-        textarea stays the editor, so the caret, the reload rule and the divider
-        all keep the single implementation they have.
+        **What it is *not* is a second editor**, and that is the decision the
+        rest depends on. The textarea stays the editor, so the buffer sent to
+        `edit`, the reload that replaces `value`, `caretPage`'s
+        `selectionStart`, the disabled state and the divider's geometry all keep
+        the single implementation they have — none of which any test in this
+        repository reaches. A code editor component would fork every one of
+        them and would need a bundler besides, which is the thing
+        `withGlobalTauri` exists to avoid.
 
         **A row is as tall as its line renders, not one line-height**, because a
         soft-wrapped paragraph occupies several rows on screen and a gutter that
         assumed otherwise would drift a number further out of true with every
         wrap. The heights come off a hidden mirror of the text laid out at the
         pane's own width; `relines` argues it.
+
+        **`overflow: hidden` here is half of a pair rather than tidiness.** This
+        box does not scroll itself; its `scrollTop` is driven from the
+        textarea's, by `relines` and by the `scroll` listener below. The band
+        takes the other route entirely — `background-attachment: local` — and
+        that contrast is why the two are built differently.
+
+        `mpdf-003` Phase 8.
       */
       #lines {
         flex: none;
@@ -286,6 +299,10 @@
           measured row. **`local` is what makes it scroll with the text**: the
           default would pin it to the border box and it would sit still while
           the lines moved under it.
+
+          **`no-repeat` cost a build.** The gradient is sized to the one
+          measured row and a background repeats by default, so without it the
+          band tiles down the whole pane and every line wears one.
 
           A band drawn as an element would need the textarea wrapped, made
           transparent, and layered over — and the divider's geometry, which
@@ -1266,7 +1283,7 @@
       }).observe(pages)
 
       /*
-        PROTOTYPE — number the lines the buffer has.
+        Number the lines the buffer has.
 
         **A row is as tall as its line renders.** A textarea soft-wraps, so one
         logical line can occupy three rows on screen, and a gutter that gave
@@ -1277,10 +1294,17 @@
         logical line. What the browser does to the mirror is what it did to the
         textarea.
 
+        **An empty logical line is mirrored as a zero-width space**, and markdown
+        is mostly blank lines. The failure without it **accumulates** rather than
+        costing one row its height: `rows` is a running sum over the measured
+        heights, so every blank line above a row shifts that row by one line
+        more than the blank line before it did.
+
         Rebuilt when the text changes or the width does, and skipped when
-        neither has — a drag fires this at its end rather than per move, since
-        the measurement is a layout and a layout per pointermove is a reflow per
-        frame for a column of numbers nobody is reading mid-drag.
+        neither has. **The width-change rebuild rides `settle`'s 200 ms timer**,
+        not a `pointermove` and not the `pointerup` itself: the measurement is a
+        layout, and a layout per frame for a column of numbers nobody is reading
+        mid-drag is waste.
       */
       const lines = document.getElementById('lines')
       const mirror = document.getElementById('mirror')
@@ -1359,12 +1383,13 @@
       }
 
       /*
-        PROTOTYPE — the line the caret is in, marked twice: its number in the
-        gutter, and a band behind the line itself.
+        The line the caret is in, marked twice: its number in the gutter, and a
+        band behind the line itself.
 
         The line is counted the way `caretPage` counts it, off `selectionStart`,
         because a second way of finding the caret's line would be a second thing
-        that can disagree with the page the frame opens on.
+        that can disagree with the page the pane opens on — and the disagreement
+        would be invisible until it was not.
 
         Only in Lines mode. The band is placed from the measured rows, and the
         rows are only measured when the gutter is drawing them — so the mode
@@ -1396,8 +1421,16 @@
         text.style.backgroundPosition = `0 ${top}px`
       }
 
-      // The gutter does not scroll itself; it follows. The band does not need
-      // this: `background-attachment: local` scrolls it with the text.
+      /*
+        **The gutter does not scroll; it follows.** Its box does not scroll
+        itself and its `scrollTop` is driven from the textarea's — here, and
+        again whenever the rows are rebuilt. Without this the numbers part
+        company with their lines the moment a document is taller than the pane,
+        which is every document.
+
+        **The band needs none of it**: `background-attachment: local` scrolls it
+        with the text. That is the contrast the two are built around.
+      */
       text.addEventListener('scroll', () => {
         lines.scrollTop = text.scrollTop
       })
