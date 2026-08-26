@@ -41,8 +41,8 @@ phases:
   - name: "Phase 7 — the page fits the pane it is given"
     reviewed: null
     shipped: null
-    cut: null
-    by: null
+    cut: 2026-08-25
+    by: mpdf-009
   - name: "Phase 8 — the text pane shows its lines"
     reviewed: 2026-08-25
     shipped: null
@@ -205,6 +205,17 @@ project has no dependency of that kind and does not gain one for a preview
 pane. OQ-1's probe settled that it does not have to: WebKit draws the PDF
 itself, and the mechanism is recorded below.
 
+> **CORRECTED 2026-08-25, by `mpdf-009` Phase 1.** The constraint above is kept
+> as it was written and no longer holds. `mpdf-009` bundles one — Mozilla's
+> `pdf.js`, two vendored ES modules — and §1.1 of that spec lands on *this*
+> sentence: bundling a viewer contradicts shipped work, which is why it is a
+> new spec rather than a phase here. What the constraint was protecting is
+> intact and was never the viewer as such: it was `withGlobalTauri`'s bargain,
+> no bundler and no node toolchain, and `pdfjs-dist` ships browser-ready
+> modules precisely so that bargain survives. What is genuinely given up is
+> named in `mpdf-009` §2: a canvas plus a text layer does not expose a tagged
+> PDF's structure to the accessibility tree, and that spec's OQ-3 carries it.
+
 ### Why the pane is a `blob:` URL in an iframe (decision, recorded)
 
 The app hands the compiled bytes to the page, the page wraps them in a `Blob`
@@ -239,6 +250,22 @@ transitive dependency of `typst`. Taking it would mean amending this decision
 and saying so, because the pane would stop showing the artifact and start
 showing a picture of it. It would not mean bundling a JavaScript viewer, which
 stays refused either way.
+
+> **CORRECTED 2026-08-25, by `mpdf-009` Phase 1.** The section above is kept as
+> it was written and no longer describes the pane. There is no iframe and no
+> `blob:` URL: `app/dist/index.html` hands the bytes to a vendored `pdf.js` and
+> rasterises each page onto a canvas the pane owns. The last sentence is the
+> one most exactly reversed — the escape hatch is taken, and it is the
+> JavaScript viewer rather than the SVG export.
+>
+> **The measurement this section rests on still stands**, and it is why the
+> route was right for as long as it was used: the frame *was* same-origin, the
+> bytes *never* touched the disk, and WebKit *did* build its own PDF view. The
+> reason it was left is not that any of that was wrong but that it was not
+> ours: `view=FitH` is read once at load, a resize cannot be answered, and the
+> view leaks no position, so a redraw could set the reader's place and never
+> restore it. `mpdf-009` §1 argues it in full. The bytes still never touch the
+> disk.
 
 ### What the pane cannot do: keep the reader's place (decision, recorded)
 
@@ -491,6 +518,11 @@ list to one item.
   returned 200 with the right content type — but that frame's
   `contentDocument` is `null`, because the scheme is a separate origin, which
   is what ruled it out. Landed in §2 as its own decision.
+
+  > **CORRECTED 2026-08-25, by `mpdf-009` Phase 1.** The resolution above is
+  > kept as it was written; its second clause, **"and no bundled viewer"**, no
+  > longer holds. The probe's findings are all still true of WebKit — this
+  > corrects what was *decided*, not what was measured. See §2's own note.
 
   The residual, recorded rather than hidden: the probe proves WebKit
   *instantiated* its PDF view, not that the pixels are right. Nothing readable

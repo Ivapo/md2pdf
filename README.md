@@ -115,13 +115,17 @@ A document that will not compile leaves the last good page on screen, dimmed, wi
 error above it — the same sentence the command prints — and the page comes back when you
 fix it.
 
-**A redraw opens the page on the heading you are writing under.** The pane is a real PDF
-view and tells the app nothing about where you scrolled it, so it follows your cursor
-instead — to the nearest heading above it, which is as close as it can get without one.
-Opening a file, and taking one that changed underneath, still start you at page 1. In a
-document written across several files it follows the headings in the file the pane is
-showing; a heading inside a section belongs to a file you are not editing, so a master
-that is only a list of sections opens at page 1 too.
+**A redraw opens the page on the heading you are writing under.** The app draws the page
+itself, so it knows where you are: it follows your cursor to the nearest heading above it,
+which is as close as it can get without one. Opening a file, and taking one that changed
+underneath, still start you at page 1. In a document written across several files it
+follows the headings in the file the pane is showing; a heading inside a section belongs
+to a file you are not editing, so a master that is only a list of sections opens at page 1
+too.
+
+**Dragging the divider or resizing the window leaves you where you were.** Nothing about
+the document moved, so nothing about your place in it does either — the page just refits
+to the width you gave it and comes back sharp when you let go.
 
 The header says where the page stands — `current` with the time the compile took, or
 `stale` when the last one failed and the page you are looking at is the older one.
@@ -712,3 +716,6 @@ The code is MIT. Most of the bundled fonts are under the SIL Open Font Licence �
 Libertinus Serif in four faces for body text, and Libertinus Mono for code; see
 `core/assets/fonts/OFL.txt`. The math font, NewCMMath-Regular, is under the GUST Font
 Licence; see `core/assets/fonts/GUST-FONT-LICENSE.txt`.
+
+The desktop app draws its page with Mozilla's `pdf.js`, vendored as two modules under
+`app/dist/pdfjs/` and licensed Apache-2.0; see `app/dist/pdfjs/LICENSE`.

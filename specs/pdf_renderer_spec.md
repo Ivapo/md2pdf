@@ -12,7 +12,7 @@ last_updated: 2026-08-25
 phases:
   - name: "Phase 1 — the page is drawn here"
     reviewed: 2026-08-25
-    shipped: null
+    shipped: 2026-08-25
     cut: null
     by: null
   - name: "Phase 2 — the text it can select and the links it can follow"
@@ -27,7 +27,9 @@ phases:
     by: null
 
 extends: null
-supersedes: null
+supersedes:
+  - id: mpdf-003
+    phases: ["Phase 7 — the page fits the pane it is given"]
 superseded_by: null
 related: [mpdf-001, mpdf-003, mpdf-006]
 reference: >

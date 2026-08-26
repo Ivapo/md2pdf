@@ -17,7 +17,8 @@ covers: >
   that compiles and the rule an external change runs, the state the loop writes
   and the four states it reports, the export and its two refusals, the errors it
   puts on the page, the bundle and the document association that launches it,
-  and the configuration facts a build enforces
+  the vendored renderer the front end imports and what embedding it costs, and
+  the configuration facts a build enforces
 max_lines: 500
 generated: 2026-08-25
 ---
@@ -45,13 +46,19 @@ that is what the anchor rule below turns on.
 
 ## The crate
 
-Eight files and three modules. `Cargo.toml` names `tauri` 2.11.5,
+Thirteen committed files, three of them the vendored renderer and its licence;
+`src/` is `main.rs` and three modules. `Cargo.toml` names `tauri` 2.11.5,
 `tauri-plugin-dialog` 2.7.2, `notify` 8.2.0 and `serde` 1.0.229 with its `derive`
 feature, with `tauri-build` 2.6.3 under `[build-dependencies]`; `build.rs` calls
 `tauri_build::build()`. `tauri.conf.json` sets `app.withGlobalTauri: true`, which
 puts the API on `window.__TAURI__` and is what removes the bundler and the node
 toolchain entirely — `build.frontendDist` is `dist`, a directory of static files,
-so the whole app is one Cargo build. `capabilities/default.json` grants
+so the whole app is one Cargo build. **The vendored `pdf.js` does not spend
+that**: `pdfjs-dist` ships browser-ready ES modules, so `app/dist/pdfjs/` is two
+more static files the page imports and not a dependency anything builds.
+`generate_context!` walks `frontendDist` recursively with no allowlist, so a new
+subdirectory is embedded with no configuration at all, and `.mjs` is served as
+`text/javascript`. `capabilities/default.json` grants
 `core:default` to the window labelled `main`, plus **one entry per dialog** —
 `dialog:allow-open` and `dialog:allow-save`.
 
@@ -60,8 +67,10 @@ without it `generate_context!` panics with "failed to open icon" — and **it mu
 be RGBA**, or `tauri-codegen` panics "is not RGBA" instead. The file in the tree
 is a generated placeholder, and **no phase has designed artwork to replace it**;
 the bundler synthesises the `.icns` from it, so the Dock upscales one 512×512
-image. `app.security.csp` is unset and defaults to `None`, so no policy blocks
-the `blob:` frame below. `app/gen/` is generated and is not committed.
+image. **`app.security.csp` is unset and defaults to `None`, so no policy is
+served at all** — which is what lets the page import ES modules and start a
+worker from `app/dist/pdfjs/` over the `tauri://localhost` custom scheme, with no
+capability added for either. `app/gen/` is generated and is not committed.
 
 ## The window
 

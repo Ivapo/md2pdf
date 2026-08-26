@@ -6,13 +6,15 @@ sources:
   - app/src/preview.rs
 covers: >
   the desktop app's two panes: the one file the front end is, the text pane and
-  the blob frame that draws the artifact, the redraw that moves the reader and
-  the page it chooses, the anchor path that opens the frame on the author's own
-  page and the one file it is filtered to, the status the page places and never
-  composes, the panel that names the document's parts and the two states it
-  keeps apart, the width the frame is held at through a change and redrawn at
-  after one, the geometry the page observes rather than infers, and the gutter
-  whose rows are as tall as their lines render
+  the canvases the app rasterises the artifact onto, the vendored renderer and
+  its worker, the retained document a geometry-only redraw draws from, the
+  redraw that moves the reader and the three causes that decide where to, the
+  anchor path that opens on the author's own page and the one file it is
+  filtered to, the status the page places and never composes, the panel that
+  names the document's parts and the two states it keeps apart, the width a
+  gesture carries by CSS size and a rest answers by a render, the reader's
+  place held across both, the geometry the page observes rather than infers,
+  and the gutter whose rows are as tall as their lines render
 max_lines: 280
 generated: 2026-08-25
 ---
@@ -28,38 +30,52 @@ bundle; this file has the two panes those things feed.
 `app/dist/index.html` is the whole front end — one file, inline CSS and JS.
 
 Two panes: a `<textarea>` at 40% of the width, a divider the reader drags, and
-the frame. **The text pane is plain** — no highlighting, no autocomplete, no
-formatting commands — and every change goes straight to Rust, which holds the
-buffer. The frame stops taking pointer events for the length of a drag, because
-WebKit's PDF view swallows them otherwise and the divider would stick the moment
-the pointer crossed the page.
+`#pages`, a scroll container holding one `<canvas>` per page. **The text pane is
+plain** — no highlighting, no autocomplete, no formatting commands — and every
+change goes straight to Rust, which holds the buffer.
 
-It draws the artifact, not a picture of it: the bytes go into a `Blob` of type
-`application/pdf`, and an iframe's `src` is the object URL, so WebKit builds its
-own PDF document view inside the frame. No JavaScript PDF viewer is bundled and
-none is wanted. The route is same-origin — a blob URL inherits the page's origin,
-where a custom URI scheme does not — and the bytes never touch the disk. The
-previous object URL is released once the frame has left it. **`draw` takes a page
-as well as the bytes** and puts a `#page=N` fragment on the object URL it just
-minted; the fragment goes on the frame's `src` and not on the URL it keeps, so
-what it revokes next time is the object URL itself.
+**The app rasterises the artifact itself.** `pdf.js` is vendored as two static
+ES modules under `app/dist/pdfjs/` — `pdf.min.mjs` and `pdf.worker.min.mjs`,
+1,717,067 bytes together, with the Apache-2.0 `LICENSE` beside them — loaded
+from a `<script type="module">`. `pdfjs-dist` ships browser-ready modules, so
+there is still no bundler, no npm at build time and no node. The worker is not
+optional: parsing and rasterisation go off the main thread, because the pane
+re-renders every time the typing stops and rasterising on the main thread would
+freeze the text the author is typing into.
 
-**A re-render moves the reader, and the app chooses where to.** WebKit's PDF view
-leaks nothing about where the reader was, so a position can never be *learned* —
-but `#page=N` on a **fresh** blob URL is honoured at load, so one can be set, and
-a redraw following the author's own edit is opened on the heading above their
-caret. A redraw that took a text from disk opens on page 1, as every redraw did
-before Phase 6.
+`openPdf` takes the bytes and a page. **`getDocument` transfers the buffer to
+the worker**, so the bytes cannot be read twice. **The loading task is retained
+between renders** and a re-render caused by geometry alone draws from it and
+invokes nothing — which is not an optimisation, since `current_pdf` refuses
+while the preview is stale and a pane that re-fetched on a resize could not
+re-fit a stale page. What is destroyed on a re-open is the *task*, not the
+document proxy, which has no `destroy` of its own; the task owns the worker, and
+dropping one undestroyed leaks a thread per compile.
+
+**A canvas is swapped in only once it holds pixels.** Setting `canvas.width`
+clears it, so re-rendering in place would flash empty pages at every rest.
+
+**Only a render that drew advances `drawnRevision`.** `openPdf` answers
+whether it did, and returns without drawing when a newer render supersedes it or
+the pane measures no width. Recording the revision regardless would tell the next
+signal that a page nobody drew is already on screen, after which `refresh`
+returns at its own guard forever — a blank pane with no error and no way back.
+
+**A re-render moves the reader only where it should, and the cause decides
+where.** A compile that took a text from disk opens at page 1; a compile after
+the author's own edit opens at the caret's page; a re-render caused by geometry
+alone restores where the reader already was, which the blob frame could never do
+because WebKit leaked no position to restore.
 
 `refresh` asks for the status first, and for the bytes only when the state is
 `current` **and** the status's `revision` is one it has not drawn — so the page
-never draws a frame it has been told is out of date, and never redraws one the
+never draws a page it has been told is out of date, and never redraws one the
 reader has scrolled for a signal that compiled nothing, which the app's own save
 now is. It re-reads the document's text on the `reloaded` count and on nothing
 else, so a fetch cannot race a keystroke still in flight.
 
 **It captures whether it took a reload *before* it advances `takenReload`**, and
-hands `draw` no page on that pass. This is load-bearing rather than tidy:
+hands `openPdf` no page on that pass. This is load-bearing rather than tidy:
 assigning a textarea's `value` moves its caret to the end of the control, so a
 pass that replaced the text would read the document's last line and open it on
 its last page. An open, an external reload over a clean buffer and a Finder
@@ -74,8 +90,7 @@ nothing when there is none. **Counting newlines is not parsing markdown** — th
 page owns no knowledge of the dialect — and it is the one quantity both sides
 agree on, `selectionStart` being a UTF-16 offset where a line in Rust is counted
 from bytes. A caret above the first heading and a document with no headings take
-the same branch and ask for no page, which is where an unfragmented frame opens
-anyway. The precision is the document's heading density, and it follows the
+the same branch and ask for no page, which is the page-1 case above. The precision is the document's heading density, and it follows the
 *author* rather than the reader.
 
 **The list it walks holds only the headings written in the file the pane holds**,
@@ -119,40 +134,83 @@ document sits is the title's business.
 section, and it takes the toggle with it; `.collapsed` is a reader who folded
 the panel, and the toggle stays so they can get it back.
 
-## The frame's width
+## The page's width
 
-**The page opens fitted**: `view=FitH` rides the fragment beside `page=N`, both
-read at load. **WebKit reads it once** — the view keeps the scale it computed
-and does not reflow when the frame resizes, and no script reaches inside a
-native PDF view to ask it to.
+**The fit is an expression, not a state.** `scale = paneWidth / naturalWidth`,
+recomputed on every render, so it cannot go stale — there is no stored fit to
+disagree with the pane.
+
+**`paneWidth` is `clientWidth` of `#pages`, the scroll container, and not of the
+`#preview` column around it.** Six A4 pages make it scroll, and on a machine set
+to show classic scrollbars its content box is some 15 px narrower than the
+column's — the difference between a page that fits and a page clipped at its
+right edge. `#pages` carries `overflow-y: scroll` rather than `auto` so that
+width cannot move under the fit: with `auto`, a document sitting just under the
+scroll threshold gains a scrollbar the moment the canvases widen, the content
+box narrows by the track, and the pages clip. The canvases sit flush to that
+content box — no gutter between pages and none at the sides.
+
+**The logical size is whole CSS pixels and the backing store is derived from
+it**, so the backing store is exactly `floor(cssWidth × devicePixelRatio)`. The
+two are one number in exact arithmetic — `naturalWidth × (paneWidth /
+naturalWidth)` is the pane width — but in floating point it lands an ulp under,
+and flooring that costs a device pixel the CSS size still claims. Sharpness is
+the display's own pixel ratio, and it is the thing a transform over a committed
+raster could never do.
 
 So the two halves of a resize are answered differently. **While a width is
-changing the frame is scaled**: it keeps the pixel width its page was fitted to
-and a transform maps it onto the width the pane now has, which is fit-to-width
-by construction — scale by `s` and the page inside is `s` times as wide. It
-composites, so it holds every frame of a drag, and **the reader keeps their
-place because nothing reloaded**. The frame is laid out `h / s` tall so it is
-exactly `h` after scaling, and `flex` goes to `none` with it, since in a column
-`flex` sizes the height being set.
+changing the canvases are resized by CSS**, their backing stores untouched and
+the browser resampling bitmaps it already has. A render costs some 94 ms for six
+pages against a frame's 16.7 ms, so a render per `pointermove` would be
+cancelled by the next and nothing would complete until the hand came off — and a
+cancelled render on a just-resized canvas leaves it cleared, so the literal
+reading blanks the pane through the drag. **Which property carries the gesture is
+a decision and not a style**: a transform leaves layout alone, so the container's
+`scrollHeight` would keep its pre-gesture extent and the reader's anchor would be
+read against a stale one. CSS width makes the extent track the gesture. The
+factor is read per canvas, because a compile landing mid-gesture swaps its pages
+in one at a time and the list then briefly holds rasters from two widths.
 
-**When the width settles the frame is drawn again**, because a scaled page is a
-page rendered for a different width and softens far enough from `1`. A fresh
-object URL at the settled width is fitted by the loader and rendered sharp. It
-fires on `pointerup` and, through one 200 ms timer, on a window resize — a drag
-ends on an event and a window resize does not — and is skipped when the width
-did not move, so a window resized by its height alone re-fits without redrawing.
-**A redraw lands on the caret's page**, by the rule above: a fresh blob can set
-a place and never restore one.
+**When the width rests the pages are drawn again**, sharp, from the retained
+document. It fires on `pointerup` and, through one 200 ms timer, on a window
+resize — a drag ends on an event and a window resize does not — and is skipped
+when the width did not move, so a window resized by its height alone costs
+nothing. **The timer waits for a render already running rather than cancelling
+it**: opening a document unhides the pane, which is a resize, which arms the
+timer, so it can come due mid-render and cancel the very render about to set the
+fit. The count of running renders is a count and not a flag, because a superseded
+render overlaps the one superseding it.
+
+**The reader's place is a page index and a fraction within that page, never a
+pixel offset.** The scale changes with the width, so every canvas's height and
+the container's `scrollHeight` change with it; an offset held across that moves
+the reader, and clamps at the bottom when a pane widens and then narrows.
+
+**The anchor is taken when the gesture starts, not when the render begins.**
+Resizing by CSS reflows, so a gesture of factor `s` maps a content offset `T` to
+`T·s` while the browser holds `scrollTop` at `T` — on the app's default geometry
+a 20% widen displaces a reader on page 5 by some 611 px, and WebKit implements no
+scroll anchoring that would compensate. It is read before the first `fit` of a
+gesture, while the canvases still hold their pre-gesture size, and reapplied on
+every step as well as after the render that ends it. Taken at the render it would
+faithfully preserve a position the drag had already ruined.
+
+**What marks a start is `fitted` itself** — the width the raster now in the
+canvases was made for. A width arriving while it differs opens a gesture; one
+arriving while a gesture is open continues it. Nothing keys on `pointerdown`,
+because a window drag-resize and a control taking width out of the column have no
+pointer event to key on. A compile landing mid-gesture keeps the reader's place
+and skips the caret jump, for that compile only.
 
 **The pane's geometry is observed, not inferred from the events believed to
-change it.** A `ResizeObserver` on the preview column, not a list of listeners.
+change it.** A `ResizeObserver` on the scroll container, not a list of listeners.
 Two bugs came from the other approach and both had one shape — a control added
 to the window changed a geometry something else had already measured. The
 divider read `clientX`, measured from the window, which matched the pane's own
 width until the panel sat to the left of it; and the scaled frame held its
 explicit width while the panel and the gutter each took width out of the column
 beside it. The divider now measures from the text pane's own left edge, taken
-once at the grab.
+once at the grab. **The rule outlived the renderer it was found in.**
 
 ## The gutter
 
