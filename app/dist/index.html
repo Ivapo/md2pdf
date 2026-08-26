@@ -92,15 +92,33 @@
       }
 
       /*
-        PROTOTYPE — the section panel. Not yet specified; mpdf-008 Phase 4 owns
-        it. It lists the parts of the open document: the master first, then the
-        sections it names in the order it reads them. A document naming no
-        section draws no panel at all, so a single-file window is unchanged.
+        The section panel. It lists the parts of the open document: the master
+        first, then the sections it names in the order it reads them, each
+        named as the master writes it — `sections/method.md` and not
+        `method.md`, because that is the master's own word for it, it is what
+        the author would edit, and two sections of the same name in different
+        folders must not read alike. A document naming no section draws no
+        panel at all, so a single-file window is unchanged.
 
-        The rows do not load anything yet. Loading a section into the pane
-        breaks "the pane holds exactly one file", which the anchor filter, the
-        external-change rule and the save all turn on — so the rows are a list
-        and are deliberately not dressed as buttons.
+        **A left column, before the text pane, and the placement is
+        load-bearing rather than taste.** It is the panel `mpdf-003` Phase 7
+        records two geometry bugs against: the divider read `clientX`, measured
+        from the window, which matched the pane's own width until this sat to
+        the left of it. `#divider` takes its grab point from the text pane's
+        own left edge because of this element.
+
+        **The rows do not load, and that is decided rather than deferred.**
+        Loading a section into the pane breaks "the pane holds exactly one
+        file", and four things turn on it: `render_with` keeps only the anchors
+        whose location names no file, `Session::on_change` runs the
+        external-change rule on the buffer the pane holds and never on a
+        section, `save` writes to the document's own path, and the join reads
+        every section off the disk. A phase that wants loading rows inverts the
+        first, forks the second, redirects the third and makes the fourth take
+        one file's text from memory — which is a phase, not a detail. So the
+        rows are a list and are deliberately not dressed as buttons.
+
+        `mpdf-008` Phase 4.
       */
       #files {
         flex: 0 0 auto;
@@ -777,25 +795,37 @@
       }
 
       /*
-        PROTOTYPE — draw the file list. The master is marked as the one the pane
-        holds, because today it always is.
+        Draw the file list. The master is marked as the one the pane holds —
+        positionally, because today it always is.
 
-        It is rebuilt on every status, which is every compile. That is fine
-        while the rows are inert and would not be once they hold a selection —
-        one more thing Phase 4 decides.
+        It is rebuilt on every status, which is every compile, and that is fine
+        because the rows are inert. It would not be once they held a selection,
+        which is one of the things "the rows do not load" above buys.
+
+        **The list tracks the text exactly and retains nothing.** A master
+        whose markers are deleted loses the rows on the next compile, because
+        `section_paths` cannot fail and an empty list is therefore the answer
+        rather than a failure to answer. The cost is a panel that flickers
+        while a marker is half-typed; if that ever proves unbearable the answer
+        is to damp this redraw, never to retain a list the text has stopped
+        naming.
       */
       const files = document.getElementById('files')
       const list = document.getElementById('parts')
       const toggle = document.getElementById('toggle')
 
       /*
-        PROTOTYPE — folded or not, held in the page.
+        Folded or not, held in the page. **Decided there rather than in
+        `Preview`**, and it does not survive a restart.
 
-        It does not survive a restart, and that is on purpose rather than an
-        omission: this app keeps its state in Rust where a test can reach it,
-        and a flag kept in `localStorage` here would be the one piece of window
-        state no test could hold. Whether the fold is worth a field in `Preview`
-        is Phase 4's call, not a thing to settle by reflex.
+        This app keeps its state in Rust where a test can reach it, and a flag
+        kept in `localStorage` here would be the one piece of window state no
+        test could hold. But that rule is about state that *decides
+        behaviour*, and a fold decides nothing but its own drawing — nothing
+        else reads it. Moving it to `Preview` would buy nothing either: both
+        die with the process, this app persists nothing to disk, and a fold
+        already survives an Open where it lives, `parts` reapplying
+        `.collapsed` on every status.
       */
       let folded = false
 
