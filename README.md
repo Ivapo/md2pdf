@@ -102,7 +102,8 @@ rebuild-on-change.
 **Type in the left pane and the page follows.** It redraws when you stop typing, and
 **the PDF is what the pane says, not what the file says** — so the page shows your
 unsaved work. `⌘S`, or the Save button, writes the pane back to the file. Drag the
-divider to give either side more room.
+divider to give either side more room. **`Lines` in the header numbers the pane and marks
+the line your cursor is on**, so an error that names a line names somewhere you can see.
 
 **Save the file in another program and the page redraws too** — with one exception. The
 window watches the folder the document sits in, so editing a section, a figure or the

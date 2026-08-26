@@ -17,8 +17,10 @@ covers: >
   a render, the reader's
   place held across both, the geometry the page observes rather than infers,
   the gap that tells one page from the next and the hairline that draws its
-  edges, and the gutter whose rows are as tall as their lines render
-max_lines: 280
+  edges, the gutter whose rows are as tall as their lines render, the follow
+  that keeps the numbers against their lines, the caret's two marks and the
+  pane that loses both when it empties
+max_lines: 310
 generated: 2026-08-25
 ---
 
@@ -270,7 +272,8 @@ once at the grab. **The rule outlived the renderer it was found in.**
 ## The gutter
 
 **`Lines` is a view and changes not one byte of the buffer.** Off, the pane is
-the plain textarea. On, it gains numbered rows and a mark on the caret's line.
+the plain textarea. On, it gains numbered rows and marks the caret's line
+**twice** — the row's number in the gutter, and a band behind the line itself.
 The textarea stays the editor either way, so nothing that assumes one — the
 buffer sent to `edit`, the reload that replaces `value`, `caretPage`, the
 disabled state, the divider — is forked.
@@ -279,18 +282,39 @@ disabled state, the divider — is forked.
 soft-wraps and will not say where, so the heights are measured off a hidden
 mirror: the same text, the same font, laid out at the same content width, one
 element per logical line. What the browser did to the mirror is what it did to
-the textarea. It is rebuilt when the text or the width changed and skipped when
-neither did, and taken at a drag's end rather than per pointermove, because the
-measurement is a layout.
+the textarea. **An empty logical line is mirrored as a zero-width space** — an
+empty line still occupies one and an empty element does not, and markdown is
+mostly blank lines. The failure without it **accumulates** rather than costing
+one row its height: the offsets are a running sum over the measured heights, so
+every blank line above a row shifts it by one line more. The rebuild happens
+when the text or the width changed and is skipped when neither did, and the
+width-change half rides `settle`'s 200 ms timer rather than a `pointermove` or
+the `pointerup`, because the measurement is a layout.
+
+**The gutter does not scroll; it follows.** Its box does not scroll itself and
+its `scrollTop` is driven from the textarea's, on the textarea's own `scroll`
+event and again whenever the rows are rebuilt. Without it the numbers part
+company with their lines the moment a document is taller than the pane, which is
+every document.
 
 **The caret's line is counted the way `caretPage` counts it**, off
 `selectionStart` — a second way of finding it would be a second thing that can
-disagree with the page the frame opens on. The band behind that line is the
+disagree with the page the pane opens on. The band behind that line is the
 textarea's **own background**, one colour sized and placed from the measured
 row, with `background-attachment: local`, which is what scrolls it with the text
-rather than pinning it to the border box. Drawing it as an element would mean
-wrapping the textarea and layering over it, and the divider's geometry reads the
-textarea's own box. Only the two rows that change are touched per caret move.
+rather than pinning it to the border box — the other half of the contrast above,
+and why the two are built differently — and `background-repeat: no-repeat`,
+without which the one-row gradient tiles down the whole pane. Drawing it as an
+element would mean wrapping the textarea and layering over it, and the divider's
+geometry reads the textarea's own box. Only the two rows that change are touched
+per caret move.
+
+**An emptied pane loses its band with its rows.** `clear` empties the buffer and
+calls `relines`, which returns early there — and the two other things that move
+the mark both need a focused, enabled textarea, which a cleared pane is not. So
+that early return clears the mark on its way out; without it the previous
+document's band stayed painted across an empty, disabled pane until something
+opened.
 
 ## What nothing checks
 

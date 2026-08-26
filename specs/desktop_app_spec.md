@@ -45,7 +45,7 @@ phases:
     by: mpdf-009
   - name: "Phase 8 — the text pane shows its lines"
     reviewed: 2026-08-25
-    shipped: null
+    shipped: 2026-08-25
     cut: null
     by: null
 
