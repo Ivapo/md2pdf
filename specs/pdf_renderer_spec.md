@@ -462,6 +462,16 @@ bookmarks that nothing in this project currently reads.
   cost around 10 ms each and a document of this size needs no virtualisation and Phase 1 will not build
   any. A thesis will. The threshold is unmeasured and the answer is a page
   budget rather than a document one. *(deferred by evidence)*
+
+  > **MEASURED 2026-08-26, by OQ-7's probe, and the threshold this asked for now
+  > exists.** At a 619 px pane and `devicePixelRatio` 2, a 71-page 62,000-word
+  > document costs **1.25 s** to draw and holds **587 MB** of canvas backing
+  > store — 17.6 ms and 8.3 MB a page, against 50 MB for the six-page showcase.
+  > **Memory is what binds, and by a wide margin**: the time is still tolerable
+  > at a size the memory is not, so a budget expressed in pages is really one
+  > expressed in megabytes, and the pane's width is a term in it. The question
+  > stays open because what to *build* about it — near-page rendering, a released
+  > backing store, a lower ratio off screen — is a phase and not a number.
 - ~~**OQ-2** — what happens to the reader's scroll position across a
   re-render?~~ **RESOLVED 2026-08-25, in round 1**, which found the draft
   calling it resolved in Phase 1 while leaving it `needs-input` here and
@@ -534,16 +544,41 @@ bookmarks that nothing in this project currently reads.
   compatible with every decision this project has recorded** and the third is
   not, which is most of the answer. Design call. Blocks nothing. *(needs-input —
   it wants a reader's judgement in use, as `mpdf-003` OQ-6 was answered)*
-- **OQ-7** — what do the two layers cost per render, and is there a page budget?
-  Raised 2026-08-25 by Phase 2's round 1. §2's whole gesture-versus-rest split is
-  keyed to a measured 94 ms for six pages, and Phase 2 adds main-thread DOM work
-  to that same path — the showcase carries 968 text items across its six pages,
-  and every rest and every compile rebuilds all of them. No figure exists because
-  none can be taken before the layers are built. **OQ-1 already names the shape
-  of the answer** — "a page budget rather than a document one" — and this is the
-  second question that will want it, which is the argument for measuring both at
-  once. Answerable from a probe once Phase 2 ships. Blocks nothing.
-  *(deferred by evidence)*
+- ~~**OQ-7** — what do the two layers cost per render, and is there a page
+  budget?~~ **RESOLVED 2026-08-26**, by the probe this question deferred to, run
+  in the window against the shipped Phase 2 on the day it shipped. Two documents,
+  seven passes each, at a 619 px pane and `devicePixelRatio` 2:
+
+  | | the showcase | a 62,000-word document |
+  |---|---|---|
+  | pages | 6 | 71 |
+  | text items | 968 | 6,509 |
+  | raster alone | 131 ms | 1,250 ms |
+  | raster and both layers | 169 ms | 1,251 ms |
+  | median ms a page | raster 18, text 5, annotations 4 | raster 12, text 4, annotations 0 |
+
+  **The text layer costs about 4 ms per 100 text items, and the two documents
+  agree on that independently** — 3.9 ms per 100 at the showcase's 161 items a
+  page, 4.3 ms per 100 at the other's 93. The annotation layer costs 0–4 ms a
+  page and **did not scale with the twenty links** the showcase carries, so what
+  it measures is the `getAnnotations` round-trip rather than the elements.
+
+  **The two totals at 71 pages are not the figure to read**, and saying so is
+  half the answer: 1,250 against 1,251 ms is worker-bound throughput rather than
+  a free layer, and it is the per-page medians that separate the phases — 4 ms of
+  16. A reader taking those totals at face value would conclude the layers cost
+  nothing, which the six-page run contradicts.
+
+  **So no page budget is forced by the layers**, which is what was asked. They
+  are a surcharge of about a third on a raster costing 12–22 ms a page, and the
+  rest they were feared to lengthen went from 131 ms to 169 ms over six pages.
+
+  **The budget that is forced is OQ-1's, and it is memory rather than time** —
+  the one thing this question did not anticipate. The pane draws every page and
+  retains it, a canvas at this width and ratio is 8.3 MB, and the 71-page
+  document therefore holds **587 MB**. Time crosses 500 ms at 28 pages and 1 s at
+  56; memory crosses 1 GB at about 120. Logged against OQ-1, which is where the
+  decision belongs.
 
 ## 4. Implementation phases
 
