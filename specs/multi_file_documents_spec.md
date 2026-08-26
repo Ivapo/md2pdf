@@ -27,7 +27,7 @@ phases:
     by: null
   - name: "Phase 4 — the document shows its parts"
     reviewed: 2026-08-25
-    shipped: null
+    shipped: 2026-08-25
     cut: null
     by: null
 

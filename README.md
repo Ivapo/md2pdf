@@ -145,7 +145,11 @@ from the Open dialog. Save first if you want to keep them.
 
 The pane holds one file — the one you opened. A master's sections are read from disk
 and drawn on the page, not edited here, so save a section in your own editor and the
-window redraws. The Install section above has the build command and the one thing an
+window redraws. **A document written across several files lists its parts down the
+left**: the master first, then the sections in the order it reads them, each named the
+way the master writes it. The rows are a list and not links, for the same reason — the
+pane holds the one file. `Sections` in the header folds the list away and brings it
+back, and a document written in a single file has neither the list nor the button. The Install section above has the build command and the one thing an
 unsigned bundle cannot do.
 
 ## What the markdown may contain

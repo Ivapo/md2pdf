@@ -13,6 +13,7 @@ covers: >
   the desktop app: the crate and its files, the window and its menu, the
   commands and the signal between them, the file I/O the app owns and the two read passes one
   closure serves, the three answers the asset list gives and the filter reads,
+  the section list the panel reads and the two status fields it rides in,
   the watch loop and the filter and the two debounces it runs on, the buffer
   that compiles and the rule an external change runs, the state the loop writes
   and the four states it reports, the export and its two refusals, the errors it
@@ -147,6 +148,14 @@ the window would never recover. It *replaces* the list with a shorter one, so
 such a document stops watching its figures until the section returns: a
 deliberate trade, since recovering the section beats watching figures through a
 window in which nothing compiles anyway.
+
+**`Render::sections` is that same list kept on its own, and its type is the
+claim.** A plain `Vec` where `assets` is an `Option`: `assets` is `None` exactly
+when the caller must keep the list it has, which is a sentence about a watch
+filter and not a thing the panel that reads this can draw. `section_paths`
+cannot fail, so an empty list is the answer rather than a failure to answer —
+and it is taken off the *text*, never off the read, so a master whose sections
+are missing from the disk still names them.
 
 **A file the document names makes two journeys through this app, and they are
 independent.** The bytes travel `read_sections_with` → `read_assets_with` →
@@ -300,6 +309,15 @@ taken. **The anchors ride the status because the status is already fetched on th
 path that draws**, so following the caret needs no command of its own. Like the
 compile time, they are replaced on a success and kept on a failure, so they always
 describe the page on screen rather than the last attempt at one.
+
+**`sections` and `master` ride with them and for their reason**, the status being
+already fetched on the path that draws, so the panel costs no command of its own.
+`sections` is `Render::sections` unchanged, assigned on every compile whether or
+not it succeeded. `master` is the file *name* of the document the pane holds — a
+name and not a path, because the panel lists one document's parts and where that
+document sits is the title's business. **The pane still holds exactly one file**,
+which is what the panel's rows not loading protects; `rules/desktop-panes.md`
+has the four things that turn on it.
 
 ## The rule an external change runs
 

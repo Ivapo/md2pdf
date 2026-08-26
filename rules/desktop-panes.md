@@ -11,8 +11,10 @@ covers: >
   redraw that moves the reader and the three causes that decide where to, the
   anchor path that opens on the author's own page and the one file it is
   filtered to, the status the page places and never composes, the panel that
-  names the document's parts and the two states it keeps apart, the width a
-  gesture carries by CSS size and a rest answers by a render, the reader's
+  names the document's parts and the two states it keeps apart, the rows that do
+  not load and the invariant they keep, the fold the page holds and the list that
+  retains nothing, the width a gesture carries by CSS size and a rest answers by
+  a render, the reader's
   place held across both, the geometry the page observes rather than infers,
   the gap that tells one page from the next and the hairline that draws its
   edges, and the gutter whose rows are as tall as their lines render
@@ -115,10 +117,12 @@ wrote.
 
 ## The panel
 
-**A document that names sections says so in a panel**, listed above the text
-pane: the master first, then the sections in the order the master reads them,
-with the one the pane is holding marked. A document that names none draws no
-panel at all, so a single-file window is what it was.
+**A document that names sections says so in a panel**, a left column beside the
+text pane at `max-width: 40%`: the master first, then the sections in the order
+the master reads them, with the one the pane is holding marked. A section is
+named as the master writes it — `sections/method.md`, not `method.md` — because
+two of that name in different folders must not read alike. A document that names
+none draws no panel at all, so a single-file window is what it was.
 
 The list is `Render::sections`, which is the list `render_with` already computed
 for the watch — `named`, taken before either shopping list can be asked
@@ -133,7 +137,25 @@ document sits is the title's business.
 
 **Absent and folded are two states.** `hidden` is a document that names no
 section, and it takes the toggle with it; `.collapsed` is a reader who folded
-the panel, and the toggle stays so they can get it back.
+the panel, and the toggle stays so they can get it back. **The fold is the
+page's own**, a variable reapplied on every status rather than a field in
+`Preview`: §2's rule is about state that decides behaviour, and a fold decides
+nothing but its own drawing.
+
+**The rows do not load, and four things turn on it.** Loading one would break
+*the pane holds exactly one file*: `render_with` keeps only the anchors whose
+location names no file, `Session::on_change` runs the external-change rule on
+the buffer the pane holds, `save` writes to the document's own path, and the
+join reads every section off the disk. So the rows are a list and are not
+dressed as buttons, and the panel is rebuilt whole on every status — right only
+while they hold no selection.
+
+**The list tracks the text exactly and retains nothing.** `section_paths` cannot
+fail, so an empty list is the answer rather than a failure to answer, and
+`Preview::compile` assigns unconditionally where it keeps the asset list on
+`None` — a master whose markers are deleted loses the rows on the next compile.
+The cost is a flicker while a marker is half-typed; the remedy would be to damp
+the redraw, never to retain a list the text has stopped naming.
 
 ## The page's width
 
