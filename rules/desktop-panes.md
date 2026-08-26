@@ -14,7 +14,8 @@ covers: >
   names the document's parts and the two states it keeps apart, the width a
   gesture carries by CSS size and a rest answers by a render, the reader's
   place held across both, the geometry the page observes rather than infers,
-  and the gutter whose rows are as tall as their lines render
+  the gap that tells one page from the next and the hairline that draws its
+  edges, and the gutter whose rows are as tall as their lines render
 max_lines: 280
 generated: 2026-08-25
 ---
@@ -147,8 +148,40 @@ column's — the difference between a page that fits and a page clipped at its
 right edge. `#pages` carries `overflow-y: scroll` rather than `auto` so that
 width cannot move under the fit: with `auto`, a document sitting just under the
 scroll threshold gains a scrollbar the moment the canvases widen, the content
-box narrows by the track, and the pages clip. The canvases sit flush to that
-content box — no gutter between pages and none at the sides.
+box narrows by the track, and the pages clip.
+
+**A page is separated from the next by 16 CSS pixels, and from the container's
+sides by nothing.** The gap is `margin-top` on each canvas, plus `#pages::after`
+for the one below the last page — a pseudo-element rather than a bottom margin,
+because whether a scroll container's last child's margin reaches `scrollHeight`
+is engine-dependent and this ships on WKWebView, and rather than a spacer
+element, because `drawPages` indexes `pages.children[n - 1]` and every geometry
+function assumes each child is a canvas carrying `.logical`. **`margin-top` is
+the property and that is a decision**: `offsetTop` includes an element's top
+margin, so the reader's place moves with the gap; `#pages` is a block formatting
+context by virtue of `overflow-y: scroll`, so the first canvas's margin does not
+collapse out of it; and only top margins exist, so no pair of siblings collapses
+to less than the constant. It is a length rather than a ratio, because a
+percentage resolves against the containing block's *width* and would track the
+divider. **Nothing at the sides, and not because the width is wanted
+elsewhere**: `clientWidth` *includes* padding, so side padding would leave
+`paneWidth` unchanged, the canvases would be sized past the content box, and
+they would clip silently. The gap is chrome and not content, so it is a constant
+that does not scale with a gesture — `fit()` and `unscale()` know nothing about
+it.
+
+**Each page wears a hairline along its top and bottom edges and along neither
+side**, `box-shadow: 0 -1px 0 var(--edge), 0 1px 0 var(--edge)`, painted into
+the gap. A shadow rather than a border so that it costs no layout: under
+`content-box` a border would make each canvas two pixels taller than the height
+`size()` wrote, and `offsetHeight` — which the reader's place is expressed in —
+would stop being the raster's own height. Top and bottom only because a
+fit-to-width canvas meets the scrollport's own side edges, so there is no
+background beside a page to separate it from, and an outset ring would spread
+outside `overflow-x: hidden`'s clip anyway. `inset` is not the escape either: an
+inset shadow paints beneath a replaced element's content, and a canvas is opaque
+white where `pdf.js` filled it. The colour is named because a colourless
+`box-shadow` resolves to `currentColor`, which inherits `--ink`.
 
 **The logical size is whole CSS pixels and the backing store is derived from
 it**, so the backing store is exactly `floor(cssWidth × devicePixelRatio)`. The

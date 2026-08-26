@@ -27,7 +27,7 @@ phases:
     by: null
   - name: "Phase 4 — the pages are told apart"
     reviewed: 2026-08-25
-    shipped: null
+    shipped: 2026-08-25
     cut: null
     by: null
 
@@ -194,6 +194,24 @@ column's — fifteen times the tolerance the gate asks for, and the difference
 between a page that fits and a page clipped at its right edge. The canvases sit
 flush to that container's content box; a phase that wants a gutter between
 pages must change this sentence and the gate with it.
+
+> **CORRECTED 2026-08-25, by Phase 4.** The last sentence above is kept as it
+> was written and its first clause is no longer true. **The canvases do not sit
+> flush**: `#pages canvas` carries `margin-top: 16px`, `#pages::after` carries
+> the same gap below the last page, and each page wears a `var(--edge)`
+> hairline on its top and bottom edges — so a reader can see where one page
+> ends and the next begins. Its *second* clause is the one that held, and held
+> exactly: a phase that wanted a gutter did have to change this sentence and
+> the gate with it, and Phase 4 is that phase doing that.
+>
+> **What is corrected is the gutter and nothing else.** The paragraph's own
+> subject — that `paneWidth` is the scroll container's `clientWidth` and not
+> the column's — is untouched and stays exactly true, and the phase is built so
+> that it does. The gap is vertical only: `clientWidth` *includes* padding, so
+> side padding would not reduce `paneWidth` at all, and the canvases would be
+> sized past the content box and clipped silently. They still meet that content
+> box at its left and right edges, which is why there is no background beside a
+> page for a side hairline to separate it from.
 
 **The pane's geometry is observed and not inferred** — `mpdf-003` Phase 7's
 rule survives its own mechanism, and a `ResizeObserver` on that container is
