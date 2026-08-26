@@ -1218,7 +1218,13 @@ measured at 71 pages, growing without bound, still stands.
   **Measured: following a destination into unrendered page 65 lands at fraction
   0.525 and does not throw.**
 
-  ### The four rules the prototype failed without
+  ### The six rules the mechanism turns on
+
+  Four carry observed-failure provenance — the harness broke without 1, 3, 4
+  and 5, in that order of discovery. Rule 2 is round 3's reasoning confirmed by
+  measurement, and rule 6 is composition with the shipped file, which the harness
+  cannot test. Round 5 asked for the provenance to be told apart, having caught
+  rule 6 claiming an observation the harness observably lacks.
 
   **1. A canvas belongs to the document generation *and* the width that drew it.
   Either stale counts as absent.** **The generation is a document counter and not
@@ -1226,25 +1232,32 @@ measured at 71 pages, growing without bound, still stands.
   and `renderSeq` is what an implementer reaches for. It cannot be `renderSeq`:
   `rerender` bumps that at every width rest, which would invalidate every canvas
   and make the bug below impossible. The width term needs no new property —
-  `canvas.width === Math.floor(wrapper.logical.w * devicePixelRatio)` is the test,
-  and it is what clause 10 measures. Generation alone loses nothing at a recompile — that
-  much a reader would notice — but **width alone was the bug that shipped in the
-  harness: after a rest at a new width, whole-mode pages kept a canvas made for
-  the old one, six pages at a 1120 backing store where 1400 was wanted, every one
-  of them soft.** That is Phase 1's own *comes back sharp when you let go*, and its
-  gate clause 3, regressed by a freshness test that looked correct. With width in
-  the test: a width change re-renders every page it must and **the round trip
-  520 → 700 → 520 returns to 116.64 MiB, sharp, exactly where it opened.**
+  `canvas.width === Math.floor(wrapper.logical.w * devicePixelRatio)` is the
+  test, and it is what clause 10 measures; the harness carried a `forWidth`
+  property instead, which the spec drops deliberately, the derived test being the
+  one that survives a display change. Generation alone loses nothing at a
+  recompile — that much a reader would notice — but **width alone was the bug
+  that shipped in the harness: after a rest at a new width, whole-mode pages kept
+  a canvas made for the old one, six pages at a 1120 backing store where 1400 was
+  wanted, every one of them soft.** That is Phase 1's own *comes back sharp when
+  you let go*, and its gate clause 3, regressed by a freshness test that looked
+  correct. With width in the test: **the round trip 520 → 700 → 520 returns to
+  116.64 MiB, sharp, exactly where it opened.**
 
-  **2. The budget is evaluated on every render pass — at an open and at every
-  width rest — and never once per document.** `whole ≤ 128 MiB` is a function of
-  pane width, and four shipped causes move it, none of them an open. **Measured on
-  a 20-page document: whole at a 520 px pane (20 canvases, 116.64 MiB), band at
-  700 (3 canvases, 31.72 MiB), whole again back at 520, sharp throughout, with the
-  boundary at a 545 px pane.** Crossing to band creates the observer and releases
-  what falls outside; crossing to whole disconnects it and fills the rest in.
-  **128 MiB is chosen, not derived** — it admits 21 pages at the default window
-  and 15 at 619 px, and OQ-8 is what would ground it.
+  **2. The budget is evaluated at the two passes that can move it — an open and a
+  width rest — and never once per document.** A scroll-rest drain is a pass and
+  re-evaluates nothing, correctly: scrolling moves no width. `whole ≤ 128 MiB`
+  is a function of pane width, and five shipped causes move it — the divider, a
+  window resize, the panel folding, the gutter, **and an open itself**, since
+  `parts()` shows the panel for any document naming sections and `report` runs
+  before the bytes are fetched, so the width is already correct when the pass
+  evaluates. **Measured on a 20-page document: whole at a 520 px pane (20
+  canvases, 116.64 MiB), band at 700 (3 canvases, 31.72 MiB), whole again back at
+  520, sharp throughout, with the boundary at a 545 px pane.** Crossing to band
+  establishes the observer and releases what falls outside; crossing to whole
+  disconnects it and fills the rest in. **128 MiB is chosen, not derived** — it
+  admits 21 pages at the default window and 15 at 619 px, and OQ-8 is what would
+  ground it.
 
   **3. A `draining` flag serialises every pass, and the open-and-rest path forces
   past the scroll rest.** Round 4 caught the previous draft recording the
@@ -1263,26 +1276,32 @@ measured at 71 pages, growing without bound, still stands.
   one sentence. **Measured: zero concurrent passes across every experiment,
   including a resize deliberately overlapped with a scroll.**
 
-  **5. After every rendered page, the pass releases each page holding a canvas
-  that is no longer wanted.** This is the harness's own sweep, and the previous
-  draft described only "leaving the band frees the backing store", which round 4
-  showed leaks: a page dropped from the wanted set while its render is in flight
-  has no canvas to release at that moment, and the callback reports only what
-  changed, so nothing revisits it. The sweep after each page is what collects it.
+  **4. The rest is re-checked before each page, not at the top of the pass.** At
+  entry only it does nothing: a 41-frame throw refused re-entry 39 times while
+  the running pass rendered 40 pages anyway. **Measured: 43 renders become 5.**
+  The rest is **120 ms** beside the width's 200 ms and is chosen, not measured;
+  OQ-9 carries it.
+
+  **5. After every rendered page — and once more as the pass ends — the pass
+  releases each page holding a canvas that is no longer wanted.** The harness
+  carries both sweeps; the previous draft recorded one, and described only
+  "leaving the band frees the backing store", which round 4 showed leaks: a page
+  dropped from the wanted set while its render is in flight has no canvas to
+  release at that moment, and the callback reports only what changed, so nothing
+  revisits it. The per-page sweep collects it; the closing sweep collects a band
+  that shrank with nothing left to render.
 
   **6. The drainer does not go through `renderPages` and does not touch
   `rendering`.** `rerender` defers while `rendering > 0`; a band pass inside that
-  bracket would re-arm the 200 ms timer for as long as it ran. It swallows what
-  it fails at, as `rerender` does, and catches `RenderingCancelledException` as
-  the shipped loop does.
+  bracket would re-arm the 200 ms timer for as long as it ran. **It must swallow
+  what it fails at, catching `RenderingCancelledException` as the shipped loop
+  does — and this is a rule for the app that the harness observably does not
+  follow**: the harness has no catch on its drain path and lets a cancelled
+  task's rejection propagate unhandled, which round 5 caught this rule claiming
+  as an observation. A timer-fired drain has no awaiter to reject into;
+  `rerender`'s "cosmetic, so it swallows what it fails at" is the precedent.
 
-  **4. The rest is re-checked before each page, not at the top of the pass.** At
-  entry only it does nothing: a 41-frame throw refused re-entry 39 times while the
-  running pass rendered 40 pages anyway. **Measured: 43 renders become 5.** The
-  rest is **120 ms** beside the width's 200 ms and is chosen, not measured; OQ-9
-  carries it.
-
-  ### The rest of the mechanism
+### The rest of the mechanism
 
   **The band** is the pages intersecting the scrollport plus one scrollport either
   side, from an `IntersectionObserver` rooted on `#pages` with
@@ -1298,7 +1317,12 @@ measured at 71 pages, growing without bound, still stands.
   that resolves only in the observer's callback never settles if that observer is
   disconnected first, stranding `rendering` above zero and deferring every future
   width rest for the life of the window. A frame is enough because the delivery
-  lands inside it. **Measured: 0.4–6.8 ms, before the first frame**, and
+  lands inside it. **The frame-wait belongs to the width rest as much as to the
+  open** — the harness performs observe → one frame → forced drain on both paths,
+  and round 5 caught the previous draft stating it for the open only: without the
+  frame, a rest's forced pass runs against a just-cleared wanted set, finds
+  nothing, and the real work rides an un-forced drain the reader's own scrolling
+  defers — defeating rule 3's promise for exactly the path it names. **Measured: 0.4–6.8 ms, before the first frame**, and
   the reader's own page is drawn rather than a placeholder. **Measured at a
   recompile mid-document: 5 renders, every canvas current, the reader's page
   drawn.**
@@ -1312,22 +1336,26 @@ measured at 71 pages, growing without bound, still stands.
   so the layers go with the canvas; *select all* reaching only the band depends on
   it.
 
-  **The observer is established over the current wrapper list on every pass in
-  band mode, and disconnected by `clear` and when the mode crosses to whole.**
-  Round 4 caught the previous draft saying "disconnected by every open", which
-  contradicts the reconciliation rule beside it and breaks the one case it was
-  written for: every dialog open goes through `clear()` already, so the only open
-  reaching a live observer is a **recompile**, where the wrappers are reused and
-  the existing observer is watching exactly the right elements — and disconnecting
-  without re-establishing would leave the wanted set frozen forever. Re-establishing
-  per pass is also what `unobserve`s nothing by hand: a fresh `observe()` over the
-  reconciled list drops the surplus with the old observer. It holds strong
-  references to its targets, and **the prototype reproduced that by omission**: an
-  open that left the previous document's observer attached had it release a page
-  out of the next document.
+  **The observer is re-established — disconnected and created afresh over the
+  reconciled wrapper list — after the sizing pass, at an open and at every width
+  rest, while the mode is band; and disconnected by `clear` and when the mode
+  crosses to whole.** Round 5 caught the previous draft saying "on every pass",
+  which in this section's own vocabulary means a *drain* pass — and re-establishing
+  per drain is an establish/deliver loop that renders nothing. **This is also a
+  deliberate divergence from the harness, which re-establishes only at a mode
+  crossing and at a resize, and that omission is a live bug in it**: a band-mode
+  recompile that *grew* the document reuses the old observer, whose target list
+  does not include the new trailing wrappers, so a page the author just wrote can
+  never render. Re-establishing after every sizing pass is what closes it, and a
+  fresh `observe()` over the reconciled list is also what drops the surplus with
+  the old observer, no `unobserve` by hand. It holds strong references to its
+  targets, and **the prototype reproduced that by omission too**: an open that left
+  the previous document's observer attached had it release a page out of the next
+  document.
 
-  **The wrapper list is reconciled** — a compile reuses the elements already there,
-  `unobserve`s and removes only the surplus. The one-shot commit is per structural
+  **The wrapper list is reconciled** — a compile reuses the elements already
+  there and removes only the surplus, the observer's re-establishment dropping the
+  old registrations with the old observer. The one-shot commit is per structural
   change, not per pass.
 
   **A band render's task joins `inflight`**, so `cancelRenders` reaches it, and
@@ -1340,7 +1368,10 @@ measured at 71 pages, growing without bound, still stands.
   delivery — live inside a `<script type="module">` and are unreachable from the
   console. So the module publishes `window.__pane`, carrying `mode`,
   `renders`, `sizingMs`, `deliveryMs`, `renderMs`, `made` and `released` — the
-  durations in milliseconds, the last two counting canvases created and zeroed.
+  durations in milliseconds — `sizingMs` the whole sizing pass from first
+  `getPage` to the commit, `deliveryMs` from `observe()` to the first callback,
+  `renderMs` the last band page's raster alone — the last two fields counting
+  canvases created and zeroed.
   Round 4 added the final three: without `renderMs` one of the engine re-takes had
   no instrument, and `made`/`released` replace a memory-timeline reading whose
   category Safari does not present. It ships, and without it half this gate has no
