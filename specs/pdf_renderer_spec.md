@@ -7,7 +7,7 @@ note: >
   rather than a transform, the type is sharp at the display's own resolution,
   and the text and links come back with it.
 status: accepted
-last_updated: 2026-08-25
+last_updated: 2026-08-26
 
 phases:
   - name: "Phase 1 — the page is drawn here"
@@ -17,7 +17,7 @@ phases:
     by: null
   - name: "Phase 2 — the text it can select and the links it can follow"
     reviewed: 2026-08-25
-    shipped: null
+    shipped: 2026-08-26
     cut: null
     by: null
   - name: "Phase 3 — the zoom the reader owns"

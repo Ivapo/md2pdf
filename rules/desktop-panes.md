@@ -6,22 +6,24 @@ sources:
   - app/src/preview.rs
 covers: >
   the desktop app's two panes: the one file the front end is, the text pane and
-  the canvases the app rasterises the artifact onto, the vendored renderer and
-  its worker, the retained document a geometry-only redraw draws from, the
+  the pages the app rasterises the artifact onto, the wrapper a page is and the
+  canvas and two layers inside it, the vendored renderer and its worker, the retained document a geometry-only redraw draws from, the
   redraw that moves the reader and the three causes that decide where to, the
   anchor path that opens on the author's own page and the one file it is
   filtered to, the status the page places and never composes, the panel that
   names the document's parts and the two states it keeps apart, the rows that do
   not load and the invariant they keep, the fold the page holds and the list that
-  retains nothing, the width a gesture carries by CSS size and a rest answers by
-  a render, the reader's
-  place held across both, the geometry the page observes rather than infers,
+  retains nothing, the text the reader can select and the stream it is read
+  off, the link filter and the destination a click resolves, the scaffolding the
+  bundle does not carry and the app supplies, the width a gesture carries by CSS
+  size and a rest answers by a render, the one property that carries the layers
+  through both, the reader's place held across both, the geometry the page observes rather than infers,
   the gap that tells one page from the next and the hairline that draws its
   edges, the gutter whose rows are as tall as their lines render, the follow
   that keeps the numbers against their lines, the caret's two marks and the
   pane that loses both when it empties
-max_lines: 310
-generated: 2026-08-25
+max_lines: 375
+generated: 2026-08-26
 ---
 
 # Desktop panes
@@ -57,8 +59,65 @@ re-fit a stale page. What is destroyed on a re-open is the *task*, not the
 document proxy, which has no `destroy` of its own; the task owns the worker, and
 dropping one undestroyed leaks a thread per compile.
 
-**A canvas is swapped in only once it holds pixels.** Setting `canvas.width`
-clears it, so re-rendering in place would flash empty pages at every rest.
+**A page is a wrapper and not a canvas.** `#pages`'s children are `div.page`,
+each holding the canvas plus a text layer and an annotation layer. Three boxes
+have to share one origin and one size, and only an element holding all three can
+be the child `drawPages` indexes and swaps, the prune removes, and the reader's
+place is measured against — so `.logical` sits on the wrapper, `size()` writes
+that box, and the canvas inside takes `width: 100%; height: 100%`. Layers as
+siblings of the canvas *in* `#pages` would break the indexing; layers under a
+wrapper that is not itself the child would be dropped by `replaceChild`. A page
+removed takes its layers with it, which is the second reason the wrapper is the
+child and is why `clear`'s `replaceChildren` disposes them too.
+
+**A page is swapped in only once it holds pixels.** Setting `canvas.width`
+clears it, so re-rendering in place would flash empty pages at every rest — and
+since the whole page is swapped, its layers ride that rule too and are built
+while it is still detached, which nothing in their path needs layout for.
+
+**The text comes off `streamTextContent` and never off `getTextContent`.** That
+call is a `for await (… of readableStream)` over its own stream, and
+`ReadableStream.prototype[Symbol.asyncIterator]` is `undefined` in WKWebView —
+Chromium and Gecko implement async iteration of a readable stream and WebKit does
+not, so it rejects with *"undefined is not a function"* from inside the minified
+bundle, which names nothing useful. `TextLayer`'s constructor takes the stream
+itself and drives it with `getReader()` and `read()`, so handing it
+`page.streamTextContent()` obeys the rule by construction rather than by
+remembering it. The showcase carries 968 text items across its six pages.
+
+**Only a link carrying an internal destination is rendered**, filtered before the
+layer is built. An external one has no element, no `href` and nothing to
+activate, so *refused* is something a second person can check rather than a
+behaviour observed not to happen — `mpdf-003` §1.1, no servers and no network,
+ever. The same filter needs no second rule for a markdown link *with text*
+pointing at a figure: it reaches the PDF as a `/URI`, `pdf.js` refuses it on its
+protocol, and it arrives with `url` and `dest` both null. The showcase's twenty
+internal links are seven cross-references *plus* the footnote marks, their return
+arrows and the citation marks, so the filter delivers a document navigable three
+ways rather than one.
+
+**The link service is three methods written here, not a port.**
+`SimpleLinkService` is not in the bundle, and its route sets a real `href`, which
+in this window would navigate the webview off `tauri://localhost` with nothing to
+come back with — so the element gets a fragment and the click is answered by
+`goToDestination`, which resolves the destination, takes its page index, turns its
+own coordinate into a CSS offset through that page's render viewport, and scrolls
+the container. **The destination's own coordinate, not the top of its page**:
+`[](#fig:halves)` lands 458 pt down page 4, measured, and the showcase's one
+cross-page reference lands 570 pt down page 3.
+
+**The bundle carries the two classes and none of their scaffolding**, which lives
+in `pdf_viewer.css` and is not vendored. So the app defines `--scale-round-x` and
+`--scale-round-y` as `1px` on the page, writes `--total-scale-factor` from
+`size()`, and brings rules for what `pdf.js` styles nowhere. A text span is given
+percentage `left` and `top`, `--font-height` in *unscaled* px, a `font-family`
+and — where they apply — `--scale-x` and `--rotate`; it is given **no `position`
+and no `font-size`**. An annotation is a `<section>` with a percentage box, a
+`z-index` and no `position`, and the `<a>` inside it gets no box at all. Left
+undefined the layers take no size and the text paints raw over the raster; left
+unstyled a link has nothing to click. The glyphs a reader sees are the raster's,
+so the layer's own text is transparent, and a span's rotation is applied before
+its `--scale-x`, that being a correction along the text's own direction.
 
 **Only a render that drew advances `drawnRevision`.** `openPdf` answers
 whether it did, and returns without drawing when a newer render supersedes it or
@@ -206,6 +265,22 @@ outside `overflow-x: hidden`'s clip anyway. `inset` is not the escape either: an
 inset shadow paints beneath a replaced element's content, and a canvas is opaque
 white where `pdf.js` filled it. The colour is named because a colourless
 `box-shadow` resolves to `currentColor`, which inherits `--ink`.
+
+**`size()` is the one writer of a page's CSS box and the one writer of
+`--total-scale-factor`**, which is what carries the two layers through a gesture
+without either of them knowing one is happening: `fit`, `unscale` and the render
+all delegate here, so a gesture and a rest agree by construction rather than by
+two functions being kept in step. A gesture produces no new viewport, so a layer
+positioned from the render's would have stayed at the old size through every
+drag. **The value is absolute** — the box's current CSS width over the page's
+*unscaled* width, which is what `setLayerDimensions` multiplies
+`rawDims.pageWidth` by — because anything relative is wrong by the render scale
+at every width: `1` would put a 595 px layer over a 535 px page. **`--scale-round-x`
+floors the layer to whole CSS pixels**, so at some pane widths that product lands
+an ulp under the integer and the layer measures 1 px narrower than its page —
+observed at a 716 px pane and not at 476 or 556, uniform across all six rather
+than drifting down them, so a span at the right margin sits up to a pixel left of
+its glyphs and one at the left margin sits on them.
 
 **The logical size is whole CSS pixels and the backing store is derived from
 it**, so the backing store is exactly `floor(cssWidth × devicePixelRatio)`. The
