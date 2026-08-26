@@ -1220,8 +1220,14 @@ measured at 71 pages, growing without bound, still stands.
 
   ### The four rules the prototype failed without
 
-  **1. A canvas belongs to the generation *and* the width that drew it. Either
-  stale counts as absent.** Generation alone loses nothing at a recompile — that
+  **1. A canvas belongs to the document generation *and* the width that drew it.
+  Either stale counts as absent.** **The generation is a document counter and not
+  `renderSeq`** — round 4 caught the previous draft saying only "the generation",
+  and `renderSeq` is what an implementer reaches for. It cannot be `renderSeq`:
+  `rerender` bumps that at every width rest, which would invalidate every canvas
+  and make the bug below impossible. The width term needs no new property —
+  `canvas.width === Math.floor(wrapper.logical.w * devicePixelRatio)` is the test,
+  and it is what clause 10 measures. Generation alone loses nothing at a recompile — that
   much a reader would notice — but **width alone was the bug that shipped in the
   harness: after a rest at a new width, whole-mode pages kept a canvas made for
   the old one, six pages at a 1120 backing store where 1400 was wanted, every one
@@ -1240,14 +1246,35 @@ measured at 71 pages, growing without bound, still stands.
   **128 MiB is chosen, not derived** — it admits 21 pages at the default window
   and 15 at 619 px, and OQ-8 is what would ground it.
 
-  **3. One drainer serves both paths, and the open-and-rest path forces past the
-  scroll rest.** `applyAnchor` and `goToDestination` write `scrollTop`, and **a
-  programmatic scroll fires a scroll event that cannot be told from a reader's by
-  a flag** — the prototype tried a microtask-cleared flag and the event outran it
-  every time. So the open and rest pass a `force` and does not wait for a rest it
-  caused itself, which is also what stops a second drainer existing.
-  **Measured: zero concurrent passes across every experiment, including a resize
-  deliberately overlapped with a scroll.**
+  **3. A `draining` flag serialises every pass, and the open-and-rest path forces
+  past the scroll rest.** Round 4 caught the previous draft recording the
+  prototype's *measurement* where its *rule* belonged: "one drainer" names one
+  function, which does not stop two invocations overlapping. **The flag does** —
+  a pass entered while one is running returns immediately. And `force` suppresses
+  the rest check **at entry and at every per-page check**, not only at entry:
+  suppressed at entry alone, the open's own `scrollTop` write stops the forced
+  pass at its second page.
+
+  `applyAnchor` and `goToDestination` write `scrollTop`, and **a programmatic
+  scroll fires a scroll event that cannot be told from a reader's by a flag** —
+  the prototype tried a microtask-cleared flag and the event outran it every
+  time. Following a link therefore waits out the rest like any other scroll,
+  which is accepted rather than fixed: it costs one rest and it keeps the rule to
+  one sentence. **Measured: zero concurrent passes across every experiment,
+  including a resize deliberately overlapped with a scroll.**
+
+  **5. After every rendered page, the pass releases each page holding a canvas
+  that is no longer wanted.** This is the harness's own sweep, and the previous
+  draft described only "leaving the band frees the backing store", which round 4
+  showed leaks: a page dropped from the wanted set while its render is in flight
+  has no canvas to release at that moment, and the callback reports only what
+  changed, so nothing revisits it. The sweep after each page is what collects it.
+
+  **6. The drainer does not go through `renderPages` and does not touch
+  `rendering`.** `rerender` defers while `rendering > 0`; a band pass inside that
+  bracket would re-arm the 200 ms timer for as long as it ran. It swallows what
+  it fails at, as `rerender` does, and catches `RenderingCancelledException` as
+  the shipped loop does.
 
   **4. The rest is re-checked before each page, not at the top of the pass.** At
   entry only it does nothing: a 41-frame throw refused re-entry 39 times while the
@@ -1265,8 +1292,13 @@ measured at 71 pages, growing without bound, still stands.
   depending on alignment.** The callback **maintains** the wanted set rather than
   rebuilding it, since after the first delivery it carries only what changed.
 
-  **The order at open is layout, position, then band**, the band pass awaiting the
-  observer's first delivery. **Measured: 0.4–6.8 ms, before the first frame**, and
+  **The order at open is layout, position, then band**, and **the band pass waits
+  one animation frame after `observe()` rather than awaiting a delivery promise** —
+  which is what the prototype does, and round 4 showed why it matters: a promise
+  that resolves only in the observer's callback never settles if that observer is
+  disconnected first, stranding `rendering` above zero and deferring every future
+  width rest for the life of the window. A frame is enough because the delivery
+  lands inside it. **Measured: 0.4–6.8 ms, before the first frame**, and
   the reader's own page is drawn rather than a placeholder. **Measured at a
   recompile mid-document: 5 renders, every canvas current, the reader's page
   drawn.**
@@ -1280,10 +1312,19 @@ measured at 71 pages, growing without bound, still stands.
   so the layers go with the canvas; *select all* reaching only the band depends on
   it.
 
-  **The observer is disconnected by `clear`, by every open, and when the mode
-  crosses to whole.** It holds strong references to its targets. **The prototype
-  reproduced this by omission**: an open that left the previous document's observer
-  attached had it release a page out of the next document.
+  **The observer is established over the current wrapper list on every pass in
+  band mode, and disconnected by `clear` and when the mode crosses to whole.**
+  Round 4 caught the previous draft saying "disconnected by every open", which
+  contradicts the reconciliation rule beside it and breaks the one case it was
+  written for: every dialog open goes through `clear()` already, so the only open
+  reaching a live observer is a **recompile**, where the wrappers are reused and
+  the existing observer is watching exactly the right elements — and disconnecting
+  without re-establishing would leave the wanted set frozen forever. Re-establishing
+  per pass is also what `unobserve`s nothing by hand: a fresh `observe()` over the
+  reconciled list drops the surplus with the old observer. It holds strong
+  references to its targets, and **the prototype reproduced that by omission**: an
+  open that left the previous document's observer attached had it release a page
+  out of the next document.
 
   **The wrapper list is reconciled** — a compile reuses the elements already there,
   `unobserve`s and removes only the surplus. The one-shot commit is per structural
@@ -1297,96 +1338,138 @@ measured at 71 pages, growing without bound, still stands.
   this file, so its gate is read by a person; three of the quantities that gate
   needs — renders started, the sizing pass's duration, the observer's first
   delivery — live inside a `<script type="module">` and are unreachable from the
-  console. So the module publishes `window.__pane`, carrying those three counters
-  and the current mode. It ships; it is four assignments; and without it a third of
-  this gate has no instrument.
+  console. So the module publishes `window.__pane`, carrying `mode`,
+  `renders`, `sizingMs`, `deliveryMs`, `renderMs`, `made` and `released` — the
+  durations in milliseconds, the last two counting canvases created and zeroed.
+  Round 4 added the final three: without `renderMs` one of the engine re-takes had
+  no instrument, and `made`/`released` replace a memory-timeline reading whose
+  category Safari does not present. It ships, and without it half this gate has no
+  instrument.
+
+  **A placeholder is paper-coloured.** `#pages .page` has no background today and
+  the white a reader sees is the canvas's, so an empty wrapper paints `--ground` —
+  tolerable in light and a dark rectangle where paper belongs in dark. The
+  prototype carries a `--paper` fill and the previous draft dropped it.
 
   **Two costs, recorded.** A selection cannot span pages that are not rendered and
   an out-of-band link is not clickable. And a reader who jumps far sees a
   placeholder for one delivery plus one render.
 
-- **Exit gate:** **Preconditions, asserted before anything else and pasteable as
-  one check**: the default window, `devicePixelRatio === 2`,
-  `pages.clientWidth === 520`, and the machine set to **always show scrollbars**.
-  Round 3 established why each is load-bearing: **at `devicePixelRatio` 1 the long
-  fixture costs 103.5 MiB, falls *under* the budget, renders whole, and four
-  clauses have nothing to measure**; with overlay scrollbars the pane is 535 px and
-  `scrollHeight` is 54,899, so clause 5 fails a correct implementation. The
-  literals below are void at any other geometry.
+- **Exit gate:** **Preconditions, and round 4 found the previous draft's block
+  unrunnable.** `#pages` ships `hidden` and only `openPdf` clears it, so a check
+  pasted "before anything else" reads `clientWidth === 0`. And the pane is not one
+  number: `#files` is shown for any document naming sections, so the **showcase**
+  sits at roughly 305 px while `long.md` and `near.md` — **single-file by
+  construction, which is why the generator writes them that way** — sit at 520.
 
-  Fixtures: **`samples/showcase/showcase.md`** (`/Count 6`) and
-  **`tests/fixtures/long.md`** (`/Count 71`), written by the `#[ignore]`d generator
-  and **pinned by a non-ignored test that compiles it and asserts the count**, per
-  `core/tests/page_examples_test.rs`'s own arrangement, where
-  `bless_the_generated_blocks` writes and `every_generated_block_is_the_parsers_own_html`
-  checks. The generator emits a cross-reference from page 1 to a figure on **page
-  65**, and the gate cites its coordinate.
+  So: open `long.md`, then assert **`devicePixelRatio === 2`**,
+  **`pages.clientWidth === 520`** (which subsumes the always-show-scrollbars
+  setting, since overlay scrollbars give 535) and **`pages.clientHeight` between
+  1001 and 1126**, outside which the band is not 3 at the ends and 5–6 in the
+  middle and every retention literal below is void. The band is also computable
+  directly — the pages intersecting `[scrollTop − H, scrollTop + 2H]` — and a
+  tester who finds the height outside that range should read it that way instead.
 
-  1. **The showcase is unchanged.** Under budget at the default window, so no
-     observer is created (`window.__pane.mode === 'whole'`) and **Phase 2's clauses
-     1–8 and Phase 4's clause 1 re-run and pass verbatim**. Clause 4 of Phase 2 is
-     included; only clause 9 is omitted, being this phase's clause 13.
-  2. **Retention equals the rule, and the rule is `whole ≤ budget ? whole : band`.**
-     On `long.md`: **17.5 MiB at the top, 29.16 to 34.99 mid-document, 17.5 at the
-     last page**, summed as `Σ canvas.width × canvas.height × 4` over `#pages`,
-     each an inclusive range rather than a point, since the band is 3 at the ends
-     and 5–6 in the middle. Against 414 MiB whole.
-  3. **Nothing is retained outside `#pages`.** Clause 2 counts *attached* canvases
-     and is blind to a canvas detached before it was zeroed — the scope's own
-     release rule. So: in the Web Inspector's memory timeline, open `long.md`,
-     scroll end to end, force ten compiles, then open the showcase; **the canvas
-     allocation returns to within 20 MiB of the showcase's own footprint and does
-     not step upward per compile.**
-  4. **The sizing pass commits once.** With a `MutationObserver` on `#pages`
-     (`childList`) armed before the open, **one record with 71 `addedNodes`**, not
-     71 records. This is the clause the previous draft claimed for `scrollHeight`,
-     which a per-page append also passes.
-  5. **The extent is exact from layout alone**: `pages.scrollHeight` is **53,337**
-     both when the sizing pass resolves and after every page has been visited.
-  6. **The reader does not move when a placeholder fills in** — *(page, fraction)*
-     before and after, same page and `|Δfraction| < 0.01`. **Not `scrollTop`**,
-     which WebKit holds constant through exactly this reflow.
+  Fixtures: **`samples/showcase/showcase.md`** (`/Count 6`), **`tests/fixtures/long.md`**
+  and **`tests/fixtures/near.md`**, the last two written by the `#[ignore]`d
+  generator and **pinned by one non-ignored test asserting `/Type/Pages/Count 71`
+  and `/Type/Pages/Count 20`** — keyed to `/Type/Pages` because outline nodes carry
+  `/Count` too. **That test also resolves the long cross-reference out of the
+  compiled bytes and asserts its page and coordinate**, the technique Phase 2's
+  round 1 used to derive "458 pt down an 841.89 pt page"; **clause 8's literals are
+  then read from what it pins rather than from this document**, which round 4
+  showed cannot supply them. The pinning test compiles a 62,000-word document at
+  every `cargo test --workspace` — **7.12 s in a debug build, measured by OQ-1** —
+  and that cost is accepted here rather than discovered later.
+
+  `window.__pane` carries **`mode`, `renders`, `sizingMs`, `deliveryMs`,
+  `renderMs`, `made` and `released`**; the last three are round 4's additions,
+  `renderMs` because clause 15's third reading had no instrument and `made`/
+  `released` because clause 3's did not exist.
+
+  1. **The showcase is unchanged**, at its own geometry: `#files` shown, pane ~305,
+     whole mode either way. **Phase 2's clauses 1–8 and Phase 4's clause 1 re-run
+     and pass verbatim**, plus **Phase 1's clause 7** — the empty, failed and stale
+     states, and a second document opened over the first — which this phase changes
+     what `clear` must do.
+  2. **Retention equals `whole ≤ budget ? whole : band`.** On `long.md`, summing
+     `Σ canvas.width × canvas.height × 4` over **`#pages canvas`**: **17.5 MiB at
+     the top, 29.16–34.99 mid-document, 17.5 at the last page**, inclusive ranges
+     because the band is 3 at the ends and 5–6 in the middle. Against 414 MiB whole.
+  3. **Nothing is retained outside `#pages`.** After scrolling `long.md` end to end
+     and ten compiles: **`__pane.made − __pane.released` equals the count of
+     canvases in `#pages`**. Exact, and it does not depend on the platform's memory
+     accounting — round 4 found the previous draft naming a "canvas allocation" line
+     that Safari's memory timeline does not present, which was clause 2's blind
+     instrument reproduced in its replacement.
+  4. **The sizing pass commits once.** A `MutationObserver` on `#pages`
+     (`childList`) armed from the empty state: **one record, `addedNodes.length`
+     71**, not 71 records.
+  5. **The extent is exact from layout alone**: `scrollHeight` **53,337** when the
+     sizing pass resolves and after every page has been visited.
+  6. **The reader does not move when canvases are released.** Park mid-document,
+     record *(page, fraction)*, scroll away and back, read it again: same page,
+     `|Δfraction| < 0.01`. **Keyed to the release direction**, since a placeholder
+     is already at its final size and filling one in reflows nothing — round 4
+     found the fill direction near-vacuous against clause 5.
   7. **A throw does not thrash.** A scripted ramp — 40 `requestAnimationFrame`
-     steps of `scrollHeight / 40` — then stop. **`window.__pane.renders` advances
-     by at most 8**, counted from the end of the open's own band, against 43 for a
-     rest checked only at the top of the pass.
-  8. **A cross-reference into an unrendered page lands at its coordinate.** Follow
-     the generator's reference from page 1: it lands on **page 65 at fraction
-     0.525 ± 0.01**, not at the top of page 65, and no error reaches the console.
-     Phase 2's clause 3 required the coordinate by name for this reason.
-  9. **Layers track canvases across release and re-entry.** Six round trips
-     between page 1 and mid-document: every page with a canvas has exactly one
-     text layer and one annotation layer, every page without has neither.
-  10. **A width gesture on `long.md`.** Drag the divider to three widths and rest.
-      No page blanks during the drag; after each rest every page holding a canvas
-      satisfies Phase 1's `floor(cssWidth × devicePixelRatio)`; the reader holds
-      *(page, fraction)*; and `window.__pane.mode` is `band` throughout. **This is
-      the clause the width-freshness bug fails**: without width in the freshness
-      test the backing stores stay at the old width and every page is soft.
-  11. **The budget is crossed in both directions.** With a 20-page document —
-      the generator emits it as `tests/fixtures/near.md` — **whole at 520 px with
-      20 canvases and 116.64 MiB; band at 700 px with 3 canvases and 31.72 MiB;
-      whole again at 520 with 116.64 MiB, sharp at every step.** The boundary is a
-      545 px pane. An implementation evaluating the budget once per open reads 20
-      canvases and 211.5 MiB at 700 and fails here.
-  12. **The three engine-dependent readings are re-taken in WKWebView**, since the
-      prototype was Chromium: the observer's first delivery (Chromium 0.4–6.8 ms),
-      the sizing pass (3.4 ms, failing above 250 ms), and **a band page's render**
-      (OQ-7 measured 12 ms a page in the window at 71 pages, which is the figure to
-      compare against). **A disagreement on these three is a finding and the app is
-      right. On every other clause a disagreement is a failure** — the previous
-      draft granted that licence to the whole gate, which would have excused the
-      retention error round 2 called its strongest finding.
-  13. `cargo test --workspace` passes, **with one new non-ignored test** — the one
-      that pins `/Count 71` — and the generator itself `#[ignore]`d.
+     steps of `scrollHeight / 40` — then stop and poll `__pane.renders` until it
+     settles. It advances **by at most 8** from the end of the open's own band,
+     against 43 for a rest checked only at the top of the pass.
+  8. **A cross-reference into an unrendered page lands at its coordinate**, the page
+     and fraction being the ones the pinning test asserts, ±0.01, and no error
+     reaches the console.
+  9. **Layers track canvases across release, re-entry and recompile.** Six round
+     trips, each allowed to settle, **and ten compiles**: every page with a canvas
+     has exactly one text layer and one annotation layer, every page without has
+     neither.
+  10. **A width gesture on `long.md`, at 400, 520 and 700 px**, set with
+      `text.style.flexBasis` so they are exact and all above the **289 px** boundary
+      below which a correct implementation is in whole mode. After each rest every
+      page holding a canvas satisfies `floor(cssWidth × devicePixelRatio)`, the
+      reader holds *(page, fraction)*, `__pane.mode` is `band`, and no error reaches
+      the console — `.natural` missing throws inside the `ResizeObserver` on the
+      first move. **This is the clause the width half of freshness fails.**
+  11. **The budget is crossed in both directions, read at the top of the document**
+      — round 4 found the previous draft naming no position, where mid-document at
+      700 px gives 4–5 pages rather than 3. On `near.md`: **whole at 520 px, 20
+      canvases, 116.64 MiB; band at 700 px, 3 canvases, 31.72 MiB; whole again at
+      520.** An implementation deciding once per open reads 20 canvases and
+      211.5 MiB at 700.
+  12. **An edit reaches the screen.** Scroll `long.md` to mid-document, edit the
+      text under the reader, and after the compile: **the page under the reader
+      shows the edit** — Phase 1's clause 8 keyed to the drawn canvas — `__pane.renders`
+      advances by the band and not by 71, `#pages.children.length` is still 71 and
+      the same element objects (held across the compile), and clause 9's equality
+      holds. **This is the clause the generation half of freshness fails**, and
+      without it an implementation that renders only pages holding no canvas passes
+      everything and loses the author's work.
+  13. **An open lands the reader on a drawn page.** Recompile at mid-document and
+      assert the landing page holds a canvas at the first frame after the open
+      resolves. **This is the phase's headline claim** and the previous draft gated
+      it nowhere: an implementation leaving `openPdf`'s positioning where it is
+      drains the band for `scrollTop` 0, jumps the reader, and shows a placeholder
+      until the rest fires — reaching an identical end state.
+  14. **Two paths do not overlap.** Drag the divider while scrolling: after the
+      rest, `__pane.renders` advanced by at most the band, layers equal canvases,
+      and every canvas satisfies clause 10's expression.
+  15. **The engine-dependent readings are re-taken.** `__pane.deliveryMs` (Chromium
+      0.4–6.8), `__pane.sizingMs` (3.4, failing above 250) and `__pane.renderMs`.
+      **The render comparison is not Chromium-versus-WebKit**: OQ-7's 12 ms a page
+      was measured *in the window*, at a **619 px** pane, so at 520 the same
+      implementation predicts about **8.5 ms** and the comparison is against that.
+      **A disagreement on these three is a finding. On every other clause a
+      disagreement is a failure.**
+  16. `cargo test --workspace` passes, with the one new non-ignored pinning test and
+      the generator `#[ignore]`d.
 
 - **Close-out:** **§2's "the first two are rebuilt by Phase 2" takes a dated
   `CORRECTED` note**; the frontmatter `note` is amended with `last_updated`.
   **OQ-1 is resolved by this phase**, inline per §4. OQ-9 already carries the
   120 ms rest.
 
-  `rules/desktop-panes.md` gains the budget, the band, the two freshness terms and
-  the observer — **and loses three sentences this phase and Phase 2 falsified**:
+  `rules/desktop-panes.md` gains the budget, the band, the two freshness terms,
+  the observer and `window.__pane` — **and loses three sentences this phase and Phase 2 falsified**:
   "a scroll container holding one `<canvas>` per page", "The gap is `margin-top` on
   each canvas" and "each child is a canvas carrying `.logical`", the last two
   already stale since Phase 2. The cap rises from 375 to **420**, budgeting for
@@ -1395,8 +1478,11 @@ measured at 71 pages, growing without bound, still stands.
   **The rule must not call this a "band"** — that word already means the caret
   line's highlight there, and `--band` is its colour in the stylesheet.
 
-  **Three in-file comments go false**: `drawPages`'s "Draw every page of the
-  retained document", the `#pages .page` block, and **`drawLayers`'s "built into
+  **Five in-file comments go false, and round 4 found the last two**:
+  `cancelRenders`'s "a task cancelled here rejects inside `renderPages`" stops
+  being true once a band task joins `inflight`, and the `rendering` comment turns
+  on the drainer staying outside that bracket. The other three are `drawPages`'s
+  "Draw every page of the retained document", the `#pages .page` block, and **`drawLayers`'s "built into
   the page while it is still detached"**, which a fragment and a persistent wrapper
   both change. Round 3 found the third; this record has caught a missed third copy
   four times now.
