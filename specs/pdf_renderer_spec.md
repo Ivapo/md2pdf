@@ -1221,7 +1221,7 @@ measured at 71 pages, growing without bound, still stands.
   ### The six rules the mechanism turns on
 
   Four carry observed-failure provenance — the harness broke without 1, 3, 4
-  and 5, in that order of discovery. Rule 2 is round 3's reasoning confirmed by
+  and 5. Rule 2 is round 3's reasoning confirmed by
   measurement, and rule 6 is composition with the shipped file, which the harness
   cannot test. Round 5 asked for the provenance to be told apart, having caught
   rule 6 claiming an observation the harness observably lacks.
@@ -1301,7 +1301,7 @@ measured at 71 pages, growing without bound, still stands.
   as an observation. A timer-fired drain has no awaiter to reject into;
   `rerender`'s "cosmetic, so it swallows what it fails at" is the precedent.
 
-### The rest of the mechanism
+  ### The rest of the mechanism
 
   **The band** is the pages intersecting the scrollport plus one scrollport either
   side, from an `IntersectionObserver` rooted on `#pages` with
@@ -1370,7 +1370,7 @@ measured at 71 pages, growing without bound, still stands.
   `renders`, `sizingMs`, `deliveryMs`, `renderMs`, `made` and `released` — the
   durations in milliseconds — `sizingMs` the whole sizing pass from first
   `getPage` to the commit, `deliveryMs` from `observe()` to the first callback,
-  `renderMs` the last band page's raster alone — the last two fields counting
+  `renderMs` the last band page's raster alone — and `made`/`released` counting
   canvases created and zeroed.
   Round 4 added the final three: without `renderMs` one of the engine re-takes had
   no instrument, and `made`/`released` replace a memory-timeline reading whose
