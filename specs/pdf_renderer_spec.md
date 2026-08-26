@@ -596,6 +596,15 @@ bookmarks that nothing in this project currently reads.
   document therefore holds **587 MB**. Time crosses 500 ms at 28 pages and 1 s at
   56; memory crosses 1 GB at about 120. Logged against OQ-1, which is where the
   decision belongs.
+- **OQ-9** — is 120 ms the right rest for a scroll? Raised 2026-08-26 with
+  Phase 5, whose prototype established that the rest is *needed* — without it a
+  throw of 41 frames starts 43 renders against 5 — and could not establish its
+  length. Too short and an ordinary slow scroll renders pages the reader is
+  passing; too long and a reader who stops waits for the page under them. It sits
+  beside the width's 200 ms and was chosen to be shorter because a scroll stops
+  more often than a drag does. **Nothing measured it against a reader**, which is
+  the only instrument that can. Blocks nothing. *(needs-input — it wants a
+  reader's judgement in use, as `mpdf-003` OQ-6 was answered)*
 - **OQ-8** — at what document length does the pane as Phase 1 built it actually
   *fail*, and on what machine? Raised 2026-08-26 with Phase 5, whose argument
   needs it and does not have it. What is measured is that the cost is linear and
@@ -1156,311 +1165,240 @@ nothing but shipped Phase 1.
   about. One push.
 
 ### Phase 5 — the pane holds what the reader is near
-*Produces the observable: **yes**, and the claim is narrower than this phase's
-first draft made it. **At the app's default window a document the pane can
-already show is rendered whole and nothing changes at all** — that is a decision
-below, not an accident, and gate clause 1 checks it rather than assuming it. What
-changes is for a document past the budget: its pages arrive without waiting for
-every page to be rasterised, and it is held at a bounded cost rather than an
-unbounded one. Round 1 rejected the draft's "some 100 ms" arithmetic — the sizing
-pass precedes the first paint and the draft omitted it — so this phase claims no
-latency figure it has not measured, and gate clause 9 is where the figure comes
-from.*
+*Produces the observable: **yes**, and both halves of the claim are now measured
+rather than argued. **A document the pane can already show is rendered whole and
+nothing changes at all** — that is what the budget decides, and gate clause 1
+checks it. For a document past the budget, **its first page is on screen 27–147 ms
+after the layout instead of 1,182 ms**, and it is held at 17.5–29 MiB instead of
+414. Two earlier drafts of this line carried latency arithmetic that was invented;
+this one carries a prototype's readings.*
 
-**Appended after Phases 1, 2 and 4 shipped**, per §6.1's ordered test worked in
-full, and **round 1 corrected the working itself**.
+**Written from a prototype, not from first principles, which is why this draft
+differs from the two before it.** Rounds 1 and 2 returned twenty-three blocking
+findings and round 2's eight were all produced by round 1's fixes — the signature
+of a phase being designed in the review loop. So the mechanism was built and run
+against the real vendored `pdf.js` and the real 71-page document before this text
+was written, one change at a time, and every quantity below is a reading. **The
+harness was Chromium, not WKWebView**, which the gate exists to close: the byte
+figures are arithmetic over canvas dimensions and transfer exactly, the DOM
+outcomes are structural and transfer, and **the two timings that are engine's own
+— the observer's first delivery and the per-page render — are what clauses 3 and 9
+re-take in the app.**
+
+**Appended after Phases 1, 2 and 4 shipped**, per §6.1's ordered test.
 
 - **Step 0 matches**: OQ-1 decided, with a reason, that Phase 1 would build no
-  virtualisation, and OQ-7's measurement changes that decision.
-- **Step 1's phase-removing bullets do not match.** Nothing Phases 1, 2 or 4
-  delivered is removed, no phase is cut, and every mechanism they shipped keeps
-  working *because* Phase 2 made the page a wrapper and the canvas a detail
-  inside it.
-- **Step 1's prose bullet DOES match, and the draft asserted it did not.** §2's
-  "What is given up, stated plainly" records that `mpdf-003` chose a real PDF
-  view for three properties and that "the first two are rebuilt by Phase 2" — a
-  live link and selectable text. **Unqualified, that stops being true here**: a
-  page outside the band has no text layer to select and no annotation layer to
-  click, which this phase's own "two costs" paragraph says four paragraphs later.
-  The draft claimed no shipped prose went misleading while its own scope
-  falsified it — **the exact shape Phase 4's round 1 caught, recurring two phases
-  later**, which is why the close-out now carries the dated `CORRECTED` note that
-  discharges it.
-- **The claim that every page is rendered lives in five places, not one**, and
-  the draft's audit named only OQ-1. It is also in OQ-7's resolution ("The pane
-  draws every page and retains it"), in the frontmatter `note` ("rasterises each
-  page onto a canvas"), in Phase 1's scope ("one canvas per page"), in
-  `drawPages`'s own doc comment, and in the `#pages .page` stylesheet comment.
-  **Only §2's sentence takes a `CORRECTED` note**: a resolved OQ is a record of
-  what was measured on a date and §6.1 forbids rewriting it, `note` is
-  description rather than a decision, and the two in-file comments are `rules`-
-  class facts that the close-out corrects in place as Phase 2's did.
-- **Step 2 then matches and is the mechanism**: `mpdf-009` owns how the pane
-  draws the page, its rollup is `partial` rather than `abandoned`, so this is a
-  phase appended to it, numbered after the last and renumbering nothing. **It has
-  its own review round and is not cleared to build until that converges.**
+  virtualisation; OQ-7's measurement changes that decision.
+- **Step 1's phase-removing bullets do not match.** Nothing shipped is removed and
+  no phase is cut — every mechanism Phases 1, 2 and 4 delivered keeps working
+  *because* Phase 2 made the page a wrapper and the canvas a detail inside it.
+- **Step 1's prose bullet does match.** §2's "What is given up, stated plainly"
+  says `mpdf-003`'s first two properties "are rebuilt by Phase 2" — a live link
+  and selectable text. Outside the band a page has neither, so the unqualified
+  sentence stops being true and the close-out gives it a dated `CORRECTED` note.
+  Round 1 caught the first draft asserting the opposite while its own costs
+  paragraph falsified it — the shape Phase 4's round 1 caught, two phases on.
+- **The same claim sits in four other places and only that one is corrected**:
+  OQ-7's resolution and the frontmatter `note` are records rather than live
+  decisions, and Phase 1's scope is history §6.1 forbids rewriting; the two
+  in-file comments are `rules`-class facts the close-out fixes in place.
+- **Step 2 is the mechanism**: `mpdf-009` owns how the pane draws the page, its
+  rollup is `partial`, so this is a phase appended to it, renumbering nothing.
+  **It is not cleared to build until its own round converges.**
 
-**It is numbered after Phase 3 and is intended to ship before it**, which §3
-permits when building an earlier phase *measures* something that reorders them —
-OQ-7's probe, run during Phase 2, is that measurement. The reason belongs in the
-review record and is short enough to state here too: **Phase 3 hands the reader a
-knob that multiplies this phase's quantity by the square of the scale.** A canvas
-is 8.3 MB at fit-to-width on a 619 px pane and 33 MB at 200%.
+**Numbered after Phase 3 and intended to ship before it**, which §3 permits when
+building an earlier phase measures something that reorders them — OQ-7's probe,
+run during Phase 2, is that measurement. Phase 3's zoom multiplies this phase's
+quantity by the square of the scale: 8.26 MiB at fit on a 619 px pane, 33 at 200%.
+**The argument does not depend on Phase 3**, which is `reviewed: null`: without it
+what remains is 414 MiB measured at 71 pages, growing without bound.
 
-**And the argument does not depend on Phase 3, which round 1 was right to press
-on.** Phase 3 is `reviewed: null` with no round of its own; if it were cut, what
-would remain is a measured 587 MB at 71 pages growing linearly and without bound,
-which is sufficient on its own. The zoom makes it urgent; it does not make it
-true.
+**What is still not measured.** OQ-8 — the length at which the present pane
+actually fails. 71 pages was survivable. This phase rests on the cost being linear
+and unbounded, not on a crash it has seen.
 
-**What is measured and what is not, stated before the design rather than after.**
-Measured, by OQ-7's probe at a 619 px pane and `devicePixelRatio` 2: 8.3 MB of
-canvas per page, 587 MB for 71 pages, 12–22 ms to rasterise one, 6,509 text items
-across 71 pages. **Not measured, and round 1 caught the draft asserting it
-anyway: what `getPage` costs.** OQ-7's table records raster, text-layer and
-annotation-layer medians and no page-fetch figure at all; the draft's "some 5 ms
-a page" was that table's *text-layer* median read as something else, and the
-355 ms sizing budget derived from it is withdrawn. The sizing pass is a worker
-round trip per page whose cost is unknown, gate clause 9 measures it, and **a
-phase that finds it dominating has learned something no probe has yet shown.**
-**Also not measured: the length at which the present pane actually fails.** 71
-pages was survivable. OQ-8 carries it and this phase does not pretend to its
-answer.
+- **Scope:** **`app/dist/index.html`**, plus **one `#[ignore]`d generator** for the
+  gate's long document, following `core/tests/page_examples_test.rs:bless_the_generated_blocks`.
+  Nothing is vendored and `core` gains no production code.
 
-**One smaller design was considered and rejected, recorded so a later round does
-not re-raise it** (§5): *render the band first and the rest in the background,
-releasing nothing.* It buys the same first-paint win with no placeholders, no
-decoupled box and neither of the two costs below — and it does not bound
-anything, which is this phase's subject. It is the right answer to a latency
-question and the wrong one to a memory question.
+  **A page's box is separated from its raster.** Every page gets a wrapper sized
+  from its viewport, which `page.getViewport` yields without rasterising, so
+  `#pages`'s child list, its `scrollHeight`, every `offsetTop`, the 16 px gap, the
+  fit and the reader's anchor work over the whole document from the first frame.
+  **Measured: the extent is exact from layout alone** — `scrollHeight` 53,337
+  before any raster and 53,337 after all 71 pages.
 
-- **Scope:** **`app/dist/index.html`**, plus **one `#[ignore]`d test that writes
-  the gate's long document** — round 1 found six of eight clauses keyed to an
-  artifact that exists nowhere in the repo and has no recipe, which is a gate a
-  second person cannot run. Nothing is vendored and `core` gains nothing.
+  **The sizing pass commits in one mutation**, and that is a decision rather than a
+  style: a pass that appends per page grows `scrollHeight` across dozens of frames,
+  which makes clause 4 fail on a correct implementation and gives the observer 71
+  separate deliveries instead of one. **Measured: 3.4 ms for 71 pages.** The two
+  drafts before this one asserted 355 ms, read out of a table that had no
+  page-fetch row; the affordability question the figure was raised for does not
+  exist.
 
-  **A page's box is separated from its raster, and that is the decision the rest
-  depends on.** Every page of the document gets a wrapper sized from its
-  viewport — which `page.getViewport` yields without rasterising — so `#pages`'s
-  child list, its `scrollHeight`, every `offsetTop` and `offsetHeight`, the 16 px
-  gap, the hairline, the fit and the reader's anchor work over the **whole**
-  document from the first frame. **This is Phase 2's wrapper being paid for**: the
-  canvas is already a detail inside a box something else owns, so releasing it
-  disturbs nothing that measures the page.
+  **A placeholder carries `.logical`, `.natural`, `.view` and its page number**,
+  all set by the sizing pass. `size()` divides by `natural.w`, and
+  `goToDestination` dereferences `view` — **measured: following a destination into
+  an unrendered page 65 lands at fraction 0.525 and does not throw**, which is the
+  crash this requirement exists to prevent.
 
-  **The box must not be allowed to depend on the raster**, which is what forbids
-  the cheaper implementation. A wrapper taking its size from a canvas it no longer
-  has would collapse, `scrollHeight` would shrink as the reader moved, and
-  `applyAnchor` would restore a fraction of a height that no longer means
-  anything. **A placeholder therefore carries `.logical`, `.natural` and `.view`
-  exactly as a rendered page does** — `size()` divides by `natural.w` and writes
-  `--total-scale-factor: NaN` without it, and `linkService.goToDestination`
-  dereferences `wrapper.view`, so a cross-page link into an unrendered page throws.
-  Round 1's catch, and all three are set by the sizing pass rather than by the
-  render.
+  **A budget decides whether to virtualise at all.** If the whole document's raster
+  fits **128 MiB**, every page is rendered, no observer is created, and the pane
+  behaves exactly as Phase 1 shipped it. Otherwise only the band is. An A4 page
+  costs `⌊W·r⌋ × ⌊1.4143·W·r⌋ × 4` bytes at pane width `W` and ratio `r` — **5.83
+  MiB** at the default window's ~520 px pane at `devicePixelRatio` 2 and **8.26
+  MiB** at OQ-7's 619 px, the second reproducing that probe's 8.3 exactly. So the
+  showcase is **34.99 MiB measured** and renders whole; the 71-page document is
+  **414.07 MiB measured**, against 414.1 derived, and does not.
 
-  **A budget decides whether to virtualise at all, and the draft had no such
-  rule.** Round 1 re-derived the draft's premise and found it false: at the app's
-  own default window the band reaches about three scrollport heights and six A4
-  pages exceed that, so a *correct* implementation would have left the last pages
-  blank and failed the very clauses the draft told it to re-run. So:
+  > **Retained bytes are `whole ≤ budget ? whole : band`.** An earlier draft wrote
+  > `min(whole, max(band, budget))` and had the gate compare against it; both
+  > round-2 reviewers found it independently, and the prototype confirms them —
+  > **a correct implementation retains 17.5 MiB at the top of the document, 29.16
+  > mid-document and 23.33 after a throw**, where that expression predicted 128.
+  > The budget selects the mode; the band sizes the retention.
 
-  > **If the whole document's raster fits the budget, every page is rendered, and
-  > the pane behaves exactly as Phase 1 shipped it.** Otherwise only the band is.
+  **The band is the pages intersecting the scrollport plus one scrollport above and
+  below**, reported by an `IntersectionObserver` rooted on `#pages` with
+  `rootMargin: '100% 0px'` — observed rather than computed from `scrollTop`, which
+  is `mpdf-003` Phase 7's rule reaching the one axis it had not been applied to.
+  The margin is a percentage so it needs no rebuilding when the window resizes.
+  **Measured: 3 pages at either end of the document, 5 in the middle.**
 
-  **The budget is 128 MiB**, derived rather than chosen, and **every byte figure
-  in this phase is a MiB** — the unit the probe reported in and the one the draft
-  left ambiguous. An A4 page costs `⌊W·r⌋ × ⌊1.4143·W·r⌋ × 4` bytes at pane width
-  `W` and ratio `r`, which is **5.83 MiB** at the default window's ~520 px pane at
-  `devicePixelRatio` 2 and **8.26 MiB** at OQ-7's 619 px — the second reproducing
-  the probe's measured 8.3 exactly. 128 MiB therefore renders the six-page
-  showcase whole at **35 MiB**, with nearly four times the room to spare; admits
-  **21** pages at the default window and **15** at OQ-7's; and refuses the 71-page
-  document, which needs **414 MiB** at the default window and **587 MiB** at
-  OQ-7's — the latter the figure the probe measured, and 4.6 times the budget.
+  **The order at open is layout, position, then band**, and the band pass **awaits
+  the observer's first delivery** rather than assuming it. `openPdf` today renders
+  and then scrolls, so an observer would report a band for the wrong place; all
+  three of OQ-2's cases know where the reader goes before any pixel is needed.
+  Round 2 held that this ordering could not execute because the delivery is
+  asynchronous. It is asynchronous and **it arrives in 0.4–6.8 ms, before the first
+  frame** — so the ordering works and the await is what makes it safe. That await
+  sits inside `renderPages`'s bracket, so `rendering > 0` holds across it and a
+  `settle` firing during an open cannot bump `renderSeq` out from under it.
 
-  **The band is the floor, and when the two conflict the floor wins.** The band is
-  the pages intersecting the scrollport plus one scrollport above and below. On a
-  very wide pane a single page can cost 50 MB and the band alone can exceed the
-  budget; a pane must draw what the reader is looking at, so the budget yields.
-  **Retained bytes are therefore `min(whole document, max(band, budget))`**, which
-  is the expression gate clause 2 evaluates from the tester's own geometry rather
-  than a literal that only holds at one window size — round 1's finding against
-  the draft's bare "100 MB", raised independently by two of the three lenses.
+  **One drainer, and the rest is checked inside its loop.** The observer's callback
+  records the wanted set and calls the drainer; the drainer refuses re-entry while
+  one pass is running. **That alone does nothing**, and it is the finding this
+  prototype exists for: a throw of 41 frames refused re-entry 39 times while the
+  *running* pass kept picking up newly-wanted pages, **43 renders for a document
+  the reader only scrolled past**. A scroll in motion is a gesture and a scroll at
+  rest is answered by a render — the same split `settle()` already makes for a
+  width — and **the check must be re-made before each page rather than at the top
+  of the pass**. With it: **5 renders.**
 
-  **The band is observed, not computed from `scrollTop`.** An
-  `IntersectionObserver` rooted on `#pages` with `rootMargin: '100% 0px'` reports
-  which pages are near. This is `mpdf-003` Phase 7's rule — *the pane's geometry is
-  observed and not inferred from the events believed to change it* — reaching the
-  one axis it had not been applied to; a scroll listener computing intersections by
-  hand is the same bug in a third place. **The margin is a percentage and not a
-  pixel count**, because a percentage resolves against the root rect's own height
-  and so needs no rebuilding when the window resizes, where a px margin would need
-  the `ResizeObserver` to rebuild the observer and nothing today does.
+  **The rest is 120 ms**, beside the width's 200 ms, and the number is chosen
+  rather than measured: it is short enough that a reader who stops sees the page
+  fill immediately and long enough that a flick renders nothing it passes. OQ-9
+  carries it, because what it costs is only visible to a reader in use.
 
-  **The order at open is layout, then position, then render**, and round 1 found
-  the draft silent on it with a bad consequence. `openPdf` today renders and *then*
-  scrolls, so an observer cannot report a band before the scroll exists — on a long
-  document every compile at the caret's page would swap in a blank wrapper and fill
-  it a frame later. All three of OQ-2's cases know where the reader goes before any
-  pixel is needed, so the sizing pass runs first, the scroll position is applied
-  second, and the band is rasterised third. **The reader's own page is never a
-  placeholder.**
+  **A page's canvas and both its layers are built detached and swapped in one
+  commit.** `drawLayers` *appends*, which is safe today only because Phase 2's
+  wrapper is new on every pass; under wrappers that persist, appending doubles both
+  layers on every re-render. So the three go into a fragment and
+  `wrapper.replaceChildren(fragment)` exchanges them together, which is where
+  Phase 1's *a canvas is swapped in only once it holds pixels* now lives.
+  **Measured over six enter-and-leave cycles: canvases, text layers and annotation
+  layers stay equal, and no page ever holds two of either.**
 
-  **How a band render composes with the shipped generation guard, named site by
-  site** — round 1's finding that the draft restructured this file's most
-  load-bearing function without naming it, where Phase 2 enumerated seven sites
-  across six functions. `renderSeq` keeps its meaning: **the generation of the
-  wanted document and geometry, not of an individual page.**
-
-  - **`drawPages`** splits into a sizing pass and a band pass. It keeps its `seq`
-    parameter, its per-await generation check, its prune and its closing
-    `unscale(); fitted = paneWidth`.
-  - **A scroll-triggered band render does not touch `renderSeq` and does not call
-    `cancelRenders`.** It is work *inside* the current generation, not a new one.
-    Bumping the sequence would abort a compile's sweep — after which `openPdf`
-    returns false, `drawnRevision` never advances and the compile is redone — and
-    calling `cancelRenders` would kill that sweep's page mid-render.
-  - **Each page's task still joins `inflight`**, so a real supersession — a new
-    document, a rest at a new width, `clear` — still cancels it through the one
-    path that already does that.
-  - **`renderPages` still brackets it**, so `rendering > 0` holds while a band
-    render is in flight and `rerender` defers to it and re-arms `settle`, which is
-    the behaviour Phase 1 argued into existence and this must not lose.
-  - **`openPdf`, `clear`, `rerender` and the `ResizeObserver` keep their shape**;
-    what changes is that `openPdf` orders the three passes above and `clear`
-    disconnects the observer.
-
-  **A page that has left the band before its render begins is skipped**, checked
-  at the top of each page's turn in the band pass — which is what stops a fast
-  scroll through seventy pages from enqueuing seventy renders.
-
-  **The wrapper list is reconciled, not replaced, and the observer's lifecycle
-  rides on that.** An `IntersectionObserver` holds a **strong** reference to every
-  target, so a wrapper dropped without `unobserve` is retained with its backing
-  store — a leak that gate clause 2's sum over `#pages` cannot see, which round 1
-  caught. So the sizing pass reuses the wrappers already there, `unobserve`s and
-  removes only the surplus when a document loses pages, and `clear` calls
-  `disconnect()`. **The canvas is what is swapped inside a stable wrapper**, which
-  is where Phase 1's *a canvas is swapped in only once it holds pixels* now lives,
-  unchanged in meaning.
-
-  **Leaving the band frees the backing store and takes both layers with it.**
+  **Release zeroes the canvas before detaching it, never after.**
   `canvas.width = canvas.height = 0` is what returns the memory — the vendored
-  bundle uses that same idiom in four places for the same purpose — and it happens
-  **before** the element is detached, never after, because a detached canvas is
-  what the gate cannot measure. The text layer and the annotation layer go with it.
+  bundle uses the same idiom for the same purpose — and a canvas detached first is
+  one no measurement over `#pages` can see.
 
-  **A placeholder is page-shaped, which needs a declaration.** `#pages .page`
-  has no background of its own today and the white a reader sees is the canvas's,
-  so an empty wrapper would render as `--ground` between two hairlines — a void
-  rather than a page. It gains a paper-coloured background, which a rendered
-  canvas then covers.
+  **The observer is disconnected by `clear` and by every open.** It holds strong
+  references to its targets, so a wrapper dropped without `unobserve` is retained
+  with its backing store. **The prototype reproduced this by omission**: an open
+  that left the previous document's observer attached had it release a page out of
+  the *next* document, which came back with five canvases where six were rendered.
 
-  **The gesture-and-rest split is untouched.** A width that is moving is answered
-  by CSS, the band is re-rendered at the rest by `rerender`, and no band render
-  runs during a gesture.
+  **The wrapper list is reconciled rather than replaced**, so a compile reuses the
+  wrappers already there, `unobserve`s and removes only the surplus when a document
+  loses pages.
 
-  **Two costs are recorded rather than hidden.** A selection cannot span pages
-  that are not rendered, so *select all* reaches the band and not the document,
-  and an out-of-band link is not clickable — `pdf.js`'s own viewer has the same
-  property, and it is §2's ledger that this falsifies, which the close-out
-  discharges. And a reader who jumps far sees a placeholder before they see the
-  page.
+  **The gesture-and-rest split for width is untouched**, and no band render runs
+  during one.
 
-- **Exit gate:** Run against **`samples/showcase/showcase.md`** (six pages,
-  `/Count 6`) **and `tests/fixtures/long.md`**, written by this phase's
-  `#[ignore]`d generator and compiling to **`/Count 71`** — both literals
-  independently checkable on the compiled page tree. Read in the Web Inspector on
-  a `cargo tauri dev` build. **Clauses keyed to the default window state so**,
-  because every byte figure in this document is geometry-dependent and round 1
-  found the draft's ceiling reproducible at no stated size.
+  **Two costs, recorded.** A selection cannot span pages that are not rendered, so
+  *select all* reaches the band and not the document, and an out-of-band link is not
+  clickable; `pdf.js`'s own viewer has the same property, and it is §2's ledger this
+  falsifies. And a reader who jumps far sees a placeholder first — **measured at
+  one observer delivery plus one page's render**, so a frame or two.
 
-  1. **At the default window the showcase is unchanged in every respect**, which
-     the budget rule makes true rather than assumed: six pages at that geometry
-     cost 35 MiB against a 128 MiB budget, so every page renders and **Phase
-     2's clauses 1, 2, 3, 5, 6, 7 and 8 and Phase 4's clause 1 re-run and pass
-     verbatim** — six text layers, six annotation layers, twenty links, gaps of
-     16 px, and the selection landing on the glyphs at three divider positions.
-     Clause 2 of Phase 2 is in this list because this phase creates a new moment
-     at which a layer is built, and clause 8 because a stale page is one of the
-     four states that ride on these elements.
-  2. **On `long.md` the retained backing store equals what the rule says.** Sum
-     `Σ canvas.width × canvas.height × 4` over `#pages` and compare it to
-     `min(71 × perPage, max(band, 128 MiB))`, `perPage` and `band` computed from
-     the tester's own `pages.clientWidth`, `pages.clientHeight` and
-     `devicePixelRatio` — **not against a literal**, because the quantity is
-     geometry-dependent and a literal is right at one window only. Take it at four
-     moments: on open, after scrolling to the last page, after scrolling back to
-     the first, and after a divider drag. Unbounded, the same document measures
-     414 MiB at the default window and 587 MiB at OQ-7's, so the comparison
-     discriminates by at least a factor of three wherever it is taken.
-  3. **No canvas is retained outside `#pages`.** In the Web Inspector's memory
-     timeline, open `long.md`, scroll from the first page to the last and back,
-     force a compile ten times, then `clear` by opening the showcase: **the canvas
-     allocation returns to the showcase's own footprint and does not step upward
-     per compile.** This is the clause that sees the leak clause 2 structurally
-     cannot — a wrapper dropped without `unobserve`, or a canvas detached before
-     it was zeroed.
-  4. **The scroll extent is right before anything beyond the band has rendered.**
-     With `pages.scrollHeight` logged from a `requestAnimationFrame` armed before
-     the open, its first value equals its value once every page has been visited.
-     A hand reading is too slow for this and the clause says so.
+- **Exit gate:** Run against **`samples/showcase/showcase.md`** (`/Count 6`) and
+  **`tests/fixtures/long.md`** (`/Count 71`), the latter written by this phase's
+  `#[ignore]`d generator, which **must emit at least one cross-reference from an
+  early page to a page beyond any band** — clause 7 cannot be written otherwise.
+  Read in the Web Inspector on a `cargo tauri dev` build **at the default window**,
+  which every byte figure below is keyed to. The expected values are the
+  prototype's readings; **where the app disagrees with one, the app is right and
+  the disagreement is the finding.**
+
+  1. **The showcase is unchanged in every respect.** Six pages cost 34.99 MiB
+     against a 128 MiB budget, so no observer is created and **Phase 2's clauses 1,
+     2, 3, 5, 6, 7 and 8 and Phase 4's clause 1 re-run and pass verbatim** — six
+     text layers, six annotation layers, twenty `<a>`, gaps of 16 px.
+  2. **`long.md` renders a band, and retention matches the rule.** Sum
+     `Σ canvas.width × canvas.height × 4` over `#pages`: **17.5 MiB at the top,
+     29.16 mid-document, 17.5 at the last page**, each within one page's worth of
+     the prototype's reading, against 414 MiB for the same document rendered whole.
+     Rendering everything and releasing down to the budget passes an inequality and
+     fails this, which is why the clause is an equality with a stated tolerance.
+  3. **The observer's first delivery arrives before the first frame.** Log the
+     interval from `observe()` to the first callback; the prototype reads 0.4–6.8 ms
+     in Chromium and **this clause exists because WKWebView is not Chromium**. It
+     fails above 16 ms, at which point the open must await it explicitly rather than
+     merely appear to.
+  4. **The extent is exact from layout alone.** `pages.scrollHeight` read once the
+     sizing pass resolves and again after every page has been visited: both 53,337
+     on `long.md` at the default window. A per-page append fails this; the one-shot
+     commit is what passes it.
   5. **The reader does not move when a placeholder fills in.** Park mid-document,
      record *(page, fraction)* with the app's own anchor arithmetic, wait for the
-     band, and read it again — **not `scrollTop`**, which WebKit holds constant
-     while content reflows above the reader and which therefore reports a pass in
-     its own failure case. Round 1's catch.
-  6. **OQ-2's three causes still land** where §3 resolves them, on `long.md`: an
-     open at page 1, a keystroke at the caret's page **with that page drawn and
-     not a placeholder**, and a divider drag and a window drag-resize at the same
-     page and fraction without drift during either.
-  7. **A jump to the last page draws it**, and a fast scroll does not thrash.
-     Scroll from page 1 to page 71 in one throw and stop: page 71 and its
-     neighbours are drawn, and the count of `render` tasks started over the throw
-     is under twice the band's page count — logged by a counter, because "does not
-     enqueue seventy renders" is otherwise unobservable.
-  8. **Phase 1's clauses 2 and 3 re-run on `long.md`, scoped**: no page clipped at
-     three divider positions with scrollbars shown, and the backing store exactly
-     `floor(cssWidth × devicePixelRatio)` **for every page that has one**.
-     **Phase 1's clause 5 is re-run only on the showcase**, where every page is
-     rendered — on `long.md` a blank page is this phase's design and that clause's
-     failure, and round 1 found the draft demanding both.
+     band, read it again — **not `scrollTop`**, which WebKit holds constant while
+     content reflows above the reader and which therefore passes in its own failure
+     case.
+  6. **A throw does not thrash.** Scroll from page 1 to page 71 across ~40 frames
+     and stop: **at most 8 renders start**, against 43 for an implementation whose
+     rest is checked only at the top of the pass. This is the clause the prototype
+     was built to produce and the one a plausible wrong implementation fails.
+  7. **A cross-reference into an unrendered page lands and does not throw.** Follow
+     the generator's long reference from page 1: the pane scrolls to the
+     destination's own coordinate, the page fills in behind it, and no error
+     reaches the console. An implementation that sets `.logical` and `.natural` in
+     the sizing pass and leaves `.view` to the render fails only here.
+  8. **The layers track the canvases on `long.md`, across release and re-entry.**
+     Scroll away and back six times: every page holding a canvas has exactly one
+     text layer and one annotation layer, every page without one has neither, and
+     the counts are equal. This is Phase 2's clause 7 re-run where a page is
+     actually released — the leak nothing else in the gate can see.
   9. **The sizing pass is measured, not assumed.** Time `getPage` across all 71
-     pages and report it; the phase asserts no figure, and this clause exists to
-     produce one. **It fails only if the total exceeds 1 s**, which is the point at
-     which a document would open slower than Phase 1 draws it whole.
-  10. `cargo test --workspace` passes unchanged. **The only `.rs` change is the
-      `#[ignore]`d generator**, which the suite does not run — the pattern
-      `core/tests/page_examples_test.rs:bless_the_generated_blocks` already
-      establishes.
+     pages; the prototype reads 3.4 ms and the clause fails above 250 ms, which is
+     the point at which it would be worth designing around rather than ignoring.
+  10. **A second Open and a `clear` leave nothing behind.** Open `long.md`, scroll
+      to the end, open the showcase: it renders whole, with six canvases and not
+      five. The prototype produced five here by leaving the previous document's
+      observer attached, which is exactly the leak this clause catches.
+  11. `cargo test --workspace` passes unchanged. **The only `.rs` change is the
+      `#[ignore]`d generator**, which the suite does not run.
 
 - **Close-out:** **§2's "the first two are rebuilt by Phase 2" takes a dated
-  `CORRECTED` note in place**, per §6.1's step-1 prose bullet and Phase 4's
-  precedent in the same section: they are rebuilt for a page in the band and for
-  no other, and a reader of that ledger must not be left thinking otherwise.
-  **OQ-1 is resolved by this phase** — it asked whether the pane renders every page
-  or the pages near the reader, and this is the answer — inline per §4, with the
-  note it already carries left standing.
+  `CORRECTED` note in place** — they are rebuilt for a page in the band and for no
+  other. **OQ-1 is resolved by this phase**, inline per §4, with the note it
+  already carries left standing. **OQ-9 is raised** for the 120 ms rest, which
+  wants a reader's judgement in use as `mpdf-003` OQ-6 did.
 
-  `rules/desktop-panes.md` gains the budget, the band, what a page outside it is,
-  and the observer that reports it; its `covers:` gains them. **The cap is named
-  now rather than deferred to the diff**, which round 1 asked for: the file sits at
-  374 of `max_lines: 375`, and it **rises to 420**. If the pass does not fit in
-  420, the geometry — the fit, the gesture and rest, the reader's place, the gap,
-  and now the band — leaves for `rules/desktop-geometry.md` with its own `sources`,
-  `covers` and index entry, and the panes file keeps the panes.
+  `rules/desktop-panes.md` gains the budget, the band, the placeholder and the
+  observer; its `covers:` gains them. The file sits at 374 of `max_lines: 375` and
+  **the cap rises to 420**; if the pass does not fit, the geometry — the fit, the
+  gesture and rest, the reader's place, the gap and now the band — leaves for
+  `rules/desktop-geometry.md` with its own `sources`, `covers` and index entry.
 
-  **The in-file comments are the third place the invariant lives**, and Phase 2's
-  close-out recorded that as a recurring miss: `drawPages`'s doc comment says
-  "Draw every page of the retained document", the `#pages .page` comment describes
-  a wrapper that always holds a raster, and both are corrected in the pass that
-  changes them. `rules/desktop.md` is untouched — nothing is vendored and its file
-  count does not move.
-
-  **`README.md` gains a sentence**, on Phase 2's argument rather than Phases 3 and
-  4's waiver: a reader who scrolls a long document fast and watches a page arrive
-  has met a behaviour. One push.
+  **The two in-file comments go false with the invariant**: `drawPages`'s doc
+  comment says "Draw every page of the retained document", and the `#pages .page`
+  comment describes a wrapper that always holds a raster. Phase 2's close-out
+  recorded this as a recurring miss, which is why it is written down here.
+  `rules/desktop.md` is untouched. **`README.md` gains a sentence**, on Phase 2's
+  argument: a reader who scrolls a long document and watches a page arrive has met
+  a behaviour. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
