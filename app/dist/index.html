@@ -332,12 +332,65 @@
         display: none;
       }
       /*
-        The canvases sit flush to the container's content box: no gutter
-        between pages and none at the sides. A phase that wants one changes
-        `mpdf-009` §2 and its exit gate with it.
+        **A page is separated from the next by 16 CSS pixels, and from the
+        container's sides by nothing.** The gap is chrome rather than content,
+        so it is a constant: `fit()` and `unscale()` keep writing canvas sizes
+        and know nothing about it, and a gap that grew with the page would read
+        as part of the document at a large scale and vanish at a small one.
+
+        **A length and not a ratio.** A percentage margin resolves against the
+        containing block's *width*, so it would track the divider — at a narrow
+        pane the same declaration renders 8–9 px. Sixteen reads as a separation
+        at a glance against a page some 535 px wide and costs only scroll
+        distance the reader was passing through anyway.
+
+        **`margin-top`, and the property is load-bearing.** `offsetTop`
+        includes an element's top margin, so the reader's anchor moves with the
+        gap; `#pages` is a block formatting context by virtue of `overflow-y:
+        scroll`, so the first canvas's margin does not collapse out of it; and
+        only top margins exist, so no pair of siblings collapses to less than
+        the constant.
+
+        **Nothing at the sides**, and not merely because the width is wanted
+        elsewhere: `clientWidth` *includes* padding, so `box()` would keep
+        reporting the padding-box width, the canvases would be sized past the
+        content box, and they would clip silently.
+
+        **The hairline is a shadow rather than a border, and rides the top and
+        bottom edges only.** A border under `content-box` would make each
+        canvas two pixels taller than the height `size()` wrote, and
+        `offsetHeight` — which the anchor is expressed in — would stop being the
+        raster's own height. A fit-to-width canvas is exactly the container's
+        own `clientWidth` wide, so there is no background beside a page to
+        separate it from, and an outset ring would spread outside `overflow-x:
+        hidden`'s clip either way. `inset` is not the escape: an inset shadow
+        paints beneath a replaced element's content, and a canvas is opaque
+        white where `pdf.js` filled it. `--edge` is named because a colourless
+        `box-shadow` resolves to `currentColor`, which inherits `--ink` — an
+        ink ring in light and a near-white one on white paper in dark.
       */
       #pages canvas {
         display: block;
+        margin-top: 16px;
+        box-shadow: 0 -1px 0 var(--edge), 0 1px 0 var(--edge);
+      }
+      /*
+        The gap below the last page. **A pseudo-element and not a bottom
+        margin**, because whether a scroll container's last child's bottom
+        margin reaches `scrollHeight` is engine-dependent and this ships on
+        WKWebView; `height` and not a margin of its own, so the 16 px is a real
+        in-flow border box rather than a margin that may not be counted.
+
+        **And not a spacer element**: `drawPages` indexes `pages.children[n -
+        1]` and prunes with `pages.lastElementChild.remove()`, and `fit`,
+        `unscale`, `readAnchor` and `applyAnchor` all assume every child is a
+        canvas carrying `.logical`. A pseudo-element is in the flow and not in
+        `children`, which is exactly the pair of properties wanted.
+      */
+      #pages::after {
+        content: '';
+        display: block;
+        height: 16px;
       }
       /*
         The mark a stale page wears. A page that belongs to older text than the
