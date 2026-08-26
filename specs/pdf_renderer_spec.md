@@ -472,6 +472,18 @@ bookmarks that nothing in this project currently reads.
   > expressed in megabytes, and the pane's width is a term in it. The question
   > stays open because what to *build* about it — near-page rendering, a released
   > backing store, a lower ratio off screen — is a phase and not a number.
+  >
+  > **What the open felt like, and what it was not.** Observed the same day: 5–7 s
+  > the first time that document opened and 1–2 s on every compile after.
+  > **Almost none of it is the pane, and the attribution nearly went the wrong
+  > way.** That document compiles in **7.12 s** through `target/debug/md2pdf` and
+  > **0.24 s** through `target/release/md2pdf` — Typst is some 30× slower
+  > unoptimised — against 0.71 s and 0.08 s for the showcase. So the first wait is
+  > the compiler in a debug build, which `cargo tauri dev` is and which every
+  > figure taken at that window therefore is; the 1–2 s after it is Typst's own
+  > incremental cache; and a release build would open this document in about
+  > 1.5 s, of which **the pane's 1.25 s is the larger half**. The renderer is what
+  > binds on time once the compiler is optimised, and memory binds before either.
 - ~~**OQ-2** — what happens to the reader's scroll position across a
   re-render?~~ **RESOLVED 2026-08-25, in round 1**, which found the draft
   calling it resolved in Phase 1 while leaving it `needs-input` here and
