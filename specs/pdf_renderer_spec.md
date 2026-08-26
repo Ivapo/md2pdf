@@ -25,6 +25,11 @@ phases:
     shipped: null
     cut: null
     by: null
+  - name: "Phase 4 — the pages are told apart"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes:
@@ -555,6 +560,117 @@ for.*
 
 - **Close-out:** `rules/desktop-panes.md`'s width section gains the modes. The
   README gains nothing — a zoom is not what the app is for. One push.
+
+### Phase 4 — the pages are told apart
+*Produces the observable: **yes**, and it is the weakest yes in this document,
+so it is argued rather than asserted. Nothing about the compiled PDF changes —
+this phase touches no byte of it. What changes is that the reader can see where
+one of its pages ends and the next begins. Phase 1 shipped, correctly by its
+own design, six A4 pages as one uninterrupted white strip, which is not what a
+six-page document looks like; the artifact was on screen and its structure was
+not. That is a property of the observable, not of the chrome around it.*
+
+**Appended after Phase 1 shipped**, per §6.1's ordered test worked in full:
+step 0 matches, because §2 decided this and the decision changes. Step 1 does
+**not** match — §2 names the vehicle itself, *"a phase that wants a gutter
+between pages must change this sentence and the gate with it"*, and nothing
+Phase 1 delivered is removed: the vendored renderer, the recomputed fit, the
+gesture-and-rest split and the reader's anchor all stand exactly as shipped.
+Step 2 matches and is the answer: `mpdf-009` owns how the pane draws the page,
+its rollup is `partial` rather than `abandoned`, so this is a phase appended to
+it. **It has its own review round and is not cleared to build until that
+converges** — `/review-spec specs/pdf_renderer_spec.md --phase 4`.
+
+**It may ship before Phases 2 and 3, and that is the expected order.** The
+array records dates, not a claim about sequence (§3). It is independent of the
+zoom modes, and taking it *before* Phase 2 is the cheaper order rather than
+merely a legal one: Phase 2 positions a text layer and an annotation layer from
+the same viewport each canvas rendered with, and doing that against a geometry
+that is about to gain a gap means positioning it twice.
+
+- **Scope:** **`app/dist/index.html`, and inside it the stylesheet alone.** No
+  `.rs` file, no change to the fit, no change to `renderPages`, no new
+  `pdf.js` API. If this phase's diff reaches the script, something has been
+  misunderstood.
+
+  **The separation is vertical only, and that is the decision this phase turns
+  on.** A gap between pages, and **no padding at the sides**. Side padding
+  would have to come out of `paneWidth`, which is the single expression Phase
+  1's exit gate exists to protect — `scale = paneWidth / naturalWidth`, read
+  from the scroll container's `clientWidth` — and every clause of that gate
+  would have to be re-argued against a `paneWidth` that is no longer the
+  content box. It would also spend the width fit-to-width exists to give: the
+  app's default preview is some 540 px, and an author writing to a page width
+  wants that width. **A vertical gap costs the reader nothing they want**, only
+  scroll distance they were passing through anyway.
+
+  **The gap is a constant in CSS pixels and does not scale with a gesture or a
+  zoom.** It is chrome and not content: a gap that grew with the page would
+  read as part of the document at a large scale and vanish at a small one.
+  `fit()` and `unscale()` therefore keep writing canvas sizes and know nothing
+  about it. The same constant sits above the first page and below the last, so
+  a page never butts against the pane's own edge, which reads as clipped.
+
+  **The page's edge is a `box-shadow` and not a `border`, and this is a
+  correctness matter rather than a taste one.** A canvas carries an explicit
+  CSS width written by `size()`. Under the default `content-box`, a 1 px border
+  makes the element two pixels wider than the pane and the excess is swallowed
+  by `overflow-x: hidden` — a clipped page, which is precisely what Phase 1's
+  gate clause 2 forbids. `border-box` would instead shrink the content area
+  inside a backing store sized for the full width, squashing the raster.
+  `box-shadow: 0 0 0 1px` costs no layout at all. It is wanted because in the
+  light palette a white page sits on `--ground` at `#f4f4f2`, a separation the
+  eye has to look for; in the dark palette the page is already unmistakable and
+  the hairline is harmless.
+
+  **The reader's anchor needs no change, and this was checked against the
+  shipped code rather than assumed.** `readAnchor` and `applyAnchor` are
+  written in terms of `offsetTop` and `offsetHeight`, and `offsetTop` already
+  includes an element's top margin — so page *k*'s offset moves with the gap
+  and the pair still round-trip. A reader parked *in* a gap yields a negative
+  fraction against the page below it, which `applyAnchor` reproduces exactly;
+  the quantity is a position, not a proportion, and nothing clamps it.
+
+- **Exit gate:** Run against **`samples/showcase/showcase.md`**, six pages
+  (`/Count 6` on the compiled page tree).
+
+  1. The six pages are **visibly separate** — a gap above the first, between
+     each pair, and below the last — and every page carries a hairline edge on
+     all four sides.
+  2. **Phase 1's gate clause 2 still passes verbatim**, with the machine set to
+     always-show scrollbars: no page clipped at its right edge at three divider
+     positions and after a window resize, and each canvas's CSS width still
+     equals the scroll container's `clientWidth`. This is the clause the
+     `box-shadow`-not-`border` decision exists for, and a phase that reached
+     for a border fails here rather than looking slightly wrong.
+  3. **Phase 1's gate clause 3 still passes verbatim**: the backing store is
+     `floor(cssWidth × devicePixelRatio)` to the device pixel, at each of those
+     positions. The gap must not have reached the fit.
+  4. **The reader's place still holds** across a divider drag and a window
+     drag-resize, taken from the same page and fraction as before the gesture —
+     Phase 1's clause 4, re-run because this phase changes what `offsetTop`
+     returns.
+  5. The gap is the same on screen at three divider widths — it did not scale.
+  6. Checked in **both palettes**: the hairline is visible in light and not
+     obtrusive in dark.
+  7. `cargo test --workspace` passes unchanged, **no `.rs` file edited**, which
+     is itself the check.
+
+  Clauses 1–6 are manual, per `mpdf-003` OQ-10.
+
+- **Close-out:** **§2's sentence "The canvases sit flush to that container's
+  content box" takes a dated `CORRECTED` note** — it is a decision statement
+  that stops being true, which §6.1's third rule sends to a note in place
+  rather than to a sibling file, and §2 itself named this phase as the thing
+  that would do it. The clause about `paneWidth` being the scroll container's
+  `clientWidth` is **not** corrected and must be left standing: this phase is
+  built so that it stays exactly true.
+
+  `rules/desktop-panes.md`'s "The page's width" loses "no gutter between pages
+  and none at the sides" and gains the gap, the hairline and the reason the
+  hairline is a shadow. **`README.md` gains nothing** — it describes what the
+  app does for a writer, and a reader who can see a page boundary has not
+  gained a feature to be told about. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
