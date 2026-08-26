@@ -349,11 +349,11 @@
 
         `overflow-y: scroll` rather than `auto`, so that width cannot move
         under the fit. With `auto` a document sitting just under the scroll
-        threshold gains a scrollbar the moment the canvases widen, the content
+        threshold gains a scrollbar the moment the pages widen, the content
         box narrows by the track, and the pages clip.
 
-        `position: relative` makes each canvas's `offsetTop` a measurement
-        from this box, which is what the reader's place is read against.
+        `position: relative` makes each page's `offsetTop` a measurement from
+        this box, which is what the reader's place is read against.
       */
       #pages {
         flex: 1;
@@ -367,9 +367,16 @@
         display: none;
       }
       /*
+        **A page is a wrapper and the canvas is inside it.** Three boxes have
+        to share one origin and one size — the raster, the text the reader
+        selects and the links they follow — and only an element holding all
+        three can be the child `#pages` indexes, replaces, prunes and measures
+        the reader's place against. So `.logical` sits here, `size()` writes
+        this box, and the canvas fills it.
+
         **A page is separated from the next by 16 CSS pixels, and from the
         container's sides by nothing.** The gap is chrome rather than content,
-        so it is a constant: `fit()` and `unscale()` keep writing canvas sizes
+        so it is a constant: `fit()` and `unscale()` keep writing page sizes
         and know nothing about it, and a gap that grew with the page would read
         as part of the document at a large scale and vanish at a small one.
 
@@ -382,32 +389,58 @@
         **`margin-top`, and the property is load-bearing.** `offsetTop`
         includes an element's top margin, so the reader's anchor moves with the
         gap; `#pages` is a block formatting context by virtue of `overflow-y:
-        scroll`, so the first canvas's margin does not collapse out of it; and
+        scroll`, so the first page's margin does not collapse out of it; and
         only top margins exist, so no pair of siblings collapses to less than
-        the constant.
+        the constant. **It is on the wrapper and not on the canvas**: a layer
+        pinned to the wrapper's origin would otherwise sit 16 px above the
+        glyphs it belongs to.
 
         **Nothing at the sides**, and not merely because the width is wanted
         elsewhere: `clientWidth` *includes* padding, so `box()` would keep
-        reporting the padding-box width, the canvases would be sized past the
+        reporting the padding-box width, the pages would be sized past the
         content box, and they would clip silently.
 
         **The hairline is a shadow rather than a border, and rides the top and
-        bottom edges only.** A border under `content-box` would make each
-        canvas two pixels taller than the height `size()` wrote, and
-        `offsetHeight` — which the anchor is expressed in — would stop being the
-        raster's own height. A fit-to-width canvas is exactly the container's
-        own `clientWidth` wide, so there is no background beside a page to
-        separate it from, and an outset ring would spread outside `overflow-x:
-        hidden`'s clip either way. `inset` is not the escape: an inset shadow
-        paints beneath a replaced element's content, and a canvas is opaque
-        white where `pdf.js` filled it. `--edge` is named because a colourless
+        bottom edges only.** A border under `content-box` would make each page
+        two pixels taller than the height `size()` wrote, and `offsetHeight` —
+        which the anchor is expressed in — would stop being the raster's own
+        height. A fit-to-width page is exactly the container's own
+        `clientWidth` wide, so there is no background beside one to separate it
+        from, and an outset ring would spread outside `overflow-x: hidden`'s
+        clip either way. `inset` is not the escape: an inset shadow paints
+        beneath a replaced element's content, and a canvas is opaque white
+        where `pdf.js` filled it. `--edge` is named because a colourless
         `box-shadow` resolves to `currentColor`, which inherits `--ink` — an
         ink ring in light and a near-white one on white paper in dark.
+
+        **Two of the three custom properties `pdf.js` reads live here.**
+        `setLayerDimensions` sizes a layer as `round(down,
+        var(--total-scale-factor) * <unscaled>px, var(--scale-round-x))`, and
+        the bundle defines none of the three — their definitions ship in
+        `pdf_viewer.css`, which this project does not vendor. Undefined, those
+        declarations are invalid at computed-value time, the layer takes no
+        size at all, and the text paints raw over the raster. `1px` is the
+        whole-CSS-pixel rule the pages already follow; `size()` writes the
+        third.
       */
-      #pages canvas {
+      #pages .page {
+        position: relative;
         display: block;
         margin-top: 16px;
         box-shadow: 0 -1px 0 var(--edge), 0 1px 0 var(--edge);
+        --scale-round-x: 1px;
+        --scale-round-y: 1px;
+      }
+      /*
+        **The canvas has no size of its own.** `.logical` moved to the wrapper
+        with Phase 2, so `size()` writes that box and nothing writes this one —
+        and a canvas with no CSS size lays out at its backing store, which at a
+        pixel ratio of 2 is a page twice the pane's width.
+      */
+      #pages canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
       }
       /*
         The gap below the last page. **A pseudo-element and not a bottom
@@ -419,7 +452,7 @@
         **And not a spacer element**: `drawPages` indexes `pages.children[n -
         1]` and prunes with `pages.lastElementChild.remove()`, and `fit`,
         `unscale`, `readAnchor` and `applyAnchor` all assume every child is a
-        canvas carrying `.logical`. A pseudo-element is in the flow and not in
+        page carrying `.logical`. A pseudo-element is in the flow and not in
         `children`, which is exactly the pair of properties wanted.
       */
       #pages::after {
@@ -428,9 +461,90 @@
         height: 16px;
       }
       /*
+        **The layers `pdf.js` builds and does not style.** The bundle exports
+        `TextLayer` and `AnnotationLayer`; what it does not carry is what its
+        own viewer wraps around them, and that is `pdf_viewer.css` rather than
+        a third module — so this is the app's business and these are the app's
+        rules.
+
+        **A text span is given percentage `left` and `top`, `--font-height` in
+        unscaled px, a `font-family`, and — when they apply — `--scale-x` and
+        `--rotate`. It is given no `position` and no `font-size`.** With no
+        rules of our own the percentages resolve against nothing, and the layer
+        renders as a wall of readable text over the raster. `--font-height` is
+        in the page's *unscaled* units, which is why the size is multiplied by
+        `--total-scale-factor` here.
+
+        **The glyphs a reader sees are the raster's**, so the text above them
+        is transparent. It is there to be selected and copied, not read.
+
+        **The rotation is applied before the horizontal scale**, which is the
+        order `pdf.js` writes and is not interchangeable: `--scale-x` corrects a
+        measured width against the width the PDF asked for, which is a length
+        along the text's own direction, so it belongs inside the rotation.
+
+        No `.markedContent` rule, and that is not an omission:
+        `streamTextContent()` leaves `includeMarkedContent` false, so those
+        wrapper spans never reach the layer at all.
+      */
+      .textLayer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
+        overflow: clip;
+        line-height: 1;
+        text-align: initial;
+        transform-origin: 0 0;
+        -webkit-text-size-adjust: none;
+        text-size-adjust: none;
+      }
+      .textLayer span,
+      .textLayer br {
+        position: absolute;
+        color: transparent;
+        white-space: pre;
+        cursor: text;
+        transform-origin: 0 0;
+        font-size: calc(var(--font-height) * var(--total-scale-factor));
+        transform: rotate(var(--rotate, 0deg)) scaleX(var(--scale-x, 1));
+      }
+
+      /*
+        The same shape one layer up. `_createContainer` builds a `<section>`
+        with a percentage box, a `z-index` and **no `position`**, and the `<a>`
+        it appends gets no box at all — so a link has nothing to click until
+        these rules give it one.
+
+        `pointer-events` is split deliberately: the layer covers the whole page
+        and must not take the pointer from the text under it, and each
+        annotation must.
+      */
+      .annotationLayer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 2;
+        transform-origin: 0 0;
+        pointer-events: none;
+      }
+      .annotationLayer section {
+        position: absolute;
+        margin: 0;
+        box-sizing: border-box;
+        pointer-events: auto;
+      }
+      .annotationLayer a {
+        position: absolute;
+        inset: 0;
+      }
+
+      /*
         The mark a stale page wears. A page that belongs to older text than the
         file on disk may not pass for the current one, and the error above it
-        says why. No word spells "stale" here: that chrome is Phase 3's.
+        says why. No word spells "stale" here: that chrome is Phase 3's. **A
+        stale page keeps its text selectable and its links live**: it is old,
+        not broken.
       */
       #pages.stale {
         opacity: 0.5;
@@ -876,11 +990,12 @@
       }
 
       /*
-        **The pane draws the page itself.** One canvas per page in a container
-        this app owns and scrolls, rasterised by `pdf.js` off the main thread.
-        Nothing here hands the bytes to a viewer somebody else wrote, so the
-        fit is an expression this file evaluates rather than a parameter a
-        loader reads once.
+        **The pane draws the page itself.** One page per page in a container
+        this app owns and scrolls: a canvas `pdf.js` rasterises off the main
+        thread, with the text it carries and the links it carries laid over
+        that raster. Nothing here hands the bytes to a viewer somebody else
+        wrote, so the fit is an expression this file evaluates rather than a
+        parameter a loader reads once.
 
         The bytes cross raw and **`getDocument` transfers the buffer to the
         worker**, so they cannot be read twice. The proxy is kept, because a
@@ -932,11 +1047,13 @@
         thing a transform over a committed raster could never do, and the
         report that produced this renderer.
 
-        **A canvas is swapped in only once it holds pixels.** Setting
+        **A page is swapped in only once it holds pixels.** Setting
         `canvas.width` clears it, so re-rendering in place would flash six
-        empty pages at every rest. The outgoing canvas at its gesture size and
+        empty pages at every rest. The outgoing page at its gesture size and
         the incoming one at its logical size occupy the same layout box, so
-        nothing jumps as they are exchanged.
+        nothing jumps as they are exchanged — and since Phase 2 the whole page
+        is what is exchanged, so its two layers ride the same rule and are
+        built while it is still detached.
       */
       async function renderPages(seq) {
         rendering++
@@ -958,7 +1075,7 @@
         const from = doc
 
         for (let n = 1; n <= from.numPages; n++) {
-          let canvas
+          let wrapper
           let task
           try {
             const page = await from.getPage(n)
@@ -980,12 +1097,26 @@
             const cssWidth = Math.round(viewport.width)
             const cssHeight = Math.round(viewport.height)
 
-            canvas = document.createElement('canvas')
+            wrapper = document.createElement('div')
+            wrapper.className = 'page'
+            // What the CSS size is written from, here and through a gesture.
+            wrapper.logical = { w: cssWidth, h: cssHeight }
+            /*
+              The page's own width in unscaled PDF units — 595.28 for A4 —
+              which is what `setLayerDimensions` multiplies and so what
+              `--total-scale-factor` is measured against. It is a property of
+              the document and does not move with the pane.
+            */
+            wrapper.natural = { w: viewport.rawDims.pageWidth }
+            // The viewport this page was drawn with, kept for the one thing
+            // that turns a PDF coordinate back into a CSS one: a destination.
+            wrapper.view = viewport
+            size(wrapper, 1)
+
+            const canvas = document.createElement('canvas')
             canvas.width = Math.floor(cssWidth * ratio)
             canvas.height = Math.floor(cssHeight * ratio)
-            // What the CSS size is written from, here and through a gesture.
-            canvas.logical = { w: cssWidth, h: cssHeight }
-            size(canvas, 1)
+            wrapper.append(canvas)
 
             task = page.render({
               canvas,
@@ -994,6 +1125,9 @@
             })
             inflight.add(task)
             await task.promise
+            if (seq !== renderSeq) return false
+
+            await drawLayers(wrapper, page, viewport, seq)
           } catch (problem) {
             /*
               Superseded — by another render, by a re-open, or by `clear`
@@ -1012,16 +1146,18 @@
           if (seq !== renderSeq) return false
 
           const old = pages.children[n - 1]
-          if (old) pages.replaceChild(canvas, old)
-          else pages.append(canvas)
+          if (old) pages.replaceChild(wrapper, old)
+          else pages.append(wrapper)
         }
 
-        // A document that lost pages leaves canvases behind it.
+        // A document that lost pages leaves them behind it — and a page
+        // removed here takes its two layers with it, because they are inside
+        // it. That is the second reason the wrapper is the child.
         while (pages.children.length > from.numPages) {
           pages.lastElementChild.remove()
         }
 
-        // Every canvas above was inserted at its logical size already; this is
+        // Every page above was inserted at its logical size already; this is
         // the function that owns the rule, and it is what closes a gesture.
         unscale()
         fitted = paneWidth
@@ -1033,6 +1169,148 @@
       function cancelRenders() {
         for (const task of inflight) task.cancel()
         inflight.clear()
+      }
+
+      /*
+        **The two things the raster is not.** A canvas is a picture of a page,
+        and a PDF carries two properties of the page itself that a picture
+        loses: the text is words rather than shapes, and a link is a live
+        annotation. `mpdf-003` chose a real PDF view for exactly those, and
+        Phase 1 took them away with it. These are them, put back.
+
+        **The text never comes off `getTextContent`, and this is the trap.**
+        That call is a `for await (… of readableStream)` over its own stream,
+        and `ReadableStream.prototype[Symbol.asyncIterator]` is `undefined` in
+        WKWebView — Chromium and Gecko implement async iteration of a readable
+        stream and WebKit does not. It rejects with "undefined is not a
+        function" from inside the minified bundle, which names nothing useful.
+        `TextLayer` takes the stream itself and drives it with `getReader()`
+        and `read()`, so handing it `streamTextContent()` obeys the rule by
+        construction rather than by remembering it.
+
+        **Only a link carrying an internal destination is rendered.** An
+        external one has no element, no `href` and nothing to activate, so
+        "refused" is something a second person can check in the inspector
+        rather than a behaviour observed not to happen. `mpdf-003` §1.1 is the
+        reason: no servers, no network, ever. The filter takes a third class
+        with it without needing a second rule — a markdown link *with text*
+        pointing at a figure is an ordinary link, reaches the PDF as a `/URI`,
+        and `pdf.js` refuses it on its protocol, so it arrives with `url` and
+        `dest` both null.
+
+        **The annotation layer takes the viewport unflipped** where the text
+        layer takes it as it was drawn. That is what `pdf.js`'s own viewer
+        does.
+
+        Both are built into the page while it is still detached, which is
+        available because nothing here reads layout: `TextLayer` measures
+        against an offscreen 2D context and `setLayerDimensions` only writes
+        styles. Every await re-checks that a newer render has not superseded
+        this one, exactly as the loop around it does.
+      */
+      async function drawLayers(wrapper, page, viewport, seq) {
+        const words = document.createElement('div')
+        words.className = 'textLayer'
+        wrapper.append(words)
+        await new pdfjs.TextLayer({
+          textContentSource: page.streamTextContent(),
+          container: words,
+          viewport
+        }).render()
+        if (seq !== renderSeq) return
+
+        const found = await page.getAnnotations({ intent: 'display' })
+        if (seq !== renderSeq) return
+
+        const links = document.createElement('div')
+        links.className = 'annotationLayer'
+        wrapper.append(links)
+        await new pdfjs.AnnotationLayer({
+          div: links,
+          page,
+          viewport: viewport.clone({ dontFlip: true }),
+          linkService
+        }).render({
+          annotations: found.filter(
+            (link) =>
+              link.annotationType === pdfjs.AnnotationType.LINK &&
+              link.dest != null
+          )
+        })
+      }
+
+      /*
+        What `pdf.js` asks a viewer for when it renders a link, written here
+        rather than ported. **`SimpleLinkService` is not in the bundle** — it
+        ships in `pdfjs-dist/web/pdf_viewer.mjs`, which this project does not
+        vendor — and its route puts a real `href` on the `<a>`, which in this
+        window would navigate the webview off `tauri://localhost` with nothing
+        to come back with.
+
+        **An internal destination is already something this app reaches**: it
+        scrolls the pages container, which is what the reader's anchor does.
+        So the element gets a fragment and the click is answered here.
+      */
+      const linkService = {
+        /*
+          Never followed — `pdf.js` binds a handler that returns false — and a
+          fragment rather than a URL so that a click which escaped that
+          handler still could not leave the origin. `getAnchorUrl` is for the
+          annotation kinds the filter above does not expect to see.
+        */
+        getDestinationHash: () => '#',
+        getAnchorUrl: () => '#',
+
+        async goToDestination(dest) {
+          const from = doc
+          if (from === null) return
+
+          const explicit =
+            typeof dest === 'string' ? await from.getDestination(dest) : dest
+          if (!Array.isArray(explicit) || explicit.length === 0) return
+
+          // A destination names its page by reference; some name it by index
+          // instead, and both are cheap to accept.
+          const index =
+            typeof explicit[0] === 'number'
+              ? explicit[0]
+              : await from.getPageIndex(explicit[0])
+          if (from !== doc) return // the document changed under the await
+
+          const wrapper = pages.children[index]
+          if (!wrapper) return
+
+          /*
+            **The destination's own coordinate, not the top of its page.** The
+            kinds that carry one carry it in PDF units up from the page's
+            bottom edge, so the page's own viewport is what turns it into the
+            CSS offset this container scrolls in. The ratio is 1 at rest and
+            the gesture's factor while a width is still moving, which is the
+            same quantity `readAnchor` works in and for the same reason.
+          */
+          const top = destinationTop(explicit)
+          const y =
+            top === null ? 0 : wrapper.view.convertToViewportPoint(0, top)[1]
+          const scale = wrapper.offsetHeight / wrapper.logical.h
+          pages.scrollTop = wrapper.offsetTop + Math.max(y, 0) * scale
+        }
+      }
+
+      // How far up its page a destination points, in the page's own units, or
+      // null for the kinds that name a whole page and nothing in it — and for
+      // an `XYZ` that leaves its coordinate open, which means "stay".
+      function destinationTop(dest) {
+        switch (dest[1]?.name) {
+          case 'XYZ':
+            return dest[3] ?? null
+          case 'FitH':
+          case 'FitBH':
+            return dest[2] ?? null
+          case 'FitR':
+            return dest[5] ?? null
+          default:
+            return null
+        }
       }
 
       /*
@@ -1090,11 +1368,13 @@
         off, and a cancelled render on a just-resized canvas leaves it cleared.
         The literal reading blanks the pane through the drag.
 
-        So while a width is changing the canvases are resized by CSS and the
-        browser resamples bitmaps it already has; when the width rests they are
-        re-rendered at the new scale, which is sharp because the raster is made
-        for that width. The cost of a step is a relayout and a repaint, far
-        under what a render costs, which is what the gesture exists to avoid.
+        So while a width is changing the pages are resized by CSS — their
+        canvases' backing stores untouched and the browser resampling bitmaps
+        it already has, their two layers following by one custom property; when
+        the width rests they are re-rendered at the new scale, which is sharp
+        because the raster is made for that width. The cost of a step is a
+        relayout and a repaint, far under what a render costs, which is what
+        the gesture exists to avoid.
 
         **The rest costs nothing it used to.** A redraw through WebKit could
         not restore the reader's place, because that view leaks none; a
@@ -1102,7 +1382,7 @@
         positions, so a rest is the same page at the same place in it, sharper.
       */
 
-      // The pane width the raster now in the canvases was made for. Null when
+      // The pane width the raster now on the pages was made for. Null when
       // nothing is drawn, which is the only time there is nothing to hold.
       let fitted = null
 
@@ -1111,7 +1391,7 @@
         render that ends it: a page index and a fraction within that page.
 
         **Not a pixel offset.** The scale changes with the width, so every
-        canvas's height and the container's `scrollHeight` change with it — an
+        page's height and the container's `scrollHeight` change with it — an
         offset held across that moves the reader, and clamps at the bottom when
         a pane widens and then narrows. An index and a fraction survive both a
         scale change and a document that gained a page.
@@ -1133,7 +1413,7 @@
       }
 
       /*
-        A canvas's CSS size is its logical size times the gesture's scale.
+        A page's CSS size is its logical size times the gesture's scale.
 
         **Which property carries a gesture is a decision and not a style.** A
         transform leaves layout alone, so the container's `scrollHeight` would
@@ -1141,36 +1421,55 @@
         a stale one. CSS width makes the extent track the gesture — and makes
         the backing store and the CSS size diverge during one and agree again
         at rest, so a rest that never came is visible.
+
+        **This is also the one place `--total-scale-factor` is written**, which
+        is what carries the two layers through a gesture without either of them
+        knowing one is happening: `fit`, `unscale` and the render all delegate
+        here, so a gesture and a rest agree by construction rather than by two
+        functions being kept in step. A gesture produces no new viewport, so a
+        layer positioned from the render's would have stayed at the old size
+        through every drag; one CSS property moves every layer box and every
+        span with the page.
+
+        **The value is absolute** — the box's current CSS width over the page's
+        *unscaled* width, `setLayerDimensions` multiplying `rawDims.pageWidth`
+        by it. Anything relative is wrong by the render scale at every width:
+        `1` would put a 595 px layer over a 535 px page, every span and every
+        annotation rect overhanging by 11%, most of it clipped rather than
+        visible. Written as the one expression it needs no case analysis, which
+        is the argument for writing it that way.
       */
-      function size(canvas, scale) {
-        canvas.style.width = `${canvas.logical.w * scale}px`
-        canvas.style.height = `${canvas.logical.h * scale}px`
+      function size(page, scale) {
+        const width = page.logical.w * scale
+        page.style.width = `${width}px`
+        page.style.height = `${page.logical.h * scale}px`
+        page.style.setProperty('--total-scale-factor', width / page.natural.w)
       }
 
       /*
-        **The factor is read per canvas, not once for the list.** They are
+        **The factor is read per page, not once for the list.** They are
         normally all made for the same width, so this is `width / fitted` for
         every one of them — but a compile landing mid-gesture swaps its pages
         in one at a time, and for those few frames the list holds rasters from
-        two different widths. Each canvas carries the width its own raster was
+        two different widths. Each page carries the width its own raster was
         made for, so each one lands at the container's width regardless.
       */
       function fit() {
         const width = box().width
         if (!(width > 0)) return
-        for (const canvas of pages.children) {
-          size(canvas, width / canvas.logical.w)
+        for (const page of pages.children) {
+          size(page, width / page.logical.w)
         }
       }
 
       /*
         Back to the size the raster was made for. It **writes** the logical
-        size rather than clearing it: a canvas with no CSS size lays out at its
-        backing store, which at a pixel ratio of 2 is a page twice the pane's
-        width.
+        size rather than clearing it: a page with no CSS size takes the
+        container's whole width and no height at all, and the canvas inside it,
+        being sized from that box, follows it to nothing.
       */
       function unscale() {
-        for (const canvas of pages.children) size(canvas, 1)
+        for (const page of pages.children) size(page, 1)
       }
 
       // Which page the container is scrolled into, and how far through it.
@@ -1206,8 +1505,8 @@
         no scale — and that is also where a gesture that never changed anything
         is closed.
 
-        Cosmetic, so it swallows what it fails at: the canvases keep the size
-        the gesture left them at, soft rather than absent, and the next compile
+        Cosmetic, so it swallows what it fails at: the pages keep the size the
+        gesture left them at, soft rather than absent, and the next compile
         re-renders them anyway.
       */
       async function rerender() {
@@ -1265,7 +1564,7 @@
         happened twice, and the next control added to the row would have
         reintroduced it. The rule outlived the renderer it was found in.
 
-        **The anchor is read before `fit` reflows.** The canvases still hold
+        **The anchor is read before `fit` reflows.** The pages still hold
         their pre-gesture CSS size at this point, so this is where the reader
         actually was. Resizing by CSS reflows, so a gesture of factor `s` maps
         a content offset `T` to `T·s` while the browser holds `scrollTop` at
