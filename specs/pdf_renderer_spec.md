@@ -16,7 +16,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 2 — the text it can select and the links it can follow"
-    reviewed: null
+    reviewed: 2026-08-25
     shipped: null
     cut: null
     by: null
@@ -297,7 +297,147 @@ function"* from inside the minified bundle, which names nothing useful.
 **`streamTextContent` read by hand works**, and is what Phase 2 uses: take
 `getReader()`, loop on `read()` until `done`, collect `value.items`. Measured on
 the same page: **190 items, the first of them `"Everything the Dialect
-Carries"`**, which is that page's own heading.
+Carries"`**, which is that page's own title block. Phase 2's round re-derived the
+whole profile — 190, 173, 165, 139, 234 and 67 items, 968 in all.
+
+**The loop above need not be written, and Phase 2's round found why.**
+`TextLayer`'s constructor takes a `textContentSource` and branches on
+`t instanceof ReadableStream`, driving it with `getReader()` and `read()` — no
+async iteration anywhere. Handing it `page.streamTextContent()` obeys this
+decision by construction. The hand-written loop stays recorded because it is
+what the rule *means*, and because a later reader reaching for
+`getTextContent` needs to find this section either way.
+
+### The layers need scaffolding the vendored files do not carry (decision, recorded)
+
+**This is the trap of Phase 2 as `getTextContent` is the trap of its text**,
+measured in that phase's round 1. `app/dist/pdfjs/` holds three files, and the
+bundle does export `TextLayer` and `AnnotationLayer` — the classes are there.
+What is not there is what pdf.js's own viewer wraps around them.
+
+- **`SimpleLinkService` is absent**: the string appears zero times in
+  `pdf.min.mjs`. `LinkAnnotationElement.render` reads `this.linkService` and
+  calls `addLinkAttributes`, `getDestinationHash` and `goToDestination` on it,
+  and the only implementation ships in `pdfjs-dist/web/pdf_viewer.mjs`, which
+  this project does not vendor.
+- **`--total-scale-factor`, `--scale-round-x` and `--scale-round-y` are read and
+  never defined.** `setLayerDimensions` writes
+  `round(down, var(--total-scale-factor) * <pageWidth>px, var(--scale-round-x))`,
+  and the annotation editor's own styles read the same property. Their
+  definitions live in `pdf_viewer.css`, which is not vendored either.
+  Undefined, those declarations are invalid at computed-value time, the layer
+  takes no size, and the text paints raw over the canvas instead of aligning to
+  it.
+
+**The answer is not a third vendored file**, and both gaps turn out to be this
+app's own business.
+
+**The app defines the three custom properties, and that is what carries a
+gesture.** The split this section already decided for the canvases arrives free:
+one property is written wherever a page's CSS box is written, and every layer box
+and every span position follows by CSS — no new viewport, no re-render. Phase 2's
+draft said the layers are "positioned from the same viewport the canvas rendered
+with, so a scale change moves them together", which is true of a **rest**, that
+being what produces a new viewport, and false of a **gesture**, which produces
+none — the layers would have stayed at the old size through every drag, which is
+the drift the sentence claimed to prevent. The custom property is what makes it
+true of both. `--scale-round-x` and `--scale-round-y` are `1px`, the same
+whole-CSS-pixel rule the canvases already follow.
+
+**`--total-scale-factor` is an absolute scale from unscaled PDF units, and round
+2 caught this document saying otherwise.** `setLayerDimensions` multiplies it by
+`viewport.rawDims.pageWidth`, and `rawDims` is built as `viewBox[2] - viewBox[0]`
+— **unscaled**, 595.28 for the showcase's A4, and independent of the render
+scale. So the value is always
+
+> `--total-scale-factor` = *the page's current CSS width* ÷ *its unscaled width*
+
+which is the render scale at rest and the render scale times *s* during a
+gesture. An earlier draft of this section said `fit()` writes it and `unscale()`
+"writes it back to `1`"; **`1` would put a 595 px layer over a 535 px page** on
+this app's own default geometry — an 11.3% offset on every span and every
+annotation rect, most of the overhang clipped rather than visible. The relative
+factor a gesture already computes is wrong by the same ratio at every width.
+Written as the one expression above it needs no case analysis, which is the
+argument for writing it that way.
+
+**The layers need a stylesheet, and "define three properties" is not one.** Round
+2's second catch, and this section had the mechanism right and its surface
+wrong — an earlier draft claimed the bundle's own span styles key off
+`--total-scale-factor`, and that property appears **zero times** inside
+`TextLayer`. What a text span actually receives inline is `left` and `top` as
+**percentages**, `--font-height` in unscaled px, `font-family`, and — when they
+apply — `--scale-x` and `--rotate`. **There is no `position` and no
+`font-size`**, so with no rules of the app's own the percentages resolve against
+nothing and the layer renders as a wall of readable text over the raster.
+`AnnotationElement._createContainer` is the same shape: percentage `left`, `top`,
+`width` and `height`, a `zIndex`, and no `position`; and the `<a>` it appends
+gets no box at all, so a link has nothing to click until the app gives it one.
+
+So the app both **defines** three properties and **consumes** three more, in a
+short stylesheet of its own — position and font-size for a span, the transform
+that `--scale-x` and `--rotate` feed, a box for the annotation's `<a>`, and
+transparent text, the glyphs a reader sees being the raster's. That stylesheet is
+part of what "no third vendored file" buys and is named here so it is not
+mistaken for an omission.
+
+**A gesture does not call `TextLayer.update()`.** It re-measures every span
+against a 2D context to recompute `--scale-x`, which is a unitless
+measured-to-target ratio that a pure scale change does not disturb. Reaching for
+it per gesture step would put a per-frame text measurement into the drag, which
+is the cost the whole gesture-versus-rest split exists to avoid.
+
+**The link service is hand-written rather than ported.** An internal destination
+is already something this app reaches — it scrolls the pages container, which is
+what its anchor path does — and `SimpleLinkService`'s own route sets an `href`
+on an `<a>`, which in this window navigates the webview off `tauri://localhost`
+with nothing to come back with.
+
+**The annotation layer takes `viewport.clone({ dontFlip: true })`** where the
+text layer takes the viewport itself. That is what pdf.js's viewer does, and it
+is recorded here for the same reason as everything else in this section.
+
+### An external link is not rendered at all (decision, recorded)
+
+Phase 2's draft said an external link "is refused rather than opened" and that
+the decision "belongs to a round". This is that round, and the answer is that
+**the annotation is filtered out before the layer is built**: only a link
+carrying an internal destination is rendered, so an external one has no element,
+no `href` and nothing to activate. "Refused" then means something a second
+person can check — there is no `<a>` in the DOM for it — rather than a behaviour
+observed not to happen.
+
+**The citation is `mpdf-003` §1.1, "No servers, no network. Ever."**, and not
+`mpdf-001` §2, which the draft named and which is about Typst package resolution
+and font discovery inside the compiler's `World`. Round 1 caught the
+substitution. The app also declares only `core:default` and the two dialogs, and
+carries no opener or shell plugin, so opening one was never a step away.
+
+**A third class exists that refuse-or-follow does not name**, and it sits in the
+sample the gate runs against. `samples/showcase/sections/text.md:56` writes
+`[this one](#fig:pipeline)` — a markdown link *with text*, which the dialect
+emits as an ordinary link rather than as a reference. **It reaches the PDF as a
+`/URI (#fig:pipeline)` annotation**, and pdf.js rejects it on its *protocol*
+rather than for lacking a destination: `_isValidProtocol` accepts `http`,
+`https`, `ftp`, `mailto` and `tel` and nothing else, so the annotation arrives
+with `url` and `dest` **both `null`**. It is on page 2, and it reads in the markdown almost exactly like a
+cross-reference. The filter above covers it without a second rule: no internal
+destination, no element.
+
+**Internal is broader than cross-references, which is worth knowing before the
+filter is written.** Re-derived from the compiled showcase: its twenty
+internal-destination links are seven cross-references *plus* the footnote marks
+and their return arrows and the citation marks into the reference list — so the
+filter delivers a document that is navigable in three ways, not one, and a gate
+that only exercised a cross-reference would under-report what shipped.
+
+**What it costs, recorded rather than hidden**: a reader who sees a link cannot
+follow it, and the page gives no sign of which links are live. The showcase
+carries five external annotations and they are **not all on one page** — four on
+page 2, being `https://typst.app` three ways and `mailto:you@example.com`, and a
+fifth inside a footnote that lands on page 5. Round 2 caught an enumeration here
+that named four and called them five. The sixth `/URI` above is on page 2 too.
+OQ-6 carries what could be given back.
 
 ### What is given up, stated plainly (decision, recorded)
 
@@ -382,6 +522,28 @@ bookmarks that nothing in this project currently reads.
   which is why they are omitted — but a document naming a CJK font, or an image
   in a format `pdf.js` decodes in wasm, would be the case that proves it wrong.
   The showcase does not exercise any of the three. *(deferred by evidence)*
+- **OQ-6** — what is given back to a reader who clicks a link out to the web?
+  Raised 2026-08-25 by Phase 2's round 1, which forced the refusal to be decided
+  rather than deferred. §2 settles that an external annotation is not rendered,
+  which is the honest floor and leaves the reader with no sign that the link was
+  ever live. Three shapes were named and none costed: mark the link visibly
+  inert, so the page distinguishes a dead link from ordinary text; copy the URL
+  to the clipboard on a click, which fetches nothing; or open the system browser,
+  which needs a Tauri opener plugin, a capability entry, and a decision against
+  `mpdf-003` §1.1 that this project has never wanted to make. **The first two are
+  compatible with every decision this project has recorded** and the third is
+  not, which is most of the answer. Design call. Blocks nothing. *(needs-input —
+  it wants a reader's judgement in use, as `mpdf-003` OQ-6 was answered)*
+- **OQ-7** — what do the two layers cost per render, and is there a page budget?
+  Raised 2026-08-25 by Phase 2's round 1. §2's whole gesture-versus-rest split is
+  keyed to a measured 94 ms for six pages, and Phase 2 adds main-thread DOM work
+  to that same path — the showcase carries 968 text items across its six pages,
+  and every rest and every compile rebuilds all of them. No figure exists because
+  none can be taken before the layers are built. **OQ-1 already names the shape
+  of the answer** — "a page budget rather than a document one" — and this is the
+  second question that will want it, which is the argument for measuring both at
+  once. Answerable from a probe once Phase 2 ships. Blocks nothing.
+  *(deferred by evidence)*
 
 ## 4. Implementation phases
 
@@ -532,34 +694,192 @@ this app instead of by WebKit, and fitted to the pane at every width.*
   thing it states — and `## Licence` gains the Apache-2.0 entry. One push.
 
 ### Phase 2 — the text it can select and the links it can follow
-*Produces the observable: **yes** — the same page, with the text selectable and
-the links live, which is what it was before Phase 1 took the frame away.*
+*Produces the observable: **yes**, and in the same weak class Phase 4 argued
+rather than asserted — the draft of this line asserted it, which round 1 caught.
+No byte of the compiled PDF changes here. What changes is that two things the PDF
+genuinely carries, its link annotations and its text, stop being unreachable to
+the reader looking at it. That is Phase 4's argument exactly: the artifact was on
+screen and a property of the artifact was not.*
 
-- **Scope:** A text layer and an annotation layer over each canvas.
+**Why it is worth building.** `mpdf-003` §2 chose to draw a real PDF for three
+named properties — a link stays a live annotation, the text stays selectable, and
+the accessibility tagging survives — and Phase 1 of this spec removed all three
+when it took WebKit's view away. §2's "What is given up" assigns the first two
+here. **So this closes a regression against six shipped phases rather than adding
+a capability**, which is a different argument from Phase 4's and a stronger one.
 
-  **The text comes off `streamTextContent` and never off `getTextContent`**,
-  per §2: the convenience call is broken in this webview and the stream read by
-  hand is not. This is the phase's one non-obvious fact and the reason it is
-  recorded in §2 rather than discovered here.
+- **Scope:** All of it is in **`app/dist/index.html`**. No `.rs` file is edited
+  and **nothing new is vendored** — §2's scaffolding decision is what makes that
+  hold.
 
-  **The layers are positioned from the same viewport the canvas rendered
-  with**, so a scale change moves them together or the selection drifts off the
-  glyphs.
+  **The DOM shape is the decision the rest depends on, and it moves a shipped
+  invariant.** `#pages`'s children are canvases today, and five shipped functions
+  turn on it — **seven sites across six functions**, the prune living inside
+  `drawPages`, and round 2's sweep found two that the first draft of this list
+  missed: `drawPages` indexes `pages.children[n - 1]`, calls
+  `pages.replaceChild`, and **prunes with
+  `while (pages.children.length > numPages) pages.lastElementChild.remove()`**;
+  `fit` and `unscale` iterate `pages.children` and dereference `canvas.logical`;
+  `readAnchor` and `applyAnchor` read `offsetTop` and `offsetHeight` off each
+  child; and **`size(canvas, scale)` is the only writer of a CSS box in the
+  file**, which `fit`, `unscale` and `drawPages` all delegate to. Phase 4 wrote
+  that invariant down as its own reason for a pseudo-element rather than a spacer
+  element, and this phase is where it is renegotiated deliberately rather than
+  tripped over.
 
-  Links are `pdf.js`'s annotation layer, filtered to the link subtype: an
-  internal destination scrolls the container, an external one is refused
-  rather than opened, per `mpdf-001` §2 — this app fetches nothing and opening
-  a browser is not fetching, but it is the same decision and belongs to a
-  round.
+  **A page becomes a positioned wrapper and the canvas moves inside it**, with
+  the text layer and the annotation layer beside it **inside that wrapper**:
+  `.logical` is set on the
+  wrapper, `replaceChild` swaps the wrapper, the prune removes a wrapper and
+  takes its layers with it, and the anchor reads the wrapper's box. **All seven
+  sites keep their shape and change only what they address.** Layers as
+  siblings of the canvas *inside `#pages`* break the indexing; layers inside a
+  wrapper that is not itself the child leave `replaceChild` swapping the wrapper
+  away and dropping them. Neither is available, and saying so is what stops an
+  implementer trying one.
 
-- **Exit gate:** Selecting a paragraph on a rendered page yields its text in
-  document order; a cross-reference in the showcase, which `mpdf-005` makes a
-  live link, scrolls the container to the figure it names. Both are manual —
-  `mpdf-003` OQ-10.
+  **`size()` sizes the wrapper, and the canvas inside it takes `width: 100%;
+  height: 100%`.** Round 2's catch: with `.logical` on the wrapper, `size()`
+  writes the wrapper's box and nothing writes the canvas's — and a canvas with no
+  CSS size lays out at its backing store, which at `devicePixelRatio` 2 is a page
+  twice the pane's width. That is the exact failure Phase 1 argued `unscale()`
+  into existence to prevent, arriving by a different door.
 
-- **Close-out:** `rules/desktop-panes.md` gains the two layers and the
-  `getTextContent` trap, which is the kind of fact a rule exists to hold. One
-  push.
+  **`size()` is also where `--total-scale-factor` is written**, as §2's one
+  expression — the box's new CSS width over the page's unscaled width, the
+  unscaled width being kept beside `.logical` at render. Writing it there rather
+  than in `fit()` and `unscale()` is what makes a gesture and a rest agree
+  without either knowing about the layers: both already delegate here.
+  **`--scale-round-x` and `--scale-round-y` are `1px`**, restated here rather
+  than left under the pointer to §2 because undefined they take the layer's size
+  down with them, which is clause 5's failure by a second route.
+
+  **The app's own stylesheet for the layers**, per §2 — a span's `position` and
+  `font-size`, the transform `--scale-x` and `--rotate` feed, a box for the
+  annotation's `<a>`, and transparent text. `pdf.js` sets none of these, and
+  without them the text layer renders as readable text over the raster.
+
+  **`margin-top: 16px` and the `var(--edge)` hairline move to the wrapper with
+  it.** `#pages canvas` still matches a canvas nested one deep, so left alone the
+  gap would move *inside* the page: a layer pinned to the wrapper's origin would
+  sit 16 px above its glyphs, and Phase 4's `offsetTop` arithmetic would read `0`
+  where it shipped `16`. Phase 4's clause is therefore re-run in this gate.
+
+  **The text comes off `streamTextContent` and never off `getTextContent`**, per
+  §2 — and `TextLayer`'s constructor takes the `ReadableStream` directly, so the
+  loop §2 describes is what the class already does and is not written again here.
+
+  **The annotation layer takes `viewport.clone({ dontFlip: true })`** where the
+  text layer takes the viewport itself, per §2.
+
+  **Only a link with an internal destination is rendered**, per §2's own
+  decision, and following one scrolls the pages container through the app's
+  existing anchor path rather than through a `linkService` port. The destination
+  is honoured at its own coordinate, not at the top of its page.
+
+  **The layers follow a gesture by `--total-scale-factor` and a rest by being
+  rebuilt**, per §2 — the property as `size()` writes it above, and a render
+  rebuilding both layers from the viewport it drew with.
+
+  **The layers are built while the wrapper is still detached, and swapped in
+  with it.** Phase 1 made "a canvas is swapped in only once it holds pixels" an
+  invariant against flashing empty pages, and under wrappers the whole wrapper is
+  what is swapped, so the invariant now covers the layers too. Nothing in the
+  layer path needs layout to do its work — `TextLayer` measures against an
+  offscreen 2D context and `setLayerDimensions` only writes styles — so building
+  detached is available, and it is chosen rather than left open. It puts the
+  `streamTextContent` await inside the per-page loop, where every await already
+  re-checks that a newer render has not superseded this one.
+
+  **The four states keep working**, named as Phase 1 named them because they ride
+  on the elements being changed. A **stale** page keeps its text selectable and
+  its links live under `report`'s dimming — it is old, not broken, and a reader
+  who can no longer select the page they are looking at would read it as the
+  latter. `fail` still reads whether a page is drawn. `clear`'s
+  `pages.replaceChildren()` disposes both layers with the wrappers, because they
+  are inside them — which is the second reason the wrapper is the child.
+
+  **A link followed inside `settle`'s 200 ms window is undone**, because
+  `rerender()` ends with `applyAnchor` on the anchor captured when the gesture
+  opened. **Accepted as it falls rather than fixed**: it is the same shape as the
+  compile-landing-mid-gesture case §3 resolves in prose, the window is 200 ms
+  wide, and the anchor exists to protect the reader's place against exactly the
+  gesture that is still open.
+
+- **Exit gate:** Run against **`samples/showcase/showcase.md`**, six pages.
+  Manual, per `mpdf-003` OQ-10, and every clause names what a second person
+  reads. Clauses 1, 3 and 4 are keyed to literals Phase 2's round 1 re-derived
+  from the compiled PDF and the vendored bundle.
+
+  1. **Select all of page 1 and copy it**: the text begins `Everything the
+     Dialect Carries`, which is that page's own title block. §2 measures the page
+     at 190 text items.
+  2. **The selection lands on the glyphs at three divider positions and after a
+     window drag-resize** — select one word mid-paragraph on page 4 and confirm
+     the highlight covers that word and not its neighbour. **This is the clause
+     `--total-scale-factor` exists for**: layers left at the render's viewport
+     drift through every drag and fail here, and pass clause 1.
+  3. **`[](#fig:halves)` on page 4 scrolls to Figure 4.2, which sits 458 pt down
+     an 841.89 pt page** — not to the top of page 4. Re-derived from the
+     compiled PDF during this phase's round; an implementation that scrolls to
+     the destination *page* rather than to its coordinate would pass by eye
+     without it. **And `[](#tab:kinds)` on page 4 scrolls back to Table 3.1 on
+     page 3**, the document's only cross-page reference and the one that proves
+     the destination's page was resolved at all. **Then one footnote mark and
+     one citation mark**, per §2 — the filter admits twenty internal links here
+     and only seven of them are cross-references.
+  4. **No external link is followable.** The Web Inspector shows no `<a>` for
+     any of page 2's four external annotations — `https://typst.app` three ways
+     and `mailto:you@example.com` — and a click where each sits does nothing and
+     navigates nowhere. **The fifth is inside a footnote and lands on page 5**,
+     which is the one a filter applied to the wrong page would miss; round 2
+     caught this clause looking for all five in one place. **The same at `[this one](#fig:pipeline)`, also page 2**,
+     which is §2's third class: it carries a `/URI` and is refused on protocol,
+     so an implementer who filters on "has a URL" rather than "has an internal
+     destination" renders it and fails only here.
+  5. **No text is painted over the canvas**: the glyphs the reader sees are the
+     raster's and the layer above them is invisible. **Both scaffolding failures
+     land here first** — a missing stylesheet renders the text layer as a wall of
+     readable text, and a `--total-scale-factor` left at `1` puts a 595 px layer
+     over a 535 px page — and both are easy to mistake for a font bug.
+  6. **Both layers are present on all six pages**, and the gap between pages
+     still measures 16 px — Phase 4's clause 1 re-run against the wrapper this
+     phase moves the margin to.
+  7. **A compile, a `clear` and a second Open each leave exactly one text layer
+     and one annotation layer per page**, counted in the Inspector. This is the
+     leak a layer parked outside the wrapper produces, and nothing else in the
+     gate sees it.
+  8. **A stale page's text still selects and its links still follow** — enter the
+     state by saving a document that will not compile.
+  9. `cargo test --workspace` passes unchanged — no `.rs` file is edited, which
+     is itself the check.
+
+- **Close-out:** `rules/desktop-panes.md` gains the two layers, §2's scaffolding
+  and the link filter. **It sits at 301 of its declared 310 body lines**, so this
+  close-out does the arithmetic `mpdf-003` Phase 7's did and reaches the other
+  answer: that file had a second subject to shed and this one does not — the
+  panes, their geometry, the gutter and now the layers are one subject — so the
+  cap rises in the same pass rather than the file being split again.
+  `rules/desktop.md` is untouched, and the reason is this phase's own "nothing
+  new is vendored": it counts the app's files and names the vendored renderer,
+  and neither moves.
+
+  **The stylesheet's own comments are a third place the invariant lives, and they
+  go false with it.** The block above `#pages canvas` says `margin-top` sits on
+  `#pages canvas`; `#pages::after`'s says `fit`, `unscale`, `readAnchor` and
+  `applyAnchor` "assume each child is a canvas carrying `.logical`"; and
+  `#pages`'s own says `position: relative` makes each *canvas's* `offsetTop` a
+  measurement from that box. All three are corrected in the pass that moves the
+  wrapper in. This is the miss Phase 4's round 1 caught against its own draft,
+  recurring one phase later, which is why it is written into the close-out rather
+  than left to be noticed.
+
+  **`README.md`'s app section gains a sentence, and that is argued rather than
+  waived.** Phases 3 and 4 each say "the README gains nothing" with a reason; the
+  reason does not carry here, because a reader who clicks a link in the pane and
+  sees nothing happen has met a behaviour, and behaviours are what that section
+  documents. It says the text selects, that a cross-reference jumps to what it
+  names, and that a link out to the web does not open. One push.
 
 ### Phase 3 — the zoom the reader owns
 *Produces the observable: **yes** — the same page at the size the reader asked

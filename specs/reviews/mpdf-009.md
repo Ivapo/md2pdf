@@ -2,6 +2,217 @@
 
 Append-only. Newest round first. One heading per round.
 
+### Round 4 — Phase 2 only — 2026-08-25 — same reviewer, resumed with the author's changelog — **READY (converged)**
+
+**Run past the loop's cap, which a person decided.** §7.6 escalates at three and
+round 3 escalated; the human was shown the outstanding blocker and authorized
+this round. Phase 1 of this spec took the same shape, and that precedent is why
+the option was offered rather than the date simply being set.
+
+All four of round 3's changes confirmed against the files, by `grep` rather than
+by reading the changelog: `writes it back to \`1\`` survives only inside §2's
+retraction, where it names a rejected draft, and `whole of the scaffolding`
+returns nothing.
+
+**The check this round existed for was the end-to-end read**, since round 3's
+finding was that the scope block was internally inconsistent while every
+individual statement had a correct counterpart somewhere else in the document.
+Read straight through as an implementer, in order, without consulting §2:
+**nothing in it contradicts anything else in it.** The reviewer walked the chain
+at every join — `.logical` on the wrapper, `size()` sizing the wrapper, the
+canvas at `width/height: 100%`, `size()` writing `--total-scale-factor` as
+CSS-width-over-unscaled-width, the gesture-and-rest paragraph deferring to that
+one write rather than restating a value, the margin and hairline on the wrapper
+so a canvas at `height: 100%` has none left to overflow with, `clear`'s
+`replaceChildren()` disposing layers with wrappers because they are inside them,
+and the build order putting the layers inside the same detached wrapper `size()`
+already sized. **The value round 3 found stated twice is now stated once, in the
+paragraph that owns it.**
+
+Three non-blocking refinements folded in on convergence. `--scale-round-x` and
+`--scale-round-y` are restated in the scope's `size()` paragraph rather than left
+under a pointer to §2 — undefined they take the layer's size down with them,
+which is clause 5's failure by a second route, and it was the one load-bearing
+value the block did not carry. "Five shipped functions" against "all seven sites"
+is resolved as **seven sites across six functions**, the prune living inside
+`drawPages`. And "the text layer and the annotation layer as its two siblings"
+becomes "beside it **inside that wrapper**", the rejected shape in the next
+sentence having used the same noun with only a location clause to tell them
+apart.
+
+**Phase 2 `reviewed: 2026-08-25`.** `status` was already `accepted`. Nothing
+about Phase 3 was judged in any of these rounds, and its `reviewed` stays `null`.
+
+**What the four rounds cost and bought, since this spec now has two phases that
+went to four.** Eight blocking findings in all: six in round 1, two in round 2 —
+**both of which the round-1 fix introduced** — one in round 3, which was the
+round-2 fix failing to delete what it superseded, and none in round 4. The two
+that the fixes introduced are the loop's own §3 warning observed twice in one
+episode, and neither would have been caught by a fresh reviewer: round 2's
+needed someone who knew what the fix had claimed, and round 3's needed someone
+who knew which sentence the fix was supposed to have removed. **That is the
+argument for §7.4's same-agent resume, measured rather than asserted.**
+
+### Round 3 — Phase 2 only — 2026-08-25 — same reviewer, resumed with the author's changelog — **NOT READY (escalated at the cap)**
+
+**The design converged this round and the text did not.** Both round-2 blockers
+confirmed resolved against the files, and the reviewer re-derived the `size()`
+decision at all three of its call sites rather than taking the changelog's word:
+`drawPages` establishes `.logical` and the unscaled width on the two lines above
+its `size(wrapper, 1)`, so the property is written and not read; `fit`'s
+`size(wrapper, width / logical.w)` reduces to `width / natural.w`, which also
+survives the mid-gesture mixed-raster case the per-canvas factor exists for; and
+`unscale`'s `size(wrapper, 1)` yields `logical.w / natural.w`, the render scale —
+"precisely the value that is **not** `1`".
+
+One blocking finding, and it is an author's failure to delete rather than a
+design fault: **the round-2 paragraph survived verbatim inside Phase 2's scope**,
+still saying `unscale()` "writes it back to `1`" and that the three properties
+are "the whole of the scaffolding", four paragraphs below the corrected `size()`
+text and three below the stylesheet requirement. §2 retracted both, but phrased
+the retraction as "an earlier draft of this section said…", which points at §2's
+history rather than at a live sentence in the phase — and §3 makes the phase
+block the unit of a plan-mode pass, so an implementer planning from it had to
+choose between two adjacent instructions, one producing a 595 px layer over a
+535 px page and the other building no stylesheet. Fixed by replacing the
+paragraph.
+
+Two non-blocking folded in with it: §2's own bullet still asserted the claim §2
+later calls false — that the bundle's inline span styles key off
+`--total-scale-factor` — and the clause is deleted rather than annotated, Phase 2
+not having shipped, so this is §5's consistency sweep and not §6.1's `CORRECTED`
+discipline; "the five sites" is now seven and said so in one place while still
+reading "five" in the next paragraph; and the build order is decided rather than
+left open — **the layers are built while the wrapper is detached and swapped in
+with it**, which extends Phase 1's "a canvas is swapped in only once it holds
+pixels" to cover them, and is available because nothing in the layer path needs
+layout.
+
+**Escalated at the loop's cap of three rounds**, per §7.6. Nothing is set: no
+`reviewed` date, `status` unchanged. What is outstanding is the confirmation
+round, not a design question — every literal the gate is keyed to reproduced
+again this round.
+
+### Round 2 — Phase 2 only — 2026-08-25 — same reviewer, resumed with the author's changelog — **NOT READY**
+
+All six round-1 blockers confirmed resolved. **Two new ones, and both were
+introduced by the round-1 fix** — the failure mode §3 of the loop names, caught
+in the round that exists to catch it.
+
+1. **`--total-scale-factor` is an absolute scale and the fix had written it as a
+   relative one.** `PageViewport`'s `rawDims.pageWidth` is `viewBox[2] -
+   viewBox[0]` — unscaled, 595.28 for A4, independent of the render scale — and
+   `setLayerDimensions` multiplies the property by it. So "`unscale()` writes it
+   back to `1`" puts a 595 px layer over a 535 px page on the app's own default
+   geometry: an 11.3% offset on every span and every annotation rect, with most
+   of the overhang clipped by `overflow-x: hidden` rather than visible. §2 now
+   carries the value as one expression, current CSS width over unscaled width.
+2. **The layers have no stylesheet, and defining three properties is not one.**
+   A text span receives `left` and `top` as percentages, `--font-height` in
+   unscaled px, `font-family`, and `--scale-x`/`--rotate` where they apply —
+   **no `position` and no `font-size`** — and `_createContainer` is the same
+   shape with no box for its `<a>`. Without app-written rules the text layer
+   renders as a wall of readable text over the raster.
+
+**The reviewer corrected the author on the record**, and was right: the
+changelog claimed the bundle's own span styles key off `--total-scale-factor`,
+and that property appears **zero times** inside the `TextLayer` class body — the
+`calc()` hits are annotation-editor code. Verified independently before the fix
+was written.
+
+The round's sweep also found two sites the author's list had missed, and the
+second is the catch of the round: `drawPages`' prune, and **`size()`, the only
+writer of a CSS box in the file**, which `fit`, `unscale` and `drawPages` all
+delegate to. With `.logical` on the wrapper, `size()` sizes the wrapper and
+nothing sizes the canvas inside it — a canvas with no CSS size lays out at its
+backing store, which at `devicePixelRatio` 2 is a page twice the pane's width,
+and is the exact failure Phase 1 argued `unscale()` into existence to prevent,
+arriving by a different door. `size()` is now both the property's home and the
+sixth named site.
+
+Non-blocking folded in: gate clause 4 looked for all five external annotations
+on page 2 where **four** are there and the fifth is inside a footnote on page 5 —
+the one a filter applied to the wrong page would miss, and §2's enumeration had
+the same off-by-one; `_isValidProtocol` accepts five protocols, `tel:` included,
+where §2 listed four; the three stylesheet comments in `app/dist/index.html`
+(`#pages canvas`, `#pages::after`, `#pages`) go false with the wrapper and are
+written into the close-out, this being Phase 4's round-1 miss recurring one phase
+later; and `TextLayer.update()` is recorded as *not* called per gesture step,
+`--scale-x` being a measured-to-target ratio a pure scale change does not
+disturb.
+
+**On the observable, the reviewer withdrew its own round-1 point**: "this closes
+a regression against six shipped phases rather than adding a capability" is a
+stronger argument than Phase 4's, not a weaker one, so the phase stays **yes** in
+Phase 4's argued class. The round-1 finding had been about the flat assertion,
+which is gone.
+
+### Round 1 — Phase 2 only — 2026-08-25 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode): yes.** Phase 2 restores two of the three properties
+`mpdf-003` §2 chose to draw a real PDF for — live link annotations and selectable
+text — which Phase 1 of this spec removed with WebKit's view; the page has
+neither today. It closes a regression against six shipped phases rather than
+adding a capability, which is the stronger form of the argument, and the one fact
+that would trip an implementer is already banked in §2 as a measurement.
+
+One generalist rather than a panel: Phase 2's blast radius is one file, which is
+where `mpdf-003` Phase 8's round drew the same line.
+
+**Six blocking findings, all accepted, none rejected.**
+
+1. The phase named **no file, no function and no DOM shape** — against §3's "each
+   phase names the files and functions to touch" — and the shape it left unnamed
+   collides with the `#pages` children invariant Phase 4 shipped. Five functions
+   index `pages.children` or dereference `canvas.logical`; layers as siblings
+   break the indexing, layers under a non-child wrapper get dropped by
+   `replaceChild`.
+2. A per-page wrapper **silently breaks Phase 4's gap arithmetic**: `#pages
+   canvas` still matches a canvas nested one deep, so the 16 px would move inside
+   the page and Phase 4's `offsetTop` expression would read `0` where it shipped
+   `16`.
+3. **"The layers are positioned from the same viewport the canvas rendered with"
+   is false for a gesture** — the case §2 spends its longest decision on. A rest
+   makes a new viewport; `fit()` makes none, so the layers would drift through
+   every drag, which is the outcome the sentence claimed to prevent.
+4. **The phase assumed layer machinery `app/dist/pdfjs/` does not contain.**
+   `SimpleLinkService` is zero hits in the bundle, and `--total-scale-factor`,
+   `--scale-round-x` and `--scale-round-y` are read by `setLayerDimensions` and
+   defined only in an unvendored `pdf_viewer.css`.
+5. **The external-link rule was undecided by the phase's own words** — "belongs
+   to a round" — unspecified as a mechanism, and cited `mpdf-001` §2, which is
+   about Typst package resolution and font discovery inside the compiler's
+   `World` rather than about following a hyperlink.
+6. **The exit gate was "it runs"**: no document, no page, no expected string, no
+   instrument, and no clause at all for the external-link rule.
+
+**What the round measured, so a later one need not.** `/Count 6`; page 1 at
+**190** text items beginning `"Everything the Dialect Carries"`, the full profile
+190/173/165/139/234/67 for 968 in all; `getOutline` at six entries; and
+`getTextContent`'s trap grounded in the vendored bytes as `for await (… of …)`
+over the stream.
+
+**The author sharpened one finding past the reviewer's own statement**, and it
+became the clause an implementer fails first: `sections/text.md:56`'s
+`[this one](#fig:pipeline)` reaches the PDF as a **`/URI (#fig:pipeline)`
+annotation refused on protocol**, not as a destination-less one — so a filter
+written as "has no URL" renders it. The author's parse of the compiled PDF also
+found that **twenty** internal destinations exist where the gate had assumed
+cross-references: seven are, and the rest are footnote marks, their return
+arrows and citation marks, so the phase delivers a document navigable three ways.
+Re-derived with it: `[](#fig:halves)` → Figure 4.2 at **458 pt down an 841.89 pt
+page 4**, and `[](#tab:kinds)` → Table 3.1 on **page 3**, the document's only
+cross-page reference.
+
+Two new open questions came out of the round: **OQ-6**, what a reader gets back
+for a link the app refuses to open, and **OQ-7**, what the layers cost per render,
+pointed at OQ-1's page budget.
+
+**One partial correction to the reviewer, changing no fix:** Phase 4 was said to
+be "explicitly forbidden to touch" `fit`/`unscale`/`size`. Phase 4's scope says
+"the stylesheet alone" about *itself*, which is a statement of its own scope and
+not a prohibition binding Phase 2. The substance stood and Phase 2 now says so.
+
 ### Round 3 — Phase 4 only — 2026-08-25 — panel of two, resumed — **READY (converged)**
 
 Both lenses READY, zero blocking, within the three-round cap. Phase 4's
