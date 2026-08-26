@@ -31,7 +31,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 5 — the pane holds what the reader is near"
-    reviewed: null
+    reviewed: 2026-08-26
     shipped: null
     cut: null
     by: null

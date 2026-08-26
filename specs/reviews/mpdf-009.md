@@ -2,6 +2,69 @@
 
 Append-only. Newest round first. One heading per round.
 
+### Round 5 — Phase 5 only — 2026-08-26 — one reviewer, one question, resumed twice — **READY (converged)**
+
+**Scoped to a single question by the human's direction, past the cap:** does the
+scope describe the program that was observed working? The reference was the
+prototype harness itself — `proto/v2.html` in the session's scratchpad, one HTML
+file over the vendored `pdf.js`, reproducible from the log in this record — and
+the reviewer walked every rule in the scope against it line by line, classifying
+each as confirmed, diverging, untestable there, or spec-only.
+
+**The transcription held everywhere but one paragraph.** Rules 1, 3, 4, the
+sweep, the band, the open ordering, the build-and-release idiom, the
+reconciliation and both freshness terms: confirmed against the program. All
+three of round 4's catches: confirmed genuinely fixed. Three blockers, all in or
+beside the observer's lifecycle:
+
+1. **"Established on every pass" meant a drain pass in the section's own
+   vocabulary** — an establish/deliver loop that renders nothing — and the
+   justification beside it ("the existing observer is watching exactly the right
+   elements") argued against the rule itself. Resolved by naming the moment:
+   re-established after the sizing pass, at an open and at every width rest.
+   **The round's real find rode on this one: the harness has the bug the rule
+   fixes.** It re-establishes only at a mode crossing, so a band-mode recompile
+   that *grew* the document reuses an observer whose targets do not include the
+   new trailing wrappers — a page the author just wrote can never render. The
+   spec now states the divergence as deliberate, with that bug as the reason.
+2. **The frame-wait between `observe()` and the forced drain was stated for the
+   open only**; the harness performs it on the width rest too, and without it the
+   rest's forced pass runs against a just-cleared wanted set.
+3. **Rule 6 claimed observed provenance for a catch the harness observably
+   lacks** — its drain path has no error handling at all. Restated as the app
+   composition rule it is, on `rerender`'s own "cosmetic, so it swallows what it
+   fails at".
+
+**§7.4's same-agent resume worked for the first time in this phase's five
+rounds**, the reviewer living in the session that spawned it — and it did what
+the record said it would: the re-review verified every fold-in claim against the
+files, caught the fold-in's own newly-introduced blocker (the `### The rest of
+the mechanism` heading flattened to column 0, silently truncating Phase 5's
+block boundary — §7.3's fix-introduces-a-blocker pattern, one last time), and
+confirmed the three-line repair at `6f1ded6` with nothing else disturbed.
+
+**Two rejections, recorded**: the `rootMargin` rationale wording (imprecise, not
+wrong, and the re-establishment rule makes the rebuild explicit a paragraph
+down) and the identity-mutation note (the finding's own text says no observable
+differs). Two further non-blockers folded with the repair: `made`/`released`
+regained their antecedent, and an unverifiable order-of-discovery claim was
+dropped rather than defended.
+
+**Converged at zero blocking. Phase 5 `reviewed: 2026-08-26`.**
+
+**What the episode cost, for the record.** Five rounds, two prototypes,
+sixty-one blocking findings — fifteen, eight, eighteen, sixteen, three plus one —
+against Phase 2's eight across four rounds. The shape: rounds 1–2 failed the
+design, round 3 failed the gate, rounds 4–5 failed the distance between the
+document and the program, and each round's fixes seeded part of the next round's
+findings, five times in five rounds. The two findings no reviewer produced —
+width-stale canvases after a rest, and the grown-recompile observer gap — both
+came from the harness, one by measurement and one by the reviewer reading its
+code. The methodology note this episode earns is the one round 2 wrote early:
+a phase whose subject is concurrent, observable behaviour is designed in a
+running program and *transcribed* into the spec, and the transcription is its
+own review surface — rounds 4 and 5 existed entirely to check it.
+
 ### Round 4 — Phase 5 only — 2026-08-26 — panel of two, fresh, past the cap by the human's call — **NOT READY (folded in; the phase is not cleared)**
 
 **Past §7.6's cap of three, authorised by the human**, as Phases 1 and 2 of this
