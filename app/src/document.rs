@@ -614,6 +614,78 @@ mod tests {
         );
     }
 
+    /// The panel's list is the master's own, in the order the master reads it.
+    ///
+    /// [`every_file_a_master_names_is_read_once_across_both_passes`] already
+    /// pins that order — as the *prefix of `assets`*, which is a list of paths
+    /// to watch and not a list of parts to draw. This asserts the field the
+    /// panel actually reads, so the two are checked to be one answer arriving
+    /// twice rather than one assumed from the other. It is a plain `Vec` where
+    /// `assets` is an `Option`, and the type is the claim: a panel draws what
+    /// the text names, where `assets`' `None` says something about a watch
+    /// filter that a panel cannot draw.
+    #[test]
+    fn the_sections_a_master_names_are_its_parts_in_master_order() {
+        let dir = fixture("");
+        let markdown = std::fs::read_to_string(fixture("multi_file.md")).unwrap();
+        let rendered = render(&dir, &markdown);
+
+        assert!(rendered.pdf.is_ok(), "{:?}", rendered.pdf.as_ref().err());
+        assert_eq!(
+            rendered.sections,
+            [
+                "sections/introduction.md",
+                "sections/method.md",
+                "sections/results.md",
+            ]
+        );
+    }
+
+    /// A master whose sections are not on the disk still names them.
+    ///
+    /// The list is read off the *text* and never off the read, which is what
+    /// lets the panel name the parts of a document that will not compile —
+    /// `md2pdf_core::section_paths` walks the markers and the asset walk only
+    /// borrows the result. True by construction today and asserted here because
+    /// an implementer who took the list from `read_sections_with`'s answer
+    /// instead would pass every other case in this module and empty the panel
+    /// exactly when the author most needs to see which file is missing.
+    #[test]
+    fn a_master_whose_sections_are_missing_still_names_them() {
+        let dir = scratch_dir("sections-absent-still-named");
+        let markdown = std::fs::read_to_string(fixture("multi_file.md")).unwrap();
+        let rendered = render(&dir, &markdown);
+
+        assert!(rendered.pdf.is_err(), "no section is on disk here");
+        assert_eq!(
+            rendered.sections,
+            [
+                "sections/introduction.md",
+                "sections/method.md",
+                "sections/results.md",
+            ]
+        );
+    }
+
+    /// A document that names no section names none, and that is an answer.
+    ///
+    /// `section_paths` cannot fail — its `Result` is symmetry with the two
+    /// shopping lists, not a channel that carries anything — so an empty list
+    /// is never a failure to answer and the panel is right to draw nothing.
+    /// [`a_single_file_document_keeps_its_anchors_and_its_bytes`] asserts the
+    /// `assets` analogue of this and is deliberately not the same claim: that
+    /// list is `Some(Vec::new())`, an answer wrapped in the channel that can
+    /// also say *no answer*, and this one has no such wrapper to be read
+    /// through.
+    #[test]
+    fn a_document_that_names_no_section_has_no_parts() {
+        let markdown = std::fs::read_to_string(fixture("basic.md")).unwrap();
+        let rendered = render(&fixture(""), &markdown);
+
+        assert!(rendered.pdf.is_ok(), "{:?}", rendered.pdf.as_ref().err());
+        assert!(rendered.sections.is_empty());
+    }
+
     /// Only the headings written in the file the pane holds become anchors.
     ///
     /// Both directions, because an unasserted absence is what

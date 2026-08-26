@@ -1357,4 +1357,53 @@ mod tests {
             status.error
         );
     }
+
+    /// A master that stops naming sections stops having parts.
+    ///
+    /// **This belongs at `Preview::compile` and nowhere else.**
+    /// `document::render_with` is stateless, so at *that* surface a master
+    /// whose markers were just deleted and a document that never had one are
+    /// the same call, and the assertion would hold however this list were kept.
+    /// It is [`Preview::sections`] — retained across compiles, replaced
+    /// unconditionally — that the question was ever about: under a rule that
+    /// kept the last non-empty answer, a master whose markers are genuinely
+    /// deleted would hold a phantom panel for the life of the open document,
+    /// because no later compile could restore an empty list.
+    ///
+    /// `master` rides along, being the other field the panel reads and the
+    /// other one nothing else asserts. It is a file *name* and not a path,
+    /// because the panel lists one document's parts and where that document
+    /// sits is the window title's business.
+    #[test]
+    fn a_master_that_stops_naming_sections_loses_its_parts() {
+        let dir = scratch_dir("parts-deleted");
+        std::fs::create_dir_all(dir.join("sections")).unwrap();
+        std::fs::write(dir.join("sections/one.md"), "# One\n\nText.\n").unwrap();
+        std::fs::write(dir.join("sections/two.md"), "# Two\n\nText.\n").unwrap();
+        let document = dir.join("report.md");
+        std::fs::write(&document, "[](sections/one.md)\n\n[](sections/two.md)\n").unwrap();
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1, "opening compiles once");
+
+        let opened = session.preview().status();
+        assert_eq!(opened.master.as_deref(), Some("report.md"));
+        assert_eq!(opened.sections, ["sections/one.md", "sections/two.md"]);
+
+        session.edit("# A master that names nothing now.\n".to_string());
+        assert_eq!(wait_for(&compiles, 2), 2, "a pause in the typing compiles");
+
+        let after = session.preview().status();
+        assert!(
+            after.sections.is_empty(),
+            "the deleted markers left rows behind: {:?}",
+            after.sections
+        );
+        assert_eq!(
+            after.master.as_deref(),
+            Some("report.md"),
+            "the document is still the one that is open"
+        );
+    }
 }
