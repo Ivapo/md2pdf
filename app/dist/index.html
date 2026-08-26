@@ -20,6 +20,14 @@
         --quiet: #6b7280;
         --alarm: #a03323;
         --band: #e9e9e4;
+        /*
+          The colour of paper, and **it is deliberately not overridden in
+          dark.** It stands in for a page whose raster has not been made yet or
+          has been released, and that raster is white in either palette because
+          the document is. A dark `--paper` would put a dark rectangle exactly
+          where the reader is about to see a white one.
+        */
+        --paper: #fff;
       }
       @media (prefers-color-scheme: dark) {
         :root {
@@ -422,11 +430,19 @@
         size at all, and the text paints raw over the raster. `1px` is the
         whole-CSS-pixel rule the pages already follow; `size()` writes the
         third.
+
+        **A page is paper-coloured even when it holds no raster.** Every page is
+        laid out at its final size before any of them is drawn, and a long
+        document's pages are released again once the reader has left them — so
+        this box is on screen empty, and with no background of its own it would
+        paint `--ground`: tolerable in light, and a dark rectangle where paper
+        belongs in dark.
       */
       #pages .page {
         position: relative;
         display: block;
         margin-top: 16px;
+        background: var(--paper);
         box-shadow: 0 -1px 0 var(--edge), 0 1px 0 var(--edge);
         --scale-round-x: 1px;
         --scale-round-y: 1px;
@@ -449,10 +465,10 @@
         WKWebView; `height` and not a margin of its own, so the 16 px is a real
         in-flow border box rather than a margin that may not be counted.
 
-        **And not a spacer element**: `drawPages` indexes `pages.children[n -
-        1]` and prunes with `pages.lastElementChild.remove()`, and `fit`,
-        `unscale`, `readAnchor` and `applyAnchor` all assume every child is a
-        page carrying `.logical`. A pseudo-element is in the flow and not in
+        **And not a spacer element**: `layoutPages` addresses
+        `pages.children[n - 1]` and commits the whole list with
+        `replaceChildren`, and `fit`, `unscale`, `readAnchor`, `applyAnchor` and
+        the drainer all assume every child is a page carrying `.logical`. A pseudo-element is in the flow and not in
         `children`, which is exactly the pair of properties wanted.
       */
       #pages::after {
@@ -687,10 +703,17 @@
       let renderSeq = 0
       const inflight = new Set()
 
-      // How many renders are running, so a rest can wait for one rather than
-      // cancel it. A count and not a flag: a render being superseded overlaps
-      // the one superseding it, and a flag would be cleared by the loser on
-      // its way out.
+      /*
+        How many *sizing passes* are running, so a rest can wait for one rather
+        than cancel it. A count and not a flag: a pass being superseded overlaps
+        the one superseding it, and a flag would be cleared by the loser on its
+        way out.
+
+        **The drainer is deliberately outside this bracket**, and that is a rule
+        rather than an oversight. `rerender` defers while this is above zero, so
+        a drain counted here would re-arm the 200 ms timer for as long as it ran
+        — and a drain runs for as long as the reader keeps giving it pages.
+      */
       let rendering = 0
 
       /*
@@ -1024,60 +1047,76 @@
         loading?.destroy()
         loading = next
         doc = opened
+        docGen++
 
         // Before the width is read: an element that is `display: none`
         // measures zero, and the scale is that measurement.
         pages.hidden = false
         if (!(await renderPages(seq))) return false
 
+        /*
+          **The reader is put where they belong before a raster is asked for,
+          and that order is this phase's whole claim.** Every page is already at
+          its final size when the sizing pass returns, so this lands exactly
+          where it will stay. Drawing first and scrolling afterwards would spend
+          the pass on whatever sits at `scrollTop` 0, jump the reader off it,
+          and leave a placeholder under them until the next rest — reaching an
+          identical end state by way of a visible one.
+        */
         if (anchor !== null) applyAnchor(anchor)
         else if (page === null) pages.scrollTop = 0
         else applyAnchor({ page: page - 1, fraction: 0 })
+
+        await refill(seq)
         return true
       }
 
       /*
-        Draw every page of the retained document at the width the container
-        has now, and answer whether the drawing finished.
+        **Lay the whole document out, and draw nothing.**
+
+        Every page gets a box sized from its own viewport, so the child list,
+        `scrollHeight`, every `offsetTop`, the gap between pages, the fit and the
+        reader's anchor are right over the whole document from the first frame —
+        whether or not a raster ever arrives for a given page. The extent is
+        exact from layout alone: 53,337 px for a 71-page document at a 520 px
+        pane, before any page is rastered and after every one of them is.
 
         **The scale is recomputed here and held nowhere**, so a fit cannot go
         stale: it is `paneWidth / naturalWidth`, evaluated when the page is
-        drawn. **The backing store is that viewport at the display's own pixel
-        ratio** and the CSS size is left at the logical one — which is the
-        thing a transform over a committed raster could never do, and the
-        report that produced this renderer.
+        sized. What it costs to *raster* those pages is a separate question, and
+        the budget below is where it is asked.
 
-        **A page is swapped in only once it holds pixels.** Setting
-        `canvas.width` clears it, so re-rendering in place would flash six
-        empty pages at every rest. The outgoing page at its gesture size and
-        the incoming one at its logical size occupy the same layout box, so
-        nothing jumps as they are exchanged — and since Phase 2 the whole page
-        is what is exchanged, so its two layers ride the same rule and are
-        built while it is still detached.
+        **It commits in one mutation.** Appending a page at a time grows
+        `scrollHeight` across frames and hands the observer seventy-one
+        deliveries where one was wanted. And it *reconciles* rather than
+        rebuilding: a compile reuses the boxes already there and removes only the
+        surplus, so the elements the reader's place is measured against survive
+        it.
       */
       async function renderPages(seq) {
         rendering++
         try {
-          return await drawPages(seq)
+          return await layoutPages(seq)
         } finally {
           rendering--
         }
       }
 
-      async function drawPages(seq) {
-        const ratio = window.devicePixelRatio
+      async function layoutPages(seq) {
         const paneWidth = box().width
         if (!(paneWidth > 0)) return false // a pane with no width to fit to
 
         // Held rather than re-read: `clear` and a re-open both replace `doc`,
-        // and this loop must find out by its own generation check rather than
-        // by starting to draw a different document halfway down.
+        // and this pass must find out by its own generation check rather than by
+        // measuring a different document halfway down.
         const from = doc
+        const started = performance.now()
 
-        for (let n = 1; n <= from.numPages; n++) {
-          let wrapper
-          let task
-          try {
+        const list = []
+        let grew = false
+
+        try {
+          for (let n = 1; n <= from.numPages; n++) {
             const page = await from.getPage(n)
             if (seq !== renderSeq) return false
 
@@ -1097,8 +1136,13 @@
             const cssWidth = Math.round(viewport.width)
             const cssHeight = Math.round(viewport.height)
 
-            wrapper = document.createElement('div')
-            wrapper.className = 'page'
+            let wrapper = pages.children[n - 1]
+            if (!wrapper) {
+              wrapper = document.createElement('div')
+              wrapper.className = 'page'
+              grew = true
+            }
+
             // What the CSS size is written from, here and through a gesture.
             wrapper.logical = { w: cssWidth, h: cssHeight }
             /*
@@ -1108,68 +1152,405 @@
               the document and does not move with the pane.
             */
             wrapper.natural = { w: viewport.rawDims.pageWidth }
-            // The viewport this page was drawn with, kept for the one thing
-            // that turns a PDF coordinate back into a CSS one: a destination.
-            wrapper.view = viewport
-            size(wrapper, 1)
-
-            const canvas = document.createElement('canvas')
-            canvas.width = Math.floor(cssWidth * ratio)
-            canvas.height = Math.floor(cssHeight * ratio)
-            wrapper.append(canvas)
-
-            task = page.render({
-              canvas,
-              viewport,
-              transform: [ratio, 0, 0, ratio, 0, 0]
-            })
-            inflight.add(task)
-            await task.promise
-            if (seq !== renderSeq) return false
-
-            await drawLayers(wrapper, page, viewport, seq)
-          } catch (problem) {
             /*
-              Superseded — by another render, by a re-open, or by `clear`
-              destroying this document out from under the loop. None of those
-              is news, and the generation check is what tells them from a real
-              failure, which is re-thrown for `refresh` to put on the page.
+              The viewport this page would be drawn with, kept for the one thing
+              that turns a PDF coordinate back into a CSS one: a destination. It
+              is written by this pass and not by the render, which is what lets a
+              cross-reference into a page holding no raster land at its own
+              coordinate rather than throwing.
             */
-            if (seq !== renderSeq) return false
-            if (problem instanceof pdfjs.RenderingCancelledException) {
-              return false
-            }
-            throw problem
-          } finally {
-            if (task) inflight.delete(task)
+            wrapper.view = viewport
+            wrapper.number = n
+            size(wrapper, 1)
+            list.push(wrapper)
           }
+        } catch (problem) {
+          /*
+            Superseded — by another pass, by a re-open, or by `clear` destroying
+            this document out from under the loop. None of those is news, and the
+            generation check is what tells them from a real failure, which is
+            re-thrown for `refresh` to put on the page.
+          */
           if (seq !== renderSeq) return false
-
-          const old = pages.children[n - 1]
-          if (old) pages.replaceChild(wrapper, old)
-          else pages.append(wrapper)
+          throw problem
         }
 
-        // A document that lost pages leaves them behind it — and a page
-        // removed here takes its two layers with it, because they are inside
-        // it. That is the second reason the wrapper is the child.
-        while (pages.children.length > from.numPages) {
-          pages.lastElementChild.remove()
+        if (grew || pages.children.length !== list.length) {
+          // A document that lost pages leaves them behind it, and a page that
+          // goes must give its raster back on the way out — nothing else will,
+          // because the element is about to stop being reachable.
+          const keeping = new Set(list)
+          for (const wrapper of pages.children) {
+            if (!keeping.has(wrapper)) release(wrapper)
+          }
+          pages.replaceChildren(...list)
         }
 
-        // Every page above was inserted at its logical size already; this is
-        // the function that owns the rule, and it is what closes a gesture.
+        // Every page above was written at its logical size already; this is the
+        // function that owns the rule, and it is what closes a gesture.
         unscale()
         fitted = paneWidth
+        pane.sizingMs = since(started)
         return true
       }
 
-      // What the next render cancels. A task cancelled here rejects inside
-      // `renderPages`, which returns rather than touching the page.
+      // What the next render cancels. A sizing pass starts none of its own, so
+      // these are pages the drainer put in flight; a task cancelled here rejects
+      // inside `paint`, and `drain` swallows it the way `rerender` does.
       function cancelRenders() {
         for (const task of inflight) task.cancel()
         inflight.clear()
       }
+
+      /*
+        **The pane holds what the reader is near.**
+
+        One canvas at fit-to-width costs 5.8 MiB at this app's default pane, so a
+        71-page document costs 414 MiB and a longer one costs more, without
+        bound. Under a budget the pane draws the document whole and nothing a
+        reader sees changes. Over it the pane holds only the pages the reader is
+        near and lets the rest go — and the page a compile takes the reader to
+        arrives without waiting for the seventy pages they are not looking at.
+
+        **128 MiB is chosen and not derived.** It admits 21 pages at the default
+        window and 15 at a wide one. What would ground it is the length at which
+        this webview actually jettisons its content process, which nobody has
+        measured; until then this is a number that keeps a quantity from growing
+        rather than one that prevents a crash it has seen.
+
+        **The rest is 120 ms**, beside the width's 200, and it is chosen too: a
+        scroll stops more often than a drag does. Too short and an ordinary slow
+        scroll draws pages the reader is already past; too long and a reader who
+        stops waits for the page under them. Nothing has measured it against a
+        reader, which is the only instrument that can.
+      */
+      const BUDGET = 128 * 2 ** 20
+      const REST = 120
+
+      /*
+        **Which document a raster belongs to — and it is not `renderSeq`.** A
+        canvas is the one the pane wants only if it was drawn from this document
+        *and* for this width; either one stale counts as absent.
+
+        It cannot be `renderSeq`, which is what an implementer reaches for:
+        `rerender` bumps that at every width rest, so every canvas would be stale
+        at every rest and the pair below could never disagree. **Generation alone
+        loses the author's own edit** — a page already holding a raster would
+        never be drawn again after a compile. **Width alone leaves every page
+        holding a canvas made for the old width after a rest**, soft, which is
+        Phase 1's *comes back sharp when you let go* regressed by a freshness
+        test that reads correctly.
+
+        **The width term needs no property of its own.** A backing store is
+        `floor(logical.w × devicePixelRatio)` by construction, so comparing
+        `canvas.width` against that expression *is* the test — and it stays right
+        across a change of display, which a remembered width would not.
+      */
+      let docGen = 0
+
+      // Whether the pane is holding every page or only the ones the reader is
+      // near. Decided by the budget at the two passes that can move it, and
+      // never once per document.
+      let mode = 'whole'
+
+      // The pages the reader is near. **Maintained and not rebuilt**: after its
+      // first delivery the observer reports only what changed.
+      const wanted = new Set()
+      let watcher = null
+
+      // One pass at a time, what a scroll that has not rested looks like, and
+      // the timer that ends it.
+      let draining = false
+      let moving = false
+      let resting = null
+
+      /*
+        What this phase's exit gate reads. **It ships, and that is a decision.**
+        Nothing in this repository reaches this file, so its gate is read by a
+        person at a console — and three of the quantities that gate needs, the
+        renders started, what the sizing pass cost and when the observer first
+        delivered, live inside a module and are reachable from nowhere else.
+      */
+      const pane = {
+        mode,
+        renders: 0,
+        sizingMs: null,
+        deliveryMs: null,
+        renderMs: null,
+        made: 0,
+        released: 0
+      }
+      window.__pane = pane
+
+      const since = (started) => Math.round((performance.now() - started) * 10) / 10
+
+      // What one page's raster costs in bytes, which is the only term in the
+      // budget — and the pane's width is inside it, which is why a budget in
+      // pages is really a budget in megabytes.
+      function cost(wrapper) {
+        const ratio = window.devicePixelRatio
+        return (
+          Math.floor(wrapper.logical.w * ratio) *
+          Math.floor(wrapper.logical.h * ratio) *
+          4
+        )
+      }
+
+      /*
+        Decide what the pane holds, **at the two passes that can move it and
+        never once per document**: an open, and a width rest. A drain after a
+        scroll re-evaluates nothing, correctly — scrolling moves no width.
+
+        Five shipped causes move this answer: the divider, a window resize, the
+        section panel folding, the line gutter, and an open itself, since the
+        panel is shown for any document naming sections and the status that
+        decides it arrives before the bytes do.
+      */
+      function decideMode() {
+        let whole = 0
+        for (const wrapper of pages.children) whole += cost(wrapper)
+        mode = whole <= BUDGET ? 'whole' : 'band'
+        pane.mode = mode
+      }
+
+      /*
+        **Watch which pages the reader is near rather than computing them** —
+        `mpdf-003` Phase 7's rule, that geometry is observed and not inferred
+        from the events believed to change it, on the one axis it had not
+        reached. The margin is one scrollport either side, written as a
+        percentage so that a resize needs no rebuild.
+
+        **It is established afresh after every sizing pass**, at an open and at
+        every width rest, while the mode is band — and not per drain, which would
+        be an establish-and-deliver loop that renders nothing. A compile that
+        *grew* the document would otherwise keep an observer whose targets do not
+        include the new trailing pages, and a page the author had just written
+        could never be drawn. A fresh `observe()` over the reconciled list is
+        also what drops the old registrations, so nothing is unobserved by hand.
+
+        An observer holds its targets strongly, so one left attached across an
+        open goes on releasing pages out of the document that replaced them.
+      */
+      function watch() {
+        watcher?.disconnect()
+        watcher = null
+        wanted.clear()
+        if (mode !== 'band') return
+
+        const started = performance.now()
+        pane.deliveryMs = null
+        watcher = new IntersectionObserver(
+          (entries) => {
+            if (pane.deliveryMs === null) pane.deliveryMs = since(started)
+            for (const entry of entries) {
+              if (entry.isIntersecting) wanted.add(entry.target)
+              else wanted.delete(entry.target)
+            }
+            drain(false)
+          },
+          { root: pages, rootMargin: '100% 0px' }
+        )
+        for (const wrapper of pages.children) watcher.observe(wrapper)
+      }
+
+      // Whether this page holds the raster the pane wants: the right document,
+      // and the right width. See `docGen` for why it is both.
+      function fresh(wrapper) {
+        const canvas = wrapper.querySelector('canvas')
+        return (
+          canvas !== null &&
+          canvas.gen === docGen &&
+          canvas.width === Math.floor(wrapper.logical.w * window.devicePixelRatio)
+        )
+      }
+
+      // Give a canvas's memory back. **Zeroing is the release** — dropping the
+      // element leaves the backing store to a collector with no idea how much it
+      // is holding — and the vendored bundle does exactly this for the same
+      // reason. It answers false so a superseded render can `return drop(…)`.
+      function drop(canvas) {
+        canvas.width = 0
+        canvas.height = 0
+        pane.released++
+        return false
+      }
+
+      // A page back to a placeholder. Its two layers go with its canvas, which
+      // is what keeps a selection to the pages the pane is actually holding.
+      function release(wrapper) {
+        const canvas = wrapper.querySelector('canvas')
+        if (canvas === null) return
+        drop(canvas)
+        wrapper.replaceChildren()
+      }
+
+      /*
+        Let go of every page the reader is no longer near.
+
+        **After every page drawn, and once more as the pass ends** — either alone
+        leaks. A page dropped from the set while its own render is in flight has
+        no canvas to release at that moment, and the observer reports only what
+        changed, so nothing would ever revisit it; and a set that shrank with
+        nothing left to draw never reaches the per-page sweep at all.
+      */
+      function sweep() {
+        if (mode !== 'band') return
+        for (const wrapper of pages.children) {
+          if (!wanted.has(wrapper)) release(wrapper)
+        }
+      }
+
+      /*
+        Draw one page — its raster and both its layers, built while they are
+        detached and swapped in together.
+
+        **One `replaceChildren` and not an append.** A page element now outlives
+        the raster inside it, so appending a layer to a page that already has one
+        gives it two. That invariant held only while every render built a new
+        page element, and this is the phase that stops it being true.
+      */
+      async function paint(wrapper, seq) {
+        const from = doc
+        const gen = docGen
+        const ratio = window.devicePixelRatio
+
+        const page = await from.getPage(wrapper.number)
+        if (seq !== renderSeq || from !== doc) return false
+
+        const viewport = wrapper.view
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.floor(wrapper.logical.w * ratio)
+        canvas.height = Math.floor(wrapper.logical.h * ratio)
+        canvas.gen = gen
+        pane.made++
+
+        const held = document.createDocumentFragment()
+        held.append(canvas)
+
+        const started = performance.now()
+        let task
+        pane.renders++
+        try {
+          task = page.render({
+            canvas,
+            viewport,
+            transform: [ratio, 0, 0, ratio, 0, 0]
+          })
+          inflight.add(task)
+          await task.promise
+          pane.renderMs = since(started)
+          if (seq !== renderSeq || from !== doc) return drop(canvas)
+
+          await drawLayers(held, page, viewport, seq)
+          if (seq !== renderSeq || from !== doc) return drop(canvas)
+        } catch (problem) {
+          /*
+            **A canvas this pass made must be given back however the pass ends**,
+            and a cancellation is the ordinary way it ends. Nothing else will:
+            the canvas never reached the page, so no sweep and no release can
+            reach it, and the pane's own count of what it has made against what
+            it has released — which is the only exact measure of what is held
+            outside `#pages` — would drift by one per cancelled render.
+          */
+          drop(canvas)
+          throw problem
+        } finally {
+          if (task) inflight.delete(task)
+        }
+
+        const old = wrapper.querySelector('canvas')
+        if (old) drop(old)
+        wrapper.replaceChildren(held)
+        return true
+      }
+
+      /*
+        Draw what the pane should be holding and is not, and let the rest go.
+
+        **One pass at a time**, and a flag is what makes that true: naming one
+        function does not stop two invocations of it overlapping, and two would
+        race over the same pages and the same set.
+
+        **The rest is re-checked before every page, not at the top of the pass.**
+        Checked at entry alone it does nothing under a throw — the re-entries are
+        refused while the pass already running draws every page the reader is
+        flying past. A forty-one-frame throw costs five renders this way and
+        forty-three the other.
+
+        **`force` is the open and the width rest, and it suppresses that check at
+        entry *and* at every page.** Suppressed at entry alone, the open's own
+        `scrollTop` write fires a scroll event and stops the forced pass at its
+        second page. A programmatic scroll cannot be told from a reader's by a
+        flag — the event outruns any flag cleared on a microtask — so following a
+        link waits out one rest, which is accepted rather than fixed.
+
+        Cosmetic, so it swallows what it fails at, exactly as `rerender` does: a
+        cancelled task rejects here with no awaiter to reject into, and the pages
+        this pass did not reach keep the placeholder they had.
+      */
+      async function drain(force) {
+        if (draining) return
+        if (moving && !force) return
+
+        draining = true
+        const seq = renderSeq
+        try {
+          for (;;) {
+            if (moving && !force) break
+            if (seq !== renderSeq) break
+
+            const holding = mode === 'band' ? [...wanted] : [...pages.children]
+            const next = holding.find((wrapper) => !fresh(wrapper))
+            if (!next) break
+
+            if (!(await paint(next, seq))) break
+            sweep()
+          }
+        } catch {
+          // See above. A rest, a re-open or `clear` is what cancels these.
+        } finally {
+          sweep()
+          draining = false
+        }
+      }
+
+      /*
+        Decide what to hold, watch for it, and fill it in — the tail of an open
+        and of a width rest alike.
+
+        **A frame, and not the observer's own first delivery.** That is the
+        difference between a pass that runs and one that hangs: a promise settled
+        only inside the callback never settles at all if the observer is
+        disconnected before it delivers, and it would strand its caller inside
+        `rendering`, deferring every future width rest for the life of the
+        window. One frame is enough — the delivery lands inside it.
+      */
+      async function refill(seq) {
+        decideMode()
+        watch()
+        await new Promise((next) => requestAnimationFrame(next))
+        if (seq !== renderSeq) return
+        await drain(true)
+      }
+
+      /*
+        A scroll ends on nothing, so a timer is what gives it an end — the same
+        shape as `settle`'s and shorter, because a scroll stops more often than a
+        drag does. This is the only thing that arms an unforced pass besides the
+        observer's own delivery.
+      */
+      pages.addEventListener(
+        'scroll',
+        () => {
+          moving = true
+          clearTimeout(resting)
+          resting = setTimeout(() => {
+            moving = false
+            drain(false)
+          }, REST)
+        },
+        { passive: true }
+      )
 
       /*
         **The two things the raster is not.** A canvas is a picture of a page,
@@ -1202,16 +1583,19 @@
         layer takes it as it was drawn. That is what `pdf.js`'s own viewer
         does.
 
-        Both are built into the page while it is still detached, which is
-        available because nothing here reads layout: `TextLayer` measures
-        against an offscreen 2D context and `setLayerDimensions` only writes
-        styles. Every await re-checks that a newer render has not superseded
-        this one, exactly as the loop around it does.
+        Both are built into the fragment the raster is being built in, and
+        swapped onto the page with it. That is available because nothing here
+        reads layout — `TextLayer` measures against an offscreen 2D context and
+        `setLayerDimensions` only writes styles — and it is now required rather
+        than merely cheap: a page element outlives the raster inside it, so a
+        layer appended to the page itself would join the one already there
+        instead of replacing it. Every await re-checks that a newer render has
+        not superseded this one, exactly as the loop around it does.
       */
-      async function drawLayers(wrapper, page, viewport, seq) {
+      async function drawLayers(held, page, viewport, seq) {
         const words = document.createElement('div')
         words.className = 'textLayer'
-        wrapper.append(words)
+        held.append(words)
         await new pdfjs.TextLayer({
           textContentSource: page.streamTextContent(),
           container: words,
@@ -1224,7 +1608,7 @@
 
         const links = document.createElement('div')
         links.className = 'annotationLayer'
-        wrapper.append(links)
+        held.append(links)
         await new pdfjs.AnnotationLayer({
           div: links,
           page,
@@ -1346,8 +1730,17 @@
         relines()
         renderSeq++
         cancelRenders()
+        watcher?.disconnect()
+        watcher = null
+        wanted.clear()
+        mode = 'whole'
+        pane.mode = mode
         pages.hidden = true
         pages.classList.remove('stale')
+        // Every page gives its raster back on the way out. Dropping the elements
+        // alone would leave the backing stores to a collector, and the pane's own
+        // count of what it has made and released would stop being checkable.
+        for (const wrapper of pages.children) release(wrapper)
         pages.replaceChildren()
         loading?.destroy()
         loading = null
@@ -1538,6 +1931,11 @@
         }
         applyAnchor(anchor)
         anchor = null
+
+        // The width moved, so what the pane can afford to hold moved with it —
+        // this is the second of the two passes that re-decide it, and the reader
+        // is back where they were before it does.
+        await refill(seq)
       }
 
       /*
