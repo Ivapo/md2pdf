@@ -1261,19 +1261,23 @@ question and the wrong one to a memory question.
 
   **A budget decides whether to virtualise at all, and the draft had no such
   rule.** Round 1 re-derived the draft's premise and found it false: at the app's
-  own default window the band reaches some 3,300 px and the showcase's six pages
-  are 5,346 px of content, so a *correct* implementation would have left two pages
+  own default window the band reaches about three scrollport heights and six A4
+  pages exceed that, so a *correct* implementation would have left the last pages
   blank and failed the very clauses the draft told it to re-run. So:
 
   > **If the whole document's raster fits the budget, every page is rendered, and
   > the pane behaves exactly as Phase 1 shipped it.** Otherwise only the band is.
 
-  **The budget is 128 MB**, and the number is derived rather than chosen. A page
-  costs about `5.66 × dpr² × paneWidth²` bytes for A4 — 6.1 MB at the default
-  window's ~520 px pane at `devicePixelRatio` 2, 8.3 MB at OQ-7's 619 px, both
-  matching the probe. 128 MB therefore admits the six-page showcase at 37 MB with
-  room to spare, admits some twenty pages at the default window, and refuses the
-  71-page document at 587 MB by a factor of four and a half.
+  **The budget is 128 MiB**, derived rather than chosen, and **every byte figure
+  in this phase is a MiB** — the unit the probe reported in and the one the draft
+  left ambiguous. An A4 page costs `⌊W·r⌋ × ⌊1.4143·W·r⌋ × 4` bytes at pane width
+  `W` and ratio `r`, which is **5.83 MiB** at the default window's ~520 px pane at
+  `devicePixelRatio` 2 and **8.26 MiB** at OQ-7's 619 px — the second reproducing
+  the probe's measured 8.3 exactly. 128 MiB therefore renders the six-page
+  showcase whole at **35 MiB**, with nearly four times the room to spare; admits
+  **21** pages at the default window and **15** at OQ-7's; and refuses the 71-page
+  document, which needs **414 MiB** at the default window and **587 MiB** at
+  OQ-7's — the latter the figure the probe measured, and 4.6 times the budget.
 
   **The band is the floor, and when the two conflict the floor wins.** The band is
   the pages intersecting the scrollport plus one scrollport above and below. On a
@@ -1374,7 +1378,7 @@ question and the wrong one to a memory question.
 
   1. **At the default window the showcase is unchanged in every respect**, which
      the budget rule makes true rather than assumed: six pages at that geometry
-     cost some 37 MB against a 128 MB budget, so every page renders and **Phase
+     cost 35 MiB against a 128 MiB budget, so every page renders and **Phase
      2's clauses 1, 2, 3, 5, 6, 7 and 8 and Phase 4's clause 1 re-run and pass
      verbatim** — six text layers, six annotation layers, twenty links, gaps of
      16 px, and the selection landing on the glyphs at three divider positions.
@@ -1383,12 +1387,14 @@ question and the wrong one to a memory question.
      four states that ride on these elements.
   2. **On `long.md` the retained backing store equals what the rule says.** Sum
      `Σ canvas.width × canvas.height × 4` over `#pages` and compare it to
-     `min(71 × perPage, max(band, 128 MB))`, both computed from the tester's own
-     `pages.clientWidth`, `pages.clientHeight` and `devicePixelRatio` — **not to a
-     literal**. Take it at four moments: on open, after scrolling to the last
-     page, after scrolling back to the first, and after a divider drag. The
-     unbounded pane measures 587 MB at OQ-7's geometry, so the comparison
-     discriminates by more than a factor of four wherever it is taken.
+     `min(71 × perPage, max(band, 128 MiB))`, `perPage` and `band` computed from
+     the tester's own `pages.clientWidth`, `pages.clientHeight` and
+     `devicePixelRatio` — **not against a literal**, because the quantity is
+     geometry-dependent and a literal is right at one window only. Take it at four
+     moments: on open, after scrolling to the last page, after scrolling back to
+     the first, and after a divider drag. Unbounded, the same document measures
+     414 MiB at the default window and 587 MiB at OQ-7's, so the comparison
+     discriminates by at least a factor of three wherever it is taken.
   3. **No canvas is retained outside `#pages`.** In the Web Inspector's memory
      timeline, open `long.md`, scroll from the first page to the last and back,
      force a compile ten times, then `clear` by opening the showcase: **the canvas
