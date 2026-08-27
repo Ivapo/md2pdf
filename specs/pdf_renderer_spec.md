@@ -1017,20 +1017,131 @@ a capability**, which is a different argument from Phase 4's and a stronger one.
 *Produces the observable: **yes** — the same page at the size the reader asked
 for.*
 
+**Redrafted 2026-08-26, from a prototype, before its review round.** The phase was
+scoped in twelve lines before Phase 5 existed, and Phase 5 put a budget under the
+pane that those twelve lines do not mention. Rather than let a review round
+discover that — which is how Phase 5 came to cost five rounds and sixty-one
+findings — the three modes were built onto the shipped front end and driven, and
+every quantity below is a reading. `reviewed` stays `null`; this is the draft the
+round will argue with.
+
 - **Scope:** Fit-to-width, fit-page, and an explicit scale, as the three modes
-  `armquill`'s viewer names. The mode is the pane's state, and a resize
+  `armquill`'s viewer names. The mode is the pane's state, and a width that moves
   re-derives the scale under the first two and leaves it alone under the third.
 
   **Fit-to-width stays the default**, because it is what the pane has always
   approximated and what an author writing to a page width wants.
 
-- **Exit gate:** Each mode holds across a divider drag and a window resize;
-  fit-page shows a whole page at the pane's shorter dimension; the explicit
-  scale survives a re-render after a compile.
+  **The scale is chosen in `layoutPages` and nowhere else.** It already computes
+  `paneWidth / naturalWidth` per page; the mode decides which expression it uses,
+  and everything downstream — the CSS box, `--total-scale-factor`, the backing
+  store, the anchor, the budget — follows from the viewport it produces. Measured:
+  the three modes are one expression each and no other function needs to know the
+  mode, with two exceptions the prototype found and which are named below.
 
-- **Close-out:** `rules/desktop-geometry.md`'s width section gains the modes —
-  the file that section moved to when Phase 5 split it out. The
-  README gains nothing — a zoom is not what the app is for. One push.
+  **A gesture must not resize a page the reader pinned a size to.** `fit()` scales
+  every page to the pane on every `pointermove`, which is right under the two
+  derived modes and wrong under a pinned one — the reader asked for 400%, not for
+  whatever 400% becomes when the divider moves. It returns early under the pinned
+  mode. **Measured: a pane dragged from 520 to 700 at 400% left the page at
+  2,381 px, the retained set at 244.7 MiB and the reader on page 36 fraction
+  0.500.**
+
+  **A page wider than the pane must be reachable, and today it is not.** `#pages`
+  ships `overflow-x: hidden`, so at any scale above fit-to-width the page is
+  clipped at the pane's right edge with no way to reach the rest of it. It becomes
+  `overflow-x: auto`. **Measured: at 400% the container reports `scrollWidth`
+  2,381 against a `clientWidth` of 520, and scrolling fully right reaches the
+  page's own edge; at fit-to-width nothing overflows and the pane still measures
+  520, so the change costs the default nothing.**
+
+  **Phase 4's hairline argument is touched and must be re-argued rather than
+  assumed.** It reasoned that a side hairline was unpaintable because an outset
+  ring would spread outside `overflow-x: hidden`'s clip. Under `auto` that clip is
+  gone, so the reason changes even though the conclusion may not: at fit-to-width
+  a page still meets the scrollport's own side edges, so there is still no
+  background beside it to separate it from — but a ring would now produce a pixel
+  of horizontal overflow rather than being clipped, which is a different objection
+  and belongs in this phase's own prose.
+
+  **A mode change must carry the reader, and the anchor as shipped will not.**
+  `anchor` is gesture-scoped: it is opened by a width arriving that differs from
+  `fitted` and closed by the render that ends the gesture, and a mode change is
+  neither. **Measured, and this is the prototype's plainest failure: a reader at
+  page 36 fraction 0.499 who switched from fit-to-width to 200% landed on page 16
+  fraction 0.684.** A mode change reads the anchor before the layout and applies
+  it after, exactly as a width rest does.
+
+  **What a scale costs, and the decision this phase turns on.** Phase 5 bounds
+  *whether* the pane draws a document whole; nothing bounds the retained set, and
+  its cost is quadratic in the scale. Measured on a 71-page document at a 520 px
+  pane and `devicePixelRatio` 2:
+
+  | scale | one page | pages held | retained |
+  |---|---|---|---|
+  | 100% | 7.6 MiB | 4 | 30.6 MiB |
+  | 200% | 30.6 MiB | 3 | 91.8 MiB |
+  | 300% | 68.8 MiB | 2 | **137.7 MiB** |
+  | 400% | 122.4 MiB | 2 | **244.7 MiB** |
+  | 500% | **191.1 MiB** | 1 | 191.1 MiB |
+
+  **The retained set crosses the 128 MiB budget at about 290%, and above about
+  410% a single page exceeds it on its own** — at which point holding fewer pages
+  is no longer a lever, because one is the floor. So a zoom that only re-derives
+  the scale puts the pane back exactly where Phase 5 found it, and **this phase
+  must decide what to do about it.** Three shapes, none costed, and the round is
+  where one is chosen:
+
+  - **Cap the scale** at whatever keeps one page inside the budget — simple,
+    checkable, and it takes a capability away from the reader for a reason they
+    cannot see.
+  - **Lower the backing store when zoomed** — render at less than
+    `devicePixelRatio` above some scale, which spends the sharpness Phase 1 exists
+    for, and spends it exactly where a reader zoomed in to look closely.
+  - **Re-derive the budget against the zoomed cost and accept a larger one**,
+    which is honest only if OQ-8 ever finds the ceiling it is still looking for.
+
+  **What is not in this phase.** No pinch gesture and no scroll-wheel zoom — the
+  mode is set by a control, and a gesture is a separate subject with its own
+  device questions. No per-page scale. No rotation.
+
+- **Exit gate:** Run against **`tests/fixtures/long.md`** (71 pages) for the
+  retention clauses and **`samples/showcase/showcase.md`** for the rest.
+
+  1. Each mode holds across a divider drag and a window resize: under the two
+     derived modes the scale re-derives, and under the pinned one the page keeps
+     its size to the pixel.
+  2. **Fit-page shows a whole page, read at a pane wider than 745 px.** Below
+     that it is not a distinct mode and the clause tests nothing: a page fits the
+     *width* constraint first, so at the app's default 520 px pane fit-page and
+     fit-to-width produce the identical 520 × 735 box — measured. At a 900 px pane
+     they separate, 745 × 1054 against 900 × 1273.
+  3. The pinned scale survives a re-render after a compile, and a divider drag
+     leaves the page's CSS width unchanged to the pixel.
+  4. **A page wider than the pane is reachable**: at 400% the reader can scroll to
+     its right edge, and at fit-to-width the container does not overflow and the
+     pane still measures what it measured before this phase.
+  5. **A mode change leaves the reader on the same page and fraction**, ±0.01,
+     in every direction between the three modes.
+  6. **Phase 5's clauses 2, 3, 9, 10.1 and 13 re-run at a pinned scale**, which is
+     where this phase can break them: retention is the mode's own set, nothing is
+     retained outside `#pages`, layers track canvases, the rest never empties the
+     pane, and a compile lands the reader on a drawn page.
+  7. **Whatever §4 decides about the budget is gated here**, and the clause is
+     written when the decision is made rather than now.
+  8. **Phase 4's clause 1 re-run**: the gap reads 16 px throughout at every mode
+     and scale, the gap being chrome and not content.
+  9. `cargo test --workspace` passes unchanged — no `.rs` file is edited.
+
+  Clauses 1–8 are manual, per `mpdf-003` OQ-10, and the pasteable script Phase 5
+  shipped its gate as is the instrument.
+
+- **Close-out:** `rules/desktop-geometry.md` gains the three modes, the scale
+  expression each derives, the overflow the pane now allows and whatever §4
+  settles about the budget. **`rules/desktop-panes.md` is touched too** if Phase
+  4's hairline reasoning changes, that prose having stayed with the pages rather
+  than the geometry. The README gains nothing — a zoom is not what the app is
+  for. One push.
 
 ### Phase 4 — the pages are told apart
 *Produces the observable: **yes**, and it is the weakest yes in this document,
