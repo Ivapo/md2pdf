@@ -637,6 +637,46 @@ bookmarks that nothing in this project currently reads.
   Phase 3's explicit zoom multiplies the same quantity by the square of the scale
   whatever the answer turns out to be. *(deferred by evidence)*
 
+  > **MEASURED 2026-08-26, by the probe this asked for, and the cliff was not
+  > reached.** A ladder of 142, 284, 426, 568 and 852 pages, each opened twice at
+  > a 520 px pane and `devicePixelRatio` 2 — once with the budget disabled, which
+  > is the pane as Phase 1 built it, and once as Phase 5 ships it. The instrument
+  > is Playwright's WebKit rather than WKWebView in the window, so these are the
+  > engine's numbers and not the app's.
+  >
+  > | pages | uncapped | capped |
+  > |---|---|---|
+  > | 142 | 828 MiB, 3.9 s | 17 MiB, 1.7 s |
+  > | 284 | 1,656 MiB, 7.3 s | 17 MiB, 1.7 s |
+  > | 426 | 2,484 MiB, 12.3 s | 17 MiB, 1.7 s |
+  > | 568 | 3,313 MiB, 18.7 s | 17 MiB, 1.7 s |
+  > | 852 | **4,969 MiB, 36.5 s** | **17 MiB, 1.7 s** |
+  >
+  > **Uncapped, nothing failed.** 852 pages holding 4.85 GiB of backing store drew
+  > and stayed answering. **So the question's own dichotomy is settled even though
+  > its number is not**: 128 MiB is preventing a quantity from growing, not a
+  > crash anybody has seen, exactly as §2 claimed and at least up to 4.85 GiB.
+  > **Capped, both columns are flat** — three canvases, 17 MiB and 1.7 s at every
+  > length on the ladder — which is the property that matters: retention and the
+  > cost of an open stop being functions of how long the document is.
+  >
+  > **The ladder stopped at 852 rather than finding the cliff**, and the reason is
+  > recorded rather than hidden: the next rung is 8.3 GiB against 7.8 GiB free on
+  > the machine to hand, so it would have measured that machine's swap rather than
+  > the engine's limit. The length at which WKWebView gives up is still unmeasured
+  > and this question stays open for it.
+  >
+  > **What it does settle for Phase 3, which is why it was run now.** The budget
+  > bounds *whether* the pane draws a document whole; **nothing bounds the retained
+  > set itself**, and its cost is quadratic in the scale — re-derived here and
+  > confirmed against two measured widths, 5.832 MiB a page at 520 px and 10.574 at
+  > 700, a ratio of 1.813 against (700/520)² = 1.813. So a six-page retention costs
+  > 35 MiB at fit-to-width and **560 MiB at 400%**, on a budget of 128. A zoom that
+  > re-derives the scale without re-deciding what is held would put the pane back
+  > where Phase 5 found it. Phase 3 must either bound the retained set or evaluate
+  > the budget against the zoomed cost, and its review round is where that is
+  > argued.
+
 ## 4. Implementation phases
 
 ### Phase 1 — the page is drawn here
