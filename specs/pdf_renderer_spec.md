@@ -1301,6 +1301,20 @@ nothing but shipped Phase 1.
   and a canvas's bitmap is opaque white where `pdf.js` filled it, so an inset
   ring would be invisible.
 
+  > **CORRECTED 2026-08-26, by Phase 3.** Both premises above have moved and
+  > the hairline now rings all four edges, `box-shadow: 0 0 0 1px var(--edge)`.
+  > The first premise — no background beside a page — held of the only fit there
+  > was; fit-page above its boundary and a small pinned scale both draw a page
+  > narrower than the pane, `--ground` shows beside it, and the ring is what
+  > draws its edge. The second — that an outset ring spreads outside
+  > `overflow-x: hidden`'s clip — moved with the clip, which Phase 3 replaces
+  > with `overflow-x: auto` so a zoomed page is reachable. **At fit-width
+  > nothing this phase shipped changes visibly**: the side pixels land outside
+  > the scrollport and a `box-shadow` is painted ink rather than scrollable
+  > overflow, so they are neither shown nor given a track. The reasoning below
+  > about `inset`, about `box-shadow` rather than a border, and about naming
+  > `--edge` is unaffected and still holds.
+
   **The hairline is `box-shadow: 0 -1px 0 var(--edge), 0 1px 0 var(--edge)`**,
   painted into the gap above and below each page. `--edge` is named because
   `box-shadow` with no colour resolves to `currentColor`, which inherits
@@ -1487,6 +1501,16 @@ measured at 71 pages, growing without bound, still stands.
   you let go*, and its gate clause 3, regressed by a freshness test that looked
   correct. With width in the test: **the round trip 520 → 700 → 520 returns to
   116.64 MiB, sharp, exactly where it opened.**
+
+  > **CORRECTED 2026-08-26, by Phase 3.** The two passes are three: an open, a
+  > width rest, **and a fit change**. The addition is mechanically free — the fit
+  > change rides the width rest's path, and `decideMode` already lives in
+  > `refill` — and it is not optional, because a scale multiplies a page's cost
+  > by its square. A 20-page document pinned at 200% costs 612 MiB retained for
+  > an implementation that re-derives the scale without re-deciding what is
+  > held, on the budget this rule sets at 128. Everything below about *which*
+  > passes move the width term, and about a scroll-rest drain re-evaluating
+  > nothing, is unaffected: scrolling moves neither a width nor a fit.
 
   **2. The budget is evaluated at the two passes that can move it — an open and a
   width rest — and never once per document.** A scroll-rest drain is a pass and

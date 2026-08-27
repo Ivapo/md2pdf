@@ -128,6 +128,13 @@ too.
 the document moved, so nothing about your place in it does either — the page just refits
 to the width you gave it and comes back sharp when you let go.
 
+**The control beside `Lines` says how big the page is drawn.** `Fit width` is where it
+starts and is what the pane has always done; `Fit page` puts a whole page in the window;
+and the percentages below them pin a size of your own, up to 400%, where a page wider
+than the pane scrolls sideways. Changing it keeps your place in the document, and the
+page is drawn again at the new size rather than stretched to it. Opening a file goes
+back to `Fit width`.
+
 **The page is text, not a picture of text.** Select and copy from it as you would in any
 PDF reader — on a long document, from the pages around the one you are reading, which are
 the ones the app keeps drawn — and click a cross-reference to jump to the figure, table,

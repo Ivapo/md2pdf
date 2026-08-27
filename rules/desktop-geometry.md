@@ -3,35 +3,82 @@ title: desktop-geometry
 sources:
   - app/dist/index.html
 covers: >
-  the desktop pane's geometry and what it costs: the fit that is an expression
-  rather than a state and the container it is measured from, the gap that tells
-  one page from the next and the hairline that draws its edges, the one writer of
-  a page's CSS box and of the property that carries its layers, the backing store
-  derived from the logical size, the width a gesture carries by CSS size and a
-  rest answers by a render, the reader's place held across both and what marks a
-  gesture's start, the geometry the page observes rather than infers, the budget
-  that decides whether the pane draws a document whole and the two passes that
-  evaluate it, the layout separated from the raster, the pages the reader is near
-  and the observer that reports them, the two terms a raster's freshness turns on,
-  the one drawing pass and the rest it re-checks before every page, the release
-  that zeroes a canvas and the two sweeps that catch one, and the surface the pane
-  publishes for its own gate
-max_lines: 240
+  the desktop pane's geometry and what it costs: the three fits the reader
+  chooses between and the one expression each derives, the control that offers
+  them and the cap that is its own last option, the container every width is
+  measured from and the axis a zoomed page may overflow, the gap that tells one
+  page from the next, the ring that draws a page's edges and the margins that
+  centre one narrower than the pane, the one writer of a page's CSS box and of
+  the property that carries its layers, the backing store derived from the
+  logical size, the width a gesture carries by CSS size and a rest answers by a
+  render, the reader's place held across both, the one comparison that opens a
+  gesture and passes a fit change through, the geometry the page observes rather
+  than infers, the budget that decides whether the pane draws a document whole
+  and the three passes that evaluate it, the layout separated from the raster,
+  the pages the reader is near and the observer that reports them, the two terms
+  a raster's freshness turns on, the one drawing pass and the rest it re-checks
+  before every page, the release that zeroes a canvas and the two sweeps that
+  catch one, and the surface the pane publishes for its own gate
+max_lines: 340
 generated: null
 ---
 
 # Desktop geometry
 
-How wide a page is drawn, how the pane answers a width that is moving, where the
-reader is kept across that, and how much of a document the pane holds at once.
+How big a page is drawn and who decides, how the pane answers a width that is
+moving, where the reader is kept across that, and how much of a document the
+pane holds at once.
 Its sibling `desktop-panes.md` has the panes themselves — the front end, the
 renderer, the wrapper a page is, the panel and the gutter.
 
-## The page's width
+## The page's size
 
-**The fit is an expression, not a state.** `scale = paneWidth / naturalWidth`,
-recomputed on every render, so it cannot go stale — there is no stored fit to
-disagree with the pane.
+**There are three fits and the reader picks one**: `fitMode` is `width | page |
+manual`, with `fitScale` beside it under the third. What moves re-derives under
+the first two and is held under the third. **Fit-to-width is the default** and
+an Open puts it back — an open is not a zoom request — which `clear()` does
+with the rest of the pane's state.
+
+**The word is "fit" and never "mode".** `mode`, `decideMode` and `__pane.mode`
+are the whole-or-band retention below, a different question about the same
+pane, and a second `mode` here would hand a reader the wrong variable at the
+first grep.
+
+**The scale is chosen in `layoutPages` and nowhere else, one expression per fit
+and all three in `scaleFor`**: `paneWidth / natural.w` under width,
+`min(paneWidth / natural.w, paneHeight / natural.h)` under page, and `fitScale`
+under manual. Everything downstream — the CSS box, `--total-scale-factor`, the
+backing store, the reader's anchor, the budget — follows from the viewport it
+produces. **The pane is passed in rather than read there**, so one pass sizes
+every page against one measurement of the box.
+
+**The pass stores what it derived, unrounded, in `fitted`.** Recovering it from
+the rounded CSS box as `logical.w / natural.w` is a different number and never
+equals a fit-page derivation, so every rest would re-lay the document out for
+nothing.
+
+**The control is a `<select id="fit">` in the header, and its option list is the
+cap.** `Fit width`, `Fit page`, then `50% · 75% · 100% · 125% · 150% · 200% ·
+300% · 400%`. Nothing above 400% is offered and no second clamp is written
+anywhere: there is no pinch and no wheel, so the control is the whole surface,
+and a scale stated twice would be a scale stated once wrongly. **400% is the
+last step that fits the budget**: a pinned page costs `7.645·s²` MiB of backing
+store at `devicePixelRatio` 2 whatever the pane measures, so above about 410% —
+`√(128 / 7.645) = 4.09` — one page alone exceeds 128 MiB, where holding fewer
+has stopped being a lever because one is the floor. While a reader holds a zoom
+the retained set may reach two pages and 245 MiB, roughly twice the budget:
+accepted, because the ladder below measured 4.85 GiB drawn and answering, so
+this spends headroom known to exist. The backing store is not lowered to buy it
+back — that spends the sharpness the renderer exists for, exactly where a reader
+zoomed in to look.
+
+**A fit change is a rest and never a gesture.** Nothing about it is continuous,
+so it takes the width rest's path unmodified — set the fit, read the anchor if
+none is held, then layout, `applyAnchor`, `refill` — and inherits that path's
+deferral behind a running render, its cosmetic catch, and its budget pass. The
+anchor is read *before* the layout, which is the whole of what carries the
+reader: taken after it, a reader at page 36 fraction 0.499 switching from
+fit-width to 200% lands at page 16 fraction 0.684.
 
 **`paneWidth` is `clientWidth` of `#pages`, the scroll container, and not of the
 `#preview` column around it.** Six A4 pages make it scroll, and on a machine set
@@ -42,39 +89,58 @@ width cannot move under the fit: with `auto`, a document sitting just under the
 scroll threshold gains a scrollbar the moment the canvases widen, the content
 box narrows by the track, and the pages clip.
 
-**A page is separated from the next by 16 CSS pixels, and from the container's
-sides by nothing.** The gap is `margin-top` on each page's
+**The other axis is `auto`, and it is what makes a zoomed page reachable** —
+2,381 px against a 520 px pane at 400%, where `hidden` would put everything past
+the right edge out of reach rather than merely off screen. **The asymmetry costs
+nothing**: only a pinned scale overflows sideways, and a pinned scale is the one
+fit that does not read the pane, so the track it raises cannot move a scale under
+itself. Fit-page is the fit that reads `clientHeight`, and it never overflows
+sideways — its scale is at most `paneWidth / natural.w` — so that track is never
+in the height it measures. The horizontal offset across a re-render is whatever
+element reuse preserves; the anchor stays *(page, vertical fraction)*.
+
+**A page is separated from the next by 16 CSS pixels, and the container adds
+nothing at its own sides.** The gap is the top margin on each page's
 wrapper, plus `#pages::after` for the one below the last page — a pseudo-element
 rather than a bottom margin, because whether a scroll container's last child's
 margin reaches `scrollHeight` is engine-dependent and this ships on WKWebView,
 and rather than a spacer element, because `layoutPages` addresses
 `pages.children[n - 1]` and every geometry function, and the drainer with them,
-assumes each child is a page carrying `.logical`. **`margin-top` is
-the property and that is a decision**: `offsetTop` includes an element's top
-margin, so the reader's place moves with the gap; `#pages` is a block formatting
-context by virtue of `overflow-y: scroll`, so the first page's margin does not
-collapse out of it; and only top margins exist, so no pair of siblings collapses
-to less than the constant. It is a length rather than a ratio, because a
-percentage resolves against the containing block's *width* and would track the
-divider. **Nothing at the sides, and not because the width is wanted
-elsewhere**: `clientWidth` *includes* padding, so side padding would leave
-`paneWidth` unchanged, the canvases would be sized past the content box, and
-they would clip silently. The gap is chrome and not content, so it is a constant
-that does not scale with a gesture — `fit()` and `unscale()` know nothing about
-it.
+assumes each child is a page carrying `.logical` and `.natural`.
+**The declaration is `margin: 16px auto 0` and every part of it is a
+decision.** `offsetTop` includes an element's top margin, so the reader's place
+moves with the gap; `#pages` is a block formatting context by virtue of
+`overflow-y: scroll`, so the first page's margin does not collapse out of it;
+and no *bottom* margin exists, so no pair of siblings collapses to less than the
+constant. It is a length rather than a ratio, because a percentage resolves
+against the containing block's *width* and would track the divider. **No padding
+at the container's sides, and not because the width is wanted elsewhere**:
+`clientWidth` *includes* padding, so side padding would leave `paneWidth`
+unchanged, the canvases would be sized past the content box, and they would clip
+silently. The gap is chrome and not content, so it is a constant that does not
+scale with a gesture or a zoom — `fit()` and `unscale()` know nothing about it.
 
-**Each page wears a hairline along its top and bottom edges and along neither
-side**, `box-shadow: 0 -1px 0 var(--edge), 0 1px 0 var(--edge)`, painted into
-the gap. A shadow rather than a border so that it costs no layout: under
+**The auto sides centre a page narrower than the pane**, which fit-page above
+its boundary and a small pinned scale both draw and fit-to-width never could. An
+auto margin resolves to zero when the page is at least as wide as the containing
+block, so fit-to-width is untouched to the pixel and a zoomed page still
+overflows to the right, where it is reachable.
+
+**Each page wears a one-pixel ring on all four edges**, `box-shadow: 0 0 0 1px
+var(--edge)`. A shadow rather than a border so that it costs no layout: under
 `content-box` a border would make each canvas two pixels taller than the height
 `size()` wrote, and `offsetHeight` — which the reader's place is expressed in —
-would stop being the raster's own height. Top and bottom only because a
-fit-to-width canvas meets the scrollport's own side edges, so there is no
-background beside a page to separate it from, and an outset ring would spread
-outside `overflow-x: hidden`'s clip anyway. `inset` is not the escape either: an
+would stop being the raster's own height. `inset` is not the escape either: an
 inset shadow paints beneath a replaced element's content, and a canvas is opaque
 white where `pdf.js` filled it. The colour is named because a colourless
 `box-shadow` resolves to `currentColor`, which inherits `--ink`.
+
+**At fit-width nothing of the ring is visible and nothing changed.** The side
+pixels land at x ∈ [−1, 0) and [W, W+1), outside the scrollport, and a
+`box-shadow` is painted ink rather than scrollable overflow — so `overflow-x:
+auto` neither shows them nor grows a track for them. Where `--ground` shows
+beside a page, the ring is what draws its edge; that case exists only because
+the fits made it.
 
 **`size()` is the one writer of a page's CSS box and the one writer of
 `--total-scale-factor`**, which is what carries the two layers through a gesture
@@ -100,8 +166,14 @@ and flooring that costs a device pixel the CSS size still claims. Sharpness is
 the display's own pixel ratio, and it is the thing a transform over a committed
 raster could never do.
 
-So the two halves of a resize are answered differently. **While a width is
-changing the canvases are resized by CSS**, their backing stores untouched and
+So the two halves of a resize are answered differently, and **only the width
+fit has a page that should track a moving pane** — `fit()` returns at once under
+the other two, so under fit-page the page keeps its size through a drag and
+under manual it keeps the size the reader pinned. Below fit-page's boundary that
+fit *is* width-bound, so there a drag holds the page at its old size until the
+rest snaps it: the accepted cost of one rule rather than three.
+
+**While a width is changing the canvases are resized by CSS**, their backing stores untouched and
 the browser resampling bitmaps it already has. A render costs some 94 ms for six
 pages against a frame's 16.7 ms, so a render per `pointermove` would be
 cancelled by the next and nothing would complete until the hand came off — and a
@@ -116,8 +188,7 @@ in one at a time and the list then briefly holds rasters from two widths.
 **When the width rests the pages are drawn again**, sharp, from the retained
 document. It fires on `pointerup` and, through one 200 ms timer, on a window
 resize — a drag ends on an event and a window resize does not — and is skipped
-when the width did not move, so a window resized by its height alone costs
-nothing. **The timer waits for a render already running rather than cancelling
+when **the scale the fit derives is the scale the layout holds**. **The timer waits for a render already running rather than cancelling
 it**: opening a document unhides the pane, which is a resize, which arms the
 timer, so it can come due mid-render and cancel the very render about to set the
 fit. The count of running renders is a count and not a flag, because a superseded
@@ -137,12 +208,25 @@ gesture, while the canvases still hold their pre-gesture size, and reapplied on
 every step as well as after the render that ends it. Taken at the render it would
 faithfully preserve a position the drag had already ruined.
 
-**What marks a start is `fitted` itself** — the width the raster now in the
-canvases was made for. A width arriving while it differs opens a gesture; one
-arriving while a gesture is open continues it. Nothing keys on `pointerdown`,
-because a window drag-resize and a control taking width out of the column have no
-pointer event to key on. A compile landing mid-gesture keeps the reader's place
-and skips the caret jump, for that compile only.
+**What marks a start is `fitted` itself** — the scale the raster now in the
+canvases was made for. A derived scale arriving while it differs opens a
+gesture; one arriving while a gesture is open continues it. Nothing keys on
+`pointerdown`, because a window drag-resize, a control taking width out of the
+column, and the fit control itself have no pointer event to key on. A compile
+landing mid-gesture keeps the reader's place and skips the caret jump, for that
+compile only.
+
+**One comparison answers four cases, and it was a width until the fits arrived.**
+A width is the right thing to compare only while width is the one input. As a
+scale: a window resized by its height alone still costs nothing under
+fit-to-width; a height-only resize under fit-page *does* re-derive, which a width
+comparison could never notice, so the page goes on fitting the pane; a width rest
+under a pinned scale derives the same number and costs nothing; and a fit change
+passes the rest's own guard on its own, because the derived scale moved while the
+width did not. **A null derivation is not a scale that failed to move**: it means
+the pane holds no page, and a layout that could not measure the pane leaves
+`fitted` null too — skipping there would refuse the render meant to fix it, for
+the life of the window.
 
 **The pane's geometry is observed, not inferred from the events believed to
 change it.** A `ResizeObserver` on the scroll container, not a list of listeners.
@@ -165,11 +249,19 @@ process, which nobody has measured. Under it a document is drawn whole and
 nothing a reader sees changes; over it the pane holds the pages the reader is
 near and lets the rest go.
 
-**It is evaluated at the two passes that can move it, an open and a width rest,
-and never once per document.** Five shipped causes move the pane's width — the
-divider, a window resize, the panel folding, the gutter, and an open itself, the
-panel being shown for any document naming sections. A pass after a scroll
-re-evaluates nothing, correctly: scrolling moves no width.
+**It is evaluated at the three passes that can move it — an open, a width rest
+and a fit change — and never once per document.** A pass after a scroll
+re-evaluates nothing, correctly: scrolling moves neither width nor fit. Five
+shipped causes move the *width* term: the divider, a window resize, the panel
+folding, the gutter, and an open itself, the panel being shown for any document
+naming sections.
+
+**The third pass costs nothing to add and is not optional.** It is free because
+the fit change rides the width rest's path, which already reaches the decision;
+it is required because a scale multiplies a page's cost by its square — 30.6 MiB
+at 200% where fit-to-width costs 7.6 — so an implementation that re-derived the
+scale without re-deciding what is held would draw a 20-page document whole at
+612 MiB on a budget of 128.
 
 **The layout is separated from the raster.** `layoutPages` sizes every page from
 its own viewport and draws none, so the child list, `scrollHeight`, every
@@ -227,7 +319,8 @@ a link outside it is not there to click. The pass sweeps after every page drawn
 and once more as it ends, a page dropped while its own render is in flight having
 no canvas to release at that moment.
 
-**The pane publishes `window.__pane`** — its mode, the renders started, what the
-sizing pass and the last raster cost, when the observer first delivered, and the
-canvases made and released. It ships because nothing in this repository reaches
+**The pane publishes `window.__pane`** — its mode, the fit in force and the
+scale the layout derived from it, the renders started, what the sizing pass and
+the last raster cost, when the observer first delivered, and the canvases made
+and released. It ships because nothing in this repository reaches
 this file, so the pane's gate is read by a person at a console.
