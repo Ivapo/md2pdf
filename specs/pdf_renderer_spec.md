@@ -22,7 +22,7 @@ phases:
     by: null
   - name: "Phase 3 — the zoom the reader owns"
     reviewed: 2026-08-26
-    shipped: null
+    shipped: 2026-08-26
     cut: null
     by: null
   - name: "Phase 4 — the pages are told apart"

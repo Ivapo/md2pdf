@@ -353,9 +353,19 @@
           : adds.length === 0 ? `no page was added: the pass reused all ${n}, so this ran over a re-open rather than from the empty state`
           : `${adds.length} adding record(s), ${adds[0].added} pages at once, wanted ${n}`)
 
-      // 5 — the extent is exact from layout alone.
-      ok(5, 'the extent is exact from layout', pages.scrollHeight === 53337,
-        `scrollHeight ${pages.scrollHeight}, wanted 53337`)
+      /*
+        5 — the extent is exact from layout alone. **Derived from the pane
+        rather than remembered.** 53,337 is 71 A4 pages and their gaps at a
+        520 px pane; a machine whose scrollbar is two pixels wider produces
+        53,195 with nothing whatever wrong, and the clause then reports a
+        defect that is really a scrollbar. What is being tested is that the
+        extent is exact from layout alone, at whatever width the pane has.
+      */
+      const tall = Math.round((pages.clientWidth * 841.89) / 595.28)
+      const extent = n * tall + (n + 1) * 16
+      ok(5, 'the extent is exact from layout', pages.scrollHeight === extent,
+        `scrollHeight ${pages.scrollHeight}, wanted ${extent} — ${n} pages of ` +
+        `${tall} px at a ${pages.clientWidth} px pane, plus ${n + 1} gaps of 16`)
 
       // 2 — retention is the band, not the document.
       pages.scrollTop = 0; await wait(500); await idle()
