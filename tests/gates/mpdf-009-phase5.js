@@ -220,19 +220,33 @@
       commonest cause: it is `flex: none` above `#pages` in the same column and
       takes its height out of the pane.
     */
+    /*
+      **The height is a reading here and not a result**, which is the opposite
+      of Phase 5's `pre()` and is deliberate. Every MiB literal these clauses
+      check is a function of `devicePixelRatio` and the page's own size — a
+      pinned page costs the same at any pane height — and the two things the
+      height *does* move, the fit-page boundary and how many pages the band
+      holds, are the two things no clause below is written against any more. A
+      display too short for an 1100 px window is therefore a note, not a
+      failure. It is still worth saying, because it changes which entry point
+      applies.
+    */
     if (h < 1001 || h > 1126) {
-      good = false
-      note(`pane height is ${h}, outside 1001–1126 — the window is not at its default ~900×1100${
+      note(`pane height is ${h}, outside the default window's 1001–1126${
         document.getElementById('error').hidden ? '' : ', and #error is visible above the pane, eating its height'
-      }. The boundary reads ${b} here against 745 there, so which entry point applies has moved with it.`)
+      } — a reading, not a failure: the boundary reads ${b} here against 745 there, so which entry point applies moves with it, and the band holds fewer pages. No clause below turns on either.`)
     }
+    /*
+      **Only `wide()` cares where the pane sits against the boundary**, because
+      it is the only entry point with a fit-page clause in it. `fits()` runs the
+      width and manual fits, which are the same answer on either side of it — so
+      a boundary check there reports a failure about a clause nobody is running,
+      and on a display too short for an 1100 px window it always would: at a 725
+      px pane the boundary is 513 and the reference 520 px pane is above it.
+    */
     if (wide && w <= b) {
       good = false
       note(`pane is ${w}, at or under the fit-page boundary ${b} — widen the window until pages.clientWidth exceeds it, or fit-page is fit-width and these clauses test nothing`)
-    }
-    if (!wide && w >= b) {
-      good = false
-      note(`pane is ${w}, at or above the boundary ${b} — these clauses want a pane below it, which at the default window is anything under 745; if the pane is already 520 the window is too short rather than too wide`)
     }
     ok('P3·0', 'preconditions', good, `dpr ${devicePixelRatio}, pane ${w}×${h}, boundary ${b}`)
     return good
@@ -695,8 +709,9 @@
 
       await setFit('width')
       await width(520)
-      ok('P3·2', 'fit-page is not distinct at this pane, and is not tested here', true,
-        `pane ${pages.clientWidth} against boundary ${boundary()} — run __gate.wide() with the window widened`)
+      note(`fit-page is not exercised here: pane ${pages.clientWidth} against boundary ${boundary()}. ` +
+        `Run __gate.wide() with pages.clientWidth above that number — which on a window too short ` +
+        `for 1100 px it may already be.`)
       return tally('long.md — the fits')
     },
 
