@@ -2,6 +2,8 @@
 title: desktop-panes
 sources:
   - app/dist/index.html
+  - app/tsconfig.json
+  - app/typecheck.mjs
   - app/src/document.rs
   - app/src/preview.rs
 covers: >
@@ -18,7 +20,9 @@ covers: >
   bundle does not carry and the app supplies, the gutter whose rows are as tall
   as their lines render, the follow
   that keeps the numbers against their lines, the caret's two marks and the
-  pane that loses both when it empties
+  pane that loses both when it empties, the check that reads this file and the
+  two declarations it holds to each other, and the seven defects that check
+  does not reach
 max_lines: 300
 generated: 2026-08-26
 ---
@@ -262,11 +266,46 @@ that early return clears the mark on its way out; without it the previous
 document's band stayed painted across an empty, disabled pane until something
 opened.
 
-## What nothing checks
+## What checks it, and what that does not reach
 
-**No test in this repository reaches this file.** `withGlobalTauri` bought one
-Cargo build and no node toolchain, and the price is that everything above is
-checked by eye. The narrowest edge is that nothing checks the page and `Status`
-agree: `invoke` returns an untyped value, the page reads a dozen fields off it
-by name, and a field renamed in Rust breaks the window silently at runtime.
-`specs/desktop_app_spec.md` OQ-10 carries it.
+**`app/typecheck.mjs` type-checks this file.** It mirrors the page — every line
+outside `<script type="module">` blanked, and the one relative `pdfjs` specifier
+rewritten to the bare name, which `app/tsconfig.json`'s `paths` answers with the
+vendored declarations and a relative specifier cannot be given types for — and
+runs TypeScript **5.9.3, pinned**, over the result. Both rules are
+line-preserving and the script asserts it, so every diagnostic cites a real
+`app/dist/index.html` line. It runs in CI on a push touching the page, the
+settings, the declarations or the script, and **never in `cargo test`**: bun is
+not a prerequisite of this workspace, and the Rust suite does not acquire one to
+check a file it otherwise never opens.
+
+**`strictNullChecks` and `noImplicitAny` are off, and that was measured rather
+than assumed.** With them on the shipped page reports **243** errors and not one
+is a defect: 112 nullable `getElementById` results, 78 implicit `any`, and the
+rest the page's own expando properties. With them off it reported **41**, and
+every one of those is an annotation the file now carries — the typedef block at
+the top of its script, the DOM subtypes `getElementById` cannot know, `doc` and
+`loading`, and the two `AnnotationLayer` call sites whose declarations require
+fields `pdf.js` tolerates the absence of at runtime.
+
+**The page and `Status` are held to each other from both sides.** The typedef
+block declares `Status`'s ten fields and `Anchor`'s two; the type check binds
+the page's reads to those, and `app/src/preview.rs`'s
+`the_page_typedefs_name_exactly_the_fields_status_serializes` compares the same
+`@property` lists against a serialized `Status` carrying one `Anchor` — which it
+must carry, since an empty list puts no `Anchor` in the JSON at all. **Two
+declarations compared with each other**, rather than usage compared against a
+declaration. A field renamed on either side alone fails one of the two.
+
+**What none of it reaches is most of what has gone wrong in this file.** Of the
+eight defects it has produced, a type check catches **one** — a `destroy` that
+`PDFDocumentProxy` does not have, swallowed by optional chaining, and caught in
+review before it shipped. The seven it misses are `ResizeObserver` feedback
+through a box the callback resized, an `IntersectionObserver`'s delivery racing
+an animation frame, a forced pass dropped rather than re-armed, a stale
+`deliveryMs`, a settle timer cancelling the render that was about to set the
+fit, a counter advanced for a render that never drew, and an early return
+leaving a caret band on an empty pane. Every one is behaviour, and no type
+system sees any of them: `tests/gates/mpdf-009-phase5.js`, pasted into a
+console, is still the only thing that does. `specs/desktop_app_spec.md` OQ-10
+carries what is left.

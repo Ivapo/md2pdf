@@ -337,5 +337,6 @@ no canvas to release at that moment.
 **The pane publishes `window.__pane`** — its mode, the fit in force and the
 scale the layout derived from it, the renders started, what the sizing pass and
 the last raster cost, when the observer first delivered, and the canvases made
-and released. It ships because nothing in this repository reaches
-this file, so the pane's gate is read by a person at a console.
+and released. It ships because the pane's gate is read by a person at a console:
+the type check `rules/desktop-panes.md` describes reaches this file's
+declarations and reaches none of its geometry.

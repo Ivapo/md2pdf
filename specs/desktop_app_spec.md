@@ -50,7 +50,7 @@ phases:
     by: null
   - name: "Phase 9 — what checks the front end"
     reviewed: 2026-08-27
-    shipped: null
+    shipped: 2026-08-27
     cut: null
     by: null
 
