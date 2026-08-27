@@ -753,17 +753,115 @@
       pdfjs.GlobalWorkerOptions.workerSrc =
         new URL('./pdfjs/pdf.worker.min.mjs', import.meta.url).href
 
-      const { open, save } = window.__TAURI__.dialog
-      const { invoke } = window.__TAURI__.core
-      const { listen } = window.__TAURI__.event
+      /*
+        **The types this file is checked against, in one block.** Everywhere
+        else the comments here are arguments; JSDoc is annotation, and
+        interleaving the two would cost the arguments their shape. What runs the
+        check is `app/typecheck.mjs`, which is not part of any build — see
+        `app/tsconfig.json` for why its settings are what they are.
 
-      const pages = document.getElementById('pages')
-      const text = document.getElementById('text')
+        **`Status` and `Anchor` are the point, and they are the two that can
+        lie.** `invoke` returns an untyped value and this page reads ten fields
+        off it by name, so a field renamed in Rust would break the window
+        silently at runtime. `app/src/preview.rs`'s own test compares the
+        `@property` lists below against a serialized `Status` — two declarations
+        checked against each other, rather than usage checked against a
+        declaration — so keep them written as they are and the test will keep
+        them true.
+      */
+
+      /**
+       * Everything the window says about the last compile, in one value:
+       * `app/src/preview.rs:Status`, as `invoke('status')` answers it.
+       *
+       * @typedef {object} Status
+       * @property {'empty' | 'current' | 'stale' | 'failed'} state
+       * @property {string | null} time
+       * @property {string | null} error
+       * @property {boolean} page
+       * @property {string | null} divergence
+       * @property {number} revision
+       * @property {number} reloaded
+       * @property {Anchor[]} anchors
+       * @property {string[]} sections
+       * @property {string | null} master
+       */
+
+      /**
+       * A heading in the document the pane holds, and the page its compiled
+       * form landed on: `app/src/document.rs:Anchor`. **Both are 1-based**, and
+       * neither is the `Place` below.
+       *
+       * @typedef {object} Anchor
+       * @property {number} line
+       * @property {number} page
+       */
+
+      /**
+       * Where the reader is. **A 0-based index and a fraction, not an
+       * `Anchor`** — the two are a page apart and the collision is the reason
+       * this one is named separately.
+       *
+       * @typedef {object} Place
+       * @property {number} page
+       * @property {number} fraction
+       */
+
+      /** A CSS or a PDF-unit size, depending on which of a wrapper's two it is.
+       * @typedef {{ w: number, h: number }} Size */
+
+      /**
+       * A page's own element, and the four properties this file hangs on it:
+       * the CSS box it is written at, its size in the document's own units, the
+       * viewport a destination is resolved through, and its 1-based number.
+       *
+       * @typedef {HTMLElement & { logical: Size, natural: Size, view: PageViewport, number: number }} PageWrapper
+       */
+
+      /** The container of those, whose children are all wrappers.
+       * @typedef {HTMLElement & { children: HTMLCollectionOf<PageWrapper> }} PagesPane */
+
+      /** A page's raster, tagged with the document generation it was drawn from.
+       * @typedef {HTMLCanvasElement & { gen: number }} PaneCanvas */
+
+      /** @typedef {import('pdfjs-dist').PDFDocumentProxy} PDFDocumentProxy */
+      /** @typedef {import('pdfjs-dist').PDFDocumentLoadingTask} PDFDocumentLoadingTask */
+      /** @typedef {import('pdfjs-dist').PDFPageProxy} PDFPageProxy */
+      /** @typedef {import('pdfjs-dist').PageViewport} PageViewport */
+
+      /** A viewport at scale 1, whose `rawDims` the vendored declarations type
+       * only as `Object`.
+       * @typedef {PageViewport & { rawDims: { pageWidth: number, pageHeight: number } }} UnitViewport */
+
+      /** What `box()` reads off the container. @typedef {{ width: number, height: number }} Room */
+
+      /** Where each gutter row starts, carrying the heights it was built from.
+       * @typedef {number[] & { heights: number[] }} Rows */
+
+      /*
+        **`withGlobalTauri` puts an untyped API on `window`**, and typing it
+        here would be a hand-written shim for somebody else's interface — the
+        drift hazard this file vendors `pdfjs-dist`'s own declarations to avoid,
+        reintroduced for the one dependency that has no declarations to vendor.
+        So the three below, and `window.__pane` further down, reach their
+        property by name rather than through a cast: what they destructure is
+        checked by the window opening, and what they carry across is checked by
+        `Status`. **The form is not a preference.** A cast is written
+        `(window).__pane = pane` with the type in a comment before it, and on
+        that line the preceding `}` turns the object literal above into a call
+        — which is what this check reported the first time it was tried.
+      */
+      const { open, save } = window['__TAURI__'].dialog
+      const { invoke } = window['__TAURI__'].core
+      const { listen } = window['__TAURI__'].event
+
+      const pages = /** @type {PagesPane} */ (document.getElementById('pages'))
+      const text = /** @type {HTMLTextAreaElement} */ (document.getElementById('text'))
       const message = document.getElementById('message')
       const divergence = document.getElementById('divergence')
       const error = document.getElementById('error')
       const status = document.getElementById('status')
-      const fitControl = document.getElementById('fit')
+      const fitControl = /** @type {HTMLSelectElement} */ (document.getElementById('fit'))
 
       /*
         The document the canvases were drawn from, held between renders, and
@@ -781,7 +879,9 @@
         pane re-opens every time the typing stops, so dropping one without
         destroying it leaks a thread and its copy of the document per compile.
       */
+      /** @type {PDFDocumentLoadingTask | null} */
       let loading = null
+      /** @type {PDFDocumentProxy | null} */
       let doc = null
 
       /*
@@ -934,6 +1034,7 @@
         first, so the page knows whether there are new bytes to ask for at all.
       */
       async function refresh() {
+        /** @type {Status} */
         let state
         try {
           state = await invoke('status')
@@ -1001,6 +1102,10 @@
         author rather than the reader: scroll the pane elsewhere and the next
         compile brings it back to the caret.
       */
+      /**
+       * @param {Anchor[]} anchors
+       * @returns {number | null}
+       */
       function caretPage(anchors) {
         const line = text.value.slice(0, text.selectionStart).split('\n').length
 
@@ -1018,6 +1123,7 @@
         in Rust — the state's own name and the compile time — so this places
         text and never composes it.
       */
+      /** @param {Status} state */
       function report(state) {
         status.className = state.state
         status.textContent = state.time
@@ -1079,6 +1185,7 @@
         files.classList.toggle('collapsed', folded)
       })
 
+      /** @param {Status} state */
       function parts(state) {
         files.hidden = state.sections.length === 0
         toggle.hidden = files.hidden
@@ -1124,6 +1231,10 @@
         compile only, because the page must never move out from under a hand
         that is on it.
       */
+      /**
+       * @param {ArrayBuffer} bytes
+       * @param {number | null} page
+       */
       async function openPdf(bytes, page) {
         const seq = ++renderSeq
         cancelRenders()
@@ -1227,7 +1338,7 @@
               measured against the same pair. It is a property of the document
               and does not move with the pane.
             */
-            const unit = page.getViewport({ scale: 1 })
+            const unit = /** @type {UnitViewport} */ (page.getViewport({ scale: 1 }))
             const natural = { w: unit.rawDims.pageWidth, h: unit.rawDims.pageHeight }
 
             const scale = scaleFor(natural, room)
@@ -1254,7 +1365,9 @@
 
             let wrapper = pages.children[n - 1]
             if (!wrapper) {
-              wrapper = document.createElement('div')
+              // `any` and not `PageWrapper`: a bare div is not one yet, and
+              // the four assignments below are what make it one.
+              wrapper = /** @type {any} */ (document.createElement('div'))
               wrapper.className = 'page'
               grew = true
             }
@@ -1366,6 +1479,7 @@
 
       // The pages the reader is near. **Maintained and not rebuilt**: after its
       // first delivery the observer reports only what changed.
+      /** @type {Set<PageWrapper>} */
       const wanted = new Set()
       let watcher = null
 
@@ -1377,6 +1491,7 @@
       let draining = false
       let pending = false
       let moving = false
+      /** @type {ReturnType<typeof setTimeout> | null} */
       let resting = null
 
       // Resolves at the observer's first delivery, so a forced pass can wait for
@@ -1406,13 +1521,14 @@
         made: 0,
         released: 0
       }
-      window.__pane = pane
+      window['__pane'] = pane
 
       const since = (started) => Math.round((performance.now() - started) * 10) / 10
 
       // What one page's raster costs in bytes, which is the only term in the
       // budget — and the pane's width is inside it, which is why a budget in
       // pages is really a budget in megabytes.
+      /** @param {PageWrapper} wrapper */
       function cost(wrapper) {
         const ratio = window.devicePixelRatio
         return (
@@ -1484,8 +1600,8 @@
           (entries) => {
             if (pane.deliveryMs === null) pane.deliveryMs = since(started)
             for (const entry of entries) {
-              if (entry.isIntersecting) wanted.add(entry.target)
-              else wanted.delete(entry.target)
+              if (entry.isIntersecting) wanted.add(/** @type {PageWrapper} */ (entry.target))
+              else wanted.delete(/** @type {PageWrapper} */ (entry.target))
             }
             announce()
             drain(false)
@@ -1497,8 +1613,9 @@
 
       // Whether this page holds the raster the pane wants: the right document,
       // and the right width. See `docGen` for why it is both.
+      /** @param {PageWrapper} wrapper */
       function fresh(wrapper) {
-        const canvas = wrapper.querySelector('canvas')
+        const canvas = /** @type {PaneCanvas} */ (wrapper.querySelector('canvas'))
         return (
           canvas !== null &&
           canvas.gen === docGen &&
@@ -1510,6 +1627,7 @@
       // element leaves the backing store to a collector with no idea how much it
       // is holding — and the vendored bundle does exactly this for the same
       // reason. It answers false so a superseded render can `return drop(…)`.
+      /** @param {HTMLCanvasElement} canvas */
       function drop(canvas) {
         canvas.width = 0
         canvas.height = 0
@@ -1519,6 +1637,7 @@
 
       // A page back to a placeholder. Its two layers go with its canvas, which
       // is what keeps a selection to the pages the pane is actually holding.
+      /** @param {PageWrapper} wrapper */
       function release(wrapper) {
         const canvas = wrapper.querySelector('canvas')
         if (canvas === null) return
@@ -1560,6 +1679,10 @@
         gives it two. That invariant held only while every render built a new
         page element, and this is the phase that stops it being true.
       */
+      /**
+       * @param {PageWrapper} wrapper
+       * @param {number} seq
+       */
       async function paint(wrapper, seq) {
         const from = doc
         const gen = docGen
@@ -1569,7 +1692,7 @@
         if (seq !== renderSeq || from !== doc) return false
 
         const viewport = wrapper.view
-        const canvas = document.createElement('canvas')
+        const canvas = /** @type {PaneCanvas} */ (document.createElement('canvas'))
         canvas.width = Math.floor(wrapper.logical.w * ratio)
         canvas.height = Math.floor(wrapper.logical.h * ratio)
         canvas.gen = gen
@@ -1766,6 +1889,12 @@
         instead of replacing it. Every await re-checks that a newer render has
         not superseded this one, exactly as the loop around it does.
       */
+      /**
+       * @param {DocumentFragment} held
+       * @param {PDFPageProxy} page
+       * @param {PageViewport} viewport
+       * @param {number} seq
+       */
       async function drawLayers(held, page, viewport, seq) {
         const words = document.createElement('div')
         words.className = 'textLayer'
@@ -1783,18 +1912,22 @@
         const links = document.createElement('div')
         links.className = 'annotationLayer'
         held.append(links)
-        await new pdfjs.AnnotationLayer({
+        // The vendored declarations require fields `pdf.js` tolerates the
+        // absence of at runtime, and `linkService` is a duck type of three
+        // methods rather than an `IPDFLinkService`. Both are deliberate, and
+        // both are older than this check.
+        await new pdfjs.AnnotationLayer(/** @type {any} */ ({
           div: links,
           page,
           viewport: viewport.clone({ dontFlip: true }),
           linkService
-        }).render({
+        })).render(/** @type {any} */ ({
           annotations: found.filter(
             (link) =>
               link.annotationType === pdfjs.AnnotationType.LINK &&
               link.dest != null
           )
-        })
+        }))
       }
 
       /*
@@ -2022,6 +2155,10 @@
         `clientHeight` — harmless, because the fit that reads the height is
         the fit that never overflows sideways, and worth not relying on twice.
       */
+      /**
+       * @param {Size} natural
+       * @param {Room} room
+       */
       function scaleFor(natural, room) {
         if (fitMode === 'manual') return fitScale
         const byWidth = room.width / natural.w
@@ -2097,11 +2234,21 @@
         visible. Written as the one expression it needs no case analysis, which
         is the argument for writing it that way.
       */
+      /**
+       * @param {PageWrapper} page
+       * @param {number} scale
+       */
       function size(page, scale) {
         const width = page.logical.w * scale
         page.style.width = `${width}px`
         page.style.height = `${page.logical.h * scale}px`
-        page.style.setProperty('--total-scale-factor', width / page.natural.w)
+        // A number where the IDL says string, which WebIDL stringifies on the
+        // way in. It has always been written this way, and the declaration has
+        // no way to say so.
+        page.style.setProperty(
+          '--total-scale-factor',
+          /** @type {any} */ (width / page.natural.w)
+        )
       }
 
       /*
@@ -2142,6 +2289,7 @@
       }
 
       // Which page the container is scrolled into, and how far through it.
+      /** @returns {Place | null} */
       function readAnchor() {
         const kids = pages.children
         if (kids.length === 0) return null
@@ -2158,6 +2306,7 @@
         return { page: i, fraction: (top - kids[i].offsetTop) / height }
       }
 
+      /** @param {Place | null} at */
       function applyAnchor(at) {
         const kids = pages.children
         if (at === null || kids.length === 0) return
@@ -2239,6 +2388,7 @@
         nothing about the document turns on it, and it only decides when a
         picture is drawn again.
       */
+      /** @type {ReturnType<typeof setTimeout> | null} */
       let settling = null
       const settle = () => {
         clearTimeout(settling)
@@ -2315,6 +2465,7 @@
       let linedWidth = null
 
       // Where each row starts, plus the heights beside it. Null until measured.
+      /** @type {Rows | null} */
       let rows = null
 
       // Which gutter row currently wears the mark, so clearing it is one
@@ -2358,7 +2509,10 @@
         )
 
         // One read of the whole mirror, then one write of the whole gutter.
-        const heights = Array.from(mirror.children, (row) => row.offsetHeight)
+        const heights = Array.from(
+          /** @type {HTMLCollectionOf<HTMLElement>} */ (mirror.children),
+          (row) => row.offsetHeight
+        )
         lines.replaceChildren(
           ...heights.map((height, i) => {
             const row = document.createElement('div')
@@ -2370,10 +2524,10 @@
 
         // Kept for the band, which needs where each row starts and how tall it
         // is — the same measurement, so it is taken once and read twice.
-        rows = heights.reduce(
+        rows = /** @type {Rows} */ (heights.reduce(
           (at, height) => (at.push(at[at.length - 1] + height), at),
           [0]
-        )
+        ))
         rows.heights = heights
         marked = -1 // the rows above are new elements; none of them wears it
 
