@@ -21,7 +21,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 3 — the zoom the reader owns"
-    reviewed: null
+    reviewed: 2026-08-26
     shipped: null
     cut: null
     by: null
@@ -1060,6 +1060,10 @@ a decision the prototype had not been asked to exercise; this text folds them in
   the fit now derives, against the scale the layout holds.** Everything the round
   found follows from this one edit:
 
+  - **the layout stores the scale it derived, unrounded, and the comparison
+    reads that store** — recovered from the rounded box as `logical.w /
+    natural.w` it never equals a fit-page derivation, and every rest would
+    re-lay out the document for nothing;
   - a height-only resize re-derives fit-page, which the width comparison never
     would — the page would stop fitting the pane with no path back;
   - a width rest under manual derives the same pinned scale and costs nothing,
@@ -1075,7 +1079,10 @@ a decision the prototype had not been asked to exercise; this text folds them in
   **`fit()` acts only under the width fit.** A gesture is carried by CSS size so
   a page can track a moving pane; under page the scale is usually height-bound
   and under manual it is pinned, so in both the page keeps its size through the
-  drag and the rest settles anything the width did change. **Measured: a pane
+  drag and the rest settles anything the width did change. Below the boundary
+  fit-page is width-bound, so there a drag holds the page at its old size until
+  the rest snaps it — recorded as the accepted cost of one rule rather than
+  three. **Measured: a pane
   dragged 520 → 700 at 400% left the page at 2,381 px, the retained set at
   244.7 MiB and the reader at page 36 fraction 0.500.**
 
@@ -1135,9 +1142,13 @@ a decision the prototype had not been asked to exercise; this text folds them in
   **`tests/gates/mpdf-009-phase5.js`** — Phase 5's pasteable PASS/FAIL script,
   committed by this phase's round and extended with this gate's checks — read in
   the Web Inspector at `devicePixelRatio` 2 with always-show scrollbars. **The
-  fit-page boundary is `⌊clientHeight × 595.28 / 841.89⌋`** — 745 px at a 1054
-  pane, and it moves with the height, which is why it is an expression and not a
-  number. Clauses needing a pane above it say so and are read with the window
+  fit-page boundary is `round(clientHeight × 595.28 / 841.89)`** — rounded and
+  not floored, because `layoutPages` rounds the CSS box it lays out and a floor
+  misses it by a pixel at heights where the fraction lands above a half — 745 px
+  at a 1054 pane, and it moves with the height, which is why it is an expression
+  and not a number. `clientHeight` is read under a fit that overflows nothing
+  sideways — fit-page never does — so the horizontal track a pinned scale adds,
+  some 15 px on classic scrollbars, is not in the number. Clauses needing a pane above it say so and are read with the window
   widened until `pages.clientWidth` exceeds it.
 
   1. **Each fit holds across a divider drag and a window resize.** Width:
@@ -1149,8 +1160,10 @@ a decision the prototype had not been asked to exercise; this text folds them in
      above it, the page box is `boundary × clientHeight` against fit-width's
      wider box; at the 520 pane the two fits produce the identical 520 × 735 box
      and the comparison is deliberately not made there, where it tests nothing.
-  3. **The pinned scale survives a compile** — 400%, mid-document, the page still
-     2,381 px after the redraw and the reader held.
+  3. **The pinned scale survives a compile** — 400%, mid-document, the compile
+     caused by **an edit under the reader**: OQ-2 case 2 follows the caret, so an
+     edit elsewhere jumps the reader correctly and reads as a failure here. The
+     page still 2,381 px after the redraw and the reader held.
   4. **A page wider than the pane is reachable**: at 400%, `scrollWidth` 2,381
      against `clientWidth` 520 and the right edge reached by scrolling; at
      fit-width `scrollWidth === clientWidth === 520`.
@@ -1171,8 +1184,9 @@ a decision the prototype had not been asked to exercise; this text folds them in
      clause this time. A stretched raster during the transition is the accepted
      cost; sharp after.
   8. **The cap is the control's own edge**: nothing above 400% is offered, and at
-     400% `__pane` reads one page at 122.4 MiB — under the budget — and a
-     retained set of at most 244.7.
+     400% the script's canvas sum reads one page at 122.4 MiB — under the budget
+     — and a retained set of at most 244.7. `__pane` carries counters and
+     durations; the MiB readings are the sum's.
   9. **The budget is crossed by the fit alone, both ways, width untouched**: on
      `near.md` at the 520 pane — fit-width whole, 20 canvases, 116.64 MiB;
      manual 200% band, 2–3 canvases, 61.2–91.8 MiB; fit-width whole again,

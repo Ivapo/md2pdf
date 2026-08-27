@@ -2,6 +2,94 @@
 
 Append-only. Newest round first. One heading per round.
 
+### Round 2 — Phase 3 only — 2026-08-26 — the same panel of two, resumed — **READY (converged)**
+
+Both reviewers resumed with the adjudication and told to verify against the
+files, not the changelog. Five of five and nine of nine blockers confirmed
+resolved in the file as written, and every folded literal re-derived
+independently on the way — the 4.09 cap bound, clause 6's band of 2 at the top
+and 2–3 mid-document at 200%, clause 9's 116.64 → 61.2–91.8 → 116.64 crossing,
+and the 8-step control against the cap. The correctness lens verified the
+generalised guard composes with `rerender`, `refill`, `decideMode` and the
+observer machinery, and that `margin: 16px auto 0` resolves its auto margins to
+zero when a page is wider than the pane, so manual zoom still overflows right
+and stays reachable. The gate lens found a bonus: clause 6's `canvases × 30.6`
+sum arithmetically gates scale-freshness — a stale canvas kept across a fit
+change reads 7.6 and breaks the equality — so no separate clause is needed.
+
+**Six new findings, every one non-blocking and folded in the convergence pass:**
+clause 8's MiB readings are the gate script's canvas sum, `__pane` carrying
+counters and durations; the width-bound fit-page drag holds-then-snaps below the
+boundary, now recorded as the accepted cost of one rule rather than three; the
+boundary reads `clientHeight` under a fit that overflows nothing sideways, so
+the horizontal track a pinned scale adds is not in the number; the held scale is
+stored unrounded at layout, since recovered from the rounded box it never equals
+a fit-page derivation and every rest re-lays out for nothing; the boundary
+**rounds** rather than floors, matching `layoutPages`' own `Math.round`; and
+clause 3's compile is an edit under the reader, or OQ-2 case 2's caret-follow
+reads as a failure.
+
+**Converged at zero blocking. Phase 3 `reviewed: 2026-08-26`.** Two rounds
+against Phase 5's five — the difference being the prototype ran *before* round 1
+rather than being forced by round 2's escalation, which is the practice the
+Phase 5 episode's closing note asked for, used the first time it could be.
+
+### Round 1 — Phase 3 only — 2026-08-26 — panel of two, fresh — **NOT READY**
+
+**Round 0, asked once for the episode.** Does this produce the observable and is
+it the right thing to build? Yes — the observable is the typeset PDF at the size
+the reader asked for, and the pane today offers exactly one size, an
+approximation of fit-to-width. The residue is whether a reader *wants* an
+explicit zoom in a preview pane: the spec's own Phase 3 close-out once waived
+the README on "a zoom is not what the app is for". Answered by the reference —
+`armquill`'s viewer names the three fits — by `mpdf-003` having chosen WebKit's
+view partly for a zoom this app could not reach, and by Phase 3 being the last
+unshipped phase of an accepted spec, where cutting is a decision and not a
+default. Recorded, not resolved.
+
+**The phase was redrafted from a prototype before the round** — the three fits
+built onto the shipped front end and driven in WebKit, per the practice the
+Phase 5 episode earned — and the panel of two (correctness and grounding,
+exit-gate testability) still returned **fourteen distinct blockers**, every one
+an integration point or a decision the prototype had not been asked to
+exercise. The pattern is worth the sentence: a prototype answers the questions
+put to it, and round 1's value was naming the questions that had not been.
+
+The fourteen, deduplicated: the phase's central decision — what bounds the
+quadratic cost — presented as three options and deferred to "the round", with
+its gate clause literally unwritten; no control surface at all, on a front end
+whose every prior control the spec designed explicitly; the "two exceptions"
+claim undercounting the width-keyed machinery (a height-only resize never
+re-derives fit-page; `fit()` wrong under fit-page during a drag); the
+fit-change path eaten by `rerender`'s `box().width === fitted` guard, and the
+budget never re-evaluated at a fit change — `near.md` pinned to 200% is 612 MiB
+retained by an implementation that passes every clause as then written; the
+page-narrower-than-pane case two of the three fits create, undecided in
+placement and unreached by the hairline re-argument; a dangling citation to a
+gate clause that exists only in a script outside the repository; pinned-scale
+re-runs keyed to fit-width literals false at any pinned scale; the 745 px
+threshold height-coupled with the coupling unstated; mode-change directions
+vacuous at the geometry named; the transition itself sampled by no clause —
+the exact settle-sampling blind spot Phase 5's post-ship fix documents; and the
+word "mode" bound to Phase 5's whole-or-band state in the same file.
+
+**Adjudication: all accepted; one nuance recorded as a partial rejection.** The
+gate lens reproduced the 745 px pane as unreachable using the showcase's
+section panel; the clause runs on `long.md`, which names no sections, and the
+pane reaches ~775 at the default window — the accepted defect is the unstated
+height coupling, fixed with the expression, not the fixture. The author's
+decisions forced by the fold-in: the manual scale **capped at 400%**, the last
+step where one page — `7.645·s²` MiB at any pane width — fits the 128 MiB
+budget alone, with the ≤ 245 MiB zoomed band accepted against OQ-8's measured
+4.85 GiB; the gesture machinery's width comparison generalised to derived-scale
+against held-scale, from which the height-resize, pinned-rest and
+fit-change-through-`rerender` behaviours all follow; a page narrower than its
+pane centered, the hairline becoming a one-pixel ring clipped at the scrollport
+at fit-width; and Phase 5's rule 2 and Phase 4's "top and bottom only" each
+taking a dated `CORRECTED` note at close-out rather than silent edits.
+`tests/gates/mpdf-009-phase5.js` was committed so the gate's instrument exists
+where an implementer can find it. Fold-in at `2cf75d5`.
+
 ### Round 5 — Phase 5 only — 2026-08-26 — one reviewer, one question, resumed twice — **READY (converged)**
 
 **Scoped to a single question by the human's direction, past the cap:** does the
