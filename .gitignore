@@ -10,5 +10,9 @@
 /web/pkg/
 /web/target/
 
+# The mirror `app/typecheck.mjs` writes the front end into for tsc. Generated on
+# every run and never committed.
+/app/.mirror/
+
 # Finder metadata, which reappears however often it is deleted.
 .DS_Store
