@@ -209,10 +209,17 @@ scroll event that would otherwise stop them at their second page; a programmatic
 scroll cannot be told from a reader's by a flag, so following a link waits out one
 rest.
 
-**The order is the layout, the reader's place, then the drawing** — a frame after
-the observer is established, never its own first delivery, which never arrives if
-the observer is disconnected first. Drawing before positioning would spend the
-pass at `scrollTop` 0 and then jump the reader onto a page with nothing on it.
+**The order is the layout, the reader's place, then the drawing** — waiting for
+the observer's first delivery, raced against three animation frames. **One frame
+is not enough and the difference is visible**: a delivery is computed after the
+animation frame callbacks of its own rendering turn and handed over in a task,
+while the continuation of an awaited frame is a microtask of that same callback,
+so a single frame always resumes first. The forced pass then reads an empty set,
+draws nothing, and releases the whole document to bare paper until the next scroll
+rest. **The race is what keeps it from hanging**: awaiting the delivery alone
+never returns if the observer is disconnected before it delivers. Drawing before
+positioning would spend the pass at `scrollTop` 0 and jump the reader onto a page
+with nothing on it.
 
 **A page is released by zeroing its canvas**, which is what gives the memory back,
 and its two layers go with it, so a selection reaches only what the pane holds and

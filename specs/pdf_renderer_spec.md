@@ -1348,6 +1348,30 @@ measured at 71 pages, growing without bound, still stands.
   recompile mid-document: 5 renders, every canvas current, the reader's page
   drawn.**
 
+  > **CORRECTED 2026-08-26, after Phase 5 shipped**, by a code review of the
+  > commit that shipped it. The paragraph above is kept as it was written and its
+  > central claim is false. **A frame is not enough, and "the delivery lands
+  > inside it" is the wrong way round**: an observer's records are computed
+  > *after* the animation frame callbacks of the same rendering turn and handed
+  > over in a task of their own, while the continuation of an awaited
+  > `requestAnimationFrame` is a microtask of that very callback. The
+  > continuation therefore always resumes first, and the forced pass reads a
+  > `wanted` set that is still empty — draws nothing, and its closing sweep
+  > releases every page in the document. **Measured on the shipped build, both
+  > engines: eight consecutive frames of bare paper at every width rest in band
+  > mode**, ending only when the 120 ms rest fired an unforced pass.
+  >
+  > What ships instead is the delivery raced against three frames, which keeps
+  > the hang this paragraph correctly feared — an observer disconnected before it
+  > delivers never settles its promise — while no longer reading the set before
+  > it exists. `sweep` also refuses an empty set while pages are present, so the
+  > failure is unreachable rather than merely unlikely.
+  >
+  > **The harness had this defect too, and five review rounds and this phase's
+  > own gate all missed it**, which is the finding worth keeping: every clause of
+  > that gate samples after the pane settles, and this is a defect that is only
+  > visible while it has not.
+
   **A page's canvas and both layers are built detached and swapped in one
   `replaceChildren(fragment)`**, the outgoing canvas zeroed before it is dropped.
   Appending — which `drawLayers` does today, safe only because Phase 2's wrapper is

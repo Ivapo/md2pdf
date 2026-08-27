@@ -1259,10 +1259,18 @@
       let watcher = null
 
       // One pass at a time, what a scroll that has not rested looks like, and
-      // the timer that ends it.
+      // the timer that ends it. `pending` is a forced pass that arrived while
+      // another was running: it is re-run rather than dropped, because nothing
+      // else will re-arm it — whole mode has no observer and a document that
+      // fits the pane emits no scroll.
       let draining = false
+      let pending = false
       let moving = false
       let resting = null
+
+      // Resolves at the observer's first delivery, so a forced pass can wait for
+      // the set it is about to read rather than for a fixed number of frames.
+      let delivered = null
 
       /*
         What this phase's exit gate reads. **It ships, and that is a decision.**
@@ -1335,10 +1343,16 @@
         watcher?.disconnect()
         watcher = null
         wanted.clear()
+        // Cleared before the early return, not after it: leaving band mode
+        // otherwise leaves the last session's figure on a pane that is no longer
+        // in that mode, and this surface exists to be read at a console.
+        pane.deliveryMs = null
+        delivered = null
         if (mode !== 'band') return
 
         const started = performance.now()
-        pane.deliveryMs = null
+        let announce
+        delivered = new Promise((done) => { announce = done })
         watcher = new IntersectionObserver(
           (entries) => {
             if (pane.deliveryMs === null) pane.deliveryMs = since(started)
@@ -1346,6 +1360,7 @@
               if (entry.isIntersecting) wanted.add(entry.target)
               else wanted.delete(entry.target)
             }
+            announce()
             drain(false)
           },
           { root: pages, rootMargin: '100% 0px' }
@@ -1395,6 +1410,15 @@
       */
       function sweep() {
         if (mode !== 'band') return
+        /*
+          **An observer that has not delivered yet reports an empty set, and that
+          is not the same as nothing being near.** Sweeping on it releases the
+          whole document — every page at once, to bare paper — which is what a
+          forced pass that ran before the first delivery used to do at every
+          width rest. The wait in `refill` is the fix; this is the guard that
+          makes the failure unreachable rather than merely unlikely.
+        */
+        if (wanted.size === 0 && pages.children.length > 0) return
         for (const wrapper of pages.children) {
           if (!wanted.has(wrapper)) release(wrapper)
         }
@@ -1489,7 +1513,10 @@
         this pass did not reach keep the placeholder they had.
       */
       async function drain(force) {
-        if (draining) return
+        if (draining) {
+          if (force) pending = true
+          return
+        }
         if (moving && !force) return
 
         draining = true
@@ -1511,6 +1538,10 @@
         } finally {
           sweep()
           draining = false
+          if (pending) {
+            pending = false
+            drain(true)
+          }
         }
       }
 
@@ -1518,20 +1549,36 @@
         Decide what to hold, watch for it, and fill it in — the tail of an open
         and of a width rest alike.
 
-        **A frame, and not the observer's own first delivery.** That is the
-        difference between a pass that runs and one that hangs: a promise settled
-        only inside the callback never settles at all if the observer is
-        disconnected before it delivers, and it would strand its caller inside
-        `rendering`, deferring every future width rest for the life of the
-        window. One frame is enough — the delivery lands inside it.
+        **The delivery, or three frames, whichever comes first — and one frame
+        is not enough.** An observer's records are computed after the animation
+        frame callbacks of the same rendering turn and delivered in a task of
+        their own, while the continuation of an awaited `requestAnimationFrame`
+        is a microtask of that same callback. So a single frame *always* resumes
+        before the first delivery, leaving the forced pass to read an empty set,
+        draw nothing, and — before the guard in `sweep` — release the whole
+        document to bare paper for the length of a scroll rest, at every width
+        rest and every recompile.
+
+        **But it is raced against a frame count rather than awaited**, which is
+        the hazard the single frame was reaching for: a promise settled only
+        inside the callback never settles at all if the observer is disconnected
+        before it delivers, and awaiting it alone would strand this caller and
+        defer every future width rest for the life of the window.
       */
       async function refill(seq) {
         decideMode()
         watch()
-        await new Promise((next) => requestAnimationFrame(next))
+        await Promise.race([delivered ?? frames(1), frames(3)])
         if (seq !== renderSeq) return
         await drain(true)
       }
+
+      // `n` animation frames, as a promise.
+      const frames = (n) =>
+        new Promise((done) => {
+          const step = () => (--n <= 0 ? done() : requestAnimationFrame(step))
+          requestAnimationFrame(step)
+        })
 
       /*
         A scroll ends on nothing, so a timer is what gives it an end — the same
