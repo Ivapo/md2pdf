@@ -2,6 +2,86 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 9 only — 2026-08-27 — the same reviewer, resumed — **READY (converged)**
+
+Both blockers confirmed resolved in the file as written, and **every re-keyed
+number re-derived independently** rather than read off the changelog: 243 strict
+and 41 loose under the phase's stated method, 112 nullable lookups, 35 implicit
+parameters against 43 implicit variables, 2,566 mirror lines with line 1,737
+identical, 149 vendored declaration files at 824 KB, and — the two the fold-in
+introduced — 243 on TypeScript 7.0.2 and 274 on 5.9.3 given no `target`/`module`/
+`lib`. All 41 loose errors map onto the enumerated annotation list with nothing
+left over. The eight-defect enumeration was checked against the history commit by
+commit.
+
+**The best catch of the round was the author's own fold-in going further than the
+finding that prompted it.** Round 1's non-blocking #4 said the `doc?.destroy()`
+catch was conditional on a typed shim. Measured during the fold-in, it is worse:
+with the real vendored declarations in place it still raises **nothing**, because
+`let doc = null` under `strictNullChecks: false` infers `any`. It fires only once
+`doc` carries an explicit annotation. That went into the scope, and gate clause 2
+now states that the middle class is what catches an implementer who typed `doc`
+as `any` in order to reach clause 1 — a gate written to catch the gate passing
+for the wrong reason.
+
+**One non-blocking observation, folded:** `app/src/preview.rs` already carries a
+`#[cfg(test)] mod tests` running 45 tests, so the Rust half is a function added to
+it rather than a new module.
+
+**Converged at zero blocking. Phase 9 `reviewed: 2026-08-27`.** Two rounds.
+
+### Round 1 — Phase 9 only — 2026-08-27 — one generalist, fresh, with repo access — **NOT READY**
+
+**Round 0, asked once for the episode.** Does this produce the observable and is
+it the right thing to build? It produces **none**, and the phase argues that
+rather than assuming it: it is the first mechanism in this project that can tell
+the observable has broken in a file whose only check is a person at a console.
+The residue recorded rather than resolved: it catches one defect in eight, which
+the phase states in its own scope, and the answer turns on the toolchain being
+bounded to CI and never to `cargo test`. OQ-10 having asked twice is what settles
+it.
+
+**Two blockers, both of which would have stopped an implementer dead.**
+
+1. **The Rust half had nowhere to live.** The phase put it in `app/tests/`, but
+   `app/Cargo.toml` declares only `[[bin]]` — no lib target for an integration
+   test to link — and `main.rs`'s `mod preview` is private. The reviewer
+   reproduced `error[E0433]` on a minimal bin-only crate and established that the
+   cited `core/tests/page_examples_test.rs` precedent does not transfer, `core`
+   having a `[lib]`. Worse, the phase's own "no `.rs` file under `src/` is
+   edited" forbade both escapes. Resolved by moving it to the `#[cfg(test)]`
+   module `preview.rs` already has, and restating the constraint as no shipped
+   *behaviour* changing.
+2. **`declare module` cannot shim a relative specifier.** TypeScript ignores
+   ambient module declarations for `./pdfjs/pdf.min.mjs`, measured three ways, so
+   gate clause 1's "zero errors" was unreachable by the stated mechanism.
+   Resolved by vendoring the `types/` tree from the same `pdfjs-dist` 6.2.108
+   tarball as the two `.mjs` files — which also closes the round's own
+   non-blocking hazard that a hand-written shim's fidelity is unchecked — kept at
+   `app/types/` and deliberately not under `app/dist/`, because `generate_context!`
+   walks `frontendDist` with no allowlist and would embed 824 KB in the binary.
+   The mirror gains a second stated rule, the specifier rewrite, and it is
+   line-preserving. The round also caught that only one of the two vendored files
+   is imported as a module at all.
+
+**Eleven non-blocking findings, all accepted, none rejected.** The load-bearing
+ones: no TypeScript version was pinned and a bare `bunx tsc` resolves to whatever
+is current, which moved the headline from 242 to **243** once the method was
+stated exactly; the "the file does not split" argument rested on two premises the
+repo falsifies, since `app/dist/pdfjs/` is already committed static modules, and
+was rewritten to the one that survives; the annotation list enumerated seven
+items under a heading of six and covered neither `__TAURI__` nor the
+`new Promise()` hint; the mirror's location was unspecified and one of the two
+plausible places both embeds it in the bundle and breaks the count; the close-out
+named one rules file where the phase moves facts stated in another; and the
+defect denominator was **eight**, not six — a correction that weakens the phase's
+own benefit claim and was taken anyway.
+
+**A twelfth was folded into OQ-10 rather than the phase, and taken further than
+the finding asked**: `doc?.destroy()` never reached `main`, being fixed in the
+same commit that introduced it, so OQ-10 now records the type check's measured
+record against *shipped* defects as zero and one in eight against written ones.
+
 ### Round 2 — Phase 8 only — 2026-08-25 — same reviewer, resumed with the author's changelog — **READY (converged)**
 
 All four blockers confirmed resolved against the file, with the reviewer

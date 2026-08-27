@@ -49,7 +49,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 9 — what checks the front end"
-    reviewed: null
+    reviewed: 2026-08-27
     shipped: null
     cut: null
     by: null
@@ -803,16 +803,20 @@ list to one item.
   > pair is tighter than the scrape — **two declarations compared, rather than
   > usage compared against a declaration** — and the scrape is not built.
   >
-  > **`tsc --allowJs --checkJs` over the shipped file, measured before the phase
-  > was drafted: 242 errors at strict defaults, 41 with `strictNullChecks` and
-  > `noImplicitAny` off, and none of the 242 a defect.** That is what chose the
-  > settings, and it is also the honest size of the win: of the six defects this
-  > file has produced, a type check catches **one** — `doc?.destroy()`, a method
-  > the proxy does not have, swallowed by optional chaining. The other five are
-  > `ResizeObserver` feedback, observer-delivery ordering, a timer cancelling a
-  > render, a counter advanced for a render that never drew, and an early return
-  > leaving a caret band on an empty pane. **All five are behaviour, and the
-  > wide half of this question is the only thing that reaches them.**
+  > **`tsc` over the shipped file, measured before the phase was drafted: 243
+  > errors with the strict flags on, 41 with them off, and none of the 243 a
+  > defect.** That is what chose the settings, and it is also the honest size of
+  > the win: of the eight defects this file has produced, a type check catches
+  > **one** — `doc?.destroy()`, a method `PDFDocumentProxy` does not have,
+  > swallowed by optional chaining. **That one was caught in review before it
+  > reached `main`**, in the same commit that introduced it, which makes the
+  > type check's measured record against shipped defects zero and its record
+  > against *written* ones one in eight. The seven it does not reach are
+  > `ResizeObserver` feedback, observer-delivery ordering, a dropped forced
+  > pass, a stale `deliveryMs`, a timer cancelling a render, a counter advanced
+  > for a render that never drew, and an early return leaving a caret band on an
+  > empty pane. **Every one is behaviour, and the wide half of this question is
+  > the only thing that reaches them.**
   >
   > **What the wide half now has that it did not: evidence that it works.**
   > `mpdf-009` Phase 3 was verified by serving the *shipped* `dist/index.html`
@@ -1915,120 +1919,174 @@ gap and no such excuse — out of scope here, and `mpdf-006`'s to close.)
 *Produces the observable: **no**, and the argument is OQ-10's.* Nothing here
 reaches the PDF. What it reaches is the file that decides where the reader
 lands, how much of a document the pane holds, and what the page reads off Rust
-— 752 lines of code inside a 2,566-line file, of which **the only checking
-mechanism is a person at a console**. Six defects have shipped or nearly shipped
-in it; five were found by eye or by review, one of them the day this was
-written. A phase that produces no observable is worth its place when it is the
-first thing that can tell the observable has broken.
+— 752 lines of code inside a 2,566-line file, whose **only checking mechanism is
+a person at a console**. Eight defects have shipped or nearly shipped in it;
+seven were found by eye or by review, one of them the day this was written. A
+phase that produces no observable is worth its place when it is the first thing
+that can tell the observable has broken.
 
 Appended 2026-08-27, per §6.1 step 2: OQ-10 raised this subject twice, from
 Phase 7 and from Phase 8, and this spec owns it.
 
-- **Scope:** **`app/dist/index.html`** (annotations only, no behaviour),
-  **`app/tsconfig.json`**, a mirror script, one test under **`app/tests/`**, and
-  a CI job. **No `.rs` file under `src/` is edited.**
+- **Scope:** **`app/dist/index.html`** (annotations only), **`app/tsconfig.json`**,
+  **`app/types/pdfjs/`** (vendored declarations), a mirror script,
+  **`app/src/preview.rs`** (a test function in the `#[cfg(test)] mod tests` it
+  already carries, and nothing else),
+  **`app/Cargo.toml`** (one dev-dependency), and a CI workflow. **No shipped
+  behaviour changes: no `.rs` file's runtime path is touched and no line of the
+  front end's code moves** — only comments, and a test module that does not
+  exist outside `cfg(test)`.
 
-  **The measurement comes first, because it chooses the settings.** Run over the
-  shipped file as it stands, `tsc --allowJs --checkJs` reports **242 errors at
-  its strict defaults and 41 with `strictNullChecks` and `noImplicitAny` off** —
-  and **not one of the 242 is a defect**. They are annotation gaps: 112
-  `getElementById` results that are `HTMLElement | null`, 78 implicitly-`any`
-  parameters, and the remainder the page's own expando properties. **A check
-  whose first run reports 242 non-bugs is a check nobody runs**, and that is the
-  whole reason the settings are a decision rather than a default.
+  **The measurement comes first, because it chooses the settings.** Under the
+  exact method below — TypeScript **5.9.3**, `app/tsconfig.json`, the vendored
+  declarations — `tsc` over the shipped file reports **243 errors with
+  `strictNullChecks` and `noImplicitAny` on, and 41 with them off**, and **not
+  one of the 243 is a defect**. They are annotation gaps: 112 `getElementById`
+  results that are nullable, 78 implicit `any` (35 parameters and 43 variables),
+  and the rest the page's own expando properties. **A check whose first run
+  reports 243 non-bugs is a check nobody runs**, which is why the settings are a
+  decision with an argument rather than a default.
+
+  **The version is pinned and the settings live in `app/tsconfig.json`, not in
+  flags.** A bare `bunx tsc` resolves to whatever is current — 7.x today, whose
+  modern defaults happen to give the same 243, while 5.9.3 given no
+  `target`/`module`/`lib` gives 274 and different diagnostics. Everything else in
+  this crate is pinned on a stated policy (`app/Cargo.toml`: "Every version is
+  pinned"), and an unpinned checker makes the gate drift on someone else's
+  release schedule.
 
   **So the loose settings, and the claim is that they lose nothing this project
-  has been bitten by.** Measured against the three classes that have actually
-  cost something, all three still fail with both strict flags off:
+  has been bitten by.** All three classes that have cost something still fail
+  with both flags off, each verified on its own against the shipped file:
 
   | class | code | the real instance |
   |---|---|---|
   | block-scoped use before declaration | `TS2448` | `mpdf-009` Phase 3, caught by reading during the build |
-  | a method the type does not have | `TS2339` | `doc?.destroy()`, which is not on `PDFDocumentProxy` — optional chaining swallowed it and it leaked a worker per compile |
-  | a field the page reads and Rust does not send | `TS2339` | OQ-10's own sharpest edge, given the typedef below |
+  | a method the type does not have | `TS2339` | `doc?.destroy()` — `PDFDocumentProxy` has none, and optional chaining swallows it |
+  | a field the page reads and Rust does not send | `TS2551`/`TS2339` | OQ-10's own sharpest edge |
 
-  **What it does not reach is named here rather than discovered later.** Of the
-  six defects this file has produced, **this catches one**. The five it misses
-  are `ResizeObserver` feedback through a box the callback resized, an
-  `IntersectionObserver`'s delivery racing an animation frame, a settle timer
-  cancelling the render that was about to set the fit, a counter advanced for a
-  render that never drew, and an early return that left a caret band on an empty
-  pane. Every one is behaviour, and no type system sees any of them. **This
-  phase does not answer OQ-10's wide half and must not be read as answering it.**
+  **The middle row is conditional, and the condition is part of the build.**
+  `doc` is `let doc = null`, so with `strictNullChecks` off it infers `any` and
+  `doc?.destroy()` raises nothing however good the declarations are — **measured,
+  not assumed**. It fires only once `doc` and `loading` carry
+  `@type {import('pdfjs-dist').PDFDocumentProxy | null}` and its loading-task
+  counterpart, which costs two further annotation gaps to clear. An implementer
+  who writes the annotations to satisfy the gate rather than the gate to check
+  the annotations gets a check that passes for the wrong reason; the clause below
+  is written to make that visible.
 
-  **The file does not split, and that is load-bearing.** `tsc` cannot check an
-  inline `<script>`, and the obvious answer — move it to `dist/app.js` — would
-  make `frontendDist` a build output, change the `sources` all three
-  `rules/desktop-*.md` files declare, and break the harness that drives the
-  *shipped* file with `window.__TAURI__` stubbed. Instead a **mirror**: every
-  line outside `<script type="module">` is replaced by an empty one, so the
-  mirror is the same length as the HTML and every error `tsc` reports cites a
-  real `app/dist/index.html` line. **Measured: 2,566 lines each, and line 1,737
-  identical in both.** The mirror is generated, never committed.
+  **The declarations are vendored from `pdfjs-dist` 6.2.108 and are not
+  hand-written.** A hand-written shim for a minified third party is the drift
+  hazard this phase solves carefully for `Status` and would be reintroducing one
+  file over — and it cannot work anyway: **TypeScript ignores `declare module`
+  for a *relative* specifier**, so the `./pdfjs/pdf.min.mjs` import cannot be
+  shimmed at all. The `types/` tree from the same tarball as the two vendored
+  `.mjs` files, at the same pinned version, with the same Apache-2.0 LICENSE
+  already travelling, is the faithful answer.
 
-  **The annotations are the work, and there are six of them.** `logical`,
-  `natural`, `view` and `number` on a page wrapper; `gen` on a canvas;
-  `__pane` on `window`; the DOM subtypes `getElementById` cannot know
-  (`HTMLTextAreaElement` for the buffer, `HTMLSelectElement` for the fit,
-  `HTMLElement` for the children the anchor measures); the nullable timers
-  `tsc` infers as `null` from their initialiser; a `declare module` shim for
-  the two vendored `pdf.js` files, which ship no types; and **`Status` and
-  `Anchor`, which are the point**. JSDoc, in the file, beside prose that is
-  already there — and the tension is real and accepted: this file's comments
-  are arguments and JSDoc is annotation, so the typedefs sit in one block at
-  the top rather than scattered above functions that already carry a
-  paragraph.
+  **They live at `app/types/pdfjs/` and must not live under `app/dist/`.**
+  `generate_context!` walks `frontendDist` recursively with no allowlist, so a
+  directory placed there is embedded in the shipped binary — 824 KB of
+  declarations no runtime reads. `app/dist/pdfjs/` continues to hold exactly the
+  two `.mjs` files it holds today. **Only one of those two is imported as a
+  module**; `pdf.worker.min.mjs` is reached through `new URL(…, import.meta.url)`,
+  a string `tsc` never resolves.
 
-  **The Rust half is what stops the typedef being a lie.** A hand-written
-  `@typedef Status` can drift from Rust exactly as a hand-written TypeScript
-  interface would — `tsc` would then check the page against a fiction. So a test
-  in `app/tests/` serializes a `Status` and compares its JSON keys against the
-  field list the typedef declares. **It compares two declarations rather than
-  usage against a declaration**, which is both tighter and more stable than
-  scraping `state.<field>` accesses out of the page, and it needs no toolchain:
-  `serde_json` as a dev-dependency, and the `include_str!` idiom
-  `core/tests/page_examples_test.rs` already uses on `web/index.html`.
+  **The mirror does two things, and both are stated because a generator with an
+  unstated rule is a generator nobody can reproduce.** It replaces every line
+  outside `<script type="module">` with an empty one, and it rewrites the single
+  relative `pdfjs` specifier to the bare name `pdfjs-dist`, which `paths`
+  resolves and a relative specifier cannot be given types for. Both are
+  line-preserving, so the mirror is the same length as the HTML and every error
+  cites a real `app/dist/index.html` line. **Measured: 2,566 lines each, line
+  1,737 identical.** It is generated outside `app/dist/` — inside it, `pdfjs/`
+  resolves relatively and the count goes from 41 into the thousands — and never
+  committed.
 
-  **Where the type check runs, and where it must not.** **Not `cargo test`.**
-  Bun is not a prerequisite of this workspace and making the Rust suite depend on
-  one would be OQ-2's price paid by everyone who builds the app, to check a file
-  the suite does not otherwise touch. It runs in CI — a second workflow beside
-  `pages.yml`, which builds only `web/` and must stay that way — and as one
-  documented command. **The Rust half does run in `cargo test`**, because it
-  costs nothing to.
+  **The file does not split, and the reason is narrower than the draft claimed.**
+  Moving the script to `dist/app.js` would *not* make `frontendDist` a build
+  output: `app/dist/pdfjs/` is already two committed static modules the page
+  imports, and `rules/desktop.md` says so. The reason that survives is that **the
+  mirror is required anyway** for the specifier rewrite, so a split buys nothing
+  and costs the `sources` of `rules/desktop.md`, `rules/desktop-panes.md` and
+  `rules/desktop-geometry.md`.
+
+  **The annotations are the work.** The page wrapper's `logical`, `natural`,
+  `view` and `number`; `gen` on a canvas; `__pane` and `__TAURI__` on `window`;
+  the DOM subtypes `getElementById` cannot know; the nullable timers `tsc` infers
+  as `null` from their initialiser; `doc` and `loading` as above; the two
+  `AnnotationLayer` call sites, whose vendored declarations require fields
+  pdf.js tolerates the absence of at runtime; one `new Promise()` that needs a
+  JSDoc hint; and **`Status` and `Anchor`, which are the point**. They sit in one
+  block at the top rather than scattered above functions that already carry a
+  paragraph of argument — this file's comments are arguments and JSDoc is
+  annotation, and interleaving them would cost the arguments their shape.
+
+  **The Rust half is what stops the typedef being a lie**, and it is a test
+  function in the `#[cfg(test)] mod tests` that `app/src/preview.rs` already
+  carries — 45 tests run there today. It cannot be
+  `app/tests/`: the `app` package declares only `[[bin]]`, so there is no lib
+  target for an integration test to link, and `main.rs`'s `mod preview` is
+  private — the `core/tests/page_examples_test.rs` precedent does not transfer,
+  because `core` has a `[lib]`. A unit test in the binary's own module runs under
+  `cargo test` and reaches `Status` directly. It serializes a `Status` holding
+  one `Anchor` and compares the JSON keys of both against the field lists the
+  typedefs declare, `include_str!`ing the front end the way that precedent does
+  read a file. `serde_json` is a dev-dependency and already in `Cargo.lock` via
+  `tauri`, so it adds no crate.
+
+  **Where the type check runs, and where it must not.** **Not `cargo test`** —
+  bun is not a prerequisite of this workspace, and making the Rust suite depend
+  on one would charge OQ-2's price to everyone who builds the app in order to
+  check a file the suite does not otherwise touch. It runs in CI, in a second
+  workflow beside `pages.yml`, which builds only `web/` and must stay that way.
+  **The Rust half does run in `cargo test`**, costing nothing.
+
+  **What this does not reach, named here rather than discovered later.** Of the
+  eight defects this file has produced, a type check catches **one**. The seven
+  it misses are `ResizeObserver` feedback through a box the callback resized, an
+  `IntersectionObserver`'s delivery racing an animation frame, a forced pass
+  dropped rather than re-armed, a stale `deliveryMs`, a settle timer cancelling
+  the render that was about to set the fit, a counter advanced for a render that
+  never drew, and an early return leaving a caret band on an empty pane. Every
+  one is behaviour, and no type system sees any of them. **This phase does not
+  answer OQ-10's wide half and must not be read as answering it.**
 
 - **Exit gate:**
 
-  1. `tsc` over the mirror reports **zero** errors, at the settings above.
-  2. **Each of the three classes fails on purpose.** Reintroduce them one at a
-     time — a read of `fitMode` above its declaration, a `.destroy()` on the
-     document proxy, a `state.sectons` — and each is reported, at an
-     `app/dist/index.html` line number that is the real one. **A check that has
-     never failed is not known to work**, and this clause is the only thing
-     standing between this phase and a `tsconfig.json` that silently checks
-     nothing.
+  1. `tsc` over the mirror reports **zero** errors, at the pinned version and the
+     committed `app/tsconfig.json`.
+  2. **Each of the three classes fails on purpose, one at a time.** A read of
+     `fitMode` above its declaration; a `.destroy()` on the document proxy; a
+     `state.sectons`. Each is reported, at an `app/dist/index.html` line number
+     that is the real one. **A check that has never failed is not known to
+     work** — and the middle one is the clause that catches an implementer who
+     annotated `doc` as `any` to reach clause 1, because it cannot fire if they
+     did.
   3. The mirror is the same line count as the HTML, and a line chosen from the
      middle of the prose reads identically in both.
-  4. `cargo test --workspace` passes, and **the new test fails when a `Status`
-     field is renamed in Rust and the typedef is not** — demonstrated, not
-     asserted, the same way clause 2 is.
+  4. `cargo test --workspace` passes, and **the new test fails when a field is
+     renamed in Rust and the typedef is not** — demonstrated for `Status` *and*
+     for `Anchor`, which needs a `Status` holding one to reach at all.
   5. **No behaviour changed**: `mpdf-009` Phase 3's gate re-runs to the same
-     numbers, since annotations are comments and a comment that moved a pixel
-     would be the finding.
-  6. CI runs clause 1 on a push that touches `app/dist/index.html`, and does not
-     run the wasm build.
+     numbers, and `app/dist/` still holds exactly the files it holds today.
+  6. CI runs clause 1 on a push touching `app/dist/index.html`, `app/tsconfig.json`
+     or `app/types/**`, and does not run the wasm build.
 
-- **Close-out:** **`rules/desktop-panes.md`** gains what checks this file and
-  what that check does not reach — it is the rule whose first line is "the one
-  file the front end is", and this phase is the first thing that reads that file
-  mechanically. **OQ-10 takes a dated note recording its narrow half answered
-  and its wide half open**, rather than being struck through: the geometry, the
-  fit, the observer lifecycles and the reader's place are all still checked by a
-  person, which is what the question actually asked about.
+- **Close-out:** **`rules/desktop.md`** — its `## The crate` section states the
+  committed file count and the exact dependency list, and this phase moves both;
+  it also declares `app/dist/index.html` among its sources.
+  **`rules/desktop-panes.md`** gains what checks this file and what that check
+  does not reach — it is the rule whose subject is "the one file the front end
+  is". `rules/desktop-geometry.md` declares the same source but documents only
+  geometry, which does not move: **named and excused rather than silently
+  skipped**. **OQ-10 takes a dated note recording its narrow half answered and
+  its wide half open**, rather than a strike-through: the geometry, the fit, the
+  observer lifecycles and the reader's place are all still checked by a person,
+  which is what the question asked about.
 
-  **`README.md`: none needed.** Its app section documents behaviours a reader
-  meets, and this changes none. **`CLAUDE.md`: none needed** — no id, no
-  observable and no methodology moves. One push.
+  **`README.md`: none needed** — its app section documents behaviours a reader
+  meets, and this changes none. **`CLAUDE.md`: none needed.** One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
