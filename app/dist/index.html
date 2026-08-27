@@ -77,6 +77,22 @@
       button:active {
         background: var(--edge);
       }
+      /*
+        The fit control. A `select` and not a row of buttons because the ten
+        choices are one exclusive setting, and because **the list is the
+        cap**: nothing above 400% is offered and no second clamp is written
+        anywhere in this file. The control is the whole surface — there is no
+        pinch and no wheel — so a scale stated twice would be a scale stated
+        once wrongly.
+      */
+      select {
+        font: inherit;
+        color: inherit;
+        padding: 3px 6px;
+        border: 1px solid var(--edge);
+        border-radius: 6px;
+        background: var(--ground);
+      }
 
       /*
         The status line. Every word in it is chosen in Rust and this only
@@ -360,6 +376,18 @@
         threshold gains a scrollbar the moment the pages widen, the content
         box narrows by the track, and the pages clip.
 
+        **`overflow-x` is `auto`, and it is what makes a zoomed page
+        reachable.** An explicit scale draws a page wider than the pane —
+        2,381 px against 520 at 400% — and under `hidden` everything past the
+        right edge is unreachable rather than merely off screen. **The
+        asymmetry with the axis above is deliberate and costs nothing**: only
+        a pinned scale overflows sideways, and a pinned scale is the one fit
+        that does not read the pane, so the track this permits can never move
+        a scale under itself. Fit-page is the fit that *does* read
+        `clientHeight`, and it never overflows sideways — its scale is at most
+        `paneWidth / natural.w` — so that track is never in the height it
+        measures.
+
         `position: relative` makes each page's `offsetTop` a measurement from
         this box, which is what the reader's place is read against.
       */
@@ -369,7 +397,7 @@
         min-height: 0;
         position: relative;
         overflow-y: scroll;
-        overflow-x: hidden;
+        overflow-x: auto;
       }
       #pages[hidden] {
         display: none;
@@ -382,8 +410,9 @@
         the reader's place against. So `.logical` sits here, `size()` writes
         this box, and the canvas fills it.
 
-        **A page is separated from the next by 16 CSS pixels, and from the
-        container's sides by nothing.** The gap is chrome rather than content,
+        **A page is separated from the next by 16 CSS pixels, and the
+        container adds nothing at its own sides.** The gap is chrome rather
+        than content,
         so it is a constant: `fit()` and `unscale()` keep writing page sizes
         and know nothing about it, and a gap that grew with the page would read
         as part of the document at a large scale and vanish at a small one.
@@ -394,32 +423,49 @@
         at a glance against a page some 535 px wide and costs only scroll
         distance the reader was passing through anyway.
 
-        **`margin-top`, and the property is load-bearing.** `offsetTop`
-        includes an element's top margin, so the reader's anchor moves with the
-        gap; `#pages` is a block formatting context by virtue of `overflow-y:
-        scroll`, so the first page's margin does not collapse out of it; and
-        only top margins exist, so no pair of siblings collapses to less than
-        the constant. **It is on the wrapper and not on the canvas**: a layer
-        pinned to the wrapper's origin would otherwise sit 16 px above the
-        glyphs it belongs to.
+        **The top margin is load-bearing and the sides are `auto`.**
+        `offsetTop` includes an element's top margin, so the reader's anchor
+        moves with the gap; `#pages` is a block formatting context by virtue
+        of `overflow-y: scroll`, so the first page's margin does not collapse
+        out of it; and no *bottom* margin exists, so no pair of siblings
+        collapses to less than the constant. **It is on the wrapper and not on
+        the canvas**: a layer pinned to the wrapper's origin would otherwise
+        sit 16 px above the glyphs it belongs to.
 
-        **Nothing at the sides**, and not merely because the width is wanted
-        elsewhere: `clientWidth` *includes* padding, so `box()` would keep
+        **The sides centre a page narrower than the pane, and that case is
+        new.** Fit-page above its boundary and a small pinned scale both draw
+        one; fit-to-width never could. An auto margin resolves to zero when
+        the page is at least as wide as the containing block, so fit-to-width
+        is untouched to the pixel and a zoomed page still overflows to the
+        right, where `overflow-x: auto` makes it reachable.
+
+        **No padding at the container's sides**, and not merely because the
+        width is wanted elsewhere: `clientWidth` *includes* padding, so `box()`
+        would keep
         reporting the padding-box width, the pages would be sized past the
         content box, and they would clip silently.
 
-        **The hairline is a shadow rather than a border, and rides the top and
-        bottom edges only.** A border under `content-box` would make each page
-        two pixels taller than the height `size()` wrote, and `offsetHeight` —
+        **The hairline is a shadow rather than a border, and it rings all
+        four edges.** A border under `content-box` would make each page two
+        pixels taller than the height `size()` wrote, and `offsetHeight` —
         which the anchor is expressed in — would stop being the raster's own
-        height. A fit-to-width page is exactly the container's own
-        `clientWidth` wide, so there is no background beside one to separate it
-        from, and an outset ring would spread outside `overflow-x: hidden`'s
-        clip either way. `inset` is not the escape: an inset shadow paints
-        beneath a replaced element's content, and a canvas is opaque white
-        where `pdf.js` filled it. `--edge` is named because a colourless
+        height. `inset` is not the escape: an inset shadow paints beneath a
+        replaced element's content, and a canvas is opaque white where
+        `pdf.js` filled it. `--edge` is named because a colourless
         `box-shadow` resolves to `currentColor`, which inherits `--ink` — an
         ink ring in light and a near-white one on white paper in dark.
+
+        **It was top-and-bottom-only, and the fits moved both premises it
+        stood on.** The first was that a fit-to-width page meets the
+        scrollport's own side edges, so no background sits beside one — true
+        of the only fit there was, and false of a page narrower than the pane,
+        where `--ground` now shows and the ring is what draws its edge. The
+        second was that an outset ring spreads outside `overflow-x: hidden`'s
+        clip; the clip is gone. **At fit-width nothing shipped changes
+        visibly**: the side pixels land at x ∈ [−1, 0) and [W, W+1), outside
+        the scrollport, and a `box-shadow` is painted ink rather than
+        scrollable overflow — so `overflow-x: auto` neither shows them nor
+        grows a track for them.
 
         **Two of the three custom properties `pdf.js` reads live here.**
         `setLayerDimensions` sizes a layer as `round(down,
@@ -441,9 +487,9 @@
       #pages .page {
         position: relative;
         display: block;
-        margin-top: 16px;
+        margin: 16px auto 0;
         background: var(--paper);
-        box-shadow: 0 -1px 0 var(--edge), 0 1px 0 var(--edge);
+        box-shadow: 0 0 0 1px var(--edge);
         --scale-round-x: 1px;
         --scale-round-y: 1px;
       }
@@ -467,8 +513,9 @@
 
         **And not a spacer element**: `layoutPages` addresses
         `pages.children[n - 1]` and commits the whole list with
-        `replaceChildren`, and `fit`, `unscale`, `readAnchor`, `applyAnchor` and
-        the drainer all assume every child is a page carrying `.logical`. A pseudo-element is in the flow and not in
+        `replaceChildren`, and `fit`, `unscale`, `readAnchor`, `applyAnchor`,
+        `derived` and the drainer all assume every child is a page carrying
+        `.logical` and `.natural`. A pseudo-element is in the flow and not in
         `children`, which is exactly the pair of properties wanted.
       */
       #pages::after {
@@ -615,6 +662,29 @@
       <button id="numbers" type="button" aria-pressed="false" aria-controls="lines">
         Lines
       </button>
+      <!--
+        How the page fits the pane. The header sits above `main`, so unlike
+        the section panel and the line gutter this control takes no width out
+        of the column the pages are measured from.
+
+        **Nothing above 400% is offered, and that edge is the cap itself.** A
+        pinned page costs `7.645·s²` MiB of backing store at `devicePixelRatio`
+        2 whatever the pane measures, so one page alone crosses the 128 MiB
+        budget above about 410% — `sqrt(128 / 7.645) = 4.09` — where holding
+        fewer pages has stopped being a lever, one being the floor.
+      -->
+      <select id="fit" aria-label="How the page fits the pane">
+        <option value="width" selected>Fit width</option>
+        <option value="page">Fit page</option>
+        <option value="0.5">50%</option>
+        <option value="0.75">75%</option>
+        <option value="1">100%</option>
+        <option value="1.25">125%</option>
+        <option value="1.5">150%</option>
+        <option value="2">200%</option>
+        <option value="3">300%</option>
+        <option value="4">400%</option>
+      </select>
       <button id="open" type="button">Open…</button>
       <button id="save" type="button">Save</button>
       <button id="export" type="button">Save a Copy…</button>
@@ -674,6 +744,7 @@
       const divergence = document.getElementById('divergence')
       const error = document.getElementById('error')
       const status = document.getElementById('status')
+      const fitControl = document.getElementById('fit')
 
       /*
         The document the canvases were drawn from, held between renders, and
@@ -1081,10 +1152,14 @@
         exact from layout alone: 53,337 px for a 71-page document at a 520 px
         pane, before any page is rastered and after every one of them is.
 
-        **The scale is recomputed here and held nowhere**, so a fit cannot go
-        stale: it is `paneWidth / naturalWidth`, evaluated when the page is
-        sized. What it costs to *raster* those pages is a separate question, and
-        the budget below is where it is asked.
+        **The scale is chosen here and nowhere else**, one expression per fit
+        and all three in `scaleFor`: `paneWidth / natural.w` under width,
+        `min(paneWidth / natural.w, paneHeight / natural.h)` under page, and
+        the reader's own number under manual. It is recomputed on every pass,
+        so a re-derived fit cannot go stale — and the pass **stores what it
+        derived**, in `fitted`, which is what a later pass compares against.
+        What it costs to *raster* those pages is a separate question, and the
+        budget below is where it is asked.
 
         **It commits in one mutation.** Appending a page at a time grows
         `scrollHeight` across frames and hands the observer seventy-one
@@ -1103,8 +1178,11 @@
       }
 
       async function layoutPages(seq) {
-        const paneWidth = box().width
-        if (!(paneWidth > 0)) return false // a pane with no width to fit to
+        // One measurement for the whole pass. `scaleFor` takes it rather than
+        // reading it, so no page in a list can be laid out against a box a
+        // page before it moved.
+        const room = box()
+        if (!(room.width > 0)) return false // a pane with no width to fit to
 
         // Held rather than re-read: `clear` and a re-open both replace `doc`,
         // and this pass must find out by its own generation check rather than by
@@ -1114,24 +1192,43 @@
 
         const list = []
         let grew = false
+        // The scale this pass derived, unrounded, taken from the first page —
+        // which is the page `derived()` re-derives against.
+        let held = null
 
         try {
           for (let n = 1; n <= from.numPages; n++) {
             const page = await from.getPage(n)
             if (seq !== renderSeq) return false
 
-            const scale = paneWidth / page.getViewport({ scale: 1 }).width
+            /*
+              The page's own size in unscaled PDF units — 595.28 × 841.89 for
+              A4 — which is both what the fits are expressions in and what
+              `setLayerDimensions` multiplies, so `--total-scale-factor` is
+              measured against the same pair. It is a property of the document
+              and does not move with the pane.
+            */
+            const unit = page.getViewport({ scale: 1 })
+            const natural = { w: unit.rawDims.pageWidth, h: unit.rawDims.pageHeight }
+
+            const scale = scaleFor(natural, room)
+            if (n === 1) held = scale
             const viewport = page.getViewport({ scale })
 
             /*
               The logical size is taken to whole CSS pixels and the backing
               store is derived from it, so that the backing store is exactly
-              `floor(cssWidth × devicePixelRatio)`. The two are one number in
-              exact arithmetic — `naturalWidth × (paneWidth / naturalWidth)`
-              is the pane width — but in floating point it lands an ulp under,
-              and flooring that costs a device pixel the CSS size still
-              claims. Rounding here also makes the fit exact rather than an
-              ulp short of the pane.
+              `floor(cssWidth × devicePixelRatio)`. Under fit-to-width the two
+              are one number in exact arithmetic — `natural.w × (paneWidth /
+              natural.w)` is the pane width — but in floating point it lands
+              an ulp under, and flooring that costs a device pixel the CSS
+              size still claims. Rounding here also makes that fit exact
+              rather than an ulp short of the pane.
+
+              **The scale is stored before this rounding and not after it.**
+              `fitted` holds what `scaleFor` returned; recovered from the box
+              below as `logical.w / natural.w` it would be a different number,
+              and one that never equals a fit-page derivation.
             */
             const cssWidth = Math.round(viewport.width)
             const cssHeight = Math.round(viewport.height)
@@ -1145,13 +1242,7 @@
 
             // What the CSS size is written from, here and through a gesture.
             wrapper.logical = { w: cssWidth, h: cssHeight }
-            /*
-              The page's own width in unscaled PDF units — 595.28 for A4 —
-              which is what `setLayerDimensions` multiplies and so what
-              `--total-scale-factor` is measured against. It is a property of
-              the document and does not move with the pane.
-            */
-            wrapper.natural = { w: viewport.rawDims.pageWidth }
+            wrapper.natural = natural
             /*
               The viewport this page would be drawn with, kept for the one thing
               that turns a PDF coordinate back into a CSS one: a destination. It
@@ -1189,7 +1280,8 @@
         // Every page above was written at its logical size already; this is the
         // function that owns the rule, and it is what closes a gesture.
         unscale()
-        fitted = paneWidth
+        fitted = held
+        pane.scale = held
         pane.sizingMs = since(started)
         return true
       }
@@ -1281,6 +1373,13 @@
       */
       const pane = {
         mode,
+        // The fit the reader asked for, and the scale the layout derived from
+        // it — which is `fitScale` exactly under a pinned one. Nothing else in
+        // the window reports either, and the gate is read at a console. Both
+        // are filled in below rather than here: the fit's own state is
+        // declared with the geometry it belongs to, further down this file.
+        fit: null,
+        scale: null,
         renders: 0,
         sizingMs: null,
         deliveryMs: null,
@@ -1305,14 +1404,23 @@
       }
 
       /*
-        Decide what the pane holds, **at the two passes that can move it and
-        never once per document**: an open, and a width rest. A drain after a
-        scroll re-evaluates nothing, correctly — scrolling moves no width.
+        Decide what the pane holds, **at the three passes that can move it and
+        never once per document**: an open, a width rest, and a fit change. A
+        drain after a scroll re-evaluates nothing, correctly — scrolling moves
+        no width and no fit.
 
-        Five shipped causes move this answer: the divider, a window resize, the
-        section panel folding, the line gutter, and an open itself, since the
-        panel is shown for any document naming sections and the status that
-        decides it arrives before the bytes do.
+        **The third pass costs nothing to add**, and that is the argument for
+        the fit change riding the width rest's path rather than owning one: it
+        reaches `refill`, and this already lives there. It is not optional. A
+        scale multiplies a page's cost by its square — 30.6 MiB at 200% where
+        fit-to-width costs 7.6 — so an implementation that re-derived the
+        scale without re-deciding what is held would hold a 20-page document
+        whole at 612 MiB on a budget of 128.
+
+        Five shipped causes move the *width* term: the divider, a window
+        resize, the section panel folding, the line gutter, and an open
+        itself, since the panel is shown for any document naming sections and
+        the status that decides it arrives before the bytes do.
       */
       function decideMode() {
         let whole = 0
@@ -1794,6 +1902,18 @@
         doc = null
         fitted = null
         anchor = null
+        /*
+          **An open resets the fit to fit-to-width**, control and all. An open
+          is not a zoom request, which is OQ-2 case 1's argument about the
+          reader's place made about the reader's scale; and every path that
+          opens a document — the dialog, the menu, and a file Finder handed
+          over — comes through here.
+        */
+        fitMode = 'width'
+        fitScale = 1
+        fitControl.value = 'width'
+        pane.fit = fitMode
+        pane.scale = null
         drawnRevision = -1
         takenReload = -1
       }
@@ -1820,11 +1940,78 @@
         not restore the reader's place, because that view leaks none; a
         renderer this project owns re-rasterises into canvases it already
         positions, so a rest is the same page at the same place in it, sharper.
+
+        **The fits do not add a third half to this.** A fit change *is* a
+        rest: nothing about it is continuous, so it goes straight to the
+        render and the gesture half never runs for it. What the fits change is
+        which gestures the CSS half carries at all — see `fit()`.
       */
 
-      // The pane width the raster now on the pages was made for. Null when
-      // nothing is drawn, which is the only time there is nothing to hold.
+      /*
+        **The scale the raster now on the pages was made for** — the fit's own
+        derivation, unrounded, as `layoutPages` computed it. Null when nothing
+        is drawn, which is the only time there is nothing to hold.
+
+        **It was the pane's width until the fits arrived**, and the
+        generalisation is the whole mechanism of the zoom: a width is the
+        right thing to compare only while width is the one input. Recovering
+        it from the rounded CSS box as `logical.w / natural.w` is not the
+        same number and is not an option — it never equals a fit-page
+        derivation, so every rest would re-lay the document out for nothing.
+      */
       let fitted = null
+
+      /*
+        **The fit is the pane's state, and the word is "fit" and never
+        "mode".** `mode`, `decideMode` and `__pane.mode` are already bound in
+        this file to Phase 5's whole-or-band retention, which is a different
+        question about the same pane; a second `mode` here would hand a reader
+        the wrong variable at the first grep.
+
+        What moves re-derives under `width` and `page` and is held under
+        `manual`. **Fit-to-width is the default**, because it is what the pane
+        has always approximated and what an author writing to a page width
+        wants, and `clear()` puts it back — an open is not a zoom request, the
+        same argument as OQ-2's case 1 makes about the reader's place.
+      */
+      let fitMode = 'width'
+      let fitScale = 1
+      pane.fit = fitMode
+
+      /*
+        **The one place each fit's expression is written.** Everything
+        downstream — the CSS box, `--total-scale-factor`, the backing store,
+        the reader's anchor, the budget — follows from the viewport this
+        produces, so there is exactly one of them per fit and no case analysis
+        anywhere else.
+
+        **The pane is passed in rather than read here**, so one layout pass
+        chooses every page's scale from one measurement of the box. That
+        matters on the one axis that can move under it: a pinned scale wider
+        than the pane raises a horizontal track, which takes ~15 px out of
+        `clientHeight` — harmless, because the fit that reads the height is
+        the fit that never overflows sideways, and worth not relying on twice.
+      */
+      function scaleFor(natural, room) {
+        if (fitMode === 'manual') return fitScale
+        const byWidth = room.width / natural.w
+        if (fitMode === 'page' && room.height > 0) {
+          return Math.min(byWidth, room.height / natural.h)
+        }
+        return byWidth
+      }
+
+      /*
+        The scale the fit derives *right now* for the pages on screen — what
+        `fitted` is compared against, and the generalisation of the width
+        comparison this file used to make. Null when the pane holds no page,
+        which the two callers are careful to tell from a scale that has not
+        moved.
+      */
+      function derived() {
+        const first = pages.children[0]
+        return first ? scaleFor(first.natural, box()) : null
+      }
 
       /*
         Where the reader is, taken when a gesture starts and held until the
@@ -1838,9 +2025,10 @@
 
         **Non-null is what "a gesture is open" means**, which is why nothing
         here keys on `pointerdown`: a window drag-resize has no pointer event
-        to mark a start, and a control taking width out of the column has none
-        either. A width arriving while it differs from `fitted` opens a
-        gesture; one arriving while a gesture is open continues it.
+        to mark a start, and neither a control taking width out of the column
+        nor the fit control itself has one. A derived scale differing from
+        `fitted` opens a gesture; one arriving while a gesture is open
+        continues it.
       */
       let anchor = null
 
@@ -1887,14 +2075,25 @@
       }
 
       /*
+        **A gesture is carried by CSS size so a page can track a moving pane,
+        and only the width fit has a page that should track it.** Under
+        fit-page the scale is height-bound wherever the two fits differ, and
+        under manual it is pinned by the reader; in both the page keeps its
+        size through the drag and the rest settles anything the width did
+        change. Below fit-page's boundary that fit *is* width-bound, so there
+        a drag holds the page at its old size until the rest snaps it —
+        **the accepted cost of one rule rather than three**, and the reason
+        the guard is here rather than at the two call sites.
+
         **The factor is read per page, not once for the list.** They are
-        normally all made for the same width, so this is `width / fitted` for
-        every one of them — but a compile landing mid-gesture swaps its pages
-        in one at a time, and for those few frames the list holds rasters from
-        two different widths. Each page carries the width its own raster was
-        made for, so each one lands at the container's width regardless.
+        normally all made for the same width, so this is one ratio for every
+        one of them — but a compile landing mid-gesture swaps its pages in one
+        at a time, and for those few frames the list holds rasters from two
+        different widths. Each page carries the size its own raster was made
+        for, so each one lands at the container's width regardless.
       */
       function fit() {
+        if (fitMode !== 'width') return
         const width = box().width
         if (!(width > 0)) return
         for (const page of pages.children) {
@@ -1940,10 +2139,27 @@
         Draw the pages again at the width they ended up with, and put the
         reader back where the gesture started.
 
-        It draws from the retained document and invokes nothing. Skipped when
-        the width did not move — a window resized by its height alone changes
-        no scale — and that is also where a gesture that never changed anything
-        is closed.
+        It draws from the retained document and invokes nothing.
+
+        **Skipped when the scale the fit now derives is the scale the layout
+        already holds**, and that comparison is the phase's whole mechanism.
+        It was a width, correct only while width was the one input; as a scale
+        it answers four cases with one expression. A window resized by its
+        height alone still costs nothing under fit-to-width. A height-only
+        resize under fit-page *does* re-derive, which a width comparison could
+        never have noticed, so the page goes on fitting the pane. A width rest
+        under a pinned scale derives the same pinned number and costs nothing,
+        which is what "the reader asked for 400%" means. And **a fit change
+        passes this guard on its own**, because the derived scale moved while
+        the width did not — which is why the control's whole path is to set
+        the fit, take the anchor, and call this.
+
+        A null derivation is not a scale that failed to move: it means the
+        pane holds no page to derive against, and a layout that could not
+        measure the pane leaves `fitted` null too. Skipping there would refuse
+        the render meant to fix it, for the life of the window.
+
+        This is also where a gesture that never changed anything is closed.
 
         Cosmetic, so it swallows what it fails at: the pages keep the size the
         gesture left them at, soft rather than absent, and the next compile
@@ -1951,7 +2167,8 @@
       */
       async function rerender() {
         if (pages.hidden || doc === null) return
-        if (box().width === fitted) {
+        const now = derived()
+        if (now !== null && now === fitted) {
           anchor = null
           return
         }
@@ -1979,9 +2196,10 @@
         applyAnchor(anchor)
         anchor = null
 
-        // The width moved, so what the pane can afford to hold moved with it —
-        // this is the second of the two passes that re-decide it, and the reader
-        // is back where they were before it does.
+        // The scale moved, so what the pane can afford to hold moved with it —
+        // by the square of it, when a fit change is what moved it. This is the
+        // second and third of the three passes that re-decide the budget, and
+        // the reader is back where they were before it does.
         await refill(seq)
       }
 
@@ -2016,9 +2234,16 @@
         `T` — the reader is displaced continuously through the drag unless the
         anchor is put back on every step, and WebKit implements no scroll
         anchoring that would compensate.
+
+        **What opens a gesture is the derived scale against the held one**,
+        `rerender`'s own comparison, so the two agree by construction. It is
+        read here even under the fits `fit()` declines to carry: the anchor
+        must be taken before the layout the rest is about to run, and a
+        height-only resize under fit-page reaches that layout by this path and
+        no other.
       */
       new ResizeObserver(() => {
-        if (!pages.hidden && fitted !== null && box().width !== fitted) {
+        if (!pages.hidden && fitted !== null && derived() !== fitted) {
           if (anchor === null) anchor = readAnchor()
           fit()
           applyAnchor(anchor)
@@ -2194,6 +2419,41 @@
         lines.hidden = !on
         relines()
         markLine()
+      })
+
+      /*
+        The fit changed. **The path is the width rest's, unmodified** — set
+        the fit, take the anchor, then `rerender`: layout, `applyAnchor`,
+        `refill`. It inherits every property that path already has, and each
+        one is wanted here. The `rendering > 0` deferral, so a fit changed
+        while a compile is drawing re-arms the timer rather than cancelling
+        the render that is about to set the fit. The cosmetic catch, so a
+        failure leaves the pages at the size they had rather than absent.
+        `refill`, so the budget is re-decided against the new scale and the
+        pane goes from whole to band, or back, without a second mechanism.
+
+        **The anchor is read before the layout, and that is what carries the
+        reader.** Measured before it was: a reader at page 36, fraction 0.499,
+        switching from fit-width to 200% landed on page 16, fraction 0.684.
+        `if (anchor === null)` because a fit changed mid-drag must not
+        overwrite the place the drag started from.
+
+        It calls `rerender` rather than arming `settle`, because a control is
+        an event with an end. `relines()` is not called with it: the gutter is
+        measured against the text pane, and no width there moved.
+      */
+      fitControl.addEventListener('change', () => {
+        const chosen = fitControl.value
+        if (chosen === 'width' || chosen === 'page') {
+          fitMode = chosen
+        } else {
+          fitMode = 'manual'
+          fitScale = Number(chosen)
+        }
+        pane.fit = fitMode
+
+        if (anchor === null) anchor = readAnchor()
+        rerender()
       })
 
       /*
