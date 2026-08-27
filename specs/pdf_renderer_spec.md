@@ -1307,13 +1307,15 @@ nothing but shipped Phase 1.
   > was; fit-page above its boundary and a small pinned scale both draw a page
   > narrower than the pane, `--ground` shows beside it, and the ring is what
   > draws its edge. The second — that an outset ring spreads outside
-  > `overflow-x: hidden`'s clip — moved with the clip, which Phase 3 replaces
-  > with `overflow-x: auto` so a zoomed page is reachable. **At fit-width
-  > nothing this phase shipped changes visibly**: the side pixels land outside
-  > the scrollport and a `box-shadow` is painted ink rather than scrollable
-  > overflow, so they are neither shown nor given a track. The reasoning below
-  > about `inset`, about `box-shadow` rather than a border, and about naming
-  > `--edge` is unaffected and still holds.
+  > `overflow-x: hidden`'s clip — **still holds wherever that clip is still
+  > there, and it is there under both re-deriving fits.** Phase 3 opens
+  > `overflow-x: auto` only while the fit is a pinned scale, which is the only
+  > fit that can draw a page wider than the pane; opening it unconditionally
+  > cost 21 `ResizeObserver` loop errors a gate run, measured, and is recorded
+  > in `rules/desktop-geometry.md`. **At fit-width nothing this phase shipped
+  > changes visibly**: the side pixels land outside the scrollport and the clip
+  > removes them. The reasoning below about `inset`, about `box-shadow` rather
+  > than a border, and about naming `--edge` is unaffected and still holds.
 
   **The hairline is `box-shadow: 0 -1px 0 var(--edge), 0 1px 0 var(--edge)`**,
   painted into the gap above and below each page. `--edge` is named because

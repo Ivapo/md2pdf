@@ -89,15 +89,29 @@ width cannot move under the fit: with `auto`, a document sitting just under the
 scroll threshold gains a scrollbar the moment the canvases widen, the content
 box narrows by the track, and the pages clip.
 
-**The other axis is `auto`, and it is what makes a zoomed page reachable** —
-2,381 px against a 520 px pane at 400%, where `hidden` would put everything past
-the right edge out of reach rather than merely off screen. **The asymmetry costs
-nothing**: only a pinned scale overflows sideways, and a pinned scale is the one
-fit that does not read the pane, so the track it raises cannot move a scale under
-itself. Fit-page is the fit that reads `clientHeight`, and it never overflows
-sideways — its scale is at most `paneWidth / natural.w` — so that track is never
-in the height it measures. The horizontal offset across a re-render is whatever
-element reuse preserves; the anchor stays *(page, vertical fraction)*.
+**The other axis is opened by the fit that can cross it and by no other**: a
+`.wide` class puts `overflow-x: auto` on the box while the fit is a pinned scale,
+and it is `hidden` otherwise. A zoom draws 2,381 px against a 520 px pane at
+400%, where `hidden` would put everything past the right edge out of reach rather
+than merely off screen; fit-to-width draws a page exactly `clientWidth` wide and
+fit-page one at most that wide, so neither can overflow sideways and neither needs
+the axis.
+
+**Opening it unconditionally is a measured mistake, not a hypothetical one**: 21
+`ResizeObserver loop completed with undelivered notifications` in one gate run
+against none before, every one of them in a drag being scrolled under. The loop
+is this box's own — the observer's callback writes page widths, a drag moving
+faster than the callback leaves them momentarily wider than the box, `auto`
+answers with a horizontal track, and the ~15 px it takes out of `clientHeight` is
+a fresh notification for the very observer that caused it. `hidden` absorbed that
+transient for as long as no page could legitimately be wider. Under a pinned
+scale the loop cannot form, because `fit()` declines to act there and the callback
+writes no width at all.
+
+Fit-page is also the fit that reads `clientHeight`, and it never has the track, so
+the boundary it derives is never measured against a height a scrollbar has taken.
+The horizontal offset across a re-render is whatever element reuse preserves; the
+anchor stays *(page, vertical fraction)*.
 
 **A page is separated from the next by 16 CSS pixels, and the container adds
 nothing at its own sides.** The gap is the top margin on each page's
@@ -136,11 +150,12 @@ white where `pdf.js` filled it. The colour is named because a colourless
 `box-shadow` resolves to `currentColor`, which inherits `--ink`.
 
 **At fit-width nothing of the ring is visible and nothing changed.** The side
-pixels land at x ∈ [−1, 0) and [W, W+1), outside the scrollport, and a
-`box-shadow` is painted ink rather than scrollable overflow — so `overflow-x:
-auto` neither shows them nor grows a track for them. Where `--ground` shows
-beside a page, the ring is what draws its edge; that case exists only because
-the fits made it.
+pixels land at x ∈ [−1, 0) and [W, W+1), outside the scrollport, and that fit
+keeps `overflow-x: hidden`, whose clip removes them. It would be safe without the
+clip — a `box-shadow` is painted ink rather than scrollable overflow, so `auto`
+grows no track for one — but the clip is what is actually there. Where `--ground`
+shows beside a page, the ring is what draws its edge; that case exists only
+because the fits made it.
 
 **`size()` is the one writer of a page's CSS box and the one writer of
 `--total-scale-factor`**, which is what carries the two layers through a gesture

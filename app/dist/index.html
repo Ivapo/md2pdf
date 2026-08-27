@@ -376,17 +376,30 @@
         threshold gains a scrollbar the moment the pages widen, the content
         box narrows by the track, and the pages clip.
 
-        **`overflow-x` is `auto`, and it is what makes a zoomed page
-        reachable.** An explicit scale draws a page wider than the pane —
-        2,381 px against 520 at 400% — and under `hidden` everything past the
-        right edge is unreachable rather than merely off screen. **The
-        asymmetry with the axis above is deliberate and costs nothing**: only
-        a pinned scale overflows sideways, and a pinned scale is the one fit
-        that does not read the pane, so the track this permits can never move
-        a scale under itself. Fit-page is the fit that *does* read
-        `clientHeight`, and it never overflows sideways — its scale is at most
-        `paneWidth / natural.w` — so that track is never in the height it
-        measures.
+        **`overflow-x` is opened by the fit that can cross it, and by no
+        other.** An explicit scale draws a page wider than the pane — 2,381 px
+        against 520 at 400% — and under `hidden` everything past the right edge
+        is unreachable rather than merely off screen. So `.wide` puts `auto` on
+        this box while the fit is a pinned scale. Fit-to-width draws a page
+        exactly `clientWidth` wide and fit-page one at most that wide, so
+        neither can ever overflow sideways and neither needs the axis.
+
+        **Opening it unconditionally is what the first build did, and the
+        window said no**: 21 `ResizeObserver loop completed with undelivered
+        notifications` in one gate run, against none before, all of them in a
+        drag being scrolled under. The loop is this box's own: the observer's
+        callback writes page widths, a drag moving faster than the callback
+        leaves them momentarily wider than the box, `auto` answers with a
+        horizontal track, the track takes ~15 px out of `clientHeight` — and a
+        changed content box is a fresh notification for the very observer that
+        caused it. `hidden` absorbed that transient silently for as long as no
+        page could legitimately be wider. **Under a pinned scale the loop
+        cannot form**, because `fit()` declines to act there and the callback
+        writes no width at all.
+
+        Fit-page is also the fit that reads `clientHeight`, and it never has
+        the track, so the boundary it derives is never measured against a
+        height a scrollbar has taken.
 
         `position: relative` makes each page's `offsetTop` a measurement from
         this box, which is what the reader's place is read against.
@@ -397,6 +410,9 @@
         min-height: 0;
         position: relative;
         overflow-y: scroll;
+        overflow-x: hidden;
+      }
+      #pages.wide {
         overflow-x: auto;
       }
       #pages[hidden] {
@@ -455,17 +471,20 @@
         `box-shadow` resolves to `currentColor`, which inherits `--ink` — an
         ink ring in light and a near-white one on white paper in dark.
 
-        **It was top-and-bottom-only, and the fits moved both premises it
-        stood on.** The first was that a fit-to-width page meets the
-        scrollport's own side edges, so no background sits beside one — true
-        of the only fit there was, and false of a page narrower than the pane,
-        where `--ground` now shows and the ring is what draws its edge. The
-        second was that an outset ring spreads outside `overflow-x: hidden`'s
-        clip; the clip is gone. **At fit-width nothing shipped changes
-        visibly**: the side pixels land at x ∈ [−1, 0) and [W, W+1), outside
-        the scrollport, and a `box-shadow` is painted ink rather than
-        scrollable overflow — so `overflow-x: auto` neither shows them nor
-        grows a track for them.
+        **It was top-and-bottom-only, and the fits moved the premise it stood
+        on.** That premise was that a fit-to-width page meets the scrollport's
+        own side edges, so no background sits beside one — true of the only fit
+        there was, and false of a page narrower than the pane, where `--ground`
+        now shows and the ring is what draws its edge.
+
+        **At fit-width nothing shipped changes visibly**, and the argument is
+        the same one Phase 4 made: the side pixels land at x ∈ [−1, 0) and
+        [W, W+1), outside the scrollport, and that fit keeps `overflow-x:
+        hidden`, whose clip is exactly what removes them. It would be safe
+        without the clip too — a `box-shadow` is painted ink rather than
+        scrollable overflow, so `auto` shows no track for one — but under a
+        pinned scale, where `auto` is on, the page is either wider than the
+        pane or centred with room to spare, and the ring is wanted in both.
 
         **Two of the three custom properties `pdf.js` reads live here.**
         `setLayerDimensions` sizes a layer as `round(down,
@@ -1912,7 +1931,7 @@
         fitMode = 'width'
         fitScale = 1
         fitControl.value = 'width'
-        pane.fit = fitMode
+        tellFit()
         pane.scale = null
         drawnRevision = -1
         takenReload = -1
@@ -1976,7 +1995,18 @@
       */
       let fitMode = 'width'
       let fitScale = 1
-      pane.fit = fitMode
+
+      /*
+        The two things every change of fit must do besides changing it: publish
+        it for the gate, and open the horizontal axis if this is the fit that
+        can cross it. One writer, so the class cannot drift from the state it
+        is meant to be a rendering of.
+      */
+      function tellFit() {
+        pane.fit = fitMode
+        pages.classList.toggle('wide', fitMode === 'manual')
+      }
+      tellFit()
 
       /*
         **The one place each fit's expression is written.** Everything
@@ -2450,7 +2480,7 @@
           fitMode = 'manual'
           fitScale = Number(chosen)
         }
-        pane.fit = fitMode
+        tellFit()
 
         if (anchor === null) anchor = readAnchor()
         rerender()
