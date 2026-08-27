@@ -25,6 +25,7 @@
   const fitEl = document.getElementById('fit')
   const P = () => window.__pane
   let noise = 0
+  const spoken = []
   let records = null
   let observer = null
 
@@ -116,6 +117,27 @@
   */
   const boundary = () => Math.round((pages.clientHeight * 595.28) / 841.89)
 
+  /*
+    Wait for a property of the pane rather than for its renders to stop.
+
+    **`idle()` is not evidence that the pane converged**, and every clause about
+    what the pane *holds* needs to know that: it watches `__pane.renders`, which
+    does not move at all when a pass finds nothing to do — and a forced pass
+    that runs before its `IntersectionObserver` has delivered legitimately
+    starts nothing, leaving the previous fit's canvases in place for one more
+    scroll rest. Read at that moment the pane looks like an implementation that
+    re-derived the scale and never re-drew. Polling the property tells the two
+    apart, and reports how long it took, which is itself the finding.
+  */
+  const settles = async (predicate, ms = 8000) => {
+    const started = performance.now()
+    for (let i = 0; i * 100 <= ms; i++) {
+      if (predicate()) return Math.round(performance.now() - started)
+      await wait(100)
+    }
+    return null
+  }
+
   // A page's own CSS box, which is what a fit writes and the one number a
   // pinned scale must hold to the pixel.
   const cssW = (i = 0) => Math.round(parseFloat(pages.children[i].style.width))
@@ -183,20 +205,36 @@
   const pre3 = (wide) => {
     let good = true
     const w = pages.clientWidth
+    const h = pages.clientHeight
     const b = boundary()
     if (devicePixelRatio !== 2) {
       good = false
       note(`devicePixelRatio is ${devicePixelRatio}, not 2 — every MiB literal below is void`)
     }
+    /*
+      **The height is checked first, and it is the one that explains the rest.**
+      The fit-page boundary is a function of it — 745 at the app's default pane
+      and 195 at a 276 px one — so a short window does not merely narrow a
+      margin, it moves which side of the boundary a 520 px pane is on and
+      inverts what the two entry points are for. A visible `#error` is the
+      commonest cause: it is `flex: none` above `#pages` in the same column and
+      takes its height out of the pane.
+    */
+    if (h < 1001 || h > 1126) {
+      good = false
+      note(`pane height is ${h}, outside 1001–1126 — the window is not at its default ~900×1100${
+        document.getElementById('error').hidden ? '' : ', and #error is visible above the pane, eating its height'
+      }. The boundary reads ${b} here against 745 there, so which entry point applies has moved with it.`)
+    }
     if (wide && w <= b) {
       good = false
-      note(`pane is ${w}, at or under the fit-page boundary ${b} — widen the window until it is above, or fit-page is fit-width and these clauses test nothing`)
+      note(`pane is ${w}, at or under the fit-page boundary ${b} — widen the window until pages.clientWidth exceeds it, or fit-page is fit-width and these clauses test nothing`)
     }
     if (!wide && w >= b) {
       good = false
-      note(`pane is ${w}, at or above the boundary ${b} — narrow it; these clauses want the geometry where fit-page and fit-width agree`)
+      note(`pane is ${w}, at or above the boundary ${b} — these clauses want a pane below it, which at the default window is anything under 745; if the pane is already 520 the window is too short rather than too wide`)
     }
-    ok('P3·0', 'preconditions', good, `dpr ${devicePixelRatio}, pane ${w}×${pages.clientHeight}, boundary ${b}`)
+    ok('P3·0', 'preconditions', good, `dpr ${devicePixelRatio}, pane ${w}×${h}, boundary ${b}`)
     return good
   }
 
@@ -264,8 +302,14 @@
 
     arm() {
       noise = 0
-      addEventListener('error', () => noise++)
-      addEventListener('unhandledrejection', () => noise++)
+      spoken.length = 0
+      // **Named and not merely counted.** A run that reports "21 uncaught" and
+      // nothing else sends the next round looking for something it cannot see.
+      const say = (what) => { noise++; if (spoken.length < 8) spoken.push(what) }
+      addEventListener('error', (e) =>
+        say(`error: ${e.message || e.error} @ ${e.filename || '?'}:${e.lineno || '?'}`))
+      addEventListener('unhandledrejection', (e) =>
+        say(`rejection: ${(e.reason && (e.reason.message || e.reason.name)) || String(e.reason)}`))
       records = []
       observer?.disconnect()
       observer = new MutationObserver((rs) => {
@@ -465,7 +509,8 @@
         P().made - P().released === pages.querySelectorAll('canvas').length,
         `made−released ${P().made - P().released}, canvases ${pages.querySelectorAll('canvas').length}`)
 
-      ok(15, 'no error reached the console', noise === 0, `${noise} uncaught`)
+      ok(15, 'no error reached the console', noise === 0,
+        `${noise} uncaught${spoken.length ? ' — ' + spoken.join(' | ') : ''}`)
       note(`15. engine readings — sizingMs ${P().sizingMs} (Chromium 3.4, failing above 250) · ` +
         `deliveryMs ${P().deliveryMs} (Chromium 0.4–6.8) · renderMs ${P().renderMs} (about 8.5 predicted at 520 px)`)
       note('a disagreement on those three is a finding; on every other clause it is a failure')
@@ -474,6 +519,29 @@
 
     // What to widen the window past before running `wide()`.
     boundary,
+
+    /*
+      Where the pane actually is, in one line, with a document open. Worth
+      running before anything else: every literal in both gates is derived from
+      the app's default window, and a run at another geometry produces failures
+      that look like defects and are not.
+    */
+    where() {
+      const w = pages.clientWidth
+      const h = pages.clientHeight
+      const err = document.getElementById('error')
+      console.log(
+        `pane ${w}×${h} · dpr ${devicePixelRatio} · fit-page boundary ${boundary()} · ` +
+          `__pane.fit ${P().fit} scale ${P().scale} mode ${P().mode}\n` +
+          `wanted: 520×1001–1126 at dpr 2, boundary about 745 — that is the ~900×1100 ` +
+          `window with always-show scrollbars, nothing above the pane, and the divider ` +
+          `left where it opens.\n` +
+          (err.hidden
+            ? 'the error bar is hidden, so nothing is taking height out of the pane.'
+            : `#error IS VISIBLE and is taking height out of the pane: "${err.textContent.slice(0, 200)}"`)
+      )
+      return { width: w, height: h, dpr: devicePixelRatio, boundary: boundary() }
+    },
 
     /*
       Phase 3, at the 520 pane — where fit-width and fit-page agree, so the
@@ -559,16 +627,30 @@
       pages.scrollTop = 0
       await wait(600)
       await idle()
-      const top = { n: count(), b: held() }
+      const topMs = await settles(() => held() === count() * per && count() > 0)
+      const top = { n: count(), b: held(), ms: topMs }
       pages.scrollTop = pages.scrollHeight / 2
       await wait(600)
       await idle()
-      const mid = { n: count(), b: held() }
+      const midMs = await settles(() => held() === count() * per && count() > 0)
+      const mid = { n: count(), b: held(), ms: midMs }
+      /*
+        **The equality is the clause and the counts are a reading.** How many
+        pages the band holds is a function of the scrollport's height against a
+        page four times its fit-width size, so it is 2–3 at the app's default
+        pane and 1 at a short window — a bound on it would fail on geometry and
+        say nothing about the fit. What must hold at any height is that the
+        retained bytes are exactly the canvases the pane is holding times one
+        page's own cost at *this* scale: a stale canvas kept across the fit
+        change reads a quarter of that and breaks the equality arithmetically,
+        which is why no separate freshness clause is needed here.
+      */
       ok('P3·6a', 'retention at 200% is the band, and it is canvases × one page',
         P().mode === 'band' && top.b === top.n * per && mid.b === mid.n * per &&
-        top.n >= 1 && top.n <= 3 && mid.n >= 2 && mid.n <= 4,
-        `one page ${MiB(per)} MiB (30.6 at dpr 2) · top ${top.n}/${MiB(top.b)} · ` +
-        `mid ${mid.n}/${MiB(mid.b)} · a stale canvas kept across the fit change breaks this equality`)
+        top.n >= 1 && mid.n >= 1 && top.n < pages.children.length,
+        `one page ${MiB(per)} MiB (30.6 at dpr 2) · top ${top.n}/${MiB(top.b)} in ${top.ms ?? '>8000'} ms · ` +
+        `mid ${mid.n}/${MiB(mid.b)} in ${mid.ms ?? '>8000'} ms · sharp ${sharp()} · ` +
+        `spec 2 and 2–3 at the default pane, fewer at a short one`)
       ok('P3·6b', 'nothing is retained outside #pages at 200%',
         P().made - P().released === count(), `made−released ${P().made - P().released}, canvases ${count()}`)
       let layers3 = true
@@ -585,6 +667,17 @@
       // second is the measured one, because only then is the edit under them.
       await setFit('4')
       caretAt(0.5)
+      /*
+        **Two compiles before the measured one, and the reason is a design
+        decision rather than flakiness.** A compile landing while a gesture's
+        anchor is still held keeps the reader's place and skips the caret jump —
+        OQ-2's rule, for that compile only — and the fit change just above holds
+        exactly such an anchor whenever its render was deferred behind another.
+        So the first compile may legitimately land anywhere; the second puts the
+        reader on the caret's own page; only then is the third an edit *under*
+        the reader, which is what this clause is about.
+      */
+      await compile()
       await compile()
       await wait(400)
       await idle()
@@ -654,11 +747,22 @@
       err.textContent = wasText
       await wait(1200)
       await idle()
+      /*
+        **Judged against the height that is actually there, not the one this
+        clause remembers.** Fit-page's whole claim is that the box tracks
+        `clientHeight` whatever moved it, and a pane whose height changed again
+        for some other reason — a compile putting `#error` above it, the window
+        moving — would fail a remembered literal while satisfying the property.
+        So each of the three readings is checked against its own pane.
+      */
+      const fits = (w, h, pane) => w === Math.round((pane * 595.28) / 841.89) && h === Math.round(pane)
       ok('P3·1c', 'fit-page re-derives on a height-only change, and comes back',
-        short[2] < tall[2] && short[0] < tall[0] && short[1] === Math.round(short[2]) &&
-        cssW() === tall[0] && cssH() === tall[1],
+        short[2] < tall[2] && short[0] < tall[0] &&
+        fits(tall[0], tall[1], tall[2]) && fits(short[0], short[1], short[2]) &&
+        fits(cssW(), cssH(), pages.clientHeight),
         `${tall[0]}×${tall[1]} at a ${tall[2]} pane → ${short[0]}×${short[1]} at ${short[2]} ` +
-        `→ ${cssW()}×${cssH()} at ${pages.clientHeight}`)
+        `→ ${cssW()}×${cssH()} at ${pages.clientHeight}; each must be ` +
+        `round(pane × 595.28 / 841.89) × pane`)
 
       // P3·5 and P3·7 — the four directions that are real only here.
       pages.scrollTop = pages.scrollHeight / 2
@@ -709,16 +813,23 @@
       pages.scrollTop = 0
       await wait(500)
       await idle()
+      await settles(() => count() === pages.children.length)
       const wideFit = { mode: P().mode, n: count(), b: held(), px: pages.clientWidth }
       await setFit('2')
       pages.scrollTop = pages.scrollHeight / 2
       await wait(600)
       await idle()
-      const zoomed = { mode: P().mode, n: count(), b: held(), px: pages.clientWidth, per: one() }
+      const per2 = one()
+      const zoomMs = await settles(() => held() === count() * per2 && count() > 0)
+      const zoomed = {
+        mode: P().mode, n: count(), b: held(), px: pages.clientWidth, per: per2,
+        ms: zoomMs, sharp: sharp()
+      }
       await setFit('width')
       pages.scrollTop = 0
       await wait(500)
       await idle()
+      await settles(() => count() === pages.children.length)
       const back = { mode: P().mode, n: count(), b: held(), px: pages.clientWidth }
       ok('P3·9', 'the budget is crossed by the fit alone, both ways, the width untouched',
         wideFit.mode === 'whole' && zoomed.mode === 'band' && back.mode === 'whole' &&
@@ -726,8 +837,9 @@
         zoomed.b === zoomed.n * zoomed.per &&
         wideFit.px === zoomed.px && zoomed.px === back.px && sharp(),
         `width ${wideFit.mode} ${wideFit.n}/${MiB(wideFit.b)} · 200% ${zoomed.mode} ` +
-        `${zoomed.n}/${MiB(zoomed.b)} · width ${back.mode} ${back.n}/${MiB(back.b)}; ` +
-        `pane ${wideFit.px}/${zoomed.px}/${back.px} px throughout; ` +
+        `${zoomed.n}/${MiB(zoomed.b)} (one page ${MiB(zoomed.per)}, settled in ` +
+        `${zoomed.ms ?? '>8000'} ms, sharp ${zoomed.sharp}) · width ${back.mode} ` +
+        `${back.n}/${MiB(back.b)}; pane ${wideFit.px}/${zoomed.px}/${back.px} px throughout; ` +
         `spec at dpr 2: whole 20/116.64 · band 2–3/61.2–91.8 · whole 20/116.64`)
       ok('P3·9b', 'nothing is retained outside #pages after the crossings',
         P().made - P().released === count(),
