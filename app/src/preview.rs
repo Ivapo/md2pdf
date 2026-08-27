@@ -1406,4 +1406,117 @@ mod tests {
             "the document is still the one that is open"
         );
     }
+
+    /// The `@property` names of one `@typedef {object} …` block in the page.
+    ///
+    /// Plain string operations, and no HTML parser enters this crate for it:
+    /// the markers are fixed literals and the block ends at the first `*/`
+    /// after one. The type is skipped by brace depth rather than by the first
+    /// `}`, so an inline object type would not silently truncate the name.
+    fn typedef_properties(page: &str, name: &str) -> Vec<String> {
+        let marker = format!("@typedef {{object}} {name}\n");
+        let at = page
+            .find(&marker)
+            .unwrap_or_else(|| panic!("the page declares no `@typedef {{object}} {name}`"));
+        let block = &page[at + marker.len()..];
+        let block = &block[..block.find("*/").expect("an unterminated JSDoc block")];
+
+        block
+            .lines()
+            .filter_map(|line| {
+                let rest = line.trim_start().strip_prefix("* @property ")?;
+                let rest = rest.strip_prefix('{')?;
+                let mut depth = 1usize;
+                let close = rest.char_indices().find_map(|(at, glyph)| {
+                    match glyph {
+                        '{' => depth += 1,
+                        '}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                return Some(at);
+                            }
+                        }
+                        _ => {}
+                    }
+                    None
+                })?;
+                Some(rest[close + 1..].split_whitespace().next()?.to_string())
+            })
+            .collect()
+    }
+
+    /// The page's typedefs and this crate's `Status` name the same fields.
+    ///
+    /// **This is the narrow edge `specs/desktop_app_spec.md` OQ-10 names.**
+    /// `invoke` answers with an untyped value and `app/dist/index.html` reads
+    /// ten fields off it by name, so a field renamed here and not there breaks
+    /// the window silently, at runtime, with no console anyone reads. The type
+    /// check over that file (`app/typecheck.mjs`) makes the typedef bind on the
+    /// page's side; this makes it bind on Rust's. **Two declarations compared
+    /// against each other**, rather than usage compared against a declaration.
+    ///
+    /// `anchors` holds one, and must: `Anchor` is not reachable in the JSON at
+    /// all while the list is empty.
+    #[test]
+    fn the_page_typedefs_name_exactly_the_fields_status_serializes() {
+        const PAGE: &str = include_str!("../dist/index.html");
+
+        let status = Status {
+            state: State::Current,
+            time: Some("28 ms".to_string()),
+            error: None,
+            page: true,
+            divergence: None,
+            revision: 3,
+            reloaded: 1,
+            anchors: vec![document::Anchor { line: 1, page: 1 }],
+            sections: vec!["sections/one.md".to_string()],
+            master: Some("report.md".to_string()),
+        };
+        let sent = serde_json::to_value(&status).expect("a `Status` that will not serialize");
+
+        let mut carried: Vec<String> = sent
+            .as_object()
+            .expect("a `Status` that is not a JSON object")
+            .keys()
+            .cloned()
+            .collect();
+        let mut declared = typedef_properties(PAGE, "Status");
+        carried.sort_unstable();
+        declared.sort_unstable();
+        // Both counts, not just the equality: two empty lists are equal, and a
+        // marker that stopped matching should fail loudly rather than pass.
+        assert_eq!(
+            declared.len(),
+            10,
+            "the page's `Status` typedef declares {} properties: {:?}",
+            declared.len(),
+            declared
+        );
+        assert_eq!(
+            declared, carried,
+            "the page's `Status` typedef and the serialized `Status` name different fields"
+        );
+
+        let mut riding: Vec<String> = sent["anchors"][0]
+            .as_object()
+            .expect("an `Anchor` that is not a JSON object")
+            .keys()
+            .cloned()
+            .collect();
+        let mut named = typedef_properties(PAGE, "Anchor");
+        riding.sort_unstable();
+        named.sort_unstable();
+        assert_eq!(
+            named.len(),
+            2,
+            "the page's `Anchor` typedef declares {} properties: {:?}",
+            named.len(),
+            named
+        );
+        assert_eq!(
+            named, riding,
+            "the page's `Anchor` typedef and the anchors a `Status` carries name different fields"
+        );
+    }
 }
