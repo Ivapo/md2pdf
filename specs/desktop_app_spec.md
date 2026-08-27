@@ -5,7 +5,7 @@ note: >
   A macOS desktop app that shows the PDF while you write: a Tauri window wraps
   the same core crate, watches the document and its images, and re-renders.
 status: accepted
-last_updated: 2026-08-25
+last_updated: 2026-08-27
 
 phases:
   - name: "Phase 1 — the window, and one compile on screen"
@@ -46,6 +46,11 @@ phases:
   - name: "Phase 8 — the text pane shows its lines"
     reviewed: 2026-08-25
     shipped: 2026-08-25
+    cut: null
+    by: null
+  - name: "Phase 9 — what checks the front end"
+    reviewed: null
+    shipped: null
     cut: null
     by: null
 
@@ -790,6 +795,34 @@ list to one item.
   that way and would need a webview driver, which is a different decision with
   OQ-2's price attached to it. Blocks nothing; the narrow half is a phase to
   append.
+
+  > **PART-ANSWERED 2026-08-27, by Phase 9, and the question stays open for the
+  > rest.** The narrow edge is closed twice over rather than by the scrape
+  > proposed above: a JSDoc `@typedef` the page is type-checked against, and a
+  > Rust test comparing that typedef's field list to a serialized `Status`. The
+  > pair is tighter than the scrape — **two declarations compared, rather than
+  > usage compared against a declaration** — and the scrape is not built.
+  >
+  > **`tsc --allowJs --checkJs` over the shipped file, measured before the phase
+  > was drafted: 242 errors at strict defaults, 41 with `strictNullChecks` and
+  > `noImplicitAny` off, and none of the 242 a defect.** That is what chose the
+  > settings, and it is also the honest size of the win: of the six defects this
+  > file has produced, a type check catches **one** — `doc?.destroy()`, a method
+  > the proxy does not have, swallowed by optional chaining. The other five are
+  > `ResizeObserver` feedback, observer-delivery ordering, a timer cancelling a
+  > render, a counter advanced for a render that never drew, and an early return
+  > leaving a caret band on an empty pane. **All five are behaviour, and the
+  > wide half of this question is the only thing that reaches them.**
+  >
+  > **What the wide half now has that it did not: evidence that it works.**
+  > `mpdf-009` Phase 3 was verified by serving the *shipped* `dist/index.html`
+  > over http with `window.__TAURI__` stubbed and driving it in Chromium. It
+  > reproduced the app's own literals exactly — `scrollHeight` 53,337, 116.64
+  > MiB at a 520 px pane — and, A/B'd against the parent commit, is what
+  > identified `overflow-x: auto` as the cause of 21 `ResizeObserver` errors a
+  > run. The harness was a scratch file and was thrown away. Committing it is
+  > the wide half, and it still carries OQ-2's price: a browser driver is a node
+  > toolchain. *(needs-input — the price is a judgement, not a measurement)*
 
 ## 4. Implementation phases
 
@@ -1877,6 +1910,125 @@ gap and no such excuse — out of scope here, and `mpdf-006`'s to close.)
   `README.md`'s app section names the window's controls, so it gains the
   `Lines` toggle in one sentence — a visible control the reader will otherwise
   meet undocumented.
+
+### Phase 9 — what checks the front end
+*Produces the observable: **no**, and the argument is OQ-10's.* Nothing here
+reaches the PDF. What it reaches is the file that decides where the reader
+lands, how much of a document the pane holds, and what the page reads off Rust
+— 752 lines of code inside a 2,566-line file, of which **the only checking
+mechanism is a person at a console**. Six defects have shipped or nearly shipped
+in it; five were found by eye or by review, one of them the day this was
+written. A phase that produces no observable is worth its place when it is the
+first thing that can tell the observable has broken.
+
+Appended 2026-08-27, per §6.1 step 2: OQ-10 raised this subject twice, from
+Phase 7 and from Phase 8, and this spec owns it.
+
+- **Scope:** **`app/dist/index.html`** (annotations only, no behaviour),
+  **`app/tsconfig.json`**, a mirror script, one test under **`app/tests/`**, and
+  a CI job. **No `.rs` file under `src/` is edited.**
+
+  **The measurement comes first, because it chooses the settings.** Run over the
+  shipped file as it stands, `tsc --allowJs --checkJs` reports **242 errors at
+  its strict defaults and 41 with `strictNullChecks` and `noImplicitAny` off** —
+  and **not one of the 242 is a defect**. They are annotation gaps: 112
+  `getElementById` results that are `HTMLElement | null`, 78 implicitly-`any`
+  parameters, and the remainder the page's own expando properties. **A check
+  whose first run reports 242 non-bugs is a check nobody runs**, and that is the
+  whole reason the settings are a decision rather than a default.
+
+  **So the loose settings, and the claim is that they lose nothing this project
+  has been bitten by.** Measured against the three classes that have actually
+  cost something, all three still fail with both strict flags off:
+
+  | class | code | the real instance |
+  |---|---|---|
+  | block-scoped use before declaration | `TS2448` | `mpdf-009` Phase 3, caught by reading during the build |
+  | a method the type does not have | `TS2339` | `doc?.destroy()`, which is not on `PDFDocumentProxy` — optional chaining swallowed it and it leaked a worker per compile |
+  | a field the page reads and Rust does not send | `TS2339` | OQ-10's own sharpest edge, given the typedef below |
+
+  **What it does not reach is named here rather than discovered later.** Of the
+  six defects this file has produced, **this catches one**. The five it misses
+  are `ResizeObserver` feedback through a box the callback resized, an
+  `IntersectionObserver`'s delivery racing an animation frame, a settle timer
+  cancelling the render that was about to set the fit, a counter advanced for a
+  render that never drew, and an early return that left a caret band on an empty
+  pane. Every one is behaviour, and no type system sees any of them. **This
+  phase does not answer OQ-10's wide half and must not be read as answering it.**
+
+  **The file does not split, and that is load-bearing.** `tsc` cannot check an
+  inline `<script>`, and the obvious answer — move it to `dist/app.js` — would
+  make `frontendDist` a build output, change the `sources` all three
+  `rules/desktop-*.md` files declare, and break the harness that drives the
+  *shipped* file with `window.__TAURI__` stubbed. Instead a **mirror**: every
+  line outside `<script type="module">` is replaced by an empty one, so the
+  mirror is the same length as the HTML and every error `tsc` reports cites a
+  real `app/dist/index.html` line. **Measured: 2,566 lines each, and line 1,737
+  identical in both.** The mirror is generated, never committed.
+
+  **The annotations are the work, and there are six of them.** `logical`,
+  `natural`, `view` and `number` on a page wrapper; `gen` on a canvas;
+  `__pane` on `window`; the DOM subtypes `getElementById` cannot know
+  (`HTMLTextAreaElement` for the buffer, `HTMLSelectElement` for the fit,
+  `HTMLElement` for the children the anchor measures); the nullable timers
+  `tsc` infers as `null` from their initialiser; a `declare module` shim for
+  the two vendored `pdf.js` files, which ship no types; and **`Status` and
+  `Anchor`, which are the point**. JSDoc, in the file, beside prose that is
+  already there — and the tension is real and accepted: this file's comments
+  are arguments and JSDoc is annotation, so the typedefs sit in one block at
+  the top rather than scattered above functions that already carry a
+  paragraph.
+
+  **The Rust half is what stops the typedef being a lie.** A hand-written
+  `@typedef Status` can drift from Rust exactly as a hand-written TypeScript
+  interface would — `tsc` would then check the page against a fiction. So a test
+  in `app/tests/` serializes a `Status` and compares its JSON keys against the
+  field list the typedef declares. **It compares two declarations rather than
+  usage against a declaration**, which is both tighter and more stable than
+  scraping `state.<field>` accesses out of the page, and it needs no toolchain:
+  `serde_json` as a dev-dependency, and the `include_str!` idiom
+  `core/tests/page_examples_test.rs` already uses on `web/index.html`.
+
+  **Where the type check runs, and where it must not.** **Not `cargo test`.**
+  Bun is not a prerequisite of this workspace and making the Rust suite depend on
+  one would be OQ-2's price paid by everyone who builds the app, to check a file
+  the suite does not otherwise touch. It runs in CI — a second workflow beside
+  `pages.yml`, which builds only `web/` and must stay that way — and as one
+  documented command. **The Rust half does run in `cargo test`**, because it
+  costs nothing to.
+
+- **Exit gate:**
+
+  1. `tsc` over the mirror reports **zero** errors, at the settings above.
+  2. **Each of the three classes fails on purpose.** Reintroduce them one at a
+     time — a read of `fitMode` above its declaration, a `.destroy()` on the
+     document proxy, a `state.sectons` — and each is reported, at an
+     `app/dist/index.html` line number that is the real one. **A check that has
+     never failed is not known to work**, and this clause is the only thing
+     standing between this phase and a `tsconfig.json` that silently checks
+     nothing.
+  3. The mirror is the same line count as the HTML, and a line chosen from the
+     middle of the prose reads identically in both.
+  4. `cargo test --workspace` passes, and **the new test fails when a `Status`
+     field is renamed in Rust and the typedef is not** — demonstrated, not
+     asserted, the same way clause 2 is.
+  5. **No behaviour changed**: `mpdf-009` Phase 3's gate re-runs to the same
+     numbers, since annotations are comments and a comment that moved a pixel
+     would be the finding.
+  6. CI runs clause 1 on a push that touches `app/dist/index.html`, and does not
+     run the wasm build.
+
+- **Close-out:** **`rules/desktop-panes.md`** gains what checks this file and
+  what that check does not reach — it is the rule whose first line is "the one
+  file the front end is", and this phase is the first thing that reads that file
+  mechanically. **OQ-10 takes a dated note recording its narrow half answered
+  and its wide half open**, rather than being struck through: the geometry, the
+  fit, the observer lifecycles and the reader's place are all still checked by a
+  person, which is what the question actually asked about.
+
+  **`README.md`: none needed.** Its app section documents behaviours a reader
+  meets, and this changes none. **`CLAUDE.md`: none needed** — no id, no
+  observable and no methodology moves. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
