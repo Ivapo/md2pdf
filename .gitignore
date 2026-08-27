@@ -16,3 +16,10 @@
 
 # Finder metadata, which reappears however often it is deleted.
 .DS_Store
+
+# The Playwright MCP driver writes a console log per run here, driving the front
+# end for a gate. Scratch, and one file per attempt.
+/.playwright-mcp/
+
+# Notes kept beside the work rather than in it.
+/notes-ivan/
