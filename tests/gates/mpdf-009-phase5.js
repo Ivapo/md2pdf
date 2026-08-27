@@ -202,16 +202,34 @@
 
   let pass = 0
   let fail = 0
+  /*
+    Every line is kept as well as logged, because Safari's Web Inspector copies
+    one console entry at a time and this script writes one per clause. Run
+    `__gate.report()` at the end and the whole run comes back as a single entry,
+    which is what actually gets pasted back.
+  */
+  const transcript = []
   const ok = (n, name, good, detail) => {
     good ? pass++ : fail++
+    transcript.push(
+      `${good ? 'PASS' : 'FAIL'}  ${String(n).padStart(2)}. ${name}${detail ? '  —  ' + detail : ''}`
+    )
     console.log(
       `%c${good ? 'PASS' : 'FAIL'}%c  ${String(n).padStart(2)}. ${name}${detail ? '  —  ' + detail : ''}`,
       `font-weight:bold;color:${good ? '#137333' : '#c5221f'}`,
       'color:inherit'
     )
   }
-  const note = (s) => console.log(`%c····%c  ${s}`, 'color:#888', 'color:#888')
+  const note = (s) => {
+    transcript.push(`····  ${s}`)
+    console.log(`%c····%c  ${s}`, 'color:#888', 'color:#888')
+  }
+  const heading = (s) => {
+    transcript.push('', `== ${s}`)
+    console.log(`%c\n${s}\n`, 'font-weight:bold')
+  }
   const tally = (what) => {
+    transcript.push(`${what}: ${pass} passed, ${fail} failed`)
     console.log(
       `%c${what}: ${pass} passed, ${fail} failed`,
       `font-weight:bold;color:${fail ? '#c5221f' : '#137333'}`
@@ -235,6 +253,15 @@
   }
 
   window.__gate = {
+    /*
+      The whole run as one console entry, for copying back in one gesture. Run
+      it last, after every entry point that this session is going to run.
+    */
+    report() {
+      console.log(`mpdf-009 gate — dpr ${devicePixelRatio}\n${transcript.join('\n')}`)
+      return `${transcript.length} lines`
+    },
+
     arm() {
       noise = 0
       addEventListener('error', () => noise++)
@@ -250,7 +277,7 @@
     },
 
     async long() {
-      console.log('%c\nlong.md — 71 pages\n', 'font-weight:bold')
+      heading('long.md — 71 pages')
       await idle()
       if (!pre()) note('clauses below still run; read their numbers as reports, not results')
 
@@ -453,7 +480,7 @@
       fits that are distinct here are width and manual.
     */
     async fits() {
-      console.log('%c\nlong.md — the three fits, at the 520 pane\n', 'font-weight:bold')
+      heading('long.md — the three fits, at the 520 pane')
       await setFit('width')
       await width(520)
       pages.scrollTop = 0
@@ -586,7 +613,7 @@
       where its clauses mean anything.
     */
     async wide() {
-      console.log('%c\nlong.md — fit-page, above the boundary\n', 'font-weight:bold')
+      heading('long.md — fit-page, above the boundary')
       await setFit('width')
       pages.scrollTop = 0
       await wait(500)
@@ -652,7 +679,7 @@
     },
 
     async near() {
-      console.log('%c\nnear.md — 20 pages, at the budget\n', 'font-weight:bold')
+      heading('near.md — 20 pages, at the budget')
       await idle()
       await width(520)
       pages.scrollTop = 0; await wait(500); await idle()
@@ -709,7 +736,7 @@
     },
 
     async showcase() {
-      console.log('%c\nshowcase.md — 6 pages, unchanged\n', 'font-weight:bold')
+      heading('showcase.md — 6 pages, unchanged')
       await idle()
       const k = pages.children
       const gaps = [k[0].offsetTop]
