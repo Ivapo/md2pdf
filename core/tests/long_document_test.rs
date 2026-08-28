@@ -315,7 +315,7 @@ fn document(paragraphs: usize, referable: bool) -> String {
     });
     out.push_str("author: Iva Po\ndate: 26 August 2026\ntemplate: article\ncolumns: 1\n---\n");
 
-    let mut words = Lcg(0x2026_08_26);
+    let mut words = Lcg(0x20_26_08_26);
     let table_at = (paragraphs * 9 / 10).max(1);
 
     for i in 0..paragraphs {
@@ -360,7 +360,7 @@ fn paragraph(words: &mut Lcg) -> String {
             if w > 0 {
                 out.push(' ');
             }
-            let word = WORDS[words.upto(WORDS.len()) as usize];
+            let word = WORDS[words.upto(WORDS.len())];
             if w == 0 {
                 out.push(word.as_bytes()[0].to_ascii_uppercase() as char);
                 out.push_str(&word[1..]);
