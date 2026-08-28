@@ -31,7 +31,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 5 — an image row shows the figure"
-    reviewed: null
+    reviewed: 2026-08-28
     shipped: null
     cut: null
     by: null
@@ -1014,36 +1014,73 @@ meets most often.*
   repository. **OQ-1 settles the shape and the prototype settled the mechanism**;
   both are recorded there, and this scope is the buildable form of them.
 
-  1. **A command for the bytes.** `app/src/main.rs` gains one taking a
-     root-relative path and returning `tauri::ipc::Response`, which is
-     `app/src/main.rs:current_pdf`'s own route: a `Vec<u8>` would serialize as a
-     JSON array of numbers, one per byte, and a figure is bigger than a page.
-     **It needs no capability and no `app/tauri.conf.json` change** — Tauri's
-     asset protocol would want both, and this wants neither. It **confines
-     rather than merely checking existence**, exactly as
+  1. **The read is an ordinary function, and the command is a wrapper over it.**
+     `app/src/document.rs` gains one taking the root and a root-relative path and
+     answering `Result<Vec<u8>, String>`; `app/src/main.rs` gains the
+     `#[tauri::command]` that calls it, registers it in `generate_handler!` and
+     returns `tauri::ipc::Response`. **The split is not tidiness and the gate
+     below depends on it**: `app/src/main.rs` has no test module, the crate is
+     bin-only, and `tauri::State` has a private field and no public
+     constructor — so a rule written into the command is a rule no test in this
+     repository can reach, which is that file's own header stated backwards.
+     Eleven of this app's twelve commands are already wrappers over a plain
+     function — `app/src/main.rs:pending_open` is the one that is not — and this
+     is a twelfth.
+
+     The function **confines rather than merely checking existence**, exactly as
      `app/src/preview.rs:Session::set_main` does: `document::relative` must
      answer the path back, which `root.join("../../secrets.png")` cannot.
+
+     The `tauri::ipc::Response` is `app/src/main.rs:current_pdf`'s own route: a
+     `Vec<u8>` would serialize as a JSON array of numbers, one per byte, and a
+     figure is bigger than a page. **It needs no capability and no
+     `app/tauri.conf.json` change** — Tauri's asset protocol would want both, and
+     an app-defined command wants neither.
 
   2. **A surface over the text pane, and not a third pane.** The page turns the
      bytes into a `Blob` and an object URL, draws an `<img>`, and **revokes the
      previous URL**, or the window holds every figure the reader has looked at
-     for its own lifetime. It is **absolutely positioned over `#text`'s own
-     column rather than replacing it**: `app/dist/index.html`'s divider drag
-     reads `#text`'s box, and a hidden textarea measures zero, so replacing it
-     would break the drag for as long as a figure was up. `<main>` therefore
-     takes `position: relative` and the surface mirrors `#text`'s `offsetLeft`
-     and `offsetWidth` on every show, on a window resize, and at the end of a
-     drag. **A `<figure>` carries `margin: 1em 40px` from the user agent**,
-     which puts it 40 px off that column; the prototype hit it and it is written
-     here so the next reader does not.
+     for its own lifetime. `app/dist/index.html:fileRow` is what changes to reach
+     it: its `opens` test is
+     `entry.kind === 'markdown' && !entry.missing && !holding` today, so an image
+     row's label is a `<span>` carrying the path's last segment with
+     *"— not edited here"* in the row's `title`, and it becomes a second kind of
+     button beside the one that opens a markdown row.
+
+     It is **absolutely positioned over `#text`'s own column rather than
+     replacing it**: `app/dist/index.html`'s divider drag reads
+     `text.getBoundingClientRect().left` on every `pointerdown`, and a hidden
+     textarea measures zero, so replacing it would break the drag for as long as
+     a figure was up. `<main>` therefore takes `position: relative` — it carries
+     no `position` today, and `#pages` already has its own, so no existing
+     `offsetTop` reader moves — and the surface mirrors `#text`'s `offsetLeft`
+     and `offsetWidth` **whenever that column can move**: a show, a window
+     resize, the end of a divider drag, the panel fold (`#toggle`) and the line
+     gutter (`#numbers`). The last two are the ones an enumeration drops, and
+     both shift `#text`'s left edge. **A `<figure>` carries `margin: 1em 40px`
+     from the user agent**, which puts it 40 px off that column; the prototype
+     hit it and it is written here so the next reader does not.
 
   3. **The figure sits in the upper third**, not centred and not against the
      top: centred, a small figure lands at the pane's waist and reads as
-     nothing; flush to the top it reads as a header. The container is
-     `box-sizing: border-box`, which is what keeps the image's
-     `max-height: 100%` honest against that padding — a percentage max-height
-     resolves against the *content* box, so without it a tall figure overflows
-     by exactly the padding above it.
+     nothing; flush to the top it reads as a header. The sheet holding it is a
+     flex child of the surface with `flex: 1; min-height: 0`, which is what makes
+     the padding above the figure free: **flexbox distributes the free space over
+     items' *outer* sizes**, so the padding is already accounted for, the sheet
+     cannot overflow the surface, and the image's `max-height: 100%` — resolving
+     against a content box that already excludes it — measures the right number.
+
+     **`box-sizing: border-box` is not what makes that work, and two drafts said
+     it was.** The first justified the padding by it; review called that
+     conditional on a specified height; the second answered that `flex: 1` makes
+     the height definite, which is true and is not the point. Measured in
+     Chromium over a 400 px column with a 100 px top padding, a `flex: 1` sheet
+     is 400 px and overflows by 0 under **both** values of `box-sizing`, and the
+     figure lands identically. The overflow-by-exactly-the-padding behaviour is
+     real and belongs to `height: 100%`, which is not what this builds. Recorded
+     because it is a justification a later pass would otherwise re-derive and
+     find false — the declaration itself is harmless either way, and gate clause
+     6 checks the fit by measuring rather than through this reasoning.
 
   4. **The pane goes on holding its file, and that is the decision the rest
      rests on.** Nothing here touches `edited`, the buffer, the compile, the
@@ -1051,40 +1088,90 @@ meets most often.*
      the whole document, and `app/src/preview.rs:Status` gains **no field**. It
      is a view, the way `Lines` is a view. Three ways back to the text, because
      the reader arrives by three routes: the surface's own control, `Escape`,
-     and clicking any markdown row — which already means *put that file in the
-     pane* and must not leave a picture over it. `app/dist/index.html:clear()`
-     closes it too, an open being a new project.
+     and clicking any markdown row **that opens one** — which already means *put
+     that file in the pane* and must not leave a picture over it.
+     `app/dist/index.html:clear()` closes it too, an open being a new project.
 
-  5. **A PDF row says so and draws nothing**, per OQ-8. `<img>` cannot draw a
-     PDF and `pdf` is in `md2pdf_core::IMAGE_EXTENSIONS`, so the case is
-     reachable; the sentence is Rust's like every other the window places.
+     **The row the pane already holds is inert and stays inert**, per `opens`'s
+     `!holding` term above, so clicking *it* while a figure is up does nothing —
+     which is the one gesture a reader might reasonably expect to work and does
+     not. Accepted rather than fixed: the alternative is a row whose drawing
+     depends on page state, and `rules/desktop-panes.md`'s **"the rows hold no
+     selection"** is what lets the panel be rebuilt whole on every status. The
+     surface's own control and `Escape` both cover that reader, so nobody is
+     stuck.
+
+  5. **A PDF row says so and draws nothing**, per OQ-8, **and that sentence is
+     the page's own** — which is a deliberate exception to the rule that the
+     window composes no text, and the reason is that neither route for a Rust
+     one is available. `app/dist/index.html:fail` is where a refusal from a
+     command lands, and it runs `pages.classList.add('stale')`: a click that
+     compiled nothing would mark the compiled page out of date, contradicting
+     item 4 above. The `divergence` field Phase 2 widened draws the `Discard`
+     button beside its sentence, which is wrong here. And a field on `Status` is
+     what item 4 refuses. **So the page reads the extension and writes the line**,
+     the way it writes `Back to the text` — this is a label for a file kind and
+     not a status about the document, which is the distinction that rule was
+     always about. The command is never called for a `.pdf` at all.
 
 - **Exit gate:** In the Rust suite, over `tests/fixtures/panel/`, which Phase 1
-  created and which already holds a `.jpg` and an `.svg`: the command returns
-  the file's bytes for a listed path, byte-for-byte against `std::fs::read`;
-  and it refuses `../escape.png`, an absolute path, and a path through
-  `<fixture>/outside` — the committed symlink Phase 1's clause 5 already
-  uses — each with a sentence naming what was asked for. The refusals are
-  Phase 1's confinement rule re-run against a second reader, which is the point:
-  a command is a command.
+  created:
+  1. The function returns `cover.jpg`'s bytes and `sections/mark.svg`'s bytes,
+     each byte-for-byte against `std::fs::read` of the same file.
+  2. It refuses `/tmp/escape.png` and `outside/decoy.png` — the second through
+     `<fixture>/outside`, the committed symlink to `tests/fixtures/panel-decoy/`
+     that Phase 1's clause 5 already uses, which is the case that exercises
+     confinement against a path the disk really holds.
+  3. It refuses `../escape.png` **over a scratch root**, not over the fixture:
+     the test makes a directory under `app/src/document.rs:scratch_dir`, writes
+     `escape.png` in its *parent*, and asks the function for `../escape.png` from
+     the root below. The write is what makes the case worth running — `is_file()`
+     would otherwise refuse first and the clause would pass without the
+     confinement rule ever executing — and the scratch root is where it goes,
+     because `tests/fixtures/` is tracked and that helper's own doc comment says
+     it exists so the repository stays clean. `Session::set_main`'s test writes
+     to a scratch parent for the same reason.
 
-  At the window, on `tests/gates/mpdf-010-phase5.js`: open
-  `samples/showcase/showcase.md`, click `sections/emit.svg` — **an SVG with real
-  extent, not `mark.svg`, which is a 16 px check mark and would prove nothing
-  about the fit**. The figure appears over the text pane in that pane's own
-  column; `invoke('status')`'s `edited`, `main` and `revision` are **unchanged
-  across the click**, which is what "it is a view" means as an assertion; the
-  divider still drags while it is up; `Escape` puts the text back and the
-  buffer is the same string it was; and a markdown row puts the text back and
-  moves the pane. The document's own `showcase.pdf` — present for any developer
-  who has run `samples/showcase/README.md`, and absent otherwise — is checked
-  **only if the row is there**, for the reason Phase 1 refused to gate on that
-  tree's exact contents.
+  **The fixture gains one file, and it costs two edits to Phase 1's work.**
+  `tests/fixtures/panel/plan.pdf`, so the PDF case is reachable at all: `pdf` is
+  in `md2pdf_core::IMAGE_EXTENSIONS`, and without it the only PDF in reach is
+  `samples/showcase/showcase.pdf`, which `.gitignore` excludes — so a second
+  person on a fresh clone would check nothing, which is verbatim the
+  irreproducibility Phase 1 refused to gate on. It slots between `other.md` and
+  `refs.bib` by §2's own order, and **`tests/fixtures/panel-manifest.txt` and
+  `app/src/document.rs:the_listing_is_the_disk_and_what_the_master_names` each
+  gain that one row in this phase's own commit.** An exact-enumeration gate
+  failing when its fixture grows is that gate working; it is named here so the
+  failure is expected rather than investigated.
 
-- **Close-out:** `rules/desktop.md` (the commands, and the file I/O the app
-  owns — this is the second reader of a path the author did not name in a
-  dialog, after the walk), `rules/desktop-panes.md` (the surface, and the three
-  ways back). README: that clicking a figure shows it and the pane keeps its
+  At the window, on `tests/gates/mpdf-010-phase5.js`, opening
+  `tests/fixtures/panel/sections/text.md` — which roots at the fixture, per
+  Phase 1 — and then `samples/showcase/showcase.md`:
+  1. Clicking `sections/mark.svg` shows it over the text pane, in that pane's
+     own column: the surface's left and width equal `#text`'s, read off the live
+     DOM.
+  2. `invoke('status')`'s `edited`, `main` and `revision` are **unchanged across
+     the click**, which is what "it is a view" means as an assertion, and the
+     pane's text is the same string it was.
+  3. Clicking `plan.pdf` draws no `<img>` and shows the sentence instead.
+  4. The divider still drags while a figure is up, and the surface follows it;
+     so do the `Files` fold and the `Lines` toggle.
+  5. `Escape` puts the text back. **Then the figure is shown again**, and
+     clicking a markdown row puts the text back *and* moves the pane — two
+     claims, and the re-show is what makes the second reachable after the first.
+  6. In `samples/showcase/`, `sections/emit.svg` — **`viewBox="0 0 120 72"`,
+     where `mark.svg` is `viewBox="0 0 16 16"` and would prove nothing about the
+     fit** — is drawn no wider than the sheet and no taller than it.
+
+- **Close-out:** `rules/desktop.md` (the commands, now thirteen, and the file
+  I/O the app owns — this is one more reader of a path the author did not name
+  in a dialog, beside the walk, the compile's own closure and
+  `Session::set_edited`). `rules/desktop-panes.md`: the surface and the three
+  ways back, and **the sentence this phase makes false is *"A bibliography, an
+  image and a marked-missing row open nothing and say so in their `title`, where
+  OQ-1 and OQ-2 leave them"***, with its `covers:` clause "the two gestures on a
+  row and the two marks it may carry" following it — the shape Phase 2's own
+  close-out set. README: that clicking a figure shows it and the pane keeps its
   file. **`specs/file_panel_spec.md` OQ-1 is already resolved** — this phase
   ships what that resolution names and adds nothing to it.
 

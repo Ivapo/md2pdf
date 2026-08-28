@@ -2,6 +2,96 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 5 only — 2026-08-28 — same reviewer, resumed with the author's changelog — **READY (converged)**
+
+A confirmation pass over three non-blocking fixes rather than a re-open, run
+because one of them had been wrong twice. All three confirmed against the file,
+nothing newly broken. The reviewer re-measured the geometry a third time —
+`flex: 1` sheet 400 px in a 400 px column, overflow 0, figure 300 px, against
+`height: 100%` at 500 px and overflow 100 under `content-box` — and confirmed the
+scratch-root refusal genuinely fires, `strip_prefix` of the canonical root
+against a canonical path one level above it failing.
+
+### Round 2 — Phase 5 only — 2026-08-28 — same reviewer, resumed with the author's changelog — **READY**
+
+All three blockers confirmed resolved against the code. The reviewer re-derived
+the numbers the fixes newly keyed the phase to and found each right:
+`generate_handler!` registers twelve commands and `pending_open` is the only one
+that is not a wrapper over a plain function; `plan.pdf` slots between `other.md`
+and `refs.bib` byte-wise (`o` 0x6F < `p` 0x70 < `r` 0x72); and `Status` gains no
+field, so `declared.len() == 11` is untouched.
+
+**Three non-blocking findings, all accepted, and the first is this loop biting
+the author's own round-1 fix.** The `box-sizing: border-box` justification was
+**measured false** rather than argued against: in a 400 px column with a 100 px
+top padding, a `flex: 1` sheet is 400 px and overflows by 0 under *both* values
+of `box-sizing`, because flexbox distributes free space over items' **outer**
+sizes. The overflow-by-exactly-the-padding behaviour is real and belongs to
+`height: 100%`, which is the shape the round-1 rewrite had moved off. Two drafts
+had it wrong — the first justified the padding by `box-sizing`, the second by
+`flex: 1` making the height definite, which is true and beside the point — so the
+phase now rests on the outer-size rule, prescribes no declaration it does not
+need, and carries the measurement so a later pass cannot re-derive the false
+version.
+
+The second: the author's own repair to round 1's `escape.png` finding would have
+left an untracked file in **tracked** `tests/fixtures/` on every `cargo test`,
+against `document::scratch_dir`'s own doc comment. The refusal case now builds
+over a scratch root, which is one of the two repairs the reviewer offered. The
+third: a quote of `fileRow`'s `opens` test had dropped its `!holding` term, and
+that term is load-bearing — the markdown row the pane already holds is inert, so
+clicking the row you are on while a figure is up does nothing. **Accepted rather
+than fixed**, the alternative being a row whose drawing depends on page state
+where `rules/desktop-panes.md`'s *"the rows hold no selection"* is what lets the
+panel be rebuilt whole on every status; the cost is now stated in the phase
+instead of discovered at a keyboard.
+
+### Round 1 — Phase 5 only — 2026-08-28 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode): yes.** Phase 5 produces no observable and argues it
+explicitly: `mpdf-008` made a document several files *and its figures several
+files*, the panel has listed those figures since Phase 1, and checking that
+`emit.svg` is the diagram you meant means leaving for Preview and losing the
+pane — §1's opening complaint, about pictures rather than prose. It is also
+*wanted* on the strongest evidence round 0 can have: both of OQ-1's candidate
+shapes were built and tried in the running app, and the author chose this one.
+
+One generalist rather than a panel, matching Phase 1's and Phase 2's rounds for
+a single app-facing phase. **Three blocking findings, all accepted; ten findings
+in total and no rejections in any round.**
+
+1. **The Rust exit gate was keyed to a unit that cannot be tested.** The scope
+   said `app/src/main.rs` gains a command and the gate said "the command
+   refuses" — but that file has no test module, the crate is bin-only,
+   `tauri::State` has a private field and no public constructor, and
+   `ipc::Response`'s body is private. Every sibling phase named the testable
+   seam and this one did not. Resolved by putting the read in
+   `app/src/document.rs` as an ordinary function with the command a wrapper over
+   it, which is what eleven of the twelve existing commands already are.
+2. **The PDF sentence had no route, and one of the two available routes
+   contradicted the phase's own invariant.** `app/dist/index.html:fail` runs
+   `pages.classList.add('stale')`, so routing it there would mark the compiled
+   page out of date for a click that compiled nothing — verbatim what scope item
+   4 says this phase never does — and the `divergence` field draws the `Discard`
+   button beside its sentence. Resolved by giving the sentence to the page as a
+   label for a file kind rather than a status about the document, and by never
+   calling the command for a `.pdf` at all.
+3. **The PDF case had no reproducible gate clause.** `tests/fixtures/panel/`
+   holds no `.pdf`, and the only PDF in reach — `samples/showcase/showcase.pdf` —
+   is excluded by `.gitignore`, so a second person on a fresh clone would check
+   nothing: verbatim the irreproducibility Phase 1's gate refused. The reviewer
+   also caught that the obvious repair was silently costly. Resolved by adding
+   `tests/fixtures/panel/plan.pdf` **and naming the cost in the phase**:
+   `tests/fixtures/panel-manifest.txt` and
+   `document::tests::the_listing_is_the_disk_and_what_the_master_names` each gain
+   that row in this phase's own commit, an exact-enumeration gate failing when
+   its fixture grows being that gate working.
+
+Seven non-blocking, all accepted. The sharpest were that the re-mirror
+enumeration dropped the panel fold and the `Lines` toggle, both of which move
+`#text`'s left edge; and that the `../escape.png` refusal would have passed on
+`is_file()` rather than on confinement, never running the rule under test.
+
 ### Phase 2 shipped — 2026-08-28 — the window gate, and one consequence the rounds did not enumerate
 
 **The window gate passes, at ten clauses of ten**, on `cargo tauri dev` on macOS
