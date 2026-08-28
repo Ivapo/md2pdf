@@ -11,23 +11,40 @@
    the panel the reader sees, which is what this checks: **the rows are compared
    against `invoke('status')`'s own answer**, not against a list written here.
 
+   **It is re-runnable.** `setMain()` puts the fixture's main back where it found
+   it, so a second run starts where the first did — which matters because the
+   store outlives the window and clause 1 asserts a particular main.
+
    ORDER:
      __gate.arm()              <- BEFORE opening anything, from the empty state
      open tests/fixtures/panel/sections/text.md
      await __gate.project()    <- clauses 1, 2, 3, 4
-     await __gate.setMain()    <- clause 5; leaves other.md as the main
+     await __gate.setMain()    <- clauses 5, 6
      open samples/article.md
-     await __gate.article()    <- clause 6
+     await __gate.article()    <- clauses 7, 8, 9
      __gate.report()
 
-   Clause 6 is `mpdf-008` Phase 4's gate case (2) inverted deliberately: that
+   Clause 7 is `mpdf-008` Phase 4's gate case (2) inverted deliberately: that
    phase asserted `samples/article.md` draws NO panel. Run this script against
-   the build before this phase and clause 6 is the one that fails.            */
+   the build before this phase and clause 7 is the one that fails.            */
 ;(() => {
   const files = document.getElementById('files')
   const list = document.getElementById('parts')
   const toggle = document.getElementById('toggle')
   const { invoke } = window['__TAURI__'].core
+
+  /* **The window's title is not `document.title`.** `set_title` sets the native
+     title bar; the page's own `<title>` says `md2pdf` and never changes, so a
+     clause reading it reported a failure about the wrong string. This is the one
+     Tauri call here beyond `invoke`, and it costs no capability: `allow-title`
+     is already in `core:window`'s default set, which `core:default` grants. */
+  const titled = async () => {
+    try {
+      return await window['__TAURI__'].window.getCurrentWindow().title()
+    } catch (problem) {
+      return `<unreadable: ${problem}>`
+    }
+  }
 
   let noise = 0
   const spoken = []
@@ -147,12 +164,13 @@
       heading('tests/fixtures/panel/sections/text.md — opened from a section')
       await settled()
       const state = await invoke('status')
+      const title = await titled()
 
       /* Clause 1. The observable: the section was opened and the master
          compiled. `main` is what Rust landed on, and the title bar says so. */
       ok(1, 'opening a section landed on the master above it',
-        state.main === 'book.md' && document.title === 'book.md',
-        `main ${state.main}, title "${document.title}", state ${state.state}`)
+        state.main === 'book.md' && title === 'book.md' && state.state === 'current',
+        `main ${state.main}, title "${title}", state ${state.state}`)
 
       /* Clause 2. The panel is the Rust listing, drawn — every row, in order,
          with the folders derived and nothing invented. */
@@ -201,15 +219,34 @@
       await settled()
 
       const after = await invoke('status')
+      const title = await titled()
       const marked = drawn().filter((r) => r.here).map((r) => r.name)
       ok(5, 'the gesture moves the main, the mark and the pane',
         after.main !== before.main &&
         after.main.endsWith(name) &&
         marked.length === 1 && marked[0] === name &&
-        document.title === name,
-        `${before.main} -> ${after.main}, marked ${marked.join(',')}, title "${document.title}"`)
+        title === name,
+        `${before.main} -> ${after.main}, marked ${marked.join(',')}, title "${title}"`)
 
-      note('the store keeps this: reopen the same folder and it lands here again.')
+      /* **Put it back**, and check the round trip while doing it. The store
+         outlives the window, so a gate that left the fixture altered would fail
+         its own clause 1 the second time it was run. */
+      const back = [...list.children].find(
+        (li) => li.querySelector('.name').textContent === before.main &&
+                li.querySelector('.set') !== null
+      )
+      if (back === undefined) {
+        note(`could not restore ${before.main} — the fixture's main is now ${after.main}`)
+        return tally('set main')
+      }
+      back.querySelector('.set').click()
+      await settled()
+      await settled()
+
+      ok(6, 'and it goes back, so this gate can be run twice',
+        (await invoke('status')).main === before.main,
+        `${after.main} -> ${(await invoke('status')).main}`)
+
       note('now open samples/article.md, then run: await __gate.article()')
       return tally('set main')
     },
@@ -222,17 +259,24 @@
 
       /* Clause 6. `mpdf-008` Phase 4's gate case (2), inverted. That phase
          asserted this document draws no panel at all. */
-      ok(6, 'a document naming no section draws a panel, where it drew none',
+      ok(7, 'a document naming no section draws a panel, where it drew none',
         !files.hidden && !toggle.hidden && rows.length > 0,
         `${rows.length} rows, main ${state.main}`)
 
-      ok(7, 'its own figures are listed, and the panel is the folder',
+      /* **`samples/` is the case a tidy fixture could not have caught**: a
+         single-file document sits there beside the whole `showcase/` project, so
+         a discovery that recursed found `showcase/showcase.md`, called it the
+         one master, and compiled it for an author who opened `article.md`. A
+         master is never below its own sections, so a `.md` in a subdirectory is
+         another project's. */
+      ok(8, 'the file that was opened is the file that compiles',
+        state.main === 'article.md' &&
+        rows.some((row) => row.name === 'article.md' && row.here) &&
         rows.some((row) => row.name === 'pipeline.svg') &&
-        rows.some((row) => row.name === 'check.svg') &&
-        rows.some((row) => row.name === 'article.md' && row.here),
-        rows.map((row) => row.name).join(' · '))
+        rows.some((row) => row.name === 'check.svg'),
+        `main ${state.main} — ${rows.map((row) => row.name).join(' · ')}`)
 
-      ok(8, 'no error reached the console', noise === 0,
+      ok(9, 'no error reached the console', noise === 0,
         `${noise} uncaught${spoken.length ? ' — ' + spoken.join(' | ') : ''}`)
 
       note('run __gate.report() to copy the whole transcript back in one gesture.')
