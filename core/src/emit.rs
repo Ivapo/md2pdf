@@ -23,7 +23,7 @@ use std::ops::Range;
 use pulldown_cmark::{
     Alignment, BrokenLink, CodeBlockKind, CowStr, Event, LinkType, Options, Parser, Tag, TagEnd,
 };
-use typst::syntax::VirtualPath;
+use typst::syntax::{PathError, VirtualPath};
 use unicase::UniCase;
 
 use crate::frontmatter::{self, Equations, Frontmatter};
@@ -1632,25 +1632,29 @@ fn step(
         }
 
         // An image is the one construct that needs a file, so this arm is
-        // where the pipeline decides which files it will ever ask for.
-        // `check_image` refuses every shape it cannot carry; what survives
-        // opens the alt capture and joins the shopping list.
+        // where the pipeline decides which files it will ever ask for. What
+        // survives both halves of the check opens the alt capture and joins
+        // the shopping list.
         //
-        // **The shape is checked on what the author wrote, and the section's
-        // own directory is prefixed after.** The two orders differ on more
-        // than tidiness: `typst-syntax` normalises a non-leading empty
-        // segment away, so `/x.png` prefixed to `one//x.png` would pass
-        // `portable_path` as `/one/x.png` — an absolute path laundered into a
-        // relative one, silently. Checked first, every refusal names the shape
-        // the author typed in the words it has always used. Nothing slips
-        // through the other way, because a section's directory came from a
-        // marker path that already passed `portable_path`, so a destination
-        // this check accepts is still portable once it is prefixed.
+        // **`check_image` is handed both the written destination and the one it
+        // landed on, and the division is which string each shape is read off —
+        // not which of them is computed first.** A scheme, a leading `/`, a
+        // backslash and an empty destination are properties of what the author
+        // *wrote*: `typst-syntax` normalises a non-leading empty segment away,
+        // so `/x.png` prefixed to `one//x.png` would read as `/one/x.png` and an
+        // absolute path would be laundered into a relative one, silently, and
+        // `![alt]()` prefixed to `one/` would stop being empty at all.
+        //
+        // Leaving the document's folder is the one shape that is a property of
+        // where the path *lands*, so it is the one read off the resolved
+        // destination. That is what lets a section name a figure beside the
+        // master: `../figures/plot.svg` written in `sections/method.md` lands on
+        // `figures/plot.svg`, inside the folder, and only `../../escape.png`
+        // actually climbs out.
         Event::Start(Tag::Image {
             dest_url, title, ..
         }) => {
             let line = line_of(md, range.start);
-            check_image(&dest_url, &title, line)?;
 
             // The path the master would have written. It is the identity every
             // downstream reader keys on — the Typst source, the world's
@@ -1658,6 +1662,7 @@ fn step(
             // here, at the one place that knows both the destination and the
             // file it was written in.
             let dest = sources.resolve(line, &dest_url);
+            check_image(&dest_url, &dest, &title, line)?;
             images.push(ImageRef {
                 path: dest.clone(),
                 location: Location::at(line),
@@ -1780,12 +1785,16 @@ fn top(bufs: &mut [String]) -> &mut String {
 /// path differently: an image arm says what the image is, and a frontmatter key
 /// says what the key takes. The rule underneath is the same rule, which is the
 /// point of the enum.
+///
+/// **The first three are properties of what the author wrote and the last is a
+/// property of where the path lands**, which is the division
+/// [`written_shape`] and [`landed_path`] are named after.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PathShape {
     Scheme,
     Absolute,
-    DotDot,
     Backslash,
+    Escapes,
 }
 
 impl PathShape {
@@ -1794,61 +1803,117 @@ impl PathShape {
         match self {
             PathShape::Scheme => "a URL destination",
             PathShape::Absolute => "an absolute path",
-            PathShape::DotDot => "a '..' path segment",
             PathShape::Backslash => "a backslash in its path",
+            PathShape::Escapes => "a path that leaves the document's folder",
         }
     }
 
     /// The fragment a frontmatter key that takes a path names.
+    ///
+    /// `Escapes` reads the same words in both, and that is deliberate: the other
+    /// three are about how a destination is *spelled*, where this one is about
+    /// its effect, and an effect has no second phrasing to earn.
     pub fn key(self) -> &'static str {
         match self {
             PathShape::Scheme => "a URL",
             PathShape::Absolute => "an absolute path",
-            PathShape::DotDot => "a path with a '..' segment",
             PathShape::Backslash => "a path with a backslash",
+            PathShape::Escapes => "a path that leaves the document's folder",
         }
     }
 }
 
-/// The virtual path a relative destination resolves to, or the shape that
-/// refuses it.
+/// The shapes a destination is refused for by how it is *written*.
 ///
-/// One rule, read by every construct that names a file: a document and the files
-/// it names travel as one folder. A scheme is a fetch request and nothing
-/// fetches, an absolute path converts on one machine only, a `..` segment
-/// escapes both the document's directory and the world's virtual root, and a
-/// Windows separator writes a path Typst's own virtual filesystem cannot hold.
+/// A scheme is a fetch request and nothing fetches, which catches `data:` and
+/// the drive path `C:\figure.png` with it; an absolute path converts on one
+/// machine only; a Windows separator writes a segment Typst's own virtual
+/// filesystem cannot hold.
 ///
-/// **The resolution happens here rather than after the checks**, so the one
-/// shape `VirtualPath` itself refuses is named by this function too. A caller
-/// that checked the first three and then resolved would have to answer for the
-/// fourth twice, or hand `crate::file_id` a path it cannot build — which returns
-/// `Error::Internal`, whose own contract says a broken build rather than bad
-/// input.
-pub(crate) fn portable_path(dest: &str) -> std::result::Result<VirtualPath, PathShape> {
+/// **These are read off the destination the author wrote and never off the one
+/// it resolved to**, which is load-bearing rather than tidy: `Sources::resolve`
+/// is a `format!` with no guard, so `/x.png` written in a section becomes
+/// `sections//x.png`, and `typst-syntax` maps a non-leading empty segment to
+/// `Component::Current` and ignores it — read off the prefixed string, an
+/// absolute path would be laundered into a relative one with nothing raised.
+///
+/// **The backslash is tested here rather than inferred from `VirtualPath`'s own
+/// error**, because [`landed_path`] can now fail for a second reason and the two
+/// would be indistinguishable. `components()` splits on `/` and a backslash
+/// lands inside a segment `Segment::new` rejects, so this test is exactly the
+/// `PathError::Backslash` it replaces.
+fn written_shape(dest: &str) -> std::result::Result<(), PathShape> {
     if has_scheme(dest) {
         return Err(PathShape::Scheme);
     }
     if dest.starts_with('/') {
         return Err(PathShape::Absolute);
     }
-    if dest.split('/').any(|segment| segment == "..") {
-        return Err(PathShape::DotDot);
+    if dest.contains('\\') {
+        return Err(PathShape::Backslash);
     }
-    VirtualPath::new(dest).map_err(|_| PathShape::Backslash)
+    Ok(())
+}
+
+/// The virtual path a destination lands on, or the one shape that is a property
+/// of *where* it lands rather than of how it was written.
+///
+/// A document and the files it names travel as one folder, so a path that leaves
+/// that folder is refused — but leaving it is not the same statement as carrying
+/// a `..`. `sections/../figures/plot.svg` carries one and lands inside;
+/// `../figures/plot.svg` carries one and does not. `Segments::push_component`
+/// pops a segment for a parent component and returns `PathError::Escapes` only
+/// when there is nothing left to pop, which is this dialect's rule stated once by
+/// the layer that owns the virtual root.
+///
+/// **The resolution happens here rather than after the check**, so the extension
+/// is read off the same `VirtualPath` `crate::file_id` will later build, and a
+/// caller never hands `file_id` a path it cannot build — which returns
+/// `Error::Internal`, whose own contract says a broken build rather than bad
+/// input.
+fn landed_path(dest: &str) -> std::result::Result<VirtualPath, PathShape> {
+    VirtualPath::new(dest).map_err(|error| match error {
+        PathError::Escapes => PathShape::Escapes,
+        PathError::Backslash => PathShape::Backslash,
+    })
+}
+
+/// Both halves, for a caller whose written destination is where it lands.
+///
+/// The `bibliography` frontmatter key is one — it is the master's own key, and
+/// `crate::frontmatter::parse` holds no `Sources` to prefix anything with — and
+/// [`lone_markdown_link`] is the other, reading it as a predicate to tell an
+/// include marker from a link the dialect would refuse as a path.
+pub(crate) fn portable_path(dest: &str) -> std::result::Result<(), PathShape> {
+    written_shape(dest)?;
+    landed_path(dest)?;
+    Ok(())
 }
 
 // -- images -----------------------------------------------------------------
 
 /// Refuse every image destination the pipeline cannot carry, naming the shape.
 ///
-/// The first two mirror the link arm, for the same two reasons. The next four
-/// are [`portable_path`]'s, which the `bibliography` frontmatter key reads too —
-/// one rule about what a path in this dialect may be, phrased twice. The last is
-/// the format gate's first half: Typst reads the extension before the content,
-/// so an extension it does not name leaves the format undecided, and the dialect
-/// refuses to guess.
-fn check_image(dest: &str, title: &str, line: usize) -> Result<()> {
+/// **Two destinations rather than one, because the shapes divide by what each is
+/// a property of.** `written` is what the author typed; `landed` is where it
+/// resolved to — the same string for an image the master names, and prefixed
+/// with the section's own directory for one written in a section.
+///
+/// The first two mirror the link arm, for the same two reasons. The next three
+/// are [`written_shape`]'s and are read off `written`, which is what keeps
+/// `![alt]()` an empty destination and `/x.png` an absolute path rather than
+/// whatever they would look like with `sections/` in front of them. The next is
+/// [`landed_path`]'s and is read off `landed`, because leaving the document's
+/// folder is a property of where a path ends up: `../figures/plot.svg` written
+/// under `sections/` lands inside the folder and only `../../escape.png` climbs
+/// out. **Which string reaches which check is the whole of the division** — not
+/// when the prefix is computed. The last is the format gate's first half: Typst
+/// reads the extension before the content, so an extension it does not name
+/// leaves the format undecided, and the dialect refuses to guess.
+///
+/// A shape is named before an extension, as it always has been, so `../../a.bmp`
+/// is refused for leaving the folder and not for its ending.
+fn check_image(written: &str, landed: &str, title: &str, line: usize) -> Result<()> {
     let refuse = |construct: String| {
         Err(Error::UnsupportedConstruct {
             construct,
@@ -1856,14 +1921,17 @@ fn check_image(dest: &str, title: &str, line: usize) -> Result<()> {
         })
     };
 
-    if dest.is_empty() {
+    if written.is_empty() {
         return refuse("image with an empty destination".to_string());
     }
     if !title.is_empty() {
         return refuse("image with a title".to_string());
     }
+    if let Err(shape) = written_shape(written) {
+        return refuse(format!("image with {}", shape.image()));
+    }
 
-    let vpath = match portable_path(dest) {
+    let vpath = match landed_path(landed) {
         Ok(vpath) => vpath,
         Err(shape) => return refuse(format!("image with {}", shape.image())),
     };
@@ -1883,6 +1951,22 @@ fn check_image(dest: &str, title: &str, line: usize) -> Result<()> {
 /// its extension begins.
 pub(crate) fn extension_of(path: &str) -> Option<String> {
     VirtualPath::new(path).ok()?.extension().map(str::to_string)
+}
+
+/// The same path with its `.` and `..` segments resolved away, where it resolves
+/// at all.
+///
+/// `crate::sections::Sources::resolve` reads this so that one file named two
+/// ways arrives as one string: `figures/plot.svg` written by the master and
+/// `../figures/plot.svg` written by a section under `sections/` are the same
+/// file, and `crate::collect` keys `supplied`, `seen` and the world's `FileId` on
+/// that string. **`None` is not a refusal** — it is a path that leaves the
+/// folder, which [`check_image`] refuses in the author's own words and at the
+/// author's own line.
+pub(crate) fn normalise(path: &str) -> Option<String> {
+    VirtualPath::new(path)
+        .ok()
+        .map(|vpath| vpath.get_without_slash().to_string())
 }
 
 /// True when the destination opens with a URI scheme, as RFC 3986 writes one.

@@ -492,7 +492,10 @@ mod tests {
         for (value, needle) in [
             ("https://example.com/refs.yml", "not a URL"),
             ("/etc/refs.yml", "not an absolute path"),
-            ("../refs.yml", "not a path with a '..' segment"),
+            (
+                "../refs.yml",
+                "not a path that leaves the document's folder",
+            ),
             ("refs\\bib.yml", "not a path with a backslash"),
         ] {
             match parse(&format!("bibliography: {value}\n"), 2) {
@@ -504,6 +507,21 @@ mod tests {
                 other => panic!("expected a Frontmatter error for {value}, got {other:?}"),
             }
         }
+    }
+
+    /// A `..` that lands back inside the folder is a path beside the document.
+    ///
+    /// The key reads the same rule the image arm does, and that rule is about
+    /// where a path *lands* rather than about the segments it is spelled with.
+    /// `parse` holds no `Sources`, so a key's written path is where it lands and
+    /// the whole of `portable_path` applies to it unchanged.
+    #[test]
+    fn a_bibliography_path_that_climbs_back_inside_is_accepted() {
+        let out = parse("bibliography: figures/../refs.bib\n", 2).unwrap();
+        assert_eq!(
+            out.bibliography.map(|named| named.path).as_deref(),
+            Some("figures/../refs.bib")
+        );
     }
 
     #[test]

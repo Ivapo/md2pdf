@@ -99,15 +99,30 @@ impl Sources {
     ///
     /// **A section with no directory of its own prefixes with nothing**, and so
     /// does the master. The idiom matters: a naive `format!("{dir}/{dest}")` yields
-    /// `/dot.png`, which `emit::portable_path` refuses as absolute — loud rather
+    /// `/dot.png`, which `emit::written_shape` refuses as absolute — loud rather
     /// than silent, but wrong. A single-file document has a one-segment map whose
     /// only file is absent, so nothing is prefixed and every golden is
     /// byte-identical: the same arithmetic the inertness of `locate` rests on.
+    ///
+    /// **The result is normalised, and both branches are**, because the identity
+    /// above is a string comparison: `figures/plot.svg` named by the master and
+    /// `../figures/plot.svg` named by a section under `sections/` are one file and
+    /// must arrive as one key. Normalising only the prefixed branch would leave a
+    /// master's own `figures/../plot.svg` un-normalised while a section's
+    /// equivalent normalised — the same identity failure in the other direction.
+    /// It is also what lets `app/src/watch.rs:classify` go on comparing
+    /// `root(document).join(asset)`, which no path carrying a `..` would ever
+    /// equal.
+    ///
+    /// **This stays infallible.** A path that will not normalise falls through as
+    /// it was written, so `emit::check_image` is still what refuses it and still
+    /// names the author's own file and line.
     pub(crate) fn resolve(&self, line: usize, dest: &str) -> String {
-        match self.segment(line).directory() {
+        let landed = match self.segment(line).directory() {
             "" => dest.to_string(),
             directory => format!("{directory}/{dest}"),
-        }
+        };
+        emit::normalise(&landed).unwrap_or(landed)
     }
 
     /// The segment a line of the joined document fell in.

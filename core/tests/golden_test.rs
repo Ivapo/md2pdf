@@ -922,9 +922,12 @@ fn each_bad_image_destination_names_its_shape_and_its_line() {
             "# H\n\nA ![alt](/figures/a.png) here.\n",
             "image with an absolute path",
         ),
+        // A `..` is refused for where it lands, not for the segment it is
+        // spelled with: written in the master there is nothing above to climb
+        // into, so this one leaves the folder.
         (
             "# H\n\nA ![alt](../a.png) here.\n",
-            "image with a '..' path segment",
+            "image with a path that leaves the document's folder",
         ),
         // Typst's virtual filesystem cannot hold a backslash segment, so this
         // path would fail the compile with a message naming generated source.
@@ -4358,21 +4361,25 @@ fn a_file_with_no_directory_of_its_own_prefixes_with_nothing() {
 
 /// The prefix launders no path the dialect refuses.
 ///
-/// A section cannot reach up out of its own folder, which is what keeps "a folder
-/// travels as one thing" true at both levels. **The check runs on what the author
-/// wrote**, which is why the absolute row below is a refusal: prefixed first it
-/// would have become `sections//x.png`, and `typst-syntax` normalises a
-/// non-leading empty segment away — so `portable_path` would have read
-/// `/sections/x.png` and accepted it, turning an absolute path into a relative one
-/// with nothing raised.
+/// **The written half of the check runs on what the author wrote**, which is why
+/// the absolute row below is still a refusal: prefixed first it would have become
+/// `sections//x.png`, and `typst-syntax` normalises a non-leading empty segment
+/// away — so the check would have read `/sections/x.png` and accepted it, turning
+/// an absolute path into a relative one with nothing raised. An empty destination
+/// is the second row of the same argument: prefixed first it would have stopped
+/// being empty and been refused for having no extension instead.
+///
+/// **These rows are what proves the shape check was split and not flipped**, and
+/// they are byte-identical to the ones that shipped before `..` was allowed to
+/// land back inside the folder.
 #[test]
 fn the_prefix_launders_no_path_the_dialect_refuses() {
     let master = "---\ntitle: A Report\n---\n\n[](sections/method.md)\n";
 
     for (dest, shape) in [
-        ("../x.png", "a '..' path segment"),
         ("/x.png", "an absolute path"),
         ("https://example.com/x.png", "a URL destination"),
+        ("", "an empty destination"),
     ] {
         let sections = [section(
             "sections/method.md",
@@ -4390,6 +4397,129 @@ fn the_prefix_launders_no_path_the_dialect_refuses() {
             Ok(_) => panic!("'{dest}' inside a section was accepted"),
         }
     }
+}
+
+/// A section may name a figure beside the master.
+///
+/// **The observable this phase produces.** `../figures/plot.svg` written in
+/// `sections/one.md` is prefixed to `sections/../figures/plot.svg`, which lands
+/// on `figures/plot.svg` — inside the master's own folder, escaping nothing — and
+/// it is the landing place the dialect judges. Before this phase there was no
+/// legal way to write it at all.
+#[test]
+fn a_section_may_name_a_figure_beside_the_master() {
+    let master = "---\ntitle: A Report\n---\n\n[](sections/one.md)\n";
+    let one = section(
+        "sections/one.md",
+        "# One\n\n![A plot](../figures/plot.svg)\n",
+    );
+
+    // The path the master would have written, which is the frame a caller
+    // supplies assets in.
+    let source = md_to_typst(master, std::slice::from_ref(&one)).unwrap();
+    assert!(
+        source.contains(r#"image("figures/plot.svg", alt: "A plot")"#),
+        "the section's figure did not land beside the master: {source}"
+    );
+
+    let assets = [one, asset("figures/plot.svg", MARK_SVG)];
+    let pdf = md_to_pdf(master, &assets).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "not a PDF");
+}
+
+/// A section that climbs past the master's own folder is still refused.
+///
+/// The rule did not go away; it moved to the destination's landing place. One
+/// `..` from `sections/` lands inside, two climb out, and the second is refused
+/// in the section's own file at the author's own line.
+#[test]
+fn a_section_that_climbs_out_of_the_document_is_refused() {
+    let master = "---\ntitle: A Report\n---\n\n[](sections/one.md)\n";
+    let sections = [section(
+        "sections/one.md",
+        "# One\n\n![A figure](../../escape.png)\n",
+    )];
+
+    match md_to_typst(master, &sections) {
+        Err(error) => assert_eq!(
+            error.to_string(),
+            "unsupported markdown construct 'image with a path that leaves \
+             the document's folder' in sections/one.md at line 3"
+        ),
+        Ok(_) => panic!("a path out of the document was accepted"),
+    }
+}
+
+/// One file named two ways arrives as one string.
+///
+/// `crate::collect` keys `supplied`, `seen` and the world's `FileId` on the
+/// resolved path, so `figures/plot.svg` written by the master and
+/// `../figures/plot.svg` written by a section under `sections/` must normalise to
+/// the same key or the caller reads one file and sets the other figure from it.
+///
+/// **`image_paths` deduplicates nothing** — its own contract says the list may
+/// name one path more than once, and `seen` in the caller is what supplies one
+/// asset — so what is asserted is two entries naming one string.
+#[test]
+fn one_file_named_two_ways_resolves_to_one_path() {
+    let master = "---\ntitle: A Report\n---\n\n\
+        ![The master's](figures/plot.svg)\n\n[](sections/one.md)\n";
+    let sections = [section(
+        "sections/one.md",
+        "# One\n\n![The section's](../figures/plot.svg)\n",
+    )];
+
+    let named: Vec<String> = image_paths(master, &sections)
+        .unwrap()
+        .into_iter()
+        .map(|image| image.path)
+        .collect();
+    assert_eq!(named, ["figures/plot.svg", "figures/plot.svg"]);
+
+    let source = md_to_typst(master, &sections).unwrap();
+    assert_eq!(
+        source.matches(r#"image("figures/plot.svg""#).count(),
+        2,
+        "the two spellings did not write one destination: {source}"
+    );
+}
+
+/// A master's own path normalises too, which is the other half of the identity.
+///
+/// `Sources::resolve` normalises the branch that prefixes nothing as well as the
+/// one that prefixes a directory. Normalising only the prefixed branch would
+/// leave this document naming `figures/../plot.svg` while a section's equivalent
+/// named `plot.svg` — the same identity failure in the other direction.
+#[test]
+fn a_masters_own_path_normalises_as_a_sections_does() {
+    let source = md_to_typst("![A plot](figures/../plot.svg)\n", &[]).unwrap();
+    assert!(
+        source.contains(r#"image("plot.svg", alt: "A plot")"#),
+        "the master's own path was not normalised: {source}"
+    );
+}
+
+/// A marker path is read under the same widened rule, and is not normalised.
+///
+/// `lone_markdown_link` decides by `portable_path`, so `[](sub/../one.md)` is a
+/// marker where it used to be a plain link — and `[](../one.md)` still is not
+/// one, because it still leaves the folder. **What the marker carries is the
+/// author's own spelling**: it is what a message names and what a caller is asked
+/// to open.
+#[test]
+fn a_marker_path_may_climb_back_inside_and_keeps_its_spelling() {
+    let named = md2pdf_core::section_paths("[](sub/../one.md)\n").unwrap();
+    assert_eq!(
+        named.iter().map(|s| s.path.as_str()).collect::<Vec<_>>(),
+        ["sub/../one.md"]
+    );
+
+    let sections = [section("sub/../one.md", "# One\n\nText.\n")];
+    let source = md_to_typst("[](sub/../one.md)\n", &sections).unwrap();
+    assert!(
+        source.contains("= One"),
+        "the section was not spliced: {source}"
+    );
 }
 
 // -- a defect fix, owned by no phase: the accumulator's own lines -------------

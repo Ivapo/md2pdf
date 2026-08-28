@@ -527,6 +527,55 @@ fn a_master_and_its_sections_convert() {
     assert!(pdf.starts_with(b"%PDF"), "not a PDF");
 }
 
+/// A section names a figure that sits beside the master, and it is found there.
+///
+/// **The observable `mpdf-008` Phase 5 produces.** `../figures/plot.svg` written
+/// in `sections/one.md` is prefixed to `sections/../figures/plot.svg`, which lands
+/// on `figures/plot.svg`, and it is the landing place the dialect judges rather
+/// than the segments it is spelled with.
+///
+/// **`read_assets` is unedited, and that is the point of running this at the CLI
+/// rather than only in the library.** `core` writes the normalised path into the
+/// shopping list, so joining it against the master's directory finds the file — a
+/// path still carrying `..` would have been joined just as happily, but the
+/// identity `collect` keys on would have differed from the master's own spelling.
+#[test]
+fn a_section_may_name_a_figure_beside_the_master() {
+    let dir = scratch_dir("multi-file-neighbour");
+    std::fs::create_dir_all(dir.join("sections")).unwrap();
+    std::fs::create_dir_all(dir.join("figures")).unwrap();
+
+    let input = dir.join("master.md");
+    std::fs::write(&input, "---\ntitle: A Report\n---\n\n[](sections/one.md)\n").unwrap();
+    std::fs::write(
+        dir.join("sections/one.md"),
+        "# One\n\n![A plot](../figures/plot.svg)\n",
+    )
+    .unwrap();
+    std::fs::copy(fixture("mark.svg"), dir.join("figures/plot.svg")).unwrap();
+
+    let out = run(&[input.as_ref(), "--emit-typst".as_ref()]);
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let source = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        source.contains(r#"image("figures/plot.svg", alt: "A plot")"#),
+        "source: {source}"
+    );
+
+    let out = run(&[input.as_ref()]);
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let pdf = std::fs::read(dir.join("master.pdf")).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "not a PDF");
+}
+
 /// The same master beside no sections at all.
 ///
 /// The third of the same sentence the image and the bibliography already print:
