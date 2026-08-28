@@ -112,11 +112,32 @@
 
   /* Which page is at the top of the pane. Each wrapper carries the number
      `pdf.js` gave it, so this reads the reader's place off the pane rather than
-     off anything the page was told to do. */
+     off anything the page was told to do. **It is reported and not asserted on**
+     — see `reached` below. */
   const showing = () => {
     const top = pages.scrollTop
     const at = [...pages.children].find((w) => w.offsetTop + w.offsetHeight > top)
     return at ? at.number : null
+  }
+
+  /* Where the pane would sit if it opened on this page, **clamped the way the
+     browser clamps it**.
+
+     `openPdf` scrolls with `applyAnchor({ page: page - 1, fraction: 0 })`, which
+     writes `scrollTop = kids[i].offsetTop`; a browser then clamps that to
+     `scrollHeight - clientHeight`. `showcase.md` is six pages and the heading
+     under test is on the sixth, so on any window whose pane is taller than one
+     page the clamp leaves the *fifth* page's tail at the top of the viewport —
+     the app having scrolled as far as the document allows. Reading back "which
+     page is at the top" would therefore fail on a tall window and pass on a
+     short one, which is a claim about the reader's monitor and not about this
+     phase. This compares the scroll the app actually took against the anchor's
+     own page, both read off the live DOM. */
+  const reached = (page) => {
+    const at = pages.children[page - 1]
+    if (at === undefined) return null
+    const room = pages.scrollHeight - pages.clientHeight
+    return Math.min(at.offsetTop, Math.max(room, 0))
   }
 
   /* Put the caret at the end of a line, counted the way `caretPage` counts —
@@ -255,13 +276,17 @@
       await settled()
       await settled()
 
-      const at = showing()
       /* Clause 6, the phase's observable. The heading is a dozen lines into a
-         section, and the page it landed on is the *document's*, not the file's —
-         so anything at page 1 is the old behaviour. */
+         section the master names, and the page it landed on is the *document's*
+         and not that file's — so a pane still at the top is the old behaviour,
+         which is what `wanted.page > 1` and a non-zero scroll rule out
+         together. */
+      const want = reached(wanted.page)
+      const got = pages.scrollTop
       ok(6, 'the caret opened the page that heading landed on in the whole document',
-        at === wanted.page && wanted.page > 1,
-        `showing page ${at}, the heading is on page ${wanted.page}`)
+        want !== null && wanted.page > 1 && want > 0 && Math.abs(got - want) <= 2,
+        `scrollTop ${Math.round(got)}, page ${wanted.page} of ${pages.children.length} ` +
+        `is at ${want === null ? '?' : Math.round(want)} (clamped), showing page ${showing()}`)
 
       /* Clause 7. The buffer is dirty now, so the switch refuses in a sentence
          that does not claim the file moved — and the way out is beside it. */
