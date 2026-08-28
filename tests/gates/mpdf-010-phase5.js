@@ -374,32 +374,43 @@
       }
       await shown()
 
-      /* **The pane is narrowed first, and that is the clause rather than
-         setup.** `emit.svg` is 120 × 72, so in a pane at its default width it
-         is drawn at its natural size and `max-width` has nothing to do — a
-         containment check there passes under a stylesheet with no fit rule at
-         all. Dragging to the floor puts the sheet's content box under 120 px,
-         which is where the rule is the only thing keeping the figure in. */
+      const picture = viewer.querySelector('img')
+      if (picture === null) {
+        ok(6, 'a figure is drawn inside the sheet', false, 'the row drew no img')
+        return tally('fit')
+      }
+
+      /* **The same figure is measured at two pane widths, and that is the
+         clause rather than setup.** `emit.svg` is 120 × 72 declared, so in a
+         pane at its usual width it is drawn at its own size and `max-width` has
+         nothing to do — a containment check there passes under a stylesheet
+         with no fit rule at all. Dragging to the floor puts the sheet's content
+         box under 120 px, and the figure must get smaller.
+
+         **The comparison is between two measurements and not against
+         `naturalWidth`**, which is not portable: WebKit reports an SVG's
+         *rendered* size there, so in the app this read 95 for a figure declared
+         120 and against a drawn 96 — the guard failed while the claim under it
+         held. Two layouts of one element say the same thing and say it in every
+         engine. */
+      const wide = picture.getBoundingClientRect().width
+
       drag(-2000)
       await wait(300)
 
-      const picture = viewer.querySelector('img')
       const box = sheetBox()
-      const drawn = picture ? picture.getBoundingClientRect() : null
+      const drawn = picture.getBoundingClientRect()
 
       ok(
         6,
-        'the figure is drawn no wider and no taller than the sheet, and the sheet does not overflow',
-        picture !== null &&
+        'the figure shrank with the column, and is drawn no wider and no taller than the sheet',
+        drawn.width < wide &&
           drawn.width <= box.width + 1 &&
           drawn.height <= box.height + 1 &&
-          drawn.width < picture.naturalWidth &&
           box.overflow === 0,
-        picture
-          ? `natural ${picture.naturalWidth}×${picture.naturalHeight}, ` +
-            `drawn ${Math.round(drawn.width)}×${Math.round(drawn.height)}, ` +
-            `sheet ${Math.round(box.width)}×${Math.round(box.height)}, overflow ${box.overflow}`
-          : 'no img'
+        `drawn ${Math.round(wide)} px wide before the drag and ` +
+          `${Math.round(drawn.width)}×${Math.round(drawn.height)} after, ` +
+          `sheet ${Math.round(box.width)}×${Math.round(box.height)}, overflow ${box.overflow}`
       )
 
       // Put the pane back where it was found.
