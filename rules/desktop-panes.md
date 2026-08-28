@@ -15,7 +15,8 @@ covers: >
   filtered to, the status the page places and never composes, the panel that
   lists the project's files and the two states it keeps apart, the flat entries
   it is drawn from and the folders derived rather than sent, the fold the page
-  holds, the two gestures on a row and the two marks it may carry, the disk half
+  holds, the two gestures on a row and the two marks it may carry, the surface
+  over the text pane and the three ways back, the disk half
   that is walked twice and the missing half that follows the text, the text the reader can
   select and the stream it is read off, the link filter and the destination a click resolves, the scaffolding the
   bundle does not carry and the app supplies, the gutter whose rows are as tall
@@ -24,7 +25,7 @@ covers: >
   pane that loses both when it empties, the check that reads this file and the
   two declarations it holds to each other, and the seven defects that check
   does not reach
-max_lines: 300
+max_lines: 340
 generated: 2026-08-28
 ---
 
@@ -219,11 +220,46 @@ apart before there were two of them rather than after. **`here` is the file that
 compiles and `.holding` is the file the pane shows** — one row at every open, two
 from the first click — and `.holding` wears the text pane's own `--ground` rather
 than `--band`, which sits a point from the panel's `--chrome` and would be
-invisible in both themes. A bibliography, an image and a marked-missing row open
-nothing and say so in their `title`, where OQ-1 and OQ-2 leave them. So the panel
+invisible in both themes. **An image row's body is a button too, and it does
+something else**: it shows the figure over the text pane, leaving `edited` where
+it was. A bibliography and a marked-missing row open nothing and say so in their
+`title`, where OQ-2 and the disk leave them. So the panel
 is still rebuilt whole on every status, and that is still
 right: **the rows hold no selection.** Both files live in Rust and arrive in the
 status, and each control reads its path off the DOM at the moment it is clicked.
+
+**The figure is a view over the text pane and not a third pane**, the way `Lines`
+is a view: `#viewer` is a `<figure>` positioned absolutely over `#text`'s own
+column inside a `<main>` that carries `position: relative` for it, and nothing it
+does reaches `edited`, the buffer, the compile, the bytes or the anchors — `⌘S`
+still writes the markdown, the page still shows the whole document, and `Status`
+gains no field. **It covers the textarea rather than replacing it** because
+`#divider`'s drag reads `#text.getBoundingClientRect()` at every `pointerdown`
+and a hidden textarea measures zero. `placeViewer` mirrors that column's
+`offsetLeft` and `offsetWidth` on five occasions — a show, a window resize, the
+end of a divider drag, the panel fold and the `Lines` toggle — and **that
+enumeration is the exception to this file's own rule** that the page watches the
+pane rather than the causes: an observer over `#text` never fires for a fold,
+which moves its left edge without changing its size, and the one over `#pages`
+does not fire while that pane is hidden. The sheet is `flex: 1; min-height: 0`,
+which is what makes its top padding free — flexbox distributes free space over
+items' **outer** sizes, so a figure's `max-height: 100%` resolves against a
+content box that already excludes it. `box-sizing` is not what does that, and two
+drafts of `mpdf-010` Phase 5 said it was.
+
+**Three ways back, because the reader arrives by three routes**: the surface's
+own control, `Escape`, and clicking a markdown row that opens — which already
+means *put that file in the pane* and must not leave a picture over it.
+`clear()` closes it too, an open being a new project. The markdown row the pane
+already holds stays inert, so clicking the row you are on while a figure is up
+does nothing; that is accepted rather than fixed, the alternative being a row
+whose drawing depends on page state. **A `.pdf` row draws no figure and says so
+in a sentence the page writes itself** — a deliberate exception to "the status is
+placed and never composed", on the ground that this is a label for a file kind
+and not a status about the document. `app/dist/index.html:fail` was the other
+route and it marks the compiled page stale, which a click that compiled nothing
+must not do; `document::asset_bytes` is never called for a `.pdf` at all.
+`mpdf-010` OQ-8 carries whether the vendored `pdf.js` should draw one instead.
 
 **The disk half is stable and only the marked-missing half moves.**
 `document::files_under` walks the tree at an open and at a `Change::Tree` event,

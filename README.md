@@ -182,9 +182,15 @@ list away and brings it back.
 document.** So you can write chapter three and watch the book: the file that compiles and
 the file you are editing are two different things, and the list marks each. `⌘S` writes
 the one in the pane. If it holds unsaved edits the app will not switch — it says so and
-offers `Discard`, the same way it does when a file changes underneath you. Bibliographies
-and images are listed but not opened here. The Install section above has the build command
-and the one thing an unsigned bundle cannot do.
+offers `Discard`, the same way it does when a file changes underneath you.
+
+**Click a figure and it opens over the pane, which keeps the file it was holding.** So you
+can check that `emit.svg` is the diagram you meant without leaving for Preview: nothing
+compiles, the page goes on showing the whole document, and `⌘S` still writes the markdown
+you were editing. `Escape`, or `Back to the text`, puts it away, and so does opening any
+other file. A PDF is a legal figure here, so the list holds one — it says so rather than
+drawing it. Bibliographies are listed but not opened. The Install section above has the
+build command and the one thing an unsigned bundle cannot do.
 
 ## What the markdown may contain
 

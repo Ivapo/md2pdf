@@ -13,7 +13,8 @@ sources:
 covers: >
   the desktop app: the crate and its files, the window and its menu, the two
   titles an open sets, the commands and the signal between them, the file I/O the
-  app owns and the two read passes one closure serves, the three answers the
+  app owns and the two read passes one closure serves, the fourth reader of a
+  path the author did not name in a dialog, the three answers the
   asset list gives and the filter reads, the project this file hands to a rule of
   its own, the panel's status fields and the union built where no disk is
   read, the watch loop and its fourth answer and the two debounces it runs on,
@@ -25,7 +26,7 @@ covers: >
   the vendored renderer the front end imports and what embedding it costs, the
   declarations it is type-checked against and where they may not live, and
   the configuration facts a build enforces
-max_lines: 538
+max_lines: 560
 generated: 2026-08-28
 ---
 
@@ -94,7 +95,7 @@ capability added for either. `app/gen/` is generated and is not committed.
 
 `app/src/main.rs` holds only what needs a window. `main` registers the dialog
 plugin, builds the menu, manages one `Mutex<Session>` and one
-`app/src/main.rs:Pending`, registers twelve commands, and — since the bundle —
+`app/src/main.rs:Pending`, registers thirteen commands, and — since the bundle —
 **builds the app rather than running it**, so that it can hand `App::run` a
 callback and see the run events a `.run(generate_context!())` never surfaces.
 
@@ -140,10 +141,13 @@ therefore cross the IPC boundary and the debounce is Rust's**, which is what put
 the interval on the testable side of the window: a debounce in the page would be
 logic reachable only by typing at one.
 
-Eleven of the twelve commands are wrappers over a plain function.
-`app/src/main.rs:pending_open` is the twelfth and is not: it reads no session and
-**takes** a slot the run event filled, which the section on the bundle below
-explains.
+Twelve of the thirteen commands are wrappers over a plain function.
+`app/src/main.rs:pending_open` is the thirteenth and is not: it reads no session
+and **takes** a slot the run event filled, which the section on the bundle below
+explains. `app/src/main.rs:asset_bytes` is the newest of the twelve and the split
+is load-bearing rather than tidy: this file has no test module, the crate is
+bin-only and `tauri::State` has a private field and no public constructor, so a
+rule written into a command is a rule nothing in this repository can reach.
 
 ## The file I/O
 
@@ -229,6 +233,18 @@ text included, so the buffer compiles exactly when the pane holds main. Both
 classes of failure reach the page in the terminal's words — an `Error` through its
 `Display`, a file that will not read through the sentence this builds — and a
 `main` that is not UTF-8 fails there too, wrapped so the two spell alike.
+
+**`app/src/document.rs:asset_bytes` is a fourth reader of a path the author did
+not name in a dialog**, beside the walk, the compile's own closure and
+`preview::Session::set_edited`, and it obeys the rule all four do: `relative`
+must answer the root-relative spelling back, which `root.join("../secrets.png")`
+cannot, so a `..` and a symlink out of the root are refused by the same
+comparison and in the same sentence. It reads one of the project's figures for
+the window to draw and nothing about the document changes for it — no compile, no
+buffer, no `Status` field. The bytes cross as a `tauri::ipc::Response` for
+`current_pdf`'s reason and reach the page as an `ArrayBuffer`; the page makes a
+blob of them, which wants neither Tauri's asset protocol, nor a scope in
+`app/tauri.conf.json`, nor a capability.
 
 `app/src/document.rs:default_output` is where an export lands unless the user says
 otherwise: **`main`'s** path with a `.pdf` extension, duplicating
