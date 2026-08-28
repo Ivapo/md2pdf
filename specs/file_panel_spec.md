@@ -484,7 +484,7 @@ picks one; the decision recorded here is only that a plain unlink is refused.
   rename is not "delete plus create" and should not be added as though it were.
   **Blocks nothing.**
 
-- **OQ-5 — what is the gesture that sets main?** *(design call)* **Only the
+- **OQ-5 — what is the gesture that sets main?** ~~*(design call)* **Only the
   gesture is open.** §2 settles what `main` *is* in every case — stored override,
   one master, none, or several — and Phase 1's gate clause 3 pins each of those
   four to a value, so an implementer needs nothing from this entry. What is left
@@ -492,7 +492,25 @@ picks one; the decision recorded here is only that a plain unlink is refused.
   the status area, and whether the affordance appears at all when discovery found
   exactly one master. **Blocks nothing**, and it is left to the prototype per the
   standing practice that a UI shape is tried in the running app before it is
-  specced.
+  specced.~~ **RESOLVED 2026-08-28, in Phase 1: a `main` button on the row,
+  revealed on hover and on focus.** It sits where the `◀ main` mark sits —
+  `margin-left: auto` — because only one of the two is ever on a row, and it
+  carries the entry's own `path` rather than the row's text, the text being the
+  last segment where Rust is handed the whole path. **Only a markdown row that
+  is not already main gets one**, nothing else being able to compile.
+
+  The two sub-questions are answered together, and the answer to the second is
+  *yes, always*. **A row action rather than a menu item**, because a menu item
+  needs a selection and Phase 1 has none — the rows hold no state of their own,
+  which is what lets the panel be rebuilt whole on every status. And the
+  affordance appears even where discovery found exactly one master: hiding it
+  there would make the panel's behaviour depend on a count the reader cannot
+  see, and a folder gains a second master the moment somebody writes one.
+
+  **It is deliberately not the row's body**, and that is the part Phase 2 turns
+  on: the body is inert in Phase 1 and Phase 2 gives it a meaning of its own —
+  clicking it puts that file in the pane — so the two gestures were kept apart
+  before there were two of them, rather than after.
 
 - **OQ-6 — what does the panel cost a reader using a screen reader?**
   *(needs-input)* `mpdf-009` OQ-3 asks the same question of the canvas and is
