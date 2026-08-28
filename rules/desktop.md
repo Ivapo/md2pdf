@@ -15,16 +15,17 @@ covers: >
   titles an open sets, the commands and the signal between them, the file I/O the
   app owns and the two read passes one closure serves, the three answers the
   asset list gives and the filter reads, the project this file hands to a rule of
-  its own, the panel's two status fields and the union built where no disk is
-  read, the watch loop and its third answer and the two debounces it runs on,
-  the three values the state holds where it held one, the buffer
-  that compiles and the rule an external change runs, the state the loop writes
-  and the four states it reports, the export and its two refusals, the errors it
-  puts on the page, the bundle and the document association that launches it,
+  its own, the panel's status fields and the union built where no disk is
+  read, the watch loop and its fourth answer and the two debounces it runs on,
+  the three values the state holds where it held one and the two of them that
+  are now two files, the buffer that compiles and the closure it rides, the rule
+  an external change runs and the second occasion its one field carries, the
+  state the loop writes and the four states it reports, the export and its two
+  refusals and the file it names, the errors it puts on the page, the bundle and the document association that launches it,
   the vendored renderer the front end imports and what embedding it costs, the
   declarations it is type-checked against and where they may not live, and
   the configuration facts a build enforces
-max_lines: 500
+max_lines: 538
 generated: 2026-08-28
 ---
 
@@ -46,9 +47,9 @@ hold rather than a step skipped; `specs/desktop_app_spec.md` OQ-8 says what that
 costs.
 
 **The pane's text is what compiles**, and several claims below turn on it. The
-file beside it need never have held that text. **The pane holds exactly one
-file** — the master, where there is one — and the sections come off the disk;
-that is what the anchor rule below turns on.
+file beside it need never have held that text. **The pane holds exactly one file
+and it need not be the one that compiles**: the master's text and every other
+section come off the disk, and the buffer stands in for the one file the pane has.
 
 ## The crate
 
@@ -93,7 +94,7 @@ capability added for either. `app/gen/` is generated and is not committed.
 
 `app/src/main.rs` holds only what needs a window. `main` registers the dialog
 plugin, builds the menu, manages one `Mutex<Session>` and one
-`app/src/main.rs:Pending`, registers ten commands, and — since the bundle —
+`app/src/main.rs:Pending`, registers twelve commands, and — since the bundle —
 **builds the app rather than running it**, so that it can hand `App::run` a
 callback and see the run events a `.run(generate_context!())` never surfaces.
 
@@ -112,8 +113,9 @@ needed**: once from the path the user picked before the compile, so the window
 names something whether or not it compiled, and once from the session after,
 because the open lands on the file the *project* compiles rather than the one it
 was handed. A double-click on a section reads `text.md` for one compile and
-`showcase.md` after it, both true in their instant. `set_main` is the same
-shape. **It returns no bytes.** The compile and the fetch are two calls, because
+`showcase.md` after it, both true in their instant. `set_main` and `set_edited`
+are the same shape, and the title is now the *edited* file's. **It returns no
+bytes.** The compile and the fetch are two calls, because
 the watch loop compiles with nobody asking. The command is `async`, so the
 compile runs off the thread that draws the window.
 
@@ -130,27 +132,31 @@ a wider return**, because the bytes cross raw and a status does not.
 buffer was replaced from disk. `app/src/main.rs:export_path` and
 `app/src/main.rs:export` are the two halves of Save a Copy.
 
-`app/src/main.rs:edit` takes what the author typed and
-`app/src/main.rs:save` writes it to the document's own path. **Keystrokes
+`app/src/main.rs:edit` takes what the author typed, `app/src/main.rs:save`
+writes it to the edited file's own path, and `app/src/main.rs:discard` throws it
+away and takes that file again — **the only command in this app that discards
+anything**, and the way out both refusals name. **Keystrokes
 therefore cross the IPC boundary and the debounce is Rust's**, which is what puts
 the interval on the testable side of the window: a debounce in the page would be
 logic reachable only by typing at one.
 
-Nine of the ten commands are wrappers over a plain function.
-`app/src/main.rs:pending_open` is the ninth and is not: it reads no session and
+Eleven of the twelve commands are wrappers over a plain function.
+`app/src/main.rs:pending_open` is the twelfth and is not: it reads no session and
 **takes** a slot the run event filled, which the section on the bundle below
 explains.
 
 ## The file I/O
 
-`app/src/document.rs:render` **takes the markdown as a parameter and not a path**,
-and hands that one string to both the asset list and the compile. The read left it
-for `app/src/document.rs:read_document`, one call further out, so that the string
-the pane holds is what compiles; `md2pdf_core::md_to_pdf` already took a `&str`,
-so `core` gained nothing for *that* change. It returns a `Render`, which carries the
-asset paths **even when the compile failed** — emission reads the text and not
-the disk, so a document whose figures are all missing still names them, and that
-is what keeps the watch filter alive while nothing compiles.
+`app/src/document.rs:render_with` **takes the markdown as a parameter and not a
+path**, and hands that one string to both the asset list and the compile; the read
+left it for `app/src/document.rs:read_document` one call out, so the string the
+pane holds is what compiles, and `md2pdf_core::md_to_pdf` already took a `&str`.
+`app/src/document.rs:render_project` is the caller that puts the project back
+together — `main`'s text and directory, with the buffer standing in for `edited`
+through the read closure below. Both return a `Render`, which carries the asset
+paths **even when the compile failed**: emission reads the text and not the disk,
+so a document whose figures are all missing still names them, which is what keeps
+the watch filter alive while nothing compiles.
 
 **`Render::assets` has three answers, and the section paths go in first and
 unconditionally**: `Some(sections ++ bibliography ++ images)` when the two walks
@@ -189,43 +195,48 @@ named before it exists depends on.
 The compile itself is `md2pdf_core::md_to_pdf_with_anchors`, and `Render` carries
 its `anchors` beside the bytes. **They go the other way from `assets`**: a failed
 compile has none, because they describe the *page* where the asset list describes
-the text. `app/src/document.rs:Anchor` is `md2pdf_core::Anchor` again, and the
-duplication is the one `read_assets_with` already makes — this copy crosses to
-the page inside `Status`, so it must serialize, and `core` carries no serde. It
-is also a line and a page where `core`'s carries a whole `md2pdf_core::Location`,
-because **`render_with` keeps only the anchors whose location names no file** and
-drops every one written in a section; §"The page" argues why.
+the text. `app/src/document.rs:Anchor` is `md2pdf_core::Anchor` again — the
+duplication `read_assets_with` already makes — and is a line and a page where
+`core`'s carries a `md2pdf_core::Location`, because **`document::Pane` keeps only
+the anchors written in the file the pane holds** and drops the rest.
+`rules/desktop-panes.md` has its three arms and why the third is not an absence.
 
 **The reading is two passes and it mirrors the CLI's.**
 `app/src/document.rs:read_sections_with` runs first, as
-`cli/src/main.rs:read_sections` does and for the reason that function records:
-the markers are in the master's own text, so the sections can be read with no
-join, where neither shopping list can answer about a document that has not been
+`cli/src/main.rs:read_sections` does and for the reason that function records: the
+markers are in the master's own text, so the sections can be read with no join,
+where neither shopping list can answer about a document that has not been
 assembled. `app/src/document.rs:read_assets_with` then mirrors
 `cli/src/main.rs:read_assets` — it takes the sections, seeds `seen` with their
 paths, carries them out on the same array, resolves each remaining path against
 `app/src/document.rs:directory`, reads each once, and keeps the path the markdown
-wrote. **The bibliography is read first of the two remaining channels**, because
-the line it names is the frontmatter's and is therefore earlier than every
-image's. A section's own images are found beside it with nothing added here:
-`core` wrote the folder into the destination before the list arrived, so an image
-drawn in `sections/method.md` reaches this as `sections/figure.png` and still
-joins the master's directory. The duplication with the CLI is deliberate: the two
-wrappers report their errors differently — and **the app owes the terminal three
-hand-built sentences**, one per channel, because a file that will not read is no
+wrote. **The bibliography is read first of the two remaining channels**, the line
+it names being the frontmatter's and therefore earlier than every image's. A
+section's own images are found beside it with nothing added here: `core` wrote the
+folder into the destination before the list arrived, so an image drawn in
+`sections/method.md` arrives as `sections/figure.png` and still joins the master's
+directory. The duplication with the CLI is deliberate — the two wrappers report
+their errors differently, and **the app owes the terminal three hand-built
+sentences**, one per channel, a file that will not read being no
 `md2pdf_core::Error` at all.
 
-**One closure serves both passes**, borrowed by the first and handed to the
-second in `app/src/document.rs:render_with`. The read is a parameter so a caller
-counting its own reads can check that a path named twice is read once, and a
-second closure would leave half of them outside that counter. Both classes of
-failure reach the page in the terminal's words: an `Error` through its `Display`,
-and a file that will not read through the sentence this builds.
+**One closure serves both passes**, borrowed by the first and handed to the second
+in `render_with`. The read is a parameter so a caller counting its own reads can
+check that a path named twice is read once, and a second closure would leave half
+of them outside that counter. **It is also the seam the pane's buffer rides**:
+`render_project` builds one that answers `edited` from the buffer, `main`'s own
+text included, so the buffer compiles exactly when the pane holds main. Both
+classes of failure reach the page in the terminal's words — an `Error` through its
+`Display`, a file that will not read through the sentence this builds — and a
+`main` that is not UTF-8 fails there too, wrapped so the two spell alike.
 
-`app/src/document.rs:default_output` is where an export lands unless the user
-says otherwise: the document's path with a `.pdf` extension. It duplicates
-`cli/src/main.rs:default_output`, because sharing it would make one crate's
-binary reachable from the other.
+`app/src/document.rs:default_output` is where an export lands unless the user says
+otherwise: **`main`'s** path with a `.pdf` extension, duplicating
+`cli/src/main.rs:default_output` because sharing it would make one crate's binary
+reachable from the other. `document::spell` is the textual root-relative spelling
+and `document::relative` the canonicalizing one; `document::under` is
+`document::beside` run backwards, which is how a root-relative `edited` reaches
+the spelling `md2pdf_core::Location` carries.
 
 ## The project
 
@@ -309,7 +320,8 @@ whole mechanism by which opening a second document moves both.
 `app/src/preview.rs:Preview` is what the loop writes and the pane shows. **Three
 values where it held one**: `root`, what the panel lists and the watch covers;
 `main`, which file under it compiles, root-relative; `edited`, what the pane
-holds and `⌘S` writes, equal to `main` under the root for now. **The root moves
+holds and `⌘S` writes, equal to `main` at every open and free to differ from the
+first row click on. **The root moves
 only on an explicit Open** — a click that re-rooted would strand the author below
 their own project with no way back up. Beside them: **the text the pane holds and
 the text as it stood at the last open or save**, the last good PDF bytes, how
@@ -318,12 +330,16 @@ from, two counters, a stale flag, the error and the divergence. The two strings 
 `app/src/preview.rs:external_change` compares, and holding them here rather than
 in the page is what keeps that rule testable at all.
 
-`Preview::compile` compiles the **buffer**, not the file. `Preview::load` is the
-only thing that reads the document into it, and `Preview::edit` takes what the
-author typed without compiling, because one keystroke is not a document.
-`Preview::save` writes the buffer to the document's path and moves the last-saved
-text with it — which is what makes that save's own event mean nothing a moment
-later.
+`Preview::compile` compiles **`main`, with the buffer standing in for `edited`**,
+through the one closure `document::render_project` builds: it answers the edited
+path from the buffer and every other from the disk, main's own text included, so
+the buffer is what compiles exactly when the pane holds main and one rule covers
+both. A `main` this app cannot read leaves `read_document`'s own sentence and the
+*failed* state. `Preview::load` is the only thing that reads a file into the
+buffer, and `Preview::edit` takes what the author typed without compiling,
+because one keystroke is not a document. `Preview::save` writes the buffer to
+`edited`'s path and moves the last-saved text with it — which is what makes that
+save's own event mean nothing a moment later.
 
 `Preview::compile` replaces the bytes on success and
 clears both marks; **on failure it keeps the bytes**, records the message and
@@ -344,29 +360,34 @@ the page uses it as a word and as a class.
 
 `app/src/preview.rs:Status` is that state, the compile time worded as `"28 ms"`,
 the error, whether a page is drawn, the divergence, two counters and the anchors —
-one value the page places rather than composes. **`revision` counts compiles that
-produced bytes** and `reloaded` counts the times the buffer was replaced from
+one value the page places rather than composes. **Eleven fields**, and
+`preview.rs`'s own test holds the page's typedef to exactly them.
+**`revision` counts compiles that produced bytes** and `reloaded` counts the times the buffer was replaced from
 disk; both exist so the page can tell a signal apart from work it has already
 taken. **The anchors ride the status because the status is already fetched on the
 path that draws**, so following the caret needs no command of its own. Like the
 compile time, they are replaced on a success and kept on a failure, so they always
 describe the page on screen rather than the last attempt at one.
 
-**`entries` and `main` ride with them and for their reason**, the status being
-already fetched on the path that draws, so the panel costs no command of its own.
-`entries` is put together here and **reads nothing off the disk**: `Preview::tree`
-is the walk, refreshed at an open and a `Tree` event and never in `status()`,
-which the page calls on every render, and the marked-missing rows come off
-`Preview::sections`, which every compile assigns from the master's text.
-`main` is root-relative, not the bare name it was, so the page can match it to a
-row. **The pane still holds exactly one file** — `main` and `edited` are equal
-until the phase that separates them; `rules/desktop-panes.md` has what turns on
-it.
+**`entries`, `main` and `edited` ride with them and for their reason**, the
+status being already fetched on the path that draws, so the panel costs no command
+of its own. `entries` is put together here and **reads nothing off the disk**:
+`Preview::tree` is the walk, refreshed at an open and a `Tree` event and never in
+`status()`, which the page calls on every render, and the marked-missing rows come
+off `Preview::sections`, which every compile assigns from the master's text. Both
+paths are root-relative so the page can match them to a row, and **`edited` rides
+because the page cannot derive it from `main`** — they are equal at every open and
+differ from the first click. It is spelled with `document::spell` and not
+`document::relative`, a `canonicalize` here being two syscalls in front of every
+render.
 
 ## The rule an external change runs
 
 `app/src/preview.rs:external_change` is three strings and two comparisons, and it
-needs no dirty flag. The file equal to the buffer is `Unchanged` — the app's own
+needs no dirty flag. **It is asked about the *edited* file and nothing else**: the
+master moving is a bare recompile, because with the pane elsewhere the master is
+one more file the compile reads off the disk. The file equal to the buffer is
+`Unchanged` — the app's own
 save arriving back, and **nothing happens**. The file differing under a clean
 buffer is `Taken` and recompiled, which is the loop the app has shipped since
 Phase 2 and the case an unconditional refusal would have broken. The file
@@ -398,23 +419,39 @@ first**, or it is a thing written and never used; an override naming a file the
 disk no longer holds falls through to discovery rather than opening nothing. It
 then hands root and main to `open_at`, which `Session::set_main` also takes, so
 the store and the window cannot disagree. It clears the previous document's page
-and text, reads and compiles once, and only then swaps the loops — old dropped before new
-started, so no two of them ever hold a document. Both callbacks check the
-document before writing, because dropping a `Watch` or a typing channel does not
-join its thread and a thread mid-compile could otherwise write its page over a
+and text, reads and compiles once, and only then calls `Session::arm` — old loops
+dropped before new started, so no two of them ever hold a document. Both callbacks
+check `edited` before writing, because dropping a `Watch` or a typing channel does
+not join its thread and a thread mid-compile could otherwise write its page over a
 newer one.
 
-`Session::on_change` is where the three kinds of event reach different code: an
-asset is a bare recompile, the document runs the rule, and **a `Tree` event walks
-the disk and stops** — no compile, so `revision` stands still, which is what
-"does not compile" means as an assertion. It is announced all the same, because
-the panel is drawn off the status the announcement fetches. A window that took
-the disk copy compiled inside the rule and read the new assets on the way, so one
-window never compiles twice, and **nothing is announced when nothing happened**.
+**`Session::set_edited` borrows `arm` and not the rest of the open**, and
+`rules/desktop-project.md` has why. `arm` exists at all because both loop guards
+key on a path captured when they started, so a command that moved the pane and
+stopped there would compile nothing and drop every event.
 
-`Session::set_main` **confines rather than merely checking existence**: it asks
-`document::relative` for the path's root-relative spelling back, which
-`root.join("../../secrets.md")` cannot answer where `is_file` would have said yes.
+`Session::on_change` is where the four kinds of event reach different code: the
+**edited** file runs the rule, the document and an asset are a bare recompile
+each, and **a `Tree` event walks the disk and stops** — no compile, so `revision`
+stands still, which is what "does not compile" means as an assertion. It is
+announced all the same, because the panel is drawn off the status the announcement
+fetches. A window that took the disk copy compiled inside the rule and read the new
+assets on the way, so one window never compiles twice, and **nothing is announced
+when nothing happened**.
+
+`Session::set_main` and `set_edited` **confine rather than merely checking
+existence**: each asks `document::relative` for the path's root-relative spelling
+back, which `root.join("../../secrets.md")` cannot answer where `is_file` would
+have said yes. Both then **refuse while the buffer diverges from the last-saved
+text**, in `SWITCHING`'s own sentence rather than `DIVERGED`'s, which opens *"this
+file changed on disk"* and would be a lie here. **The refusal rides `divergence`
+and not an `Err`**, so one refusal does not arrive in the window two ways, and it
+announces, because no compile ran and nothing else would fetch the status carrying
+it. **One field, one occasion at a time**: a switch refused over a standing
+divergence overwrites that sentence and is overwritten by the next, which costs
+nothing — the two name the same two exits, and `Preview::save` and
+`Preview::take` clear both. `Session::discard` is that second exit, and is
+`Preview::load` behind a command.
 
 ## The export
 
@@ -426,7 +463,9 @@ which is what keeps the two from disagreeing.
 rather than one**, because an *empty* pane holding no bytes and a *stale* or
 *failed* one holding bytes known to be old are two problems. `export_path` runs
 it before returning the default path, so a pane that cannot be exported never
-opens a dialog whose answer it would throw away.
+opens a dialog whose answer it would throw away. **That path is `main`'s and not
+the pane's**: the bytes on offer are the master's, so a section in the pane must
+not lend the file its name.
 
 **The file it writes is the file `md2pdf` writes**, byte for byte, for the same
 document — **while the pane and the file say the same thing**. The PDF is a pure

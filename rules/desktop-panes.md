@@ -15,8 +15,8 @@ covers: >
   filtered to, the status the page places and never composes, the panel that
   lists the project's files and the two states it keeps apart, the flat entries
   it is drawn from and the folders derived rather than sent, the fold the page
-  holds, the inert row and the one button on it, the disk half that is walked
-  twice and the missing half that follows the text, the text the reader can
+  holds, the two gestures on a row and the two marks it may carry, the disk half
+  that is walked twice and the missing half that follows the text, the text the reader can
   select and the stream it is read off, the link filter and the destination a click resolves, the scaffolding the
   bundle does not carry and the app supplies, the gutter whose rows are as tall
   as their lines render, the follow
@@ -160,12 +160,17 @@ the same branch and ask for no page, which is the page-1 case above. The precisi
 *author* rather than the reader.
 
 **The list it walks holds only the headings written in the file the pane holds**,
-and `app/src/document.rs:render_with` drops the rest. A line means something in
-exactly one buffer, so an anchor from a section is not a worse match but a number
-about a document the pane is not showing — and this lookup breaks at the first
-anchor past the caret rather than searching for a best one. A pure manifest
-therefore yields none and opens at page 1, which is already the no-heading case
-above; a master carrying a preface syncs on its own headings, correctly.
+and `document::Pane` is the one comparison `render_with` drops the rest by. A
+line means something in exactly one buffer, so an anchor from another file is not
+a worse match but a number about a document the pane is not showing — and this
+lookup breaks at the first anchor past the caret rather than searching for a best
+one. **Three arms and not an `Option`**: `Master` keeps the headings carrying no
+file, `Beside` those the master names by that path, and `Away` none — a file the
+master's directory does not reach, which as an absence would arrive as `Master`
+and take the master's line numbers. A pure manifest in the pane yields none and
+opens at page 1, the no-heading case above; a master carrying a preface syncs on
+its own headings, and **a section in the pane syncs on that section's**, which
+the caret could never do while the pane held only what compiles.
 
 `report` places the status: the line in the header, the message in a bar above
 the pane, the divergence in a bar of its own, and the dimming a stale page wears
@@ -207,14 +212,18 @@ about state that decides behaviour, and a fold decides nothing but its own
 drawing. The store this app now keeps is not a precedent for it — a main is a
 decision about the document, a fold is where a scrollbar was.
 
-**A row's body is inert and one button on it is not.** The `main` button appears
-on a markdown row on hover and on focus and sets which file compiles; the row
-itself does nothing, because the next phase gives the body a meaning — clicking
-it puts that file in the pane. So the panel is still rebuilt whole on every
-status, and that is still right: **the rows hold no selection.** Which file
-compiles lives in Rust and arrives in the status, and the button reads its path
-off the DOM at the moment it is clicked. `specs/file_panel_spec.md` OQ-5 carried
-only the gesture; the four cases it settles are pinned in `document.rs`'s tests.
+**A row carries two gestures and can carry two marks.** The body of a markdown
+row is a `button.name` that puts that file in the pane; the `main` button appears
+beside it on hover and on focus and sets which file compiles. They were kept
+apart before there were two of them rather than after. **`here` is the file that
+compiles and `.holding` is the file the pane shows** — one row at every open, two
+from the first click — and `.holding` wears the text pane's own `--ground` rather
+than `--band`, which sits a point from the panel's `--chrome` and would be
+invisible in both themes. A bibliography, an image and a marked-missing row open
+nothing and say so in their `title`, where OQ-1 and OQ-2 leave them. So the panel
+is still rebuilt whole on every status, and that is still
+right: **the rows hold no selection.** Both files live in Rust and arrive in the
+status, and each control reads its path off the DOM at the moment it is clicked.
 
 **The disk half is stable and only the marked-missing half moves.**
 `document::files_under` walks the tree at an open and at a `Change::Tree` event,

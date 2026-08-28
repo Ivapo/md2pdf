@@ -2,6 +2,25 @@
 
 Append-only. One heading per round, newest first.
 
+### Phase 2 shipped — 2026-08-28 — one consequence the rounds did not enumerate
+
+Round 1's five blockers were framed as *"five things follow from that one
+sentence… enumerated here rather than left to be rediscovered at a keyboard"*,
+and building it found a sixth. **`Preview::export_path` named the file in the
+pane**, so `Save a Copy…` would have offered `mathematics.pdf` for a PDF holding
+the whole book. It is one line and a test, taken in the phase rather than left as
+an open question, and it is recorded here so a later reader does not read the
+phase's diff as wider than its review.
+
+Two smaller notes, neither a departure. The master-relative spelling §Scope item
+2 gives to `Preview` is computed in `document.rs` beside its inverse, because
+that is where an ordinary test reaches it without building a `Preview`; the rule
+and the direction are unchanged. And the anchor filter took a three-armed
+`document::Pane` rather than the `Option<&str>` the prose implies: an `edited`
+with no master-relative spelling and an `edited` that *is* the master are two
+different answers, and an `Option` collapses them into one absence that would
+hand the master's own line numbers to a buffer whose lines mean something else.
+
 ### Round 2 — Phase 2 only — 2026-08-28 — same reviewer, resumed with the author's changelog — **READY (converged)**
 
 All five blockers confirmed resolved against the code rather than the changelog.

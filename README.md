@@ -102,7 +102,8 @@ rebuild-on-change.
 
 **Type in the left pane and the page follows.** It redraws when you stop typing, and
 **the PDF is what the pane says, not what the file says** — so the page shows your
-unsaved work. `⌘S`, or the Save button, writes the pane back to the file. Drag the
+unsaved work. `⌘S`, or the Save button, writes the pane back to whichever file it is
+holding. Drag the
 divider to give either side more room. **`Lines` in the header numbers the pane and marks
 the line your cursor is on**, so an error that names a line names somewhere you can see.
 
@@ -110,9 +111,8 @@ the line your cursor is on**, so an error that names a line names somewhere you 
 window watches the whole project, so editing a section, a figure or the bibliography
 elsewhere redraws it as well, and adding or removing a file shows up in the list. If the
 pane holds unsaved edits when the file changes underneath, the app keeps your text and
-says so rather than choosing for you:
-save to write the pane over the file, or open the file again to take it. It never merges
-the two.
+says so rather than choosing for you: save to write the pane over the file, or press
+`Discard` in the bar it says it in to take the file instead. It never merges the two.
 
 A document that will not compile leaves the last good page on screen, dimmed, with the
 error above it — the same sentence the command prints — and the page comes back when you
@@ -122,9 +122,10 @@ fix it.
 itself, so it knows where you are: it follows your cursor to the nearest heading above it,
 which is as close as it can get without one. Opening a file, and taking one that changed
 underneath, still start you at page 1. In a document written across several files it
-follows the headings in the file the pane is showing; a heading inside a section belongs
-to a file you are not editing, so a master that is only a list of sections opens at page 1
-too.
+follows the headings in the file the pane is showing — so editing a section takes you to
+that section's own pages in the whole document, which is the thing the file list below is
+for. A master that is only a list of sections has no headings of its own and opens at
+page 1.
 
 **Dragging the divider or resizing the window leaves you where you were.** Nothing about
 the document moved, so nothing about your place in it does either — the page just refits
@@ -146,8 +147,9 @@ nothing, so those links are inert on the page.
 The header says where the page stands — `current` with the time the compile took, or
 `stale` when the last one failed and the page you are looking at is the older one.
 
-**`File → Save a Copy…`, or `⇧⌘S`, writes the PDF where you ask**, offering the document's
-own path with a `.pdf` extension. It writes the page on screen and compiles nothing, so
+**`File → Save a Copy…`, or `⇧⌘S`, writes the PDF where you ask**, offering the path of
+the file that compiles with a `.pdf` extension — the page is that document's, whichever
+file you happen to be editing. It writes the page on screen and compiles nothing, so
 the file and the page cannot disagree, and it is byte for byte the file `md2pdf` writes
 for the same document — while the pane and the file say the same thing, which they do
 until you type. A page that is stale, or no page at all, is refused rather than written.
@@ -176,10 +178,13 @@ remembers your choice the next time you open that folder. It remembers it in its
 Application Support folder and writes nothing into yours. `Files` in the header folds the
 list away and brings it back.
 
-The pane holds one file — the one that compiles. A master's sections are read from disk
-and drawn on the page, not edited here, so save a section in your own editor and the
-window redraws. The Install section above has the build command and the one thing an
-unsigned bundle cannot do.
+**Click a file in that list and the pane opens it, while the page keeps showing the whole
+document.** So you can write chapter three and watch the book: the file that compiles and
+the file you are editing are two different things, and the list marks each. `⌘S` writes
+the one in the pane. If it holds unsaved edits the app will not switch — it says so and
+offers `Discard`, the same way it does when a file changes underneath you. Bibliographies
+and images are listed but not opened here. The Install section above has the build command
+and the one thing an unsigned bundle cannot do.
 
 ## What the markdown may contain
 

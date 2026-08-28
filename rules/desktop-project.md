@@ -7,12 +7,15 @@ covers: >
   the project the desktop app opens: the root the opened file climbs one level
   to and the cap that is chosen rather than derived, the two edges that answer
   as no candidate, the masters discovered in the root and the reason that search
-  does not recurse, the four ways one of them becomes the file that compiles, the walk and the merge and why they
+  does not recurse, the four ways one of them becomes the file that compiles,
+  the file the pane holds beside it and the switch that moves it, the two
+  refusals that switch shares with the one that sets the main and the one exit
+  they both name, the walk and the merge and why they
   are two functions rather than one, the filter that is each channel's own
   comparison, the total order the panel cannot reorder itself against, the
   confinement the walk obeys and the one a write obeys differently, and the one
   fact this app remembers about a folder and where it refuses to keep it
-max_lines: 90
+max_lines: 120
 generated: 2026-08-28
 ---
 
@@ -49,6 +52,33 @@ single-file document sits there beside the whole `showcase/` project, and
 unset** — an empty pane is a worse answer than a guess the panel marks and the
 author corrects in one action, and alphabetical claims that the same folder opens
 the same way twice rather than claiming which is right.
+
+**The file that compiles and the file that is edited are two.** `Preview::main`
+is what `document::render_project` compiles — its text, its directory, every path
+the document names resolving against it — and `Preview::edited` is what the pane
+holds, what `⌘S` writes and what the buffer stands in for inside that compile.
+They are equal at every open, because an open still puts the main in the pane,
+and free to differ from the first click on a row. `Session::set_edited` is the
+switch and **is deliberately not an open**: `open_at` assigns
+`Preview { ..Preview::default() }` and zeroes `revision` and `reloaded`, where
+`app/dist/index.html`'s `clear()` — which resets the counters the page compares
+them against — runs on an Open and not on a click, so a switch built to the open's
+shape would strand `refresh` at its own guard and draw nothing. It sets `edited`,
+loads that file, re-arms both loops through `Session::arm`, and leaves the root,
+the main, the listing, the bytes and both counters where it found them: they
+advance, they do not restart.
+
+**Both commands that move a file refuse over unsaved work, and they name one
+exit between them.** `set_edited` and `set_main` each confine the path first, then
+refuse while the buffer diverges from the last-saved text — silently discarding it
+was tolerable behind a menu item and a native dialog and is not one click from
+every row in a panel. The sentence is `SWITCHING`'s and not `DIVERGED`'s, which
+opens *"this file changed on disk"* and would be false here, and it rides
+`Preview::divergence` rather than an `Err` so one refusal does not arrive in the
+window two ways. `Session::discard` is the exit both name, and is `Preview::load`
+behind a command: it drops the buffer, takes the file again, and clears the
+divergence on the way, which answers a refused switch and a refused external
+change alike.
 
 `app/src/document.rs:files_under` walks the root and `merge` adds what the master
 names and the disk lacks. **Two functions because the app runs them at two
