@@ -20,5 +20,5 @@
   A document may be written as several markdown files: a master names its sections in the order they are read, `core` joins them into the one stream the emitter already walks, and every error, every asset and every anchor learns which file it came from.
 - **[pdf-renderer](pdf_renderer_spec.md)** — `mpdf-009` · accepted · done
   The app draws the page itself: `pdf.js` is vendored as two static modules and rasterises each page onto a canvas the pane owns, so fit-to-width is a mode rather than a transform, the type is sharp at the display's own resolution, and the text and links come back with it.
-- **[file-panel](file_panel_spec.md)** — `mpdf-010` · accepted · pending
+- **[file-panel](file_panel_spec.md)** — `mpdf-010` · accepted · partial
   The panel becomes the project's files: the opened document's folder is the root, the panel lists the markdown, images and bibliographies under it, one file is set as the main the app compiles, and clicking another edits it while the main still draws the page.

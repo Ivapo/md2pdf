@@ -12,7 +12,7 @@ last_updated: 2026-08-28
 phases:
   - name: "Phase 1 — the project's files, and the main among them"
     reviewed: 2026-08-28
-    shipped: null
+    shipped: 2026-08-28
     cut: null
     by: null
   - name: "Phase 2 — a row opens in the pane, and the main still compiles"
