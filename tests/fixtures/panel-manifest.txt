@@ -20,6 +20,7 @@ claim has bytes on both sides.
   book.md                markdown      no
   cover.jpg              image         no
   other.md               markdown      no
+  plan.pdf               image         no
   refs.bib               bibliography  no
   refs.yml               bibliography  no
   loose/orphan.md        markdown      no
@@ -27,6 +28,14 @@ claim has bytes on both sides.
   sections/mark.svg      image         no
   sections/missing.md    markdown      YES
   sections/text.md       markdown      no
+
+`plan.pdf` is a figure and not an oversight. `pdf` is in
+`md2pdf_core::IMAGE_EXTENSIONS`, so a PDF is a legal figure in this dialect and
+the panel lists one — which `mpdf-010` OQ-3 records as correct and odd-looking
+at once, a document's own exported PDF sitting beside its markdown. It is here
+because `mpdf-010` Phase 5's gate needs a PDF a fresh clone really holds:
+`samples/showcase/showcase.pdf` is excluded by `.gitignore`, so a clause over it
+would check nothing for a second person.
 
 `refs.yml` is here for the reason `cover.jpg` is. The dialect reads a
 bibliography as a `.bib`, a `.yml` or a `.yaml` — `core/src/bibliography.rs`

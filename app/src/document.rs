@@ -342,12 +342,13 @@ pub fn default_output(document: &Path) -> PathBuf {
 }
 
 // ---------------------------------------------------------------------------
-// The project: its root, its files, the main among them, and the one fact this
-// app remembers about it. `mpdf-010` Phase 1.
+// The project: its root, its files, the main among them, the bytes of one of
+// them, and the one fact this app remembers about it. `mpdf-010` Phases 1
+// and 5.
 //
-// Four ordinary functions, because a panel that could only be checked by
-// opening a window would have no exit gate but a screenshot — this file's own
-// header, applied to the newest thing in it.
+// Ordinary functions, because a panel that could only be checked by opening a
+// window would have no exit gate but a screenshot — this file's own header,
+// applied to the newest thing in it.
 // ---------------------------------------------------------------------------
 
 /// What one row of the panel is.
@@ -782,6 +783,32 @@ pub fn beside(main: &str, named: &str) -> String {
         }
     }
     segments.join("/")
+}
+
+/// The bytes of one file under `root`, for the window to draw.
+///
+/// **It confines rather than checking existence**, which is
+/// [`crate::preview::Session::set_main`]'s rule applied a third time: the path
+/// comes from the panel, which got it from this app's own listing — but a
+/// command is a command, and `root.join("../../secrets.png")` names a real file
+/// on plenty of machines. [`relative`] canonicalizes both sides, so a path that
+/// lands outside the root has no root-relative spelling to answer back, and one
+/// that reaches outside through a symlink has none either. The refusal is the
+/// sentence the other two use, so one refusal reads one way wherever it came
+/// from.
+///
+/// **It is a function and not the command**, per this file's own header:
+/// `app/src/main.rs` has no test module, the crate is bin-only and
+/// `tauri::State` has a private field and no public constructor, so a rule
+/// written into the command is a rule no test in this repository can reach.
+/// `mpdf-010` Phase 5.
+pub fn asset_bytes(root: &Path, path: &str) -> Result<Vec<u8>, String> {
+    let landed = root.join(path);
+    if !landed.is_file() || relative(root, &landed).as_deref() != Some(path) {
+        return Err(format!("{path} is not a file in this project"));
+    }
+
+    std::fs::read(&landed).map_err(|e| format!("cannot read {}: {e}", landed.display()))
 }
 
 /// The one file the store lives in, inside the directory the platform gives
@@ -1501,6 +1528,7 @@ mod tests {
                 ("book.md", Kind::Markdown, false),
                 ("cover.jpg", Kind::Image, false),
                 ("other.md", Kind::Markdown, false),
+                ("plan.pdf", Kind::Image, false),
                 ("refs.bib", Kind::Bibliography, false),
                 ("refs.yml", Kind::Bibliography, false),
                 ("loose/orphan.md", Kind::Markdown, false),
@@ -1721,6 +1749,75 @@ mod tests {
         assert!(
             render_project(&missing, &missing, "# Text the disk never held\n").is_ok(),
             "the pane holds the main, so the disk is not consulted at all"
+        );
+    }
+
+    // -- one of the project's files, read for the window to draw ------------
+    //
+    // `mpdf-010` Phase 5. The panel has listed the project's figures since
+    // Phase 1 and could not show one. The read is here rather than in the
+    // command for this file's own reason, and these three clauses are what
+    // that split buys.
+
+    /// Clause 1. The bytes are the file's, whatever kind of figure it is.
+    #[test]
+    fn a_figure_reads_back_the_bytes_the_disk_holds() {
+        let root = fixture("panel");
+        for path in ["cover.jpg", "sections/mark.svg"] {
+            assert_eq!(
+                asset_bytes(&root, path).unwrap(),
+                std::fs::read(root.join(path)).unwrap(),
+                "{path} did not come back as the disk holds it"
+            );
+        }
+    }
+
+    /// Clause 2. A path that leaves the project is refused, and the second
+    /// case is the one that can only be refused by confinement.
+    ///
+    /// `outside/decoy.png` is a file the disk really holds — through
+    /// `tests/fixtures/panel/outside`, the committed symlink to
+    /// `tests/fixtures/panel-decoy/` that the walk's own clause uses — so
+    /// `is_file()` cannot refuse it and only the root-relative spelling can.
+    #[test]
+    fn a_figure_outside_the_project_is_refused_by_name() {
+        let root = fixture("panel");
+
+        assert!(
+            root.join("outside/decoy.png").is_file(),
+            "the decoy must be reachable through the link, or this clause proves nothing"
+        );
+
+        for path in ["/tmp/escape.png", "outside/decoy.png"] {
+            assert_eq!(
+                asset_bytes(&root, path).err().as_deref(),
+                Some(format!("{path} is not a file in this project").as_str()),
+                "{path} was not refused in the sentence the other two refusals use"
+            );
+        }
+    }
+
+    /// Clause 3. A `..` is refused **by the rule and not by the file being
+    /// absent**, which is why the test writes the file it asks for.
+    ///
+    /// It runs over a scratch root rather than the fixture: `escape.png` has to
+    /// exist in the root's *parent* for `is_file()` to pass and the
+    /// confinement to be what refuses, and `tests/fixtures/` is tracked —
+    /// [`scratch_dir`]'s own reason for existing.
+    #[test]
+    fn a_figure_reached_by_climbing_out_of_the_root_is_refused() {
+        let above = scratch_dir("figure-escape");
+        let root = above.join("project");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(above.join("escape.png"), b"not the project's").unwrap();
+
+        assert!(
+            root.join("../escape.png").is_file(),
+            "the file has to be there, or `is_file()` refuses before the rule runs"
+        );
+        assert_eq!(
+            asset_bytes(&root, "../escape.png").err().as_deref(),
+            Some("../escape.png is not a file in this project")
         );
     }
 }

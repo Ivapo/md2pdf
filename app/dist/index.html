@@ -113,6 +113,99 @@
         flex: 1;
         display: flex;
         min-height: 0;
+        /* The containing block `#viewer` is positioned against. Nothing else
+           moves for it: `#pages` already carries its own `position`, and
+           `#mirror` is pinned at `top: -99999px; left: 0`, so no reader of an
+           `offsetTop` in this file changes its answer. */
+        position: relative;
+      }
+
+      /*
+        A picture over the text pane. `mpdf-010` Phase 5.
+
+        **It covers the textarea rather than replacing it**, and that is why it
+        is absolutely positioned rather than a third flex child: `#divider`'s
+        drag reads `#text`'s own box at every `pointerdown`, and a hidden
+        textarea measures zero. Left and width are mirrored off `#text` by
+        `placeViewer`, which the script calls wherever that column can move.
+
+        **The pane goes on holding the file it held.** Nothing here touches
+        `edited`, the buffer, the compile, the bytes or the anchors — `⌘S` still
+        writes the markdown and the page still shows the whole document. It is a
+        view, the way `Lines` is a view, and `Status` gains no field for it.
+      */
+      #viewer {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        z-index: 3;
+        /* A `<figure>` carries `margin: 1em 40px` from the user agent, which
+           would put this 40 px off the column it is meant to cover. */
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--ground);
+      }
+      #viewer[hidden] {
+        display: none;
+      }
+      #viewer .bar {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: var(--chrome);
+        border-bottom: 1px solid var(--edge);
+        color: var(--quiet);
+        font:
+          11px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      #viewer .bar .path {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /*
+        **The figure sits in the upper third**, neither centred nor against the
+        top. Centred, a small figure lands at the pane's waist and reads as
+        nothing in particular; flush to the top it reads as a header.
+
+        **The padding above it is free, and `box-sizing` is not what makes it
+        so** — two drafts of this phase said it was and both were wrong.
+        Flexbox distributes free space over its items' *outer* sizes, so a
+        `flex: 1` sheet's padding is already accounted for: measured in
+        Chromium over a 400 px column with a 100 px top padding, the sheet is
+        400 px and overflows by 0 under **both** values of `box-sizing`. The
+        overflow-by-exactly-the-padding behaviour is real and belongs to
+        `height: 100%`, which is not what this is. So the image's
+        `max-height: 100%` resolves against a content box that already excludes
+        the padding, and measures the right number.
+      */
+      #viewer .sheet {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 56px 12px 12px;
+        overflow: auto;
+      }
+      #viewer img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        /* A transparent PNG over the pane's own ground reads as a hole. */
+        background: var(--paper);
+      }
+      #viewer .said {
+        margin: 0;
+        color: var(--quiet);
       }
 
       /*
@@ -860,6 +953,13 @@
         disabled
         aria-label="The document's markdown"
       ></textarea>
+      <figure id="viewer" hidden aria-label="A figure from the project">
+        <div class="bar">
+          <span class="path"></span>
+          <button id="close-viewer" type="button">Back to the text</button>
+        </div>
+        <div class="sheet"></div>
+      </figure>
       <div id="divider" role="separator" aria-orientation="vertical"></div>
       <section id="preview">
         <p id="message">Open a markdown file to see its PDF. ⌘O</p>
@@ -1349,6 +1449,9 @@
         folded = !folded
         toggle.setAttribute('aria-expanded', String(!folded))
         files.classList.toggle('collapsed', folded)
+        // The fold takes its width out of this row, so the text pane's left
+        // edge moves and the figure over it has to follow.
+        placeViewer()
       })
 
       /** @param {Status} state */
@@ -1404,6 +1507,122 @@
         return drawn
       }
 
+      /*
+        The figure viewer. `mpdf-010` Phase 5, out of the prototype that
+        resolved OQ-1: an image row shows the picture, and the pane goes on
+        holding the file it held.
+
+        **The bytes come through a command and become a blob**, which is
+        `current_pdf`'s own route: the webview cannot read `file://` without
+        Tauri's asset protocol, and that would want a scope in
+        `tauri.conf.json` and a capability where an app-defined command wants
+        neither. The URL is revoked when the next one replaces it, or the
+        window holds every figure the reader has looked at for its own lifetime.
+      */
+      const viewer = document.getElementById('viewer')
+      const viewerPath = viewer.querySelector('.path')
+      const viewerSheet = viewer.querySelector('.sheet')
+      let viewing = null
+
+      /*
+        Keep the surface over the text pane's own column.
+
+        **This is an enumeration of causes in a file whose rule is that it
+        watches the pane and not the causes** — see the `ResizeObserver` over
+        `#pages` — and the exception is argued rather than assumed. An observer
+        over `#text` never fires at all here: folding the panel moves that
+        column's left edge without changing its size. And the observer over
+        `#pages` does not fire while the pane is hidden, which a figure may
+        perfectly well be up over. So the five callers are named: a show, a
+        window resize, the end of a divider drag, the panel fold and the line
+        gutter. The last two are the ones an enumeration drops, and both shift
+        `#text`'s left edge.
+      */
+      function placeViewer() {
+        if (viewer.hidden) return
+        viewer.style.left = `${text.offsetLeft}px`
+        viewer.style.width = `${text.offsetWidth}px`
+      }
+
+      /** One of the three ways back to the text, and the one the other two call. */
+      function hideAsset() {
+        viewer.hidden = true
+        viewerSheet.replaceChildren()
+        if (viewing !== null) URL.revokeObjectURL(viewing)
+        viewing = null
+      }
+
+      /**
+       * Show one of the project's figures over the text pane.
+       *
+       * **The extension is read before anything is asked for**, because a PDF
+       * is a legal figure in this dialect — `pdf` is in
+       * `md2pdf_core::IMAGE_EXTENSIONS` and the panel lists one — and `<img>`
+       * will not draw it. That row gets a sentence and the command is never
+       * called for it at all. **The sentence is the page's own**, which is a
+       * deliberate exception to the rule that the window composes no text: the
+       * two Rust routes are both wrong here, `fail` marking the compiled page
+       * stale for a click that compiled nothing and `divergence` drawing a
+       * `Discard` button beside it, and a field on `Status` is what this
+       * phase's own invariant refuses. It is a label for a file kind, not a
+       * status about the document — the distinction that rule was always about,
+       * and the one under which `Back to the text` is the page's too.
+       *
+       * @param {string} path
+       */
+      async function showAsset(path) {
+        const extension = (path.split('.').pop() ?? '').toLowerCase()
+        viewerPath.textContent = path
+
+        if (extension === 'pdf') {
+          const said = document.createElement('p')
+          said.className = 'said'
+          said.textContent = 'A PDF figure is not drawn here.'
+          if (viewing !== null) URL.revokeObjectURL(viewing)
+          viewing = null
+          viewerSheet.replaceChildren(said)
+          viewer.hidden = false
+          placeViewer()
+          return
+        }
+
+        let bytes
+        try {
+          bytes = await invoke('asset_bytes', { path })
+        } catch (problem) {
+          fail(problem)
+          return
+        }
+
+        if (viewing !== null) URL.revokeObjectURL(viewing)
+        const type =
+          extension === 'svg' || extension === 'svgz'
+            ? 'image/svg+xml'
+            : extension === 'jpg'
+              ? 'image/jpeg'
+              : `image/${extension}`
+        viewing = URL.createObjectURL(new Blob([bytes], { type }))
+
+        const picture = document.createElement('img')
+        picture.src = viewing
+        picture.alt = path
+        viewerSheet.replaceChildren(picture)
+
+        viewer.hidden = false
+        placeViewer()
+      }
+
+      document.getElementById('close-viewer').addEventListener('click', hideAsset)
+      addEventListener('resize', placeViewer)
+      // The reader arrives at a figure by three routes, so there are three ways
+      // back: this key, the surface's own control, and asking for a markdown
+      // row — which already means *put that file in the pane* and must not
+      // leave a picture over it. `clear()` closes it too, an open being a new
+      // project.
+      addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !viewer.hidden) hideAsset()
+      })
+
       /** @param {string} name @param {number} depth @returns {HTMLElement} */
       function folderRow(name, depth) {
         const li = document.createElement('li')
@@ -1424,12 +1643,19 @@
        * text is the last segment and the path is what Rust is handed. Only a
        * markdown file gets one: nothing else can be the file that compiles.
        *
-       * **The name is a button when the row opens and a span when it does not.**
-       * A markdown file the pane is not already holding goes in the pane;
-       * everything else is inert and says so in its title, which is where
-       * `mpdf-010` OQ-1 and OQ-2 leave images and bibliographies for now. The
-       * row the pane already holds is inert for the reason the `main` row has no
-       * `main` button: the gesture would ask for what is already true.
+       * **The name is a button when the row opens or shows, and a span when it
+       * does neither.** A markdown file the pane is not already holding goes in
+       * the pane; an image is shown over the pane, the pane keeping its own
+       * file, which is where `mpdf-010` OQ-1 landed. A bibliography is still
+       * inert and says so in its title, where OQ-2 leaves it, and so is a
+       * marked-missing row, which names a file the disk does not hold. The
+       * markdown row the pane already holds is inert for the reason the `main`
+       * row has no `main` button: the gesture would ask for what is already
+       * true. **That is the one gesture a reader might expect and not get** —
+       * clicking the row you are on while a figure is up does nothing — and it
+       * is accepted rather than fixed, the alternative being a row whose
+       * drawing depends on page state where holding no selection is what lets
+       * the panel be rebuilt whole on every status.
        *
        * @param {Entry} entry @param {number} depth @param {boolean} here
        * @param {boolean} holding
@@ -1437,6 +1663,7 @@
        */
       function fileRow(entry, depth, here, holding) {
         const opens = entry.kind === 'markdown' && !entry.missing && !holding
+        const shows = entry.kind === 'image' && !entry.missing
 
         const li = document.createElement('li')
         li.className = `${here ? 'here ' : ''}${holding ? 'holding ' : ''}${
@@ -1448,16 +1675,20 @@
           ? `${entry.path} — named by the document, and not on disk`
           : opens
             ? `Edit ${entry.path}`
-            : entry.kind === 'markdown'
-              ? entry.path
-              : `${entry.path} — not edited here`
+            : shows
+              ? `Look at ${entry.path}`
+              : entry.kind === 'markdown'
+                ? entry.path
+                : `${entry.path} — not edited here`
 
-        const label = document.createElement(opens ? 'button' : 'span')
+        const label = document.createElement(opens || shows ? 'button' : 'span')
         label.className = 'name'
         label.textContent = entry.path.split('/').pop() ?? entry.path
         if (label instanceof HTMLButtonElement) {
           label.type = 'button'
-          label.addEventListener('click', () => openInPane(entry.path))
+          label.addEventListener('click', () =>
+            opens ? openInPane(entry.path) : showAsset(entry.path)
+          )
         }
         li.append(label)
 
@@ -1509,6 +1740,9 @@
         with the way out beside it.
       */
       async function openInPane(path) {
+        // Asking for a file puts the text back: this already means *put that
+        // file in the pane*, and it must not leave a picture over it.
+        hideAsset()
         try {
           await invoke('set_edited', { path })
         } catch (problem) {
@@ -2353,6 +2587,7 @@
       // now, so the previous project's files would otherwise stay on screen
       // through the open that replaces them.
       function clear() {
+        hideAsset()
         files.hidden = true
         toggle.hidden = true
         list.replaceChildren()
@@ -2932,6 +3167,8 @@
         lines.hidden = !on
         relines()
         markLine()
+        // The gutter takes its width out of this row too.
+        placeViewer()
       })
 
       /*
@@ -3002,6 +3239,10 @@
           divider.removeEventListener('pointermove', move)
           divider.removeEventListener('pointerup', up)
           settle()
+          // The surface mirrors this column, and the drag is what moves it.
+          // At the end and not on every move: `placeViewer` reads layout, and
+          // this handler reads none per pointermove for that reason.
+          placeViewer()
         }
 
         divider.addEventListener('pointermove', move)

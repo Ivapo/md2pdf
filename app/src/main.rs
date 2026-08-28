@@ -12,7 +12,7 @@ mod document;
 mod preview;
 mod watch;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
@@ -116,6 +116,7 @@ fn main() {
             set_main,
             set_edited,
             discard,
+            asset_bytes,
             document_text,
             edit,
             save,
@@ -261,6 +262,30 @@ fn discard(session: tauri::State<'_, Mutex<Session>>) {
         .lock()
         .expect("the session lock was poisoned")
         .discard();
+}
+
+/// The bytes of one of the project's files, for the page to draw.
+///
+/// **The rule is [`document::asset_bytes`]'s and none of it is here**, which is
+/// this file's own division: the confinement is testable where it lives and
+/// would be reachable by nothing if it were written into a command.
+///
+/// The bytes cross as a `tauri::ipc::Response` for [`current_pdf`]'s reason,
+/// and the page turns them into a blob. That route needs no capability and no
+/// `app/tauri.conf.json` change, where Tauri's asset protocol would want both.
+#[tauri::command]
+fn asset_bytes(
+    session: tauri::State<'_, Mutex<Session>>,
+    path: String,
+) -> Result<tauri::ipc::Response, String> {
+    let session = session.lock().expect("the session lock was poisoned");
+    let root = session
+        .preview()
+        .root()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| "no document is open".to_string())?;
+
+    document::asset_bytes(&root, &path).map(tauri::ipc::Response::new)
 }
 
 /// The document Finder handed over, if one is waiting.
