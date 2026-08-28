@@ -203,7 +203,10 @@ fn number(hay: &[u8], at: usize) -> (f64, usize) {
         start += 1;
     }
     let mut end = start;
-    while matches!(hay.get(end), Some(b'0'..=b'9') | Some(b'.') | Some(b'-') | Some(b'+')) {
+    while matches!(
+        hay.get(end),
+        Some(b'0'..=b'9') | Some(b'.') | Some(b'-') | Some(b'+')
+    ) {
         end += 1;
     }
     let text = std::str::from_utf8(&hay[start..end]).expect("a number is not ASCII");

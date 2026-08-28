@@ -930,7 +930,14 @@ pub(crate) fn emit(md: &str, sources: &Sources) -> Result<Emitted> {
 
     let mut walk = Walk::new();
     for (event, range) in parser(md).into_offset_iter() {
-        step(&mut walk, md, event, range, Mode::Document(&mut notes), sources)?;
+        step(
+            &mut walk,
+            md,
+            event,
+            range,
+            Mode::Document(&mut notes),
+            sources,
+        )?;
     }
 
     walk.unclosed()?;

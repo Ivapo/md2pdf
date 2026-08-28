@@ -4235,8 +4235,14 @@ fn a_document_with_no_marker_is_the_document_it_always_was() {
 fn two_chapters() -> (&'static str, Vec<Asset>) {
     let master = "---\ntitle: Two Chapters\n---\n\n[](one/chapter.md)\n\n[](two/chapter.md)\n";
     let sections = vec![
-        section("one/chapter.md", "# One\n\n![The first figure](figure.svg)\n"),
-        section("two/chapter.md", "# Two\n\n![The second figure](figure.svg)\n"),
+        section(
+            "one/chapter.md",
+            "# One\n\n![The first figure](figure.svg)\n",
+        ),
+        section(
+            "two/chapter.md",
+            "# Two\n\n![The second figure](figure.svg)\n",
+        ),
     ];
     (master, sections)
 }
