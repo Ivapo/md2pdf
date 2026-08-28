@@ -89,17 +89,32 @@ pub fn root(document: &Path) -> PathBuf {
         .to_path_buf()
 }
 
-/// What a path under the watch is, to the document the pane holds.
+/// What a path under the watch is, to the project the window has open.
 ///
-/// The three are not the same event. An asset that moves is still "the page is
-/// out of date, compile", because nothing but the disk supplies a figure or a
-/// bibliography. The document that moves is "the disk moved, decide", because
-/// the pane's own buffer is what compiles now. And anything else under the root
-/// is "the project's files moved" — which the panel needs and the compile must
-/// not run for.
+/// The four are not the same event. The **edited** file that moves is "the disk
+/// moved under the pane, decide", because the pane's own buffer is what stands
+/// against it. An asset that moves is still "the page is out of date, compile",
+/// because nothing but the disk supplies a figure or a bibliography — and since
+/// `mpdf-010` Phase 2 the **document** is one more of those: the file that
+/// compiles is not the file the pane holds, so its own bytes come off the disk
+/// like any other. And anything else under the root is "the project's files
+/// moved" — which the panel needs and the compile must not run for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Change {
-    /// The open document itself.
+    /// The file the pane is holding.
+    ///
+    /// **Tested before the other three**, and against both of the two it can
+    /// collide with. Before `Asset`, because a section the master names is
+    /// already in the asset list and would otherwise recompile silently where
+    /// the divergence rule is owed. And before `Document`, because the two are
+    /// the same path whenever the pane holds the main — which is every document
+    /// this app opened before Phase 2 — and that rule would be lost with them.
+    Edited,
+    /// The file that compiles, when the pane is holding another.
+    ///
+    /// **A bare recompile.** It meant "the disk moved, decide" until Phase 2
+    /// gave that meaning to `Edited`; the master is now a file the compile
+    /// reads, and a file the compile reads that changed is a recompile.
     Document,
     /// One of the assets the document names: a figure, or its bibliography.
     Asset,
@@ -120,7 +135,9 @@ pub enum Change {
 /// handed the pair rather than a single path.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Changed {
-    /// The open document moved on disk.
+    /// The file the pane is holding moved on disk.
+    pub edited: bool,
+    /// The file that compiles moved on disk, and it is not the one above.
     pub document: bool,
     /// At least one asset the document names moved.
     pub assets: bool,
@@ -129,24 +146,29 @@ pub struct Changed {
     pub tree: bool,
 }
 
-/// Which of the three a change to this path is, or none of them.
+/// Which of the four a change to this path is, or none of them.
 ///
-/// It is the document when the path is the document, an asset when it is one of
-/// the paths `md2pdf_core::image_paths` and `md2pdf_core::bibliography_path`
-/// returned for it, and the tree when it is anything else under the root.
-/// Everything outside the root is dropped.
+/// It is the edited file when the path is the one the pane holds, the document
+/// when it is the one that compiles, an asset when it is one of the paths
+/// `md2pdf_core::image_paths` and `md2pdf_core::bibliography_path` returned for
+/// it, and the tree when it is anything else under the root. Everything outside
+/// the root is dropped.
+///
+/// **It takes both paths, and the assets are `main`'s.** They are read off
+/// `main`'s text and resolve against `main`'s own directory — that is where a
+/// path the markdown writes resolves — where `edited` may sit somewhere else
+/// entirely. So `here` below is the master's directory and `edited` is compared
+/// whole.
 ///
 /// **The root is a parameter and is no longer re-derived from the document.**
 /// It was `root(document)` until `mpdf-010` Phase 1, which is the same
 /// directory only while the project is the document's own folder — and the
 /// climb that finds a master above an opened section makes the two differ. The
-/// *document and its assets* are still resolved against the document's own
-/// directory, which is where a path the markdown writes resolves; the root is
-/// what `Tree` is measured against.
+/// root is what `Tree` is measured against, and nothing else.
 ///
-/// **The document stays in here**, though its events no longer mean "compile".
-/// A path dropped from the filter would never reach the rule that decides what
-/// its events do mean, and the rule is the whole of how the pane survives an
+/// **The document stays in here**, though its events no longer run the rule.
+/// A path dropped from the filter would never reach the code that decides what
+/// its events do mean, and that code is the whole of how the pane survives an
 /// external change.
 ///
 /// **Both sides are canonicalized**, and the whole loop depends on it.
@@ -162,13 +184,26 @@ pub struct Changed {
 /// asset the document names before anyone creates it has no real path to
 /// resolve yet. Joining a relative path onto a resolved directory gives a
 /// resolved path either way.
-pub fn classify(event: &Path, project: &Path, document: &Path, assets: &[String]) -> Option<Change> {
-    let name = document.file_name()?;
-    let here = resolve(&root(document));
+pub fn classify(
+    event: &Path,
+    project: &Path,
+    main: &Path,
+    edited: &Path,
+    assets: &[String],
+) -> Option<Change> {
+    let name = main.file_name()?;
+    let here = resolve(&root(main));
     let project = resolve(project);
     let event = resolve(event);
 
-    if event == here.join(name) {
+    // The *directory* is resolved and the file name joined on, for the reason
+    // the master's is: a file that has just been deleted canonicalizes to
+    // nothing, and an event about a deletion is exactly one the panel wants.
+    let held = resolve(&root(edited)).join(edited.file_name()?);
+
+    if event == held {
+        Some(Change::Edited)
+    } else if event == here.join(name) {
         Some(Change::Document)
     } else if assets.iter().any(|asset| event == here.join(asset)) {
         Some(Change::Asset)
@@ -277,6 +312,7 @@ pub fn start(
             let mut counted = false;
             for path in &event.paths {
                 match classify(path) {
+                    Some(Change::Edited) => (changed.edited, counted) = (true, true),
                     Some(Change::Document) => (changed.document, counted) = (true, true),
                     Some(Change::Asset) => (changed.assets, counted) = (true, true),
                     Some(Change::Tree) => (changed.tree, counted) = (true, true),
@@ -398,6 +434,11 @@ mod tests {
     /// **`mpdf-010` Phase 1's gate, clause 7.** The root and the document's own
     /// directory are the same here, which is every document this app opened
     /// before the climb existed; the test below is the one where they differ.
+    ///
+    /// **The pane holds the main here, so the document answers `Edited`** —
+    /// `mpdf-010` Phase 2's precedence, asserted where it matters most: this is
+    /// the shape every single-file document is in, and `Change::Document`
+    /// winning it would take the divergence rule away from all of them.
     #[test]
     fn the_filter_sorts_the_document_from_its_assets_and_its_project() {
         let dir = scratch_dir("filter");
@@ -409,9 +450,9 @@ mod tests {
         ];
 
         let real = dir.canonicalize().unwrap();
-        let sort = |path: PathBuf| classify(&path, &dir, &document, &assets);
+        let sort = |path: PathBuf| classify(&path, &dir, &document, &document, &assets);
 
-        assert_eq!(sort(real.join("figure.md")), Some(Change::Document));
+        assert_eq!(sort(real.join("figure.md")), Some(Change::Edited));
         assert_eq!(sort(real.join("refs.yml")), Some(Change::Asset));
         assert_eq!(sort(real.join("dot.png")), Some(Change::Asset));
         assert_eq!(sort(real.join("figures/mark.svg")), Some(Change::Asset));
@@ -443,12 +484,52 @@ mod tests {
         let document = inside.join("method.md");
         let assets = ["mark.svg".to_string()];
         let real = project.canonicalize().unwrap();
-        let sort = |path: PathBuf| classify(&path, &project, &document, &assets);
+        let sort = |path: PathBuf| classify(&path, &project, &document, &document, &assets);
 
-        assert_eq!(sort(real.join("sections/method.md")), Some(Change::Document));
+        assert_eq!(sort(real.join("sections/method.md")), Some(Change::Edited));
         assert_eq!(sort(real.join("sections/mark.svg")), Some(Change::Asset));
         assert_eq!(sort(real.join("book.md")), Some(Change::Tree));
         assert_eq!(sort(real.join("figures/plot.svg")), Some(Change::Tree));
+        assert_eq!(sort(real.parent().unwrap().join("outside.md")), None);
+    }
+
+    /// The file that compiles and the file in the pane are two things, and the
+    /// filter tells them apart.
+    ///
+    /// **`mpdf-010` Phase 2.** The assets are the *master's* and resolve against
+    /// the master's own directory, which is why `classify` takes both paths.
+    /// `sections/text.md` is in that asset list — a master's section always is —
+    /// and it must still answer `Edited`, or the divergence rule would be
+    /// replaced by a silent recompile for exactly the file the author is typing
+    /// into.
+    #[test]
+    fn the_filter_tells_the_file_that_compiles_from_the_file_in_the_pane() {
+        let project = scratch_dir("two-files");
+        std::fs::create_dir_all(project.join("sections")).unwrap();
+
+        let main = project.join("book.md");
+        let edited = project.join("sections/text.md");
+        let assets = [
+            "sections/text.md".to_string(),
+            "sections/mark.svg".to_string(),
+            "refs.bib".to_string(),
+        ];
+        let real = project.canonicalize().unwrap();
+        let sort = |path: PathBuf| classify(&path, &project, &main, &edited, &assets);
+
+        assert_eq!(
+            sort(real.join("sections/text.md")),
+            Some(Change::Edited),
+            "a section the master names is in the asset list, and the pane still wins it"
+        );
+        assert_eq!(
+            sort(real.join("book.md")),
+            Some(Change::Document),
+            "the master moved on disk: a bare recompile, not the rule"
+        );
+        assert_eq!(sort(real.join("sections/mark.svg")), Some(Change::Asset));
+        assert_eq!(sort(real.join("refs.bib")), Some(Change::Asset));
+        assert_eq!(sort(real.join("README.md")), Some(Change::Tree));
         assert_eq!(sort(real.parent().unwrap().join("outside.md")), None);
     }
 
@@ -467,8 +548,8 @@ mod tests {
         );
 
         assert_eq!(
-            classify(&event, &dir, &document, &[]),
-            Some(Change::Document)
+            classify(&event, &dir, &document, &document, &[]),
+            Some(Change::Edited)
         );
     }
 

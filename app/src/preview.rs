@@ -67,6 +67,23 @@ pub enum External {
 const DIVERGED: &str = "this file changed on disk, and the pane holds unsaved edits. \
     Save to write the pane over the file, or open the file again to take it.";
 
+/// The report a refused *switch* leaves for the author.
+///
+/// **Its own sentence, and not [`DIVERGED`]'s.** That one opens *"this file
+/// changed on disk"*, which is false on this occasion — nothing moved, the
+/// author asked to put another file in the pane — so reusing the constant would
+/// put a lie in the window. The shape is the same and deliberately so: name both
+/// ways out, and take neither.
+///
+/// Both ride `Preview::divergence`, whose meaning is therefore *a refused
+/// change* rather than *a refused external change*. **One field means one
+/// occasion at a time**: a switch refused while a real divergence stands
+/// overwrites this sentence and is overwritten by the next, which costs nothing
+/// — the two name the same two exits, and both are cleared by the same two
+/// actions.
+const SWITCHING: &str = "the pane holds unsaved edits, so it is still holding this file. \
+    Save to keep them, or discard them to open the other file.";
+
 /// OQ-5's rule: what an event naming the open document means.
 ///
 /// Three strings and two comparisons. `file` is what the disk holds now,
@@ -148,6 +165,13 @@ pub struct Status {
     /// to match it against a row to mark it, and two files of that name in
     /// different folders must not both light up.
     pub main: Option<String>,
+    /// Which of them the pane is holding, spelled the same way.
+    ///
+    /// It rides beside [`Status::main`] because **the page cannot derive one
+    /// from the other**: they are equal at every open and differ the moment a
+    /// row is clicked, and the panel draws a mark for each. Equal to `main`
+    /// exactly while the pane holds the file that compiles.
+    pub edited: Option<String>,
 }
 
 /// The pane's state, as Rust holds it.
@@ -173,8 +197,11 @@ pub struct Preview {
     main: Option<String>,
     /// Which file the pane holds and `⌘S` writes.
     ///
-    /// Equal to [`Preview::main`] resolved against the root for the whole of
-    /// `mpdf-010` Phase 1; Phase 2 is what lets the two differ.
+    /// Equal to [`Preview::main`] resolved against the root at every open, and
+    /// free to differ from it from the first row click on. **`main` is what
+    /// compiles and this is what is edited**: [`Preview::compile`] reads the
+    /// first and [`Preview::save`], [`Preview::load`] and [`Preview::reload`]
+    /// the second.
     edited: Option<PathBuf>,
     /// The files under the root, as the last walk of the disk found them.
     ///
@@ -213,6 +240,23 @@ impl Preview {
     /// The project the panel is listing, if one is open.
     pub fn root(&self) -> Option<&Path> {
         self.root.as_deref()
+    }
+
+    /// The file that compiles, as a path.
+    ///
+    /// [`Preview::main`] is root-relative because that is the spelling the
+    /// panel needs; every reader inside this file wants it joined back on.
+    fn main_path(&self) -> Option<PathBuf> {
+        Some(self.root.as_ref()?.join(self.main.as_ref()?))
+    }
+
+    /// The file the pane holds, spelled the way [`Preview::main`] is.
+    ///
+    /// **Textual, off no disk.** Both paths were built here by joining onto one
+    /// root, so there is nothing to canonicalize, and [`Preview::status`] calls
+    /// this on every render.
+    fn edited_relative(&self) -> Option<String> {
+        document::spell(self.root.as_deref()?, self.edited.as_deref()?)
     }
 
     /// The text the pane holds, which is the text that compiles.
@@ -270,6 +314,7 @@ impl Preview {
             anchors: self.anchors.clone(),
             entries: self.entries(),
             main: self.main.clone(),
+            edited: self.edited_relative(),
         }
     }
 
@@ -306,10 +351,15 @@ impl Preview {
     ///
     /// It refuses before the dialog rather than after it, so a pane that cannot
     /// be exported never asks the user for a path it will not use.
+    ///
+    /// **It names the file that compiles and not the file in the pane**, which
+    /// are two different files since `mpdf-010` Phase 2. The bytes it offers to
+    /// write are the master's, so `showcase.pdf` is the honest default where
+    /// `mathematics.pdf` would name a section for a PDF holding the whole book.
     pub fn export_path(&self) -> Result<PathBuf, String> {
         self.exportable()?;
-        self.document()
-            .map(document::default_output)
+        self.main_path()
+            .map(|main| document::default_output(&main))
             .ok_or_else(|| "no document is open".to_string())
     }
 
@@ -425,13 +475,29 @@ impl Preview {
     /// success and kept on a failure exactly as they are, so the time the window
     /// shows and the page the pane opens on always describe the page on screen
     /// rather than the last attempt at one.
+    ///
+    /// **It compiles [`Preview::main`], not the file in the pane.** The pane's
+    /// text reaches it through the closure `document::render_project` builds,
+    /// which answers `edited` from this buffer and everything else from the
+    /// disk — so the page shows the whole document while the author edits one
+    /// file of it, and shows exactly what the pane says while the two are the
+    /// same file. A `main` this app cannot read at all leaves the message and
+    /// the *failed* state [`Preview::load`] leaves, which is where a document
+    /// that will not read has always landed.
     pub fn compile(&mut self) {
-        let Some(document) = self.edited.clone() else {
+        let (Some(main), Some(edited)) = (self.main_path(), self.edited.clone()) else {
             return;
         };
 
         let started = Instant::now();
-        let render = document::render(document::directory(&document), &self.buffer);
+        let render = match document::render_project(&main, &edited, &self.buffer) {
+            Ok(render) => render,
+            Err(message) => {
+                self.stale = true;
+                self.error = Some(message);
+                return;
+            }
+        };
         let took = started.elapsed();
 
         if let Some(assets) = render.assets {
@@ -544,18 +610,30 @@ impl Session {
             preview.load();
         }
         (self.on_render)();
+        self.arm(root, document.clone(), document)
+    }
 
-        // The old loops go before the new ones start, so no two of them ever
-        // hold the same document.
+    /// Point both loops at these two files, dropping whatever they held.
+    ///
+    /// **Shared with [`Session::set_edited`], which is not an open.** Both
+    /// closures guard on `Preview::edited` against a path captured when they
+    /// were started, so a command that moved the pane and stopped there would
+    /// leave the typing debounce compiling nothing and every filesystem event
+    /// dropped. The guard itself stays: it is what stops a thread mid-compile
+    /// from writing its page over a newer one.
+    ///
+    /// The old loops go before the new ones start, so no two of them ever hold
+    /// the same document.
+    fn arm(&mut self, root: PathBuf, main: PathBuf, edited: PathBuf) -> Result<(), String> {
         self.watch = None;
         self.typing = None;
 
         self.typing = Some(watch::debounced(
             watch::TYPING_DEBOUNCE,
-            self.recompile(document.clone()),
+            self.recompile(edited.clone()),
         ));
-        let classify = self.classifier(root.clone(), document.clone());
-        let on_change = self.on_change(root.clone(), document);
+        let classify = self.classifier(root.clone(), main, edited.clone());
+        let on_change = self.on_change(root.clone(), edited);
         self.watch = Some(watch::start(&root, watch::DEBOUNCE, classify, on_change)?);
 
         Ok(())
@@ -586,8 +664,88 @@ impl Session {
             return Err(format!("{main} is not a file in this project"));
         }
 
+        if self.refused_while_dirty() {
+            return Ok(());
+        }
+
         document::write_override(&self.store, &root, &main)?;
         self.open_at(root, main)
+    }
+
+    /// Put another of the project's files in the pane, leaving the main alone.
+    ///
+    /// **This is not an open, and the difference is the counters.**
+    /// [`Session::open_at`] assigns `Preview { ..Preview::default() }`, which
+    /// zeroes `revision` and `reloaded`, and `app/dist/index.html`'s `clear()`
+    /// — which resets the counters the page compares them against — runs on an
+    /// Open and not on a row click. So this sets `edited`, reads that file into
+    /// the buffer, and leaves the root, the main, the listing, the bytes and
+    /// both counters exactly as it found them: they *advance* here, they do not
+    /// restart.
+    ///
+    /// It confines the path as [`Session::set_main`] does, and refuses on the
+    /// same terms while the buffer diverges from the last-saved text.
+    pub fn set_edited(&mut self, path: String) -> Result<(), String> {
+        let (root, main) = {
+            let preview = self.preview();
+            match (preview.root.clone(), preview.main.clone()) {
+                (Some(root), Some(main)) => (root, main),
+                _ => return Err("no document is open".to_string()),
+            }
+        };
+
+        let landed = root.join(&path);
+        if !landed.is_file() || document::relative(&root, &landed).as_deref() != Some(path.as_str())
+        {
+            return Err(format!("{path} is not a file in this project"));
+        }
+
+        if self.refused_while_dirty() {
+            return Ok(());
+        }
+
+        {
+            let mut preview = self.preview();
+            preview.edited = Some(landed.clone());
+            preview.load();
+        }
+        (self.on_render)();
+
+        self.arm(root.clone(), root.join(main), landed)
+    }
+
+    /// Drop what the pane holds and take the file again.
+    ///
+    /// **The second way out both refusals name.** `Preview::load` already reads
+    /// the edited file into the buffer and the last-saved text together, which
+    /// is exactly "discard"; this is that path behind a command. It clears the
+    /// divergence through `Preview::take`, so one action answers a refused
+    /// switch and a refused external change alike.
+    pub fn discard(&self) {
+        self.preview().load();
+        (self.on_render)();
+    }
+
+    /// Is there unsaved work a switch would throw away? Then say so and stop.
+    ///
+    /// **It reports through `Preview::divergence` and not through an `Err`.**
+    /// The caller's `Err` is where a path outside the project goes, and the
+    /// window draws that in the error bar; a refusal that arrived both ways
+    /// would be one problem in two places. This is a status, and the page places
+    /// it exactly as it places every other status sentence.
+    ///
+    /// It announces, because nothing else will: no compile ran, so the page
+    /// would otherwise never fetch the status carrying the sentence.
+    fn refused_while_dirty(&self) -> bool {
+        {
+            let mut preview = self.preview();
+            if preview.buffer == preview.saved {
+                return false;
+            }
+            preview.divergence = Some(SWITCHING.to_string());
+        }
+        (self.on_render)();
+        true
     }
 
     /// Take the pane's text, and start the clock on the compile it will want.
@@ -614,7 +772,8 @@ impl Session {
     fn classifier(
         &self,
         root: PathBuf,
-        document: PathBuf,
+        main: PathBuf,
+        edited: PathBuf,
     ) -> impl Fn(&Path) -> Option<Change> + Send + 'static {
         let state = Arc::clone(&self.state);
         move |path| {
@@ -623,25 +782,27 @@ impl Session {
                 .expect("the preview lock was poisoned")
                 .assets
                 .clone();
-            watch::classify(path, &root, &document, &assets)
+            watch::classify(path, &root, &main, &edited, &assets)
         }
     }
 
     /// What one settled window of filesystem events does.
     ///
-    /// **The document and the assets reach different code**, which is the
-    /// whole of what this phase changed in the loop. An asset that moved is
-    /// still a bare recompile, because nothing but the disk supplies a figure
-    /// or a bibliography. The document that moved runs [`Preview::reload`],
-    /// because the pane's own text is what compiles and the file is now a
-    /// second opinion about it.
+    /// **The edited file and everything else reach different code.** The file
+    /// the pane holds runs [`Preview::reload`], because the pane's own buffer is
+    /// what stands against it and losing that buffer is the one thing this app
+    /// refuses to do quietly. Everything else the compile reads — an asset, and
+    /// since `mpdf-010` Phase 2 the master itself — is a bare recompile, because
+    /// nothing but the disk supplies it. `Change::Edited` is decided before
+    /// both, so while the pane holds the main an event still runs the rule,
+    /// exactly as it did before the two could differ.
     ///
     /// A window that took the disk copy compiled inside the rule, and it read
     /// the new assets on the way, so the two never compile twice for one
     /// window. And nothing is announced when nothing happened: the app's own
     /// save arrives here, changes nothing, and must not redraw a frame the
     /// reader has scrolled.
-    fn on_change(&self, root: PathBuf, document: PathBuf) -> impl FnMut(Changed) + Send + 'static {
+    fn on_change(&self, root: PathBuf, edited: PathBuf) -> impl FnMut(Changed) + Send + 'static {
         let state = Arc::clone(&self.state);
         let on_render = Arc::clone(&self.on_render);
 
@@ -649,11 +810,11 @@ impl Session {
             let mut announce = false;
             {
                 let mut preview = state.lock().expect("the preview lock was poisoned");
-                if preview.edited.as_deref() != Some(document.as_path()) {
+                if preview.edited.as_deref() != Some(edited.as_path()) {
                     return;
                 }
 
-                let taken = if changed.document {
+                let taken = if changed.edited {
                     let outcome = preview.reload();
                     announce = outcome != External::Unchanged;
                     outcome == External::Taken
@@ -661,7 +822,7 @@ impl Session {
                     false
                 };
 
-                if changed.assets && !taken {
+                if (changed.document || changed.assets) && !taken {
                     preview.compile();
                     announce = true;
                 }
@@ -1400,7 +1561,10 @@ mod tests {
         // beside `revision` is what tells the two apart.
         settle();
         let after = session.preview().status();
-        assert_eq!(after.revision, 1, "a file appearing in the project compiled");
+        assert_eq!(
+            after.revision, 1,
+            "a file appearing in the project compiled"
+        );
         assert!(
             compiles.load(Ordering::SeqCst) > 1,
             "the panel was never told the export had landed"
@@ -1595,7 +1759,6 @@ mod tests {
         );
     }
 
-
     // -- the project, at the session -------------------------------------
     //
     // `mpdf-010` Phase 1's exit gate, clauses 3 and 7. The pieces they are
@@ -1727,7 +1890,10 @@ mod tests {
                 session.set_main(asked.to_string()).is_err(),
                 "{asked} was accepted as this project's main"
             );
-            assert_eq!(session.preview().status().main.as_deref(), Some("second.md"));
+            assert_eq!(
+                session.preview().status().main.as_deref(),
+                Some("second.md")
+            );
         }
 
         // And a second window over the same folder lands on it without asking.
@@ -1774,6 +1940,308 @@ mod tests {
         );
     }
 
+    // -- the pane and the main are two files -------------------------------
+    //
+    // `mpdf-010` Phase 2's exit gate. It runs over a **writable copy of
+    // `samples/showcase/`**: two of the clauses write, `samples/` is tracked,
+    // and a suite that left the repository dirty would also destroy the first
+    // clause's own premise the second time it was run.
+
+    /// A writable copy of `samples/showcase/`, and its own store.
+    fn showcase_in(name: &str) -> (PathBuf, PathBuf) {
+        let root = scratch_dir(name);
+        copy_tree(&sample("showcase"), &root);
+        (
+            root,
+            document::store_file(&scratch_dir(&format!("{name}-store"))),
+        )
+    }
+
+    fn copy_tree(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap().flatten() {
+            let (source, target) = (entry.path(), to.join(entry.file_name()));
+            if source.is_dir() {
+                copy_tree(&source, &target);
+            } else {
+                std::fs::copy(&source, &target).unwrap();
+            }
+        }
+    }
+
+    /// A loaded [`Preview`] with the two files named separately.
+    ///
+    /// [`compiled`] is its single-file counterpart and cannot express this: it
+    /// derives the main from the document, which is the conflation this phase
+    /// ends.
+    fn project(root: &Path, main: &str, edited: &str) -> Preview {
+        let mut preview = Preview {
+            root: Some(root.to_path_buf()),
+            main: Some(main.to_string()),
+            edited: Some(root.join(edited)),
+            tree: document::files_under(root),
+            ..Preview::default()
+        };
+        preview.load();
+        preview
+    }
+
+    fn lines_of(preview: &Preview) -> Vec<usize> {
+        preview.anchors.iter().map(|anchor| anchor.line).collect()
+    }
+
+    /// **Clause 1, and the phase's whole observable.** The page is the master's,
+    /// and the pane's unsaved text is in it.
+    ///
+    /// Checked against a compile of the same tree after the buffer has been put
+    /// on the disk, in the same directory and at the same absolute paths — so
+    /// nothing here turns on a compile being reproducible across two locations.
+    #[test]
+    fn the_panes_unsaved_section_reaches_the_master_that_compiles() {
+        let (root, _) = showcase_in("phase2-override");
+
+        let mut preview = project(&root, "showcase.md", "sections/mathematics.md");
+        let typed = format!("{}\nA paragraph nobody has saved.\n", preview.text());
+        preview.edit(typed.clone());
+        preview.compile();
+        let unsaved = preview.pdf().expect("the unsaved compile failed").to_vec();
+
+        std::fs::write(root.join("sections/mathematics.md"), &typed).unwrap();
+        let saved = project(&root, "showcase.md", "showcase.md");
+
+        assert_eq!(
+            unsaved,
+            saved.pdf().expect("the saved compile failed"),
+            "the buffer did not reach the compile"
+        );
+    }
+
+    /// **Clause 2. The anchors are lines, not files.**
+    ///
+    /// `document::Anchor` is `{ line, page }` and the filter under test is
+    /// precisely what drops `location.file`, so the claim is keyed to what
+    /// survives it. The two sets are disjoint by construction: `mathematics.md`
+    /// has one heading, on its own first line, where the master's own three sit
+    /// at lines 12, 27 and 54 of `showcase.md` — below its ten-line frontmatter,
+    /// and nowhere near line 1.
+    #[test]
+    fn the_anchors_are_the_headings_of_whichever_file_the_pane_holds() {
+        let (root, _) = showcase_in("phase2-anchors");
+
+        let section = project(&root, "showcase.md", "sections/mathematics.md");
+        let master = project(&root, "showcase.md", "showcase.md");
+
+        let (theirs, its_own) = (lines_of(&section), lines_of(&master));
+        assert_eq!(theirs, [1], "the section's own heading");
+        assert_eq!(its_own, [12, 27, 54], "the master's own three");
+        assert!(
+            theirs.iter().all(|line| !its_own.contains(line)),
+            "the two sets are not disjoint, so this clause proves nothing"
+        );
+    }
+
+    /// **Clause 3.** `⌘S` writes the file in the pane and nothing else.
+    #[test]
+    fn the_save_writes_the_file_in_the_pane_and_leaves_the_master_alone() {
+        let (root, _) = showcase_in("phase2-save");
+        let master = std::fs::read(root.join("showcase.md")).unwrap();
+
+        let mut preview = project(&root, "showcase.md", "sections/mathematics.md");
+        let typed = format!(
+            "{}\nA paragraph the author means to keep.\n",
+            preview.text()
+        );
+        preview.edit(typed.clone());
+        preview.save().unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(root.join("sections/mathematics.md")).unwrap(),
+            typed
+        );
+        assert_eq!(
+            std::fs::read(root.join("showcase.md")).unwrap(),
+            master,
+            "the save wrote the master too"
+        );
+    }
+
+    /// **Clause 4.** The switch refuses over unsaved work, names two ways out
+    /// without claiming the file moved, and the discard is the second of them.
+    #[test]
+    fn a_switch_refuses_over_unsaved_work_and_the_discard_lets_it_through() {
+        let (root, store) = showcase_in("phase2-refusal");
+        let (mut session, compiles) = counted_with(store);
+        session.open(root.join("showcase.md")).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        let mine = "# Mine, unsaved\n\nStill being written.\n".to_string();
+        session.edit(mine.clone());
+        settle();
+
+        session
+            .set_edited("sections/mathematics.md".to_string())
+            .unwrap();
+
+        let refused = session.preview().status();
+        assert_eq!(
+            refused.edited.as_deref(),
+            Some("showcase.md"),
+            "the switch moved the pane anyway"
+        );
+        assert_eq!(session.preview().text(), mine, "it took the work");
+
+        let sentence = refused.divergence.expect("the refusal said nothing");
+        assert!(
+            !sentence.contains("changed on disk"),
+            "the refusal claims the file moved, which it did not: {sentence:?}"
+        );
+        assert!(
+            sentence.contains("Save") && sentence.contains("discard"),
+            "the refusal names fewer than two ways out: {sentence:?}"
+        );
+
+        session
+            .set_main("sections/mathematics.md".to_string())
+            .unwrap();
+        assert_eq!(
+            session.preview().status().main.as_deref(),
+            Some("showcase.md"),
+            "set_main took the same work the switch refused to lose"
+        );
+
+        session.discard();
+        let clean = session.preview().status();
+        assert_eq!(clean.divergence, None, "the discard left the refusal up");
+        assert_ne!(session.preview().text(), mine, "the discard kept the work");
+
+        session
+            .set_edited("sections/mathematics.md".to_string())
+            .unwrap();
+        assert_eq!(
+            session.preview().status().edited.as_deref(),
+            Some("sections/mathematics.md"),
+            "the switch was refused twice"
+        );
+        assert_eq!(
+            session.preview().status().main.as_deref(),
+            Some("showcase.md"),
+            "the switch moved the main"
+        );
+    }
+
+    /// **Clause 5, first half.** The master moving on disk is a bare recompile,
+    /// and it is one even while the pane holds work of its own.
+    #[test]
+    fn an_external_write_to_the_master_recompiles_and_does_not_run_the_rule() {
+        let (root, store) = showcase_in("phase2-master-moved");
+        let (mut session, compiles) = counted_with(store);
+        session.open(root.join("showcase.md")).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        session
+            .set_edited("sections/mathematics.md".to_string())
+            .unwrap();
+        settle();
+        let seen = compiles.load(Ordering::SeqCst);
+        let before = session.preview().status();
+
+        session.edit(format!("{}\nUnsaved.\n", session.preview().text()));
+        assert_eq!(wait_for(&compiles, seen + 1), seen + 1);
+
+        let master = std::fs::read_to_string(root.join("showcase.md")).unwrap();
+        std::fs::write(
+            root.join("showcase.md"),
+            format!("{master}\nA line another program added.\n"),
+        )
+        .unwrap();
+        assert_eq!(
+            wait_for(&compiles, seen + 2),
+            seen + 2,
+            "it never recompiled"
+        );
+        settle();
+
+        let after = session.preview().status();
+        assert_eq!(
+            after.divergence, None,
+            "the master's own event ran the divergence rule"
+        );
+        assert!(
+            after.revision > before.revision,
+            "the master moved and nothing recompiled"
+        );
+    }
+
+    /// **Clause 5, second half.** The file in the pane moving runs the rule —
+    /// and it still does when that file is the master, which is Phase 1's
+    /// behaviour and every single-file document's.
+    #[test]
+    fn an_external_write_to_the_file_in_the_pane_runs_the_rule() {
+        for (name, edited) in [
+            ("phase2-section-moved", "sections/mathematics.md"),
+            ("phase2-only-file-moved", "showcase.md"),
+        ] {
+            let (root, store) = showcase_in(name);
+            let (mut session, compiles) = counted_with(store);
+            session.open(root.join("showcase.md")).unwrap();
+            assert_eq!(wait_for(&compiles, 1), 1);
+
+            if edited != "showcase.md" {
+                session.set_edited(edited.to_string()).unwrap();
+                settle();
+            }
+            let seen = compiles.load(Ordering::SeqCst);
+
+            session.edit("# Mine, unsaved\n\nStill being written.\n".to_string());
+            assert_eq!(wait_for(&compiles, seen + 1), seen + 1);
+
+            std::fs::write(root.join(edited), "# Theirs\n\nBy another program.\n").unwrap();
+            assert_eq!(
+                wait_for(&compiles, seen + 2),
+                seen + 2,
+                "{edited}: the change was never noticed"
+            );
+            settle();
+
+            let status = session.preview().status();
+            assert!(
+                status
+                    .divergence
+                    .as_deref()
+                    .is_some_and(|said| said.contains("changed on disk")),
+                "{edited}: the rule did not run — {:?}",
+                status.divergence
+            );
+            assert_eq!(
+                session.preview().text(),
+                "# Mine, unsaved\n\nStill being written.\n",
+                "{edited}: the work was taken"
+            );
+        }
+    }
+
+    /// **Clause 6.** A single-file document is what it always was.
+    ///
+    /// "Equal to what it produced before this phase" has nothing committed to
+    /// compare against — `tests/golden/` holds `.typ` and no PDF — so the
+    /// reproducible form of the claim is a compile this test asks the library
+    /// for itself, which is how
+    /// `document::tests::a_single_file_document_keeps_its_anchors_and_its_bytes`
+    /// already makes it one level down.
+    #[test]
+    fn a_document_that_is_its_own_project_compiles_to_the_librarys_own_bytes() {
+        let dir = scratch_dir("phase2-article");
+        article_in(&dir);
+
+        let preview = project(&dir, "article.md", "article.md");
+        let markdown = std::fs::read_to_string(dir.join("article.md")).unwrap();
+
+        assert_eq!(
+            preview.pdf().expect("the compile failed"),
+            md2pdf_core::md_to_pdf(&markdown, &article_assets(&dir)).unwrap()
+        );
+    }
+
     /// The `@property` names of one `@typedef {object} …` block in the page.
     ///
     /// Plain string operations, and no HTML parser enters this crate for it:
@@ -1816,7 +2284,7 @@ mod tests {
     ///
     /// **This is the narrow edge `specs/desktop_app_spec.md` OQ-10 names.**
     /// `invoke` answers with an untyped value and `app/dist/index.html` reads
-    /// ten fields off it by name, so a field renamed here and not there breaks
+    /// eleven fields off it by name, so a field renamed here and not there breaks
     /// the window silently, at runtime, with no console anyone reads. The type
     /// check over that file (`app/typecheck.mjs`) makes the typedef bind on the
     /// page's side; this makes it bind on Rust's. **Two declarations compared
@@ -1825,10 +2293,13 @@ mod tests {
     /// `anchors` holds one, and must: `Anchor` is not reachable in the JSON at
     /// all while the list is empty. `entries` holds one for the same reason.
     ///
-    /// **The count of ten did not move across `mpdf-010` Phase 1**, which
-    /// removed `sections` and `master` and added `entries` and `main`. It is a
-    /// coincidence and it is named here so nobody "fixes" the literal to
-    /// silence a failure that is really about a field.
+    /// **The count moved from ten to eleven in `mpdf-010` Phase 2**, which
+    /// added `edited` beside `main` so the panel can mark the row the pane is
+    /// holding. Phase 1 left it at ten by coincidence — it removed `sections`
+    /// and `master` and added `entries` and `main` — and said so here, in a
+    /// note this phase's own scope is the authority for rewriting. A literal
+    /// that has now moved once is still not a thing to "fix" to silence a
+    /// failure: a failure here is about a field.
     #[test]
     fn the_page_typedefs_name_exactly_the_fields_status_serializes() {
         const PAGE: &str = include_str!("../dist/index.html");
@@ -1848,6 +2319,7 @@ mod tests {
                 missing: false,
             }],
             main: Some("report.md".to_string()),
+            edited: Some("sections/method.md".to_string()),
         };
         let sent = serde_json::to_value(&status).expect("a `Status` that will not serialize");
 
@@ -1864,7 +2336,7 @@ mod tests {
         // marker that stopped matching should fail loudly rather than pass.
         assert_eq!(
             declared.len(),
-            10,
+            11,
             "the page's `Status` typedef declares {} properties: {:?}",
             declared.len(),
             declared

@@ -114,6 +114,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             open_document,
             set_main,
+            set_edited,
+            discard,
             document_text,
             edit,
             save,
@@ -199,8 +201,8 @@ async fn open_document(
 
 /// Set which file under the open project compiles, and remember it.
 ///
-/// The window is retitled for [`open_document`]'s reason: the pane is now
-/// holding a different file.
+/// The window is retitled for [`open_document`]'s reason: this routes through
+/// the open, so the pane is now holding the file it named.
 #[tauri::command]
 async fn set_main(
     window: tauri::Window,
@@ -217,6 +219,48 @@ async fn set_main(
         window.set_title(&name).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Put another of the project's files in the pane, leaving the main alone.
+///
+/// The window is retitled for [`open_document`]'s reason, which is now the
+/// whole of what the title says: it names the file the pane holds, and that is
+/// no longer the file that compiles.
+///
+/// **A refusal does not come back through this `Err`.** A path outside the
+/// project does; a pane holding unsaved edits does not, because that is a
+/// status the page places in the divergence bar rather than an error — see
+/// `preview::Session::refused_while_dirty`.
+#[tauri::command]
+async fn set_edited(
+    window: tauri::Window,
+    session: tauri::State<'_, Mutex<Session>>,
+    path: String,
+) -> Result<(), String> {
+    let opened = {
+        let mut session = session.lock().expect("the session lock was poisoned");
+        session.set_edited(path)?;
+        session.preview().document().map(document::title)
+    };
+
+    if let Some(name) = opened {
+        window.set_title(&name).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Throw the pane's unsaved edits away and take the file as it stands.
+///
+/// It is the second way out both refusals name — a switch the pane's own work
+/// blocked, and a file that moved under it — and it is the only command in this
+/// app that discards anything. It needs no dialog and no capability: the button
+/// that reaches it is drawn only beside the sentence that asks for it.
+#[tauri::command]
+fn discard(session: tauri::State<'_, Mutex<Session>>) {
+    session
+        .lock()
+        .expect("the session lock was poisoned")
+        .discard();
 }
 
 /// The document Finder handed over, if one is waiting.

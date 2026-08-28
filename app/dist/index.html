@@ -137,17 +137,19 @@
         the left of it. `#divider` takes its grab point from the text pane's
         own left edge because of this element.
 
-        **The rows still do not open, and one gesture on them does.** A row's
-        body is inert; the `main` button that appears on a markdown row sets
-        which file compiles and is deliberately not the row itself, because the
-        next phase gives the row body a meaning of its own — clicking it puts
-        that file in the pane. Four things turn on the body being inert until
-        then, and each is a thing that phase changes: `render_with` keeps only
-        the anchors whose location names no file, `Session::on_change` runs the
-        external-change rule on the buffer the pane holds, `save` writes to the
-        edited file's own path, and the join reads every section off the disk.
+        **The rows open, and two gestures on a row are two gestures.** The body
+        of a markdown row puts that file in the pane; the `main` button that
+        appears beside it sets which file compiles. They were kept apart before
+        there were two of them rather than after, which is why the second one is
+        a button of its own and not a modifier on the first.
 
-        `mpdf-010` Phase 1, replacing `mpdf-008` Phase 4's section panel.
+        **A row can carry two marks, because they are two facts.** `.here` is
+        the file that compiles and `.holding` is the file the pane is showing;
+        they sit on one row at every open and on two rows from the first click.
+        Rust sends both in the status, so the panel is still rebuilt whole on
+        every one and **the rows still hold no state of their own.**
+
+        `mpdf-010` Phase 2, over Phase 1's panel.
       */
       #files {
         flex: 0 0 auto;
@@ -257,6 +259,21 @@
         box-shadow: inset 2px 0 0 var(--ink);
       }
       /*
+        The one the pane is holding, which is a different fact and gets a
+        different mark: a band rather than an edge, so a row that is both — every
+        row at every open — reads as both rather than as one drawn twice.
+
+        **The band is the text pane's own ground and not `--band`**, which is
+        the gutter's caret colour and is a point away from `--chrome` here: over
+        the panel it would be invisible in both themes. This row is what the pane
+        is showing, so it wears the pane's own colour, which is lighter than the
+        panel in the light theme and darker in the dark one.
+      */
+      #files li.holding {
+        color: var(--ink);
+        background: var(--ground);
+      }
+      /*
         A file the master names that the disk does not hold. It is the row the
         author most needs, so it is marked rather than dimmed: the compile is
         refusing on exactly this path.
@@ -268,6 +285,27 @@
       #files li .name {
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+      /*
+        A row that opens draws its name as a button rather than a span, so the
+        gesture is reachable from the keyboard and announces itself as one. It
+        is styled back to the row it sits in: the affordance is the row, not a
+        control drawn inside it.
+      */
+      #files li button.name {
+        flex: 1;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      #files li button.name:hover {
+        color: var(--ink);
       }
       #files li .mark {
         margin-left: auto;
@@ -722,16 +760,35 @@
         color: var(--quiet);
       }
       /*
-        The divergence a refused external change leaves. It is not an error and
-        not staleness — nothing failed to compile, and the page belongs to the
-        text in the pane. It is the file that has gone elsewhere.
+        The divergence a refused change leaves. It is not an error and not
+        staleness — nothing failed to compile, and the page belongs to the text
+        in the pane. Two occasions reach it and Rust words both: the file went
+        elsewhere, or the pane is holding work a switch would have thrown away.
+
+        **The way out is a button here rather than chrome in the header**,
+        because it is wanted exactly when this bar is drawn and never otherwise.
+        Its label is the page's, as every control's label is; the sentence
+        beside it is Rust's, as every status sentence is.
       */
       #divergence {
         flex: none;
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
         margin: 0;
         padding: 8px 12px;
         background: var(--chrome);
         border-bottom: 1px solid var(--edge);
+      }
+      #divergence[hidden] {
+        display: none;
+      }
+      #divergence-text {
+        flex: 1;
+        min-width: 0;
+      }
+      #discard {
+        flex: none;
       }
 
       /* The error sits above the page it does not belong to. */
@@ -806,7 +863,10 @@
       <div id="divider" role="separator" aria-orientation="vertical"></div>
       <section id="preview">
         <p id="message">Open a markdown file to see its PDF. ⌘O</p>
-        <p id="divergence" hidden></p>
+        <p id="divergence" hidden>
+          <span id="divergence-text"></span>
+          <button id="discard" type="button">Discard</button>
+        </p>
         <p id="error" hidden></p>
         <div
         id="pages"
@@ -842,7 +902,7 @@
         `app/tsconfig.json` for why its settings are what they are.
 
         **`Status`, `Anchor` and `Entry` are the point, and they are the three
-        that can lie.** `invoke` returns an untyped value and this page reads ten
+        that can lie.** `invoke` returns an untyped value and this page reads eleven
         fields off it by name, so a field renamed in Rust would break the window
         silently at runtime. `app/src/preview.rs`'s own test compares the
         `@property` lists below against a serialized `Status` — two declarations
@@ -866,6 +926,7 @@
        * @property {Anchor[]} anchors
        * @property {Entry[]} entries
        * @property {string | null} main
+       * @property {string | null} edited
        */
 
       /**
@@ -955,6 +1016,7 @@
       const text = /** @type {HTMLTextAreaElement} */ (document.getElementById('text'))
       const message = document.getElementById('message')
       const divergence = document.getElementById('divergence')
+      const divergenceText = document.getElementById('divergence-text')
       const error = document.getElementById('error')
       const status = document.getElementById('status')
       const fitControl = /** @type {HTMLSelectElement} */ (document.getElementById('fit'))
@@ -1230,7 +1292,7 @@
         error.hidden = state.error === null
         error.classList.toggle('alone', !state.page)
 
-        divergence.textContent = state.divergence ?? ''
+        divergenceText.textContent = state.divergence ?? ''
         divergence.hidden = state.divergence === null
 
         message.hidden = state.state !== 'empty'
@@ -1302,7 +1364,7 @@
         }
 
         files.classList.toggle('collapsed', folded)
-        list.replaceChildren(...panelRows(state.entries, state.main))
+        list.replaceChildren(...panelRows(state.entries, state.main, state.edited))
       }
 
       /**
@@ -1316,9 +1378,10 @@
        *
        * @param {Entry[]} entries
        * @param {string | null} main
+       * @param {string | null} edited
        * @returns {HTMLElement[]}
        */
-      function panelRows(entries, main) {
+      function panelRows(entries, main, edited) {
         const drawn = []
         let folder = []
 
@@ -1336,7 +1399,7 @@
           }
           folder = here
 
-          drawn.push(fileRow(entry, here.length, entry.path === main))
+          drawn.push(fileRow(entry, here.length, entry.path === main, entry.path === edited))
         }
         return drawn
       }
@@ -1361,21 +1424,41 @@
        * text is the last segment and the path is what Rust is handed. Only a
        * markdown file gets one: nothing else can be the file that compiles.
        *
+       * **The name is a button when the row opens and a span when it does not.**
+       * A markdown file the pane is not already holding goes in the pane;
+       * everything else is inert and says so in its title, which is where
+       * `mpdf-010` OQ-1 and OQ-2 leave images and bibliographies for now. The
+       * row the pane already holds is inert for the reason the `main` row has no
+       * `main` button: the gesture would ask for what is already true.
+       *
        * @param {Entry} entry @param {number} depth @param {boolean} here
+       * @param {boolean} holding
        * @returns {HTMLElement}
        */
-      function fileRow(entry, depth, here) {
+      function fileRow(entry, depth, here, holding) {
+        const opens = entry.kind === 'markdown' && !entry.missing && !holding
+
         const li = document.createElement('li')
-        li.className = `${here ? 'here ' : ''}${entry.missing ? 'missing' : ''}`.trim()
+        li.className = `${here ? 'here ' : ''}${holding ? 'holding ' : ''}${
+          entry.missing ? 'missing' : ''
+        }`.trim()
         li.dataset.depth = String(Math.min(depth, 5))
         li.dataset.kind = entry.kind
         li.title = entry.missing
           ? `${entry.path} — named by the document, and not on disk`
-          : entry.path
+          : opens
+            ? `Edit ${entry.path}`
+            : entry.kind === 'markdown'
+              ? entry.path
+              : `${entry.path} — not edited here`
 
-        const label = document.createElement('span')
+        const label = document.createElement(opens ? 'button' : 'span')
         label.className = 'name'
         label.textContent = entry.path.split('/').pop() ?? entry.path
+        if (label instanceof HTMLButtonElement) {
+          label.type = 'button'
+          label.addEventListener('click', () => openInPane(entry.path))
+        }
         li.append(label)
 
         if (here) {
@@ -1407,6 +1490,43 @@
         clear()
         try {
           await invoke('set_main', { path })
+        } catch (problem) {
+          fail(problem)
+        }
+      }
+
+      /*
+        Put another of the project's files in the pane.
+
+        **It does not `clear()`, and that is the difference between this and an
+        open.** Rust keeps the preview it has — the root, the main, the listing,
+        the bytes and both counters — and only moves the edited file, so a page
+        that reset the counters it compares Rust's against would sit at
+        `refresh`'s own guard and draw nothing again.
+
+        A refusal comes back as a status rather than as a throw: Rust announces
+        it, `refresh` fetches it, and the sentence lands in the divergence bar
+        with the way out beside it.
+      */
+      async function openInPane(path) {
+        try {
+          await invoke('set_edited', { path })
+        } catch (problem) {
+          fail(problem)
+        }
+      }
+
+      /*
+        Throw the pane's unsaved edits away and take the file as it stands.
+
+        The one way out of both refusals this app makes, and the only thing here
+        that discards anything. Rust re-reads the file and announces, so the
+        pane's text comes back through `refresh`'s own reload branch rather than
+        being written here.
+      */
+      async function discardEdits() {
+        try {
+          await invoke('discard')
         } catch (problem) {
           fail(problem)
         }
@@ -2896,6 +3016,7 @@
         relines()
       })
 
+      document.getElementById('discard').addEventListener('click', discardEdits)
       document.getElementById('open').addEventListener('click', openDocument)
       document.getElementById('save').addEventListener('click', saveDocument)
       document.getElementById('export').addEventListener('click', exportDocument)

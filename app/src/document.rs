@@ -80,22 +80,64 @@ pub struct Render {
 
     /// Where each heading landed, for the pane to open on.
     ///
-    /// **Only the headings written in the file the pane holds**, which is the
-    /// master. A line means something in exactly one buffer and the pane holds
-    /// one, so an anchor from a section is not a worse match — it is a number
-    /// about a document the pane is not showing, and
+    /// **Only the headings written in the file the pane holds**, which is
+    /// [`Pane`]'s whole job and is no longer the same file as the one that
+    /// compiles. A line means something in exactly one buffer and the pane
+    /// holds one, so an anchor from another file is not a worse match — it is
+    /// a number about a document the pane is not showing, and
     /// `app/dist/index.html:caretPage` walks a flat list and breaks at the
     /// first anchor past the caret. Left in, three sections numbered 1, 4 and 1
     /// would open the frame on whatever page the last of them landed on.
     ///
-    /// A pure manifest therefore yields none and the frame opens at page 1,
-    /// which `caretPage` already documents as its no-anchor case; a master
-    /// carrying a preface syncs on its own headings and syncs correctly.
+    /// A pure manifest whose own text is in the pane therefore yields none and
+    /// the frame opens at page 1, which `caretPage` already documents as its
+    /// no-anchor case; a master carrying a preface syncs on its own headings,
+    /// and a section in the pane syncs on that section's, which is the state
+    /// `mpdf-010` Phase 2 exists to reach.
     ///
     /// Empty when the compile failed, and empty when `core`'s own count guard
     /// declined to answer. Unlike [`Render::assets`] this describes the *page*
     /// rather than the text, so it is only ever as good as the bytes beside it.
     pub anchors: Vec<Anchor>,
+}
+
+/// Which file's headings become anchors: the one the pane is holding.
+///
+/// `md2pdf_core::Location`'s `file` is `None` for a heading written in the
+/// master's own text and `Some(path)` for one written in a section, **spelled
+/// as the master names it** — so the first two arms below are exactly the two
+/// shapes that comparison can take, and the third is the one it cannot.
+///
+/// **Three arms rather than an `Option`, and the third is why.** An `edited`
+/// that does not sit under `main`'s own directory has no master-relative
+/// spelling at all. Answering `Master` for it would put the master's heading
+/// lines against a buffer whose lines mean something else entirely, which is
+/// the defect this filter exists to prevent, arriving through the case that
+/// looks like an absence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pane<'a> {
+    /// The pane holds `main` itself.
+    Master,
+    /// The pane holds this path, spelled from the master's own directory.
+    ///
+    /// It matches nothing when the master does not name that file — a
+    /// `README.md` opened beside a master contributes no anchors and the page
+    /// opens at page 1. Correct rather than special-cased.
+    Beside(&'a str),
+    /// The pane holds a file the master's directory does not reach, so no
+    /// heading in this document is a number about it.
+    Away,
+}
+
+impl Pane<'_> {
+    /// Does this anchor belong to the file the pane is holding?
+    fn holds(&self, file: Option<&str>) -> bool {
+        match self {
+            Pane::Master => file.is_none(),
+            Pane::Beside(path) => file == Some(*path),
+            Pane::Away => false,
+        }
+    }
 }
 
 /// Compile one markdown string, reading the files it names from beside the
@@ -112,25 +154,22 @@ pub struct Render {
 /// `Display`; a file that will not read is no `Error` at all, and
 /// [`read_assets_with`] builds the plain sentence for it. So a document this
 /// app refuses is refused in the same words at the window and at the terminal.
-pub fn render(directory: &Path, markdown: &str) -> Render {
-    // The closure is not noise: `std::fs::read` names one lifetime where the
-    // parameter below asks for any, so passing it directly does not compile.
-    render_with(directory, markdown, |file| std::fs::read(file))
-}
-
-/// [`render`], with the file read supplied by the caller.
 ///
-/// The seam is Phase 1's [`read_assets_with`], one level up, and it exists for
-/// the same reason: a caller that counts its own reads can check a claim about
-/// them rather than argue it from the loop.
+/// **The file read is the caller's**, which is the seam Phase 1 opened at
+/// [`read_assets_with`] one level up, and it exists for the same reason: a
+/// caller that counts its own reads can check a claim about them rather than
+/// argue it from the loop. `mpdf-010` Phase 2 is the second thing it bought —
+/// the pane's buffer standing in for one file of the document — and
+/// [`render_project`] is where that rides.
 ///
-/// **One closure serves both passes**, and that is what keeps the claim worth
+/// **One closure serves both passes**, and that is what keeps both claims worth
 /// checking. [`read_sections_with`] borrows it and [`read_assets_with`] takes
 /// what is left, so every file this app opens for one compile goes through the
-/// counter — a second closure would leave half the reads unwatched.
+/// one closure — a second would leave half the reads unwatched.
 pub fn render_with(
     directory: &Path,
     markdown: &str,
+    pane: Pane<'_>,
     mut read: impl FnMut(&Path) -> std::io::Result<Vec<u8>>,
 ) -> Render {
     // **The sections come first**, exactly as `cli/src/main.rs:run` orders
@@ -179,17 +218,18 @@ pub fn render_with(
         });
 
     // The anchors describe the bytes, so a failure has none — where `assets`
-    // above survives one, because it describes the text. An anchor carrying a
-    // file was written in a section, and the pane is not showing that file;
-    // [`Render::anchors`] argues why dropping it is the only answer that is
-    // true by construction.
+    // above survives one, because it describes the text. An anchor written in
+    // a file the pane is not showing is a number about a document the reader
+    // cannot see; [`Pane`] is the one comparison that decides which those are,
+    // and [`Render::anchors`] argues why dropping the rest is the only answer
+    // that is true by construction.
     let (pdf, anchors) = match rendered {
         Ok(rendered) => (
             Ok(rendered.pdf),
             rendered
                 .anchors
                 .into_iter()
-                .filter(|anchor| anchor.location.file.is_none())
+                .filter(|anchor| pane.holds(anchor.location.file.as_deref()))
                 .map(|anchor| Anchor {
                     line: anchor.location.line,
                     page: anchor.page,
@@ -205,6 +245,57 @@ pub fn render_with(
         pdf,
         anchors,
     }
+}
+
+/// Compile the project: `main`'s own text, with the pane's buffer standing in
+/// for the one file the pane is holding.
+///
+/// **The override rides the closure [`render_with`] already takes**, which is
+/// one rule instead of a branch. The closure answers `edited` from the buffer
+/// and every other path from the disk, and **`main`'s own text is read through
+/// it too** — so it returns the buffer exactly when the pane holds the master,
+/// and the disk copy otherwise, with nothing here having to ask which case it
+/// is in. That the markdown is `main`'s and the directory is `main`'s is the
+/// whole of what separates the file that compiles from the file that is edited:
+/// every path the document names resolves against the master, wherever the pane
+/// happens to be.
+///
+/// **The closure yields bytes where the compile wants a string**, so this read
+/// decodes as UTF-8 and a `main` that is not text fails here. It fails in
+/// [`read_document`]'s own sentence, built by wrapping the decode in the
+/// `std::io::Error` `read_to_string` would have raised, so a main that will not
+/// read reads the same in the window whichever path reached it.
+pub fn render_project(main: &Path, edited: &Path, buffer: &str) -> Result<Render, String> {
+    let read = |file: &Path| -> std::io::Result<Vec<u8>> {
+        if crate::watch::resolve(file) == crate::watch::resolve(edited) {
+            Ok(buffer.as_bytes().to_vec())
+        } else {
+            std::fs::read(file)
+        }
+    };
+
+    let markdown = read(main)
+        .and_then(|bytes| {
+            String::from_utf8(bytes).map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "stream did not contain valid UTF-8",
+                )
+            })
+        })
+        .map_err(|e| format!("cannot read {}: {e}", main.display()))?;
+
+    let spelled = under(main, edited);
+    let pane = if main == edited {
+        Pane::Master
+    } else {
+        match spelled.as_deref() {
+            Some(path) => Pane::Beside(path),
+            None => Pane::Away,
+        }
+    };
+
+    Ok(render_with(directory(main), &markdown, pane, read))
 }
 
 /// Read a document's text, in the words the terminal uses for a file it cannot
@@ -480,8 +571,10 @@ fn order(left: &str, right: &str) -> std::cmp::Ordering {
     loop {
         return match (left.next(), right.next()) {
             (Some(here), Some(there)) => {
-                let (last_here, last_there) =
-                    (left.clone().next().is_none(), right.clone().next().is_none());
+                let (last_here, last_there) = (
+                    left.clone().next().is_none(),
+                    right.clone().next().is_none(),
+                );
                 if here == there && last_here == last_there {
                     continue;
                 }
@@ -606,8 +699,13 @@ pub fn masters(root: &Path) -> Vec<String> {
 /// claim about which is right — it is a claim that the same folder opens the
 /// same way twice, which a set iteration order would not be.
 pub fn discover_main(root: &Path, opened: &Path) -> String {
-    let here = relative(root, opened)
-        .unwrap_or_else(|| opened.file_name().unwrap_or_default().to_string_lossy().into_owned());
+    let here = relative(root, opened).unwrap_or_else(|| {
+        opened
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned()
+    });
 
     let mut masters = masters(root);
     match masters.len() {
@@ -625,9 +723,21 @@ pub fn discover_main(root: &Path, opened: &Path) -> String {
 /// macOS the Open dialog hands over `/var/…` where the filesystem spells it
 /// `/private/var/…`, so comparing them as they arrive matches nothing.
 pub fn relative(root: &Path, path: &Path) -> Option<String> {
-    let root = crate::watch::resolve(root);
-    let path = crate::watch::resolve(path);
-    let rest = path.strip_prefix(&root).ok()?;
+    spell(&crate::watch::resolve(root), &crate::watch::resolve(path))
+}
+
+/// [`relative`] without the canonicalization, for two paths this app built
+/// from one root.
+///
+/// **It reads nothing off the disk, and that is why it is a function of its
+/// own.** `relative` resolves both sides because it answers about a path that
+/// came from outside — a command, a filesystem event — where the two callers
+/// here already hold `root` and `root.join(…)` and have nothing to resolve.
+/// `crate::preview::Preview::status` is one of them, and it runs on every
+/// render: a `canonicalize` in there would put two syscalls in front of every
+/// status and falsify that function's own stated invariant.
+pub fn spell(root: &Path, path: &Path) -> Option<String> {
+    let rest = path.strip_prefix(root).ok()?;
 
     let mut spelled = String::new();
     for part in rest.components() {
@@ -637,6 +747,17 @@ pub fn relative(root: &Path, path: &Path) -> Option<String> {
         spelled.push_str(&part.as_os_str().to_string_lossy());
     }
     (!spelled.is_empty()).then_some(spelled)
+}
+
+/// How the master would name this file: [`beside`] run backwards.
+///
+/// **It is `beside`'s inverse and not a call to it.** That one takes a path the
+/// master names to a root-relative one; this takes a root-relative path back to
+/// the spelling `md2pdf_core::Location` carries, which is what the anchor filter
+/// compares against. `None` is a file the master's own directory does not reach,
+/// which has no such spelling at all — [`Pane::Away`], not [`Pane::Master`].
+pub fn under(main: &Path, edited: &Path) -> Option<String> {
+    spell(directory(main), edited)
 }
 
 /// One root-relative path joined onto the directory another sits in.
@@ -856,6 +977,16 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
+    /// [`render_with`] with the disk supplying every file and the pane holding
+    /// the master, which is what every test below but the project's own means.
+    fn render(directory: &Path, markdown: &str) -> Render {
+        // The closure is not noise: `std::fs::read` names one lifetime where
+        // the parameter asks for any, so passing it directly does not compile.
+        render_with(directory, markdown, Pane::Master, |file| {
+            std::fs::read(file)
+        })
+    }
+
     fn fixture(name: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../tests/fixtures")
@@ -1062,7 +1193,7 @@ mod tests {
         let markdown = std::fs::read_to_string(fixture("multi_file.md")).unwrap();
 
         let mut reads = Vec::new();
-        let rendered = render_with(&dir, &markdown, |file| {
+        let rendered = render_with(&dir, &markdown, Pane::Master, |file: &Path| {
             reads.push(file.to_path_buf());
             std::fs::read(file)
         });
@@ -1322,7 +1453,10 @@ mod tests {
         let pair = fixture("panel-pair");
 
         // One master: whatever the author opened, the master compiles.
-        assert_eq!(discover_main(&panel, &panel.join("sections/text.md")), "book.md");
+        assert_eq!(
+            discover_main(&panel, &panel.join("sections/text.md")),
+            "book.md"
+        );
         assert_eq!(discover_main(&panel, &panel.join("book.md")), "book.md");
 
         // None: the file the author opened, which is every single-file document
@@ -1446,6 +1580,147 @@ mod tests {
     fn a_section_is_named_beside_the_master_that_reads_it() {
         assert_eq!(beside("book.md", "sections/text.md"), "sections/text.md");
         assert_eq!(beside("parts/book.md", "text.md"), "parts/text.md");
-        assert_eq!(beside("parts/book.md", "../shared/text.md"), "shared/text.md");
+        assert_eq!(
+            beside("parts/book.md", "../shared/text.md"),
+            "shared/text.md"
+        );
+    }
+
+    // -- the pane and the main are two files -------------------------------
+    //
+    // `mpdf-010` Phase 2. The compile is the master's and the pane holds one
+    // file of it, so three things have to be right: which text compiles, which
+    // file's bytes the buffer stands in for, and whose headings become anchors.
+
+    /// `beside` run backwards, and the file it cannot reach.
+    #[test]
+    fn a_file_in_the_pane_is_named_the_way_the_master_would_name_it() {
+        let root = Path::new("/p");
+
+        assert_eq!(
+            under(&root.join("book.md"), &root.join("sections/text.md")).as_deref(),
+            Some("sections/text.md")
+        );
+        assert_eq!(
+            under(&root.join("parts/book.md"), &root.join("parts/text.md")).as_deref(),
+            Some("text.md"),
+            "a master in a subdirectory names its neighbour by its bare name"
+        );
+        assert_eq!(
+            under(&root.join("parts/book.md"), &root.join("README.md")),
+            None,
+            "a file the master's own directory does not reach has no such spelling"
+        );
+        assert_eq!(
+            spell(root, &root.join("sections/text.md")).as_deref(),
+            Some("sections/text.md")
+        );
+        assert_eq!(spell(root, root), None, "the root is not under itself");
+    }
+
+    /// Whose headings become anchors, all three answers.
+    ///
+    /// **The third is why [`Pane`] is not an `Option`.** `Master` and `Away`
+    /// would collapse into one absence, and the master's own heading lines would
+    /// then be handed to a buffer whose line 1 is a different sentence
+    /// altogether — which is the exact defect this filter exists to prevent,
+    /// arriving through the case that looks like nothing.
+    #[test]
+    fn the_anchors_are_the_headings_of_the_file_the_pane_is_holding() {
+        let dir = scratch_dir("pane-arms");
+        std::fs::create_dir_all(dir.join("sections")).unwrap();
+        std::fs::write(
+            dir.join("sections/one.md"),
+            "\n# The section's own heading\n\nText.\n",
+        )
+        .unwrap();
+
+        let markdown = "# A preface of the master's own\n\nText.\n\n[](sections/one.md)\n";
+        let lines = |pane| {
+            render_with(&dir, markdown, pane, |file: &Path| std::fs::read(file))
+                .anchors
+                .into_iter()
+                .map(|anchor| anchor.line)
+                .collect::<Vec<usize>>()
+        };
+
+        assert_eq!(lines(Pane::Master), [1], "the master's own heading");
+        assert_eq!(
+            lines(Pane::Beside("sections/one.md")),
+            [2],
+            "the section's own heading, at its own line inside its own file"
+        );
+        assert!(
+            lines(Pane::Away).is_empty(),
+            "no heading in this document is a number about a file it does not reach"
+        );
+    }
+
+    /// The pane's buffer stands in for the one file it is holding, and the rest
+    /// of the document comes off the disk.
+    ///
+    /// The claim is checked against a compile this test asked for itself, after
+    /// putting the buffer on the disk — so an app that quietly agreed with
+    /// itself could not pass.
+    #[test]
+    fn the_panes_buffer_stands_in_for_the_file_it_is_holding() {
+        let dir = scratch_dir("pane-override");
+        std::fs::create_dir_all(dir.join("sections")).unwrap();
+
+        let main = dir.join("book.md");
+        let edited = dir.join("sections/one.md");
+        std::fs::write(&main, "# Book\n\n[](sections/one.md)\n").unwrap();
+        std::fs::write(&edited, "# On disk\n\nThe disk's own text.\n").unwrap();
+
+        let buffer = "# In the pane\n\nText nobody has saved.\n";
+        let unsaved = render_project(&main, &edited, buffer).expect("the master would not read");
+
+        std::fs::write(&edited, buffer).unwrap();
+        let master = std::fs::read_to_string(&main).unwrap();
+        let saved = render_project(&main, &main, &master).expect("the master would not read");
+
+        assert_eq!(
+            unsaved.pdf.expect("the unsaved compile failed"),
+            saved.pdf.expect("the saved compile failed"),
+            "the buffer reached the compile, or it did not"
+        );
+    }
+
+    /// A `main` this app cannot read fails in [`read_document`]'s own sentence.
+    ///
+    /// Both classes, because the closure yields bytes where the compile wants a
+    /// string and only one of the two is an `io::Error` to begin with. The
+    /// messages are compared against `read_document`'s rather than spelled out
+    /// again, which is the claim: a main that will not read reads the same in
+    /// the window whichever path reached it.
+    ///
+    /// **Only reachable while the pane holds another file**, and that is the
+    /// mechanism working rather than a gap in the test. With the pane on the
+    /// main the closure answers from the buffer and never touches the disk, so
+    /// there is nothing there to fail — the buffer is the document, which is
+    /// what this app has meant since `mpdf-003` Phase 2.
+    #[test]
+    fn a_main_that_will_not_read_says_so_in_the_terminals_own_words() {
+        let dir = scratch_dir("pane-unreadable");
+        let pane = dir.join("held.md");
+        std::fs::write(&pane, "# Held\n").unwrap();
+
+        let missing = dir.join("nothing.md");
+        assert_eq!(
+            render_project(&missing, &pane, "# Held\n").err(),
+            read_document(&missing).err()
+        );
+
+        let binary = dir.join("binary.md");
+        std::fs::write(&binary, [0xff, 0xfe, 0x00]).unwrap();
+        assert_eq!(
+            render_project(&binary, &pane, "# Held\n").err(),
+            read_document(&binary).err()
+        );
+
+        assert!(
+            render_project(&missing, &missing, "# Text the disk never held\n").is_ok(),
+            "the pane holds the main, so the disk is not consulted at all"
+        );
     }
 }
