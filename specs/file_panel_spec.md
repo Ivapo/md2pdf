@@ -16,7 +16,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 2 — a row opens in the pane, and the main still compiles"
-    reviewed: null
+    reviewed: 2026-08-28
     shipped: null
     cut: null
     by: null
@@ -304,13 +304,19 @@ rows not loading. Each is answered here, and none of them is `core`'s:
 
    The rule itself is not forked and not multiplied — it runs on one buffer, as
    it does today, and only the question of which event delivers it changes.
-   `app/src/watch.rs:Changed` gains one `bool` per answer, and
-   `app/src/preview.rs:Session::classifier` and `Session::on_change` close over
-   the document alone today, so both take the root beside it.
+   `app/src/watch.rs:Changed` gains one `bool` per answer.
+   `app/src/preview.rs:Session::classifier` and `Session::on_change` closed over
+   the document alone when this was written; **Phase 1 gave both the root**, and
+   Phase 2 gives them the second path, since the assets are `main`'s and resolve
+   against `main`'s directory while `edited` is somewhere else entirely.
+   **`Change::Document` also changes meaning in Phase 2** — main moving on disk
+   is a bare recompile, and `Edited` is what carries the rule.
 
-3. **The save.** `app/src/preview.rs:Preview::save` writes to `document`; it
-   writes to `edited`. `app/src/preview.rs:Preview`'s `saved` field follows
-   `edited` for the same reason.
+3. **The save.** `app/src/preview.rs:Preview::save` wrote to `document`; it
+   writes to `edited`, and `app/src/preview.rs:Preview`'s `saved` field follows
+   `edited` for the same reason. **Phase 1's rename did the code**, the two
+   fields being equal there; Phase 2 changes what it *means* and is gated on
+   that rather than on the diff.
 
 4. **The join reading every section off the disk.** **This one is already
    solved, and measuring it is what shrank this spec.** `core` never reads a
@@ -333,9 +339,17 @@ today.** That is tolerable behind a menu item and a native dialog, which is wher
 it has lived; it is not tolerable one click away from every row in a panel.
 
 So the switch **refuses while the buffer diverges from `saved`, names both ways
-out, and takes neither** — which is `app/src/preview.rs:DIVERGED`'s shape,
+out, and takes neither** — which is `app/src/preview.rs:DIVERGED`'s *shape*,
 already in this app and already reviewed, applied to a second occasion. Save, or
 discard, and the author says which.
+
+**The shape and not the sentence, and both halves of that cost something.**
+`DIVERGED` opens *"this file changed on disk"*, which is false on this occasion,
+so reusing the constant would put a lie in the window: the switch gets its own
+words. And **discard does not exist in this app** — `save` is a command and
+dropping the buffer is not — so a refusal naming two ways out is naming one that
+cannot be taken until Phase 2 builds it. It is `Preview::load`'s own path, which
+already re-reads the file and clears the divergence, behind a command.
 
 **A buffer per file was considered and refused.** It would multiply `saved` by
 the number of files touched, make `external_change` a question about a set rather
@@ -653,51 +667,180 @@ while the pane holds one section of it, and the caret's own page is right, which
 no state of this app has ever shown.*
 
 - **Scope:** Depends on Phase 1 and on nothing outside this repository. `edited`
-  stops tracking `main`.
+  stops tracking `main`, and **five things follow from that one sentence.**
+  Round 1 found every one of them missing, so they are enumerated here rather
+  than left to be rediscovered at a keyboard.
 
-  `app/src/document.rs:render_with`'s closure carries the override: the caller
-  passes one that answers `root.join(edited)` from the pane's buffer and
-  delegates every other path to `std::fs::read`. **`core` is not touched**, per
-  §2. `app/src/preview.rs:Preview::compile` builds it.
+  1. **The compile renders `main`, not the pane.**
+     `app/src/preview.rs:Preview::compile` is
+     `document::render(document::directory(&edited), &self.buffer)`, which with
+     `edited != main` renders a section's buffer as though it were the whole
+     document — the override in the closure is never reached, because the
+     markdown never goes through the closure. So the markdown becomes **`main`'s
+     own text** and the directory **`main`'s own directory**, every path the
+     document names resolving against the master. **Main's text is read through
+     the same closure the override rides on**, which is one rule instead of a
+     branch: the closure answers `root.join(edited)` from the pane's buffer and
+     every other path from `std::fs::read`, so asking it for `root.join(main)`
+     returns the buffer exactly when the pane holds main and the disk otherwise.
+     **The closure yields bytes where the compile wants a string**, so this
+     read decodes as UTF-8 and a `main` that is not text fails here; the message
+     and the *failed* state are `app/src/preview.rs:Preview::load`'s, built the
+     way `app/src/document.rs:read_document` builds them, so a main that will not
+     read reads the same in the window whichever path reached it.
 
-  `app/src/document.rs:render_with`'s anchor filter takes the edited path and
-  keeps the anchors whose `location.file` matches it, `None` meaning main.
-  `app/src/preview.rs:Preview::save` writes `edited`, and `saved` follows it.
-  `app/src/watch.rs:classify` gains §2's **`Edited`** answer here — Phase 1 added
-  only `Tree` — tested **before** `Asset`, since a section the master names is
-  already in the asset list and would otherwise recompile silently instead of
-  reaching `app/src/preview.rs:external_change`. `Changed` gains its bool beside
-  the other three.
+  2. **The anchor filter takes the path as the master names it.**
+     `app/src/document.rs:render_with` keeps the anchors whose `location.file`
+     matches the edited file, `None` meaning main. **`location.file` is
+     master-relative** — it is the marker's own spelling, per
+     `md2pdf_core::Location` — where `edited` is root-relative, and the two
+     coincide only while main sits at the root, which a stored override or
+     `Session::set_main` may perfectly well make false.
+     `app/src/preview.rs:Preview` computes the master-relative spelling — strip
+     `main`'s own directory prefix from `edited` — and passes that.
+     **`app/src/document.rs:beside` is its inverse and not its implementation**:
+     that one takes a master-relative path to a root-relative one, and this
+     wants the reverse, so it is a second small function rather than a call to
+     the first. An `edited` that does not sit under `main`'s directory has no
+     master-relative spelling at all, and keeps every anchor filtered out, which
+     is the same answer as a file the master does not name.
 
-  The switch: a new command sets `edited`, refusing with `DIVERGED`'s two-ways-out
-  sentence while `buffer != saved`, per §2. `app/dist/index.html` places that
-  refusal exactly as it places every other status sentence, composing none of it.
+  3. **`classify` needs both paths, and `on_change` remaps two answers.**
+     `app/src/watch.rs:classify` resolves the asset list against the document's
+     own directory and the assets are **main's**, so it takes `main` *and*
+     `edited` beside the root. It gains §2's **`Edited`** answer here — Phase 1
+     added only `Tree` — tested **before** `Asset`, since a section the master
+     names is already in that list. `app/src/watch.rs:Changed` gains its bool
+     beside the other three. **`app/src/preview.rs:Session::on_change` then
+     means something new by `Document`**: main moved on disk, which is a bare
+     recompile, where **`Edited`** is the answer that runs
+     `app/src/preview.rs:Preview::reload` and the divergence rule. While
+     `main == edited` an event answers `Edited` first, so the rule runs exactly
+     where it runs today and Phase 1's behaviour is unchanged by construction.
 
-- **Exit gate:** In the Rust suite:
-  1. With `main = showcase.md` and `edited = sections/mathematics.md` and a
-     buffer differing from that file on disk, the compiled PDF equals the one
-     produced by writing the buffer to disk and compiling `showcase.md` — the
-     override reaches the compile.
-  2. The same compile's anchors all carry `sections/mathematics.md`, and none
-     carry `None`; with `edited = showcase.md` the reverse.
+  4. **The switch re-arms both loops, and is not an open.**
+     `Session::on_change` and `Session::recompile` guard on `preview.edited`
+     against a path captured when the loops were started, so a command that set
+     `edited` and stopped there would leave the typing debounce compiling nothing
+     and every filesystem event dropped — and gate clause 5 and the whole window
+     gate unreachable. The command drops and restarts both loops the way
+     `app/src/preview.rs:Session::open_at` does, and the guard itself stays: it
+     is what stops a thread mid-compile from writing its page over a newer one.
+     **It borrows that half of `open_at` and not the other half.** `open_at`
+     assigns `Preview { .. ..Preview::default() }`, which zeroes `revision` and
+     `reloaded` — and `app/dist/index.html`'s `clear()`, which resets the
+     counters the page compares them against, runs on an Open and **not** on a
+     row click. A switch that replaced `Preview` wholesale would therefore
+     strand `refresh` at its own guard and draw nothing again. It sets `edited`,
+     reads that file into the buffer and `saved`, and leaves `root`, `main`, the
+     listing, the bytes, the anchors and both counters exactly as they were.
+
+  5. **`Preview::save` and `saved` already follow `edited`** — Phase 1's rename
+     did the code, the two paths being equal there. This phase changes what that
+     rename *means* and is gated on the meaning rather than on a diff.
+
+  **The switch, and the two ways out it names.** A new command sets `edited` and
+  **refuses while `buffer != saved`**, per §2. It gets **its own sentence and its
+  own constant** beside `app/src/preview.rs:DIVERGED` rather than reusing it,
+  for the reason §2 now records: `DIVERGED` opens *"this file changed on disk"*,
+  which is false here. **The second way out is built in this phase**, because a
+  refusal naming one that does not exist is worse than a refusal naming one —
+  a command that drops the buffer and re-reads the edited file, which is
+  `Preview::load`'s own path. The refusal rides `app/src/preview.rs:Preview`'s
+  `divergence`, whose meaning widens from *a refused external change* to *a
+  refused change*: both are cleared by the same two actions —
+  `app/src/preview.rs:Preview::save` and `Preview::take`, which the discard
+  reaches through `load` — which is the argument for one field carrying both
+  rather than a second field the page would have to tell apart. **One field
+  means one occasion at a time**: a switch refused while a real divergence
+  stands overwrites its sentence and is overwritten by the next, which costs
+  nothing — the two name the same two exits — and is a fact for
+  `rules/desktop.md` to carry rather than for a later reader to rediscover.
+  **`Session::set_main` reports through that same field** and not through its
+  own `Err`, which is where its other refusals go, so one refusal does not
+  arrive in the window two ways. `app/dist/index.html` places that sentence exactly as it
+  places every other status sentence, composing none of it. **`Session::set_main`
+  takes the same refusal** — it routes through `open_at`, which assigns
+  `Preview { .. }` with no check on the buffer it replaces, and that is verbatim
+  the hazard §2's rule exists for.
+
+  `app/src/preview.rs:Status` gains the **edited** path beside `main`,
+  root-relative and spelled the same way, so the panel can mark the row the pane
+  is holding — §1's end-state draws both marks and the page cannot derive one
+  from the other. **That moves `declared.len()` from 10 to 11** in
+  `app/src/preview.rs:the_page_typedefs_name_exactly_the_fields_status_serializes`,
+  against an in-code comment Phase 1 wrote telling the next reader the count was
+  a coincidence and not to move it. Moving it here is deliberate, this sentence
+  is the authority for it, and that comment is rewritten in the same commit.
+  `app/dist/index.html:fileRow` gains a second mark beside its existing `here`
+  — a class of its own and a rule of its own in the panel's CSS, because the two
+  are two facts and a row can carry both. `app/src/main.rs` registers the two new
+  commands in `generate_handler!` and retitles the window from
+  `preview().document()`, as `open_document` already does — that being `edited`
+  now.
+
+  **`core` is not touched**, per §2.
+
+  A markdown row the master does not name — a `README.md` beside a master — opens
+  like any other: the compile is still main's, the override is never consulted
+  for it, and the pane's file contributes no anchors, so the page opens at page
+  1. Correct rather than special-cased, and stated so nobody reads it as a defect.
+
+- **Exit gate:** In the Rust suite, over **a scratch copy of `samples/showcase/`**
+  — clauses 1 and 3 write, `samples/` is tracked, and a suite that left the
+  repository dirty would also destroy clause 1's own premise on its second run.
+  `app/src/preview.rs`'s `scratch_dir` is the existing spelling.
+  1. With `main = showcase.md`, `edited = sections/mathematics.md` and a buffer
+     differing from that file on disk, the compiled PDF equals the one produced
+     by writing the buffer to disk and compiling `showcase.md` — the override
+     reaches the compile.
+  2. **The anchors are lines, not files.** `app/src/document.rs:Anchor` is
+     `{ line, page }`, and the filter under test is precisely what drops
+     `location.file`, so the clause is keyed to what survives it: with
+     `edited = sections/mathematics.md` the anchor lines are that file's own
+     heading lines, and with `edited = showcase.md` they are the master's. Two
+     disjoint sets, checked both ways.
   3. `save` with `edited` set writes `sections/mathematics.md` and leaves
      `showcase.md` untouched, byte-for-byte.
-  4. Setting `edited` while `buffer != saved` refuses, names both ways out, and
-     changes neither `edited` nor the buffer.
+  4. Setting `edited` while `buffer != saved` refuses, **names both ways out in a
+     sentence that does not claim the file changed on disk**, and changes neither
+     `edited` nor the buffer. The discard command then drops the buffer and the
+     same switch succeeds. `Session::set_main` refuses on the same terms.
   5. An external write to `showcase.md` while `edited` is a section recompiles
      and does not run the divergence rule; an external write to the edited
-     section runs it.
-  6. `samples/article.md` — no sections, `main == edited` — produces a PDF equal
-     byte-for-byte to the one it produces before this phase.
+     section runs it. With `main == edited` it is the second that happens, which
+     is Phase 1's behaviour and is asserted so this phase cannot quietly move it.
+  6. **`samples/article.md` — no sections, `main == edited` — compiles to the
+     bytes `md2pdf_core::md_to_pdf` produces for it in the test itself.** "Equal
+     to what it produced before this phase" has nothing committed to compare
+     against: `tests/golden/` holds `.typ` and no PDF. Compiling it in the test
+     is the reproducible form of the same claim, and is how
+     `a_single_file_document_keeps_its_anchors_and_its_bytes` already makes it.
 
-  At the window, on `tests/gates/mpdf-010-phase2.js`: with the pane holding
-  `sections/mathematics.md`, moving the caret to its last heading scrolls the
-  page to the page that heading landed on in the whole document.
+  At the window, on `tests/gates/mpdf-010-phase2.js`: open
+  `samples/showcase/showcase.md` and click `sections/notes-and-sources.md` — **the
+  last section the master names, and one with three headings**, so the pages its
+  headings land on are the document's last and cannot be confused with page 1.
+  Put the caret under its `## Citations` heading and **type a character**:
+  `app/dist/index.html:caretPage` is consulted only on a status carrying a new
+  `revision`, so a caret move alone scrolls nothing and the gate has to say what
+  makes the redraw happen. The page then opens on the page that heading landed on
+  **in the whole document**.
 
-- **Close-out:** `rules/desktop.md` and `rules/desktop-panes.md` — the latter's
-  "the rows do not load" passage and the four things it names are the text this
-  phase makes false, and it is replaced rather than annotated, rules being the
-  artifact that tracks the code. README: what `⌘S` writes.
+  **The gate then discards, and that is a clause rather than tidiness.** Typing
+  the character leaves a dirty buffer in a tracked file, so the run ends by
+  taking the discard the switch's refusal names — which both leaves the tree as
+  it was found and exercises the second way out. Phase 1's gate made
+  re-runnability an explicit property and this one keeps it.
+
+- **Close-out:** `rules/desktop.md` (the state, the session, the watch's fourth
+  answer, the two new commands, and the one `divergence` field now carrying two
+  occasions), `rules/desktop-panes.md` — whose **"A row's body
+  is inert and one button on it is not"** is Phase 1's own text and is the
+  sentence this phase makes false, its `covers:` clause "the inert row and the
+  one button on it" following it — and `rules/desktop-project.md` (the file the
+  pane holds, beside the one that compiles). README: what `⌘S` writes, and what
+  clicking a row does.
 
 ### Phase 3 — a file is created from the panel
 *Produces the observable: **no**. A created file is empty and named by nothing —

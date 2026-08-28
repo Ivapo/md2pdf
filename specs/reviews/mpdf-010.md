@@ -2,6 +2,105 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 2 only — 2026-08-28 — same reviewer, resumed with the author's changelog — **READY (converged)**
+
+All five blockers confirmed resolved against the code rather than the changelog.
+The reviewer re-derived the three numbers the fixes newly keyed the phase to and
+found each right: `Status` carries ten fields today, so `edited` makes eleven;
+`Changed` has three bools; and `notes-and-sources.md` is the last of the five
+markers with headings on lines 1, 3 and 12. It also independently confirmed the
+spelling claim from `core/src/sections.rs`, which sets `file: Some(marker.path)`
+with `source_line: 1` — so `location.file` really is master-relative and
+`location.line` is the line *within* the section, which is what makes gate
+clause 2's two anchor sets disjoint (the master's first heading is line 11,
+`mathematics.md`'s only heading is line 1).
+
+**It sharpened blocker 3 on the way past.** The author's fix said `Edited` is
+tested before `Asset`; the reviewer pointed out it must be tested before
+`Document` too, or `main == edited` loses the divergence rule — and noted that
+gate clause 5's third sentence already asserts exactly that case, so the gate
+was right where the prose was loose.
+
+Six non-blocking findings, all folded in on convergence. **The sharpest was the
+author's own round-1 fix biting back**: "the switch re-arms both loops exactly
+as `Session::open_at` does" borrowed too much of `open_at`, which assigns
+`Preview { ..Preview::default() }` and zeroes `revision` and `reloaded` — while
+`app/dist/index.html`'s `clear()`, which resets the counters the page compares
+them against, runs on an Open and not on a row click. A switch built to that
+sentence would have stranded `refresh` at its own guard and drawn nothing again.
+The scope now says which half of `open_at` it borrows and lists what it leaves
+alone. The others: `Session::set_main`'s refusal reporting through `divergence`
+rather than its own `Err`, so one refusal does not arrive two ways; the one
+field carrying two occasions at a time, which is a fact for `rules/desktop.md`;
+the UTF-8 decode on main's read; the page's second row mark; and the window
+gate ending with the discard, which both restores the tracked tree and exercises
+the second way out.
+
+### Round 1 — Phase 2 only — 2026-08-28 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode): yes.** Phase 2 delivers §1's headline sketch exactly —
+the pane holds a section, the page shows the whole compiled document, the caret's
+own page is right, `⌘S` writes the section — and that is a state this app has
+never been in. It is also the right one: Phase 1 shipped a panel you can look at
+and click once, which is the complaint §1 opens with, and
+`specs/reviews/mpdf-008.md` independently records that a file explorer is what
+the author said they wanted.
+
+One generalist rather than a panel, matching Phase 1's round and `mpdf-008`
+Phase 4's for a single app-facing phase. **The round's premise was that Phase 1
+had shipped the same day**, so the reviewer was pointed hard at grounding: Phase
+2 was written before Phase 1 was built, and its citations describe the
+pre-Phase-1 code in places.
+
+**Five blocking findings, all accepted; fourteen findings in total and no
+rejections in either round.**
+
+1. **The compile would have rendered the wrong text.** `Preview::compile` is
+   `document::render(document::directory(&edited), &self.buffer)`, so with
+   `edited != main` it renders a section's buffer as though it were the whole
+   document — and the closure override the phase was built around is never
+   reached, because the markdown never goes through the closure. The phase said
+   only that the closure carries the override. Resolved by scope item 1: the
+   markdown is main's text, the directory is main's, and **main's text is read
+   through that same closure**, so it answers from the buffer exactly when the
+   pane holds main. One rule instead of a branch.
+2. **The switch would have disarmed both loops.** `Session::on_change` and
+   `Session::recompile` guard on `preview.edited` against a path captured when
+   the loops started, so setting `edited` and stopping there leaves the typing
+   debounce compiling nothing and every filesystem event dropped — making gate
+   clause 5 and the whole window gate unreachable. Resolved by scope item 4.
+3. **`classify`'s arity and `on_change`'s meaning were both unstated.** The
+   assets are main's and resolve against main's directory, so `classify` needs
+   both paths; and `on_change` runs the divergence rule on `Change::Document`,
+   where gate clause 5 requires main's external write to recompile *without* it.
+   Resolved by scope item 3, which remaps `Document` to a bare recompile and
+   gives `Edited` the rule.
+4. **The refusal named a way out that does not exist.** `DIVERGED` opens *"this
+   file changed on disk"*, false on this occasion, and §2's "Save, or discard"
+   names a discard this app has never had — `main.rs` exposes ten commands and
+   none of them drops the buffer. Resolved by giving the switch its own
+   constant, **building the discard in this phase**, and widening
+   `Preview::divergence` from a refused external change to a refused change.
+5. **The window gate named an action the app does not perform.** `caretPage` is
+   consulted only inside `refresh`, on a status carrying a new `revision`, so a
+   caret move alone scrolls nothing; and `sections/mathematics.md` has exactly
+   one heading, on line 1, so "moving the caret to its last heading" is where
+   the caret already is. Resolved by moving to `notes-and-sources.md` — last of
+   the five markers, three headings — and by saying the reader types a character.
+
+Nine non-blocking, all accepted. Three are worth the record. **§2's own decision
+text had gone stale in three places** by Phase 1 shipping: `classify` "answers
+`Document` or `Asset`" (it answers `Tree` too), `classifier`/`on_change` "close
+over the document alone today" (Phase 1 gave both the root), and
+`Preview::save` "writes to `document`" (Phase 1 renamed the field). **The
+close-out named text that no longer exists** — `rules/desktop-panes.md`'s "the
+rows do not load" passage, which Phase 1's own close-out replaced; it now targets
+Phase 1's live sentence. And **gate clause 2 was not checkable against what the
+code returns**: `document::Anchor` is `{ line, page }`, and the `location.file`
+the clause asserted on is dropped by the very filter under test, so the clause is
+now keyed to anchor *lines*.
+
+
 ### Round 3 — Phase 1 only — 2026-08-28 — same reviewer, resumed with the author's changelog — **READY (converged, at the cap)**
 
 The climb blocker confirmed resolved against the file and the code. The reviewer
