@@ -30,6 +30,11 @@ phases:
     shipped: null
     cut: null
     by: null
+  - name: "Phase 5 — an image row shows the figure"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes:
@@ -440,6 +445,13 @@ OQ-1 carries the shape that would close it: an insert-at-caret gesture that woul
 serve images and new sections through one mechanism, which is a better answer
 than a special case for one of them.
 
+**CORRECTED 2026-08-28:** OQ-1 no longer carries that shape. It was built,
+tried at the window and **refused** — a figure wants looking at rather than a
+marker written on the author's behalf — and OQ-1 resolved to a preview instead.
+So **this cost is now unmitigated**: adding a section is two actions, and
+nothing open is going to make it one. The decision above is unchanged; only the
+sentence naming a way out of its cost is.
+
 ### Delete moves to the Trash (decision, recorded)
 
 Not `std::fs::remove_file`. **There is no undo anywhere in this app** — not for
@@ -451,7 +463,7 @@ picks one; the decision recorded here is only that a plain unlink is refused.
 
 ## 3. Open questions
 
-- **OQ-1 — what does clicking an image row do?** *(design call)* Three shapes:
+- **OQ-1 — what does clicking an image row do?** ~~*(design call)* Three shapes:
   inert, which is what Phase 2 ships; a preview, which needs a second surface in
   a window that has two panes already; or **insert `![](figures/overview.svg)` at
   the caret**, which is the one that would also close the cost the create
@@ -461,7 +473,41 @@ picks one; the decision recorded here is only that a plain unlink is refused.
   and what an image *above* the edited file may be written as depends on
   `mpdf-008` Phase 5, which is **drafted and neither reviewed nor shipped**. That
   is a second reason this stays open rather than becoming a phase here.
-  **Blocks nothing** — Phase 2 leaves image rows inert and says so in the window.
+  **Blocks nothing** — Phase 2 leaves image rows inert and says so in the
+  window.~~ **RESOLVED 2026-08-28, by prototype: the second shape. Clicking an
+  image row shows the picture over the text pane.** Phase 5 below ships it.
+
+  **Both blockers had cleared, and the insert shape was refused on its merits
+  rather than on its cost.** `mpdf-008` Phase 5 shipped on 2026-08-28, so a
+  section may name a figure above itself: a master naming `sections/text.md`
+  whose text is `![](../cover.svg)` compiles, checked, and only an image above
+  the *master's own folder* is still refused — `![](../../cover.svg)` from
+  `parts/sections/text.md` under a master at `parts/book.md`, which fails with
+  *"image with a path that leaves the document's folder"*. The insert gesture
+  was then built and tried, and the answer was that **a figure wants looking at,
+  not a marker written on the author's behalf**: where a section goes in a
+  document is a decision the author is making, and so is where a figure goes.
+  The path arithmetic it needed is recorded here because it was worked and
+  verified and the next reader should not re-derive it — everything is
+  *master-relative*, since `md2pdf_core::Sources::resolve` prefixes a
+  destination with the section's own directory relative to the master, and the
+  virtual root a `..` may not escape is the master's folder rather than the
+  project root.
+
+  **The preview's predicted cost — "a second surface in a window that has two
+  panes already" — is real and is not a third pane.** It is a *view* over the
+  text pane, the way `Lines` is a view: `edited` does not move, so `⌘S`, the
+  compile, the page and the anchors are all untouched, and that is the whole
+  reason this is cheap. Two findings from the prototype, both load-bearing and
+  neither obvious: it is **absolutely positioned over the text pane's own
+  column rather than replacing it**, because `app/dist/index.html`'s divider
+  drag reads `#text`'s own box and a hidden textarea measures zero; and the
+  bytes come through **a command returning `tauri::ipc::Response`, which the
+  page turns into a blob**, which is `current_pdf`'s own route and needs neither
+  Tauri's asset protocol, nor a scope in `app/tauri.conf.json`, nor a new
+  capability.
+
+  **What it does not settle is the PDF row**, and that is OQ-8 below.
 
 - **OQ-2 — does a `.bib` open in the pane at all?** *(design call)* It is not
   markdown, so a pane holding it compiles nothing meaningful and the page would
@@ -530,15 +576,30 @@ picks one; the decision recorded here is only that a plain unlink is refused.
   behaviour in its own gate, and §1.2 makes the deeper layout a non-goal until
   this is answered.
 
+- **OQ-8 — what does a PDF row show?** *(design call, opened by OQ-1)* `pdf` is
+  in `core/src/emit.rs:IMAGE_EXTENSIONS`, so a PDF is a legal figure, the panel
+  lists one, and Phase 5's viewer can be asked for one — which `<img>` cannot
+  draw. Three shapes: **the sentence Phase 5 ships**, which says so and draws
+  nothing; the first page through the `pdf.js` this app already vendors, which
+  is reachable rather than a new dependency; or a PDF row that does not open at
+  all, so the question never arises. It is **not hypothetical and not rare**:
+  OQ-3 records that a document's own exported PDF sits in the panel beside its
+  markdown, so a reader meets a PDF row by accident rather than by intent — and
+  if OQ-3 is answered by hiding the export, most PDF rows go with it, which is
+  why this waits on that one. **Blocks nothing.**
+
 ## 4. Implementation phases
 
-Strictly sequential; each is one plan-mode pass. **Two of the four produce the
-observable and two do not**, which is a higher ratio of scaffolding than any spec
-here has carried, and it is a property of the subject rather than an oversight: a
-panel is *about* the material the observable is made from. The two that produce
-none are argued in place, and neither is a prerequisite of the other — Phase 3
-and Phase 4 could each be cut without touching what Phases 1 and 2 deliver, which
-is the honest test of a phase that shows nothing.
+Strictly sequential; each is one plan-mode pass. **Two of the five produce the
+observable and three do not**, which is a higher ratio of scaffolding than any
+spec here has carried, and it is a property of the subject rather than an
+oversight: a panel is *about* the material the observable is made from. The
+three that produce none are argued in place, and none is a prerequisite of
+another — Phases 3, 4 and 5 could each be cut without touching what Phases 1 and
+2 deliver, which is the honest test of a phase that shows nothing. **Phase 5 was
+appended after Phase 2 shipped**, out of the prototype that resolved OQ-1; it
+depends on Phase 2 and on neither of the two between them, so it may ship out of
+order, which §3 of the methodology allows and this sentence is the record of.
 
 ### Phase 1 — the project's files, and the main among them
 *Produces the observable: **yes** — open `samples/showcase/sections/text.md` from
@@ -936,6 +997,96 @@ Finder for half the task, which is the state Phase 3 was written to end.*
   dependency the bundle gains), `rules/desktop-panes.md` (the panel's gestures).
   README: that deletion is to the Trash, which is the kind of promise a user
   reads before they trust it.
+
+### Phase 5 — an image row shows the figure
+*Produces the observable: **no**. Nothing here compiles, no PDF differs, and the
+pane goes on holding the file it held. The argument is the panel's own, made
+about a different half of it: `mpdf-008` made a document several files **and its
+figures several files**, and the panel has listed those figures since Phase 1
+while being the one thing in the window that could not show one. Checking that
+`emit.svg` is the diagram you meant means leaving for Preview and losing the
+pane — the same complaint §1 opens with, about pictures rather than prose. It is
+the smallest of the three phases that show nothing, and it is the one an author
+meets most often.*
+
+- **Scope:** Depends on Phase 2 — the panel's rows must already be clickable and
+  `edited` must already be a thing a row can move — and on nothing outside this
+  repository. **OQ-1 settles the shape and the prototype settled the mechanism**;
+  both are recorded there, and this scope is the buildable form of them.
+
+  1. **A command for the bytes.** `app/src/main.rs` gains one taking a
+     root-relative path and returning `tauri::ipc::Response`, which is
+     `app/src/main.rs:current_pdf`'s own route: a `Vec<u8>` would serialize as a
+     JSON array of numbers, one per byte, and a figure is bigger than a page.
+     **It needs no capability and no `app/tauri.conf.json` change** — Tauri's
+     asset protocol would want both, and this wants neither. It **confines
+     rather than merely checking existence**, exactly as
+     `app/src/preview.rs:Session::set_main` does: `document::relative` must
+     answer the path back, which `root.join("../../secrets.png")` cannot.
+
+  2. **A surface over the text pane, and not a third pane.** The page turns the
+     bytes into a `Blob` and an object URL, draws an `<img>`, and **revokes the
+     previous URL**, or the window holds every figure the reader has looked at
+     for its own lifetime. It is **absolutely positioned over `#text`'s own
+     column rather than replacing it**: `app/dist/index.html`'s divider drag
+     reads `#text`'s box, and a hidden textarea measures zero, so replacing it
+     would break the drag for as long as a figure was up. `<main>` therefore
+     takes `position: relative` and the surface mirrors `#text`'s `offsetLeft`
+     and `offsetWidth` on every show, on a window resize, and at the end of a
+     drag. **A `<figure>` carries `margin: 1em 40px` from the user agent**,
+     which puts it 40 px off that column; the prototype hit it and it is written
+     here so the next reader does not.
+
+  3. **The figure sits in the upper third**, not centred and not against the
+     top: centred, a small figure lands at the pane's waist and reads as
+     nothing; flush to the top it reads as a header. The container is
+     `box-sizing: border-box`, which is what keeps the image's
+     `max-height: 100%` honest against that padding — a percentage max-height
+     resolves against the *content* box, so without it a tall figure overflows
+     by exactly the padding above it.
+
+  4. **The pane goes on holding its file, and that is the decision the rest
+     rests on.** Nothing here touches `edited`, the buffer, the compile, the
+     bytes or the anchors: `⌘S` still writes the markdown, the page still shows
+     the whole document, and `app/src/preview.rs:Status` gains **no field**. It
+     is a view, the way `Lines` is a view. Three ways back to the text, because
+     the reader arrives by three routes: the surface's own control, `Escape`,
+     and clicking any markdown row — which already means *put that file in the
+     pane* and must not leave a picture over it. `app/dist/index.html:clear()`
+     closes it too, an open being a new project.
+
+  5. **A PDF row says so and draws nothing**, per OQ-8. `<img>` cannot draw a
+     PDF and `pdf` is in `md2pdf_core::IMAGE_EXTENSIONS`, so the case is
+     reachable; the sentence is Rust's like every other the window places.
+
+- **Exit gate:** In the Rust suite, over `tests/fixtures/panel/`, which Phase 1
+  created and which already holds a `.jpg` and an `.svg`: the command returns
+  the file's bytes for a listed path, byte-for-byte against `std::fs::read`;
+  and it refuses `../escape.png`, an absolute path, and a path through
+  `<fixture>/outside` — the committed symlink Phase 1's clause 5 already
+  uses — each with a sentence naming what was asked for. The refusals are
+  Phase 1's confinement rule re-run against a second reader, which is the point:
+  a command is a command.
+
+  At the window, on `tests/gates/mpdf-010-phase5.js`: open
+  `samples/showcase/showcase.md`, click `sections/emit.svg` — **an SVG with real
+  extent, not `mark.svg`, which is a 16 px check mark and would prove nothing
+  about the fit**. The figure appears over the text pane in that pane's own
+  column; `invoke('status')`'s `edited`, `main` and `revision` are **unchanged
+  across the click**, which is what "it is a view" means as an assertion; the
+  divider still drags while it is up; `Escape` puts the text back and the
+  buffer is the same string it was; and a markdown row puts the text back and
+  moves the pane. The document's own `showcase.pdf` — present for any developer
+  who has run `samples/showcase/README.md`, and absent otherwise — is checked
+  **only if the row is there**, for the reason Phase 1 refused to gate on that
+  tree's exact contents.
+
+- **Close-out:** `rules/desktop.md` (the commands, and the file I/O the app
+  owns — this is the second reader of a path the author did not name in a
+  dialog, after the walk), `rules/desktop-panes.md` (the surface, and the three
+  ways back). README: that clicking a figure shows it and the pane keeps its
+  file. **`specs/file_panel_spec.md` OQ-1 is already resolved** — this phase
+  ships what that resolution names and adds nothing to it.
 
 <!--
 The review record is a sibling file, not a section: it lives at
