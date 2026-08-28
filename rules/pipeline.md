@@ -27,7 +27,7 @@ covers: >
   the author asks for and the look formats, the figure numbering a document may
   section by, the heading anchors a compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 930
+max_lines: 960
 generated: 2026-08-24
 ---
 
@@ -362,16 +362,25 @@ An empty destination and a title mirror the link arm. The middle four are
 `core/src/emit.rs:portable_path`'s, which the `bibliography` frontmatter key reads too —
 one rule about what a path in this dialect may be, rendered twice by
 `core/src/emit.rs:PathShape` because an image arm says what the image is and a key says
-what the key takes. A URI scheme is a fetch request and
-nothing fetches, which catches `data:` and the drive path `C:\figure.png` with it; an
-absolute path converts on one machine only; a `..` segment escapes the document's
-directory and the world's virtual root; a backslash is a segment `VirtualPath` cannot
-hold. That last shape is why the resolution happens inside `portable_path` rather than
-after it: a caller that checked the first three and then resolved would hand
-`core/src/lib.rs:file_id` a path it cannot build, and `Error::Internal` means a broken
-build rather than bad input. Last, the extension must sit in Typst's own table — `png`, `jpg`, `jpeg`, `gif`,
-`webp`, `svg`, `svgz`, `pdf` — read case-sensitively through `VirtualPath::extension`,
-the function Typst's own detection reads.
+what the key takes. **The four divide by what each is a property of**, which is why
+`check_image` is handed both the written destination and the one it landed on. Three are
+properties of what the author *wrote*, and
+`core/src/emit.rs:written_shape` reads them: a URI scheme is a fetch request and nothing
+fetches, which catches `data:` and the drive path `C:\figure.png` with it; an absolute path
+converts on one machine only; a backslash is a segment `VirtualPath` cannot hold, tested
+directly rather than inferred from an error now that a second error can arrive there. The
+fourth is a property of where the path *lands*: `core/src/emit.rs:landed_path` refuses one
+that leaves the document's folder, which is `PathError::Escapes` from
+`typst-syntax`'s own `Segments::push_component` — it pops a segment for each parent
+component and fails only when there is nothing left to pop. So a `..` is not refused for
+being a `..`: `../figures/plot.svg` written under `sections/` lands inside the folder and is
+legal, where `../../escape.png` climbs out and is not. The resolution happens inside
+`landed_path` rather than after it, so the extension is read off the same `VirtualPath`
+`core/src/lib.rs:file_id` will build and no caller hands `file_id` a path it cannot
+build — `Error::Internal` means a broken build rather than bad input. Last, the extension
+must sit in Typst's own table — `png`, `jpg`, `jpeg`, `gif`, `webp`, `svg`, `svgz`, `pdf` —
+read case-sensitively through `VirtualPath::extension`, the function Typst's own detection
+reads. Where a shape and a bad extension both apply, the shape is named first.
 
 **A destination written inside a section is prefixed with that section's own directory**, by the
 `Tag::Image` arm of `core/src/emit.rs:step` — the one place that knows both the destination and
@@ -381,10 +390,17 @@ the file it was written in. It is the emitter's because the written path is an *
 sections each naming `figure.png` would emit two identical calls and a caller resolving them
 differently would set one figure twice, silently. `core/src/emit.rs:collect_definitions` takes
 the map beside `core/src/emit.rs:emit`, or an image inside a footnote definition would keep its
-written path. **The shape is checked on what the author wrote and the prefix applied after**,
-since `typst-syntax` drops a non-leading empty segment and `/x.png` prefixed to `one//x.png`
-would read as `/one/x.png`. **A file with no directory of its own prefixes with nothing**, where
-`format!("{dir}/{dest}")` yields `/dot.png`.
+written path. **The written half of the shape check runs before the prefix and the landing
+half after**, since `typst-syntax` drops a non-leading empty segment and `/x.png` prefixed to
+`one//x.png` would read as `/one/x.png` — an absolute path laundered into a relative one — and
+`![alt]()` prefixed to `one/` would stop being an empty destination at all. **A file with no
+directory of its own prefixes with nothing**, where `format!("{dir}/{dest}")` yields
+`/dot.png`. **`core/src/sections.rs:Sources::resolve` then normalises, on both branches**,
+because the identity above is a string comparison: `figures/plot.svg` written by the master
+and `../figures/plot.svg` written by a section under `sections/` are one file and must arrive
+as one key, and normalising only the prefixed branch would fail the same identity the other
+way round. It stays infallible — a path that will not normalise falls through as it was
+written, so `check_landed_image` is still what refuses it, at the author's own file and line.
 
 `core/src/lib.rs:collect` then checks the bytes before the compile, once per path at its
 first reference: no asset is `Error::MissingImage`, bytes that disagree with the extension
@@ -718,8 +734,11 @@ format or embedding Hayagriva's inside a YAML subset this hand-written reader pa
 at a time. Typst reads Hayagriva `.yaml`/`.yml` and BibLaTeX `.bib`, and the emitter writes
 the same call either way, so both are accepted and nothing here reads the file. The value
 takes `core/src/emit.rs:portable_path`'s shape rule, phrased for a key: a URL, an absolute
-path, a `..` segment and a backslash are each `Error::Frontmatter` naming the key and the
-line.
+path, a backslash and a path that leaves the document's folder are each `Error::Frontmatter`
+naming the key and the line. `core/src/frontmatter.rs:parse` holds no
+`core/src/sections.rs:Sources`, so a key's written path is where it lands and the whole rule
+applies to it unchanged — `bibliography: figures/../refs.bib` is accepted and
+`bibliography: ../refs.bib` is not.
 
 `equations` and `figures` are names against closed sets rather than booleans, and
 `core/src/frontmatter.rs:Equations::from_name` and `Figures::from_name` each resolve one

@@ -32,7 +32,7 @@ phases:
     by: null
   - name: "Phase 5 — a section may name a figure beside the master"
     reviewed: 2026-08-28
-    shipped: null
+    shipped: 2026-08-28
     cut: null
     by: null
 

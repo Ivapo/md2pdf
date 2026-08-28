@@ -346,9 +346,13 @@ error: cannot read figures/pipeline.svg for the image at line 12: No such file o
 
 Bytes that disagree with their extension are an error too. So are four destinations:
 a URL and a `data:` URI, because nothing is fetched over the network; an absolute path,
-which converts on one machine only; and a path with a `..` segment, which escapes the
-document's own folder — a section's included, so a section cannot reach up out of the
-folder it sits in.
+which converts on one machine only; and a path that leaves the document's own folder.
+
+That last one is about where a path *lands*, not about the `..` written in it. A document
+and the files it names travel as one folder, so `../../plot.svg` climbs out of that folder
+and is refused wherever it is written. `../figures/plot.svg` written inside
+`sections/method.md` does not: it means `figures/plot.svg`, beside the master, and it
+converts.
 
 ## Several files
 
@@ -405,6 +409,18 @@ looked for beside *that file*, so `![A figure](figure.png)` there means
 `sections/figure.png`. A chapter folder holding its own figures can be moved, copied or
 shared whole — moving it means editing one line, the master's marker, which is the line
 that exists to say where a section is.
+
+**And a section can still reach the figures the whole document shares.** `../` in a
+section climbs out of that section's folder and not out of the document, so
+`![A plot](../figures/plot.svg)` in `sections/method.md` finds `figures/plot.svg` beside
+the master. A chapter folder keeps what is only its own and names what is everyone's:
+
+```
+report.md               <- the master
+figures/plot.svg        <- shared: ../figures/plot.svg from any section
+sections/method.md
+sections/figure.png     <- the chapter's own: figure.png from method.md
+```
 
 ## Captions
 

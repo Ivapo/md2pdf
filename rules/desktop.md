@@ -223,14 +223,21 @@ binary reachable from the other.
 ## The watch loop
 
 `app/src/watch.rs:root` is the whole watch set: **the document's own directory,
-watched recursively**. `core/src/emit.rs:check_image` refuses a URI scheme, a
-leading `/`, a `..` segment and a backslash, and `core/src/frontmatter.rs` puts
-the bibliography under that same rule, so every path a document can legally name
-resolves under there — one watch covers the document, every asset it names, every
-asset it will name, and every directory not yet created. It is computable from
-the document's path alone, so a document the dialect refuses is
-watched too. The limit: an asset that is a symlink out of the directory is not
-watched, because a watch follows the tree and not the targets.
+watched recursively**. `core/src/emit.rs:written_shape` refuses a URI scheme, a
+leading `/` and a backslash, `core/src/emit.rs:landed_path` refuses a path that
+leaves the document's folder, and `core/src/frontmatter.rs` puts the bibliography
+under that same rule, so every path a document can legally name resolves under
+there — one watch covers the document, every asset it names, every asset it will
+name, and every directory not yet created. **The premise is where a path lands
+and not the segments it is spelled with**: `../figures/plot.svg` written inside
+`sections/method.md` is legal and lands on `figures/plot.svg`, still under the
+root. What `classify` compares against is the resolved path, which
+`core/src/sections.rs:Sources::resolve` has already normalised — a stored
+`sections/../figures/plot.svg` would never equal the event path
+`root(document).join(asset)` builds. It is computable from the document's path
+alone, so a document the dialect refuses is watched too. The limit: an asset that
+is a symlink out of the directory is not watched, because a watch follows the
+tree and not the targets.
 
 `app/src/watch.rs:classify` is the filter, and the one list `section_paths`,
 `image_paths` and `bibliography_path` fill is what it filters against — the list
