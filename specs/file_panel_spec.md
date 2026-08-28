@@ -17,7 +17,7 @@ phases:
     by: null
   - name: "Phase 2 — a row opens in the pane, and the main still compiles"
     reviewed: 2026-08-28
-    shipped: null
+    shipped: 2026-08-28
     cut: null
     by: null
   - name: "Phase 3 — a file is created from the panel"

@@ -2,7 +2,27 @@
 
 Append-only. One heading per round, newest first.
 
-### Phase 2 shipped — 2026-08-28 — one consequence the rounds did not enumerate
+### Phase 2 shipped — 2026-08-28 — the window gate, and one consequence the rounds did not enumerate
+
+**The window gate passes, at ten clauses of ten**, on `cargo tauri dev` on macOS
+26.5.2: the pane holds `sections/notes-and-sources.md` while `showcase.md`
+compiles, the panel marks the two rows separately, typing under `## Citations`
+opens the page that heading landed on **in the whole document**, the switch
+refuses over the dirty buffer in a sentence that does not claim the file moved,
+and the discard puts the tracked file back byte for byte.
+
+**Its first run failed clause 6, and the app was right.** `showcase.md` is six
+pages and that heading is on the sixth, so `applyAnchor`'s
+`scrollTop = kids[5].offsetTop` clamps to `scrollHeight - clientHeight` and the
+fifth page's tail stays at the top of a pane taller than one page. The clause
+read *which page is at the top*, which would have passed on a short window and
+failed on a tall one — a claim about the reader's monitor, which that file's own
+header promises none of its clauses are. It now compares the scroll the app took
+against the anchor's own page position, clamped the way the browser clamps it.
+Worth the record because the gate was written from the spec and the spec's own
+sentence — *"the page then opens on the page that heading landed on"* — is
+ambiguous between the two readings at the end of a document.
+
 
 Round 1's five blockers were framed as *"five things follow from that one
 sentence… enumerated here rather than left to be rediscovered at a keyboard"*,
