@@ -32,7 +32,7 @@ phases:
     by: null
   - name: "Phase 5 — an image row shows the figure"
     reviewed: 2026-08-28
-    shipped: null
+    shipped: 2026-08-28
     cut: null
     by: null
 

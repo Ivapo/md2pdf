@@ -2,6 +2,52 @@
 
 Append-only. One heading per round, newest first.
 
+### Phase 5 shipped — 2026-08-28 — the window gate, and three things the rounds did not measure
+
+**The window gate passes, at eight clauses of eight**, on `cargo tauri dev` on
+macOS 26.5.2: the figure is drawn over the text pane's own column (`viewer
+153+360`, `text 153+360`), `main`, `edited` and `revision` are unchanged across
+the click, the `.pdf` row says so without touching the stale mark or the error
+bar, the surface follows the divider and the `Files` fold and the `Lines`
+toggle, all three ways back work and a markdown row still moves the pane, and
+`emit.svg` shrinks from 120 px to 96 × 58 in a 96 × 601 sheet with overflow 0.
+
+**Its first run failed clause 6, and the app was right — the gate was measuring
+the engine.** The clause guarded against passing vacuously with
+`drawn.width < picture.naturalWidth`, and **WebKit reports an SVG's *rendered*
+size for `naturalWidth`**, not its intrinsic one: 95 for a figure declared
+120 × 72, against a drawn 96, while the containment claim underneath held
+exactly. It now measures the same element at two pane widths and asserts it got
+smaller, which a stylesheet with no fit rule fails and every engine agrees on.
+The same shape as Phase 2's own first run: a clause written from the spec that
+was true of one environment rather than of this phase.
+
+**Round 2's `box-sizing` measurement reproduced, with the declaration dropped.**
+The phase records that flexbox distributes free space over items' *outer* sizes
+and that `box-sizing` is not what frees the sheet's top padding. Built with no
+`box-sizing` on the sheet at all and measured in Chromium: the sheet is 797 px
+inside an 853 px surface with a 56 px bar, `scrollHeight - clientHeight` is 0,
+and a deliberately tall figure — 100 × 4000 — is capped at 728.75 px against a
+729 px content box. So the reviewer's third-round arithmetic holds at
+`content-box`, and the phase prescribes nothing it does not need.
+
+**The height half of the fit rule has no window clause, and that is stated
+rather than hidden.** Gate clause 6 is `emit.svg` in a narrow column, which
+binds on width; the sheet is 601 px tall and nothing in either sample project
+is tall enough to bind on height. The 4000 px case above is where that half was
+checked, in the Chromium harness, and it is recorded here because the exit gate
+does not reach it.
+
+Two smaller notes, neither a departure. The five re-mirror occasions are an
+enumeration in a file whose own rule is that it watches the pane rather than the
+causes, and the exception is argued in place: an observer over `#text` never
+fires for a fold, which moves its left edge without changing its size, and the
+existing one over `#pages` does not fire while that pane is hidden. And the
+prototype the phase was written from was **not** on `main` — it sat in a stash —
+so this was a build rather than the reconciliation an in-place prototype makes
+it, and the four ways the stash differs from the phase are each in the feat
+commit's message.
+
 ### Round 3 — Phase 5 only — 2026-08-28 — same reviewer, resumed with the author's changelog — **READY (converged)**
 
 A confirmation pass over three non-blocking fixes rather than a re-open, run
