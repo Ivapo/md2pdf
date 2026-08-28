@@ -7,7 +7,7 @@ note: >
   emitter already walks, and every error, every asset and every anchor learns
   which file it came from.
 status: accepted
-last_updated: 2026-08-27
+last_updated: 2026-08-28
 
 phases:
   - name: "Phase 1 — the master reads its sections"
@@ -31,7 +31,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 5 — a section may name a figure beside the master"
-    reviewed: null
+    reviewed: 2026-08-28
     shipped: null
     cut: null
     by: null
@@ -1248,75 +1248,154 @@ in the pane and still cannot see the list without hunting for the markers.
 ### Phase 5 — a section may name a figure beside the master
 *Produces the observable: **yes** — a document whose section names
 `../figures/plot.svg` compiles with that figure in it, where today it refuses
-with `image with a .. segment` and there is no legal way to write it.*
+with `image with a '..' path segment` and there is no legal way to write it.*
+
+**§6.1, worked:** step 0 — a decision, since what a path written in a section may
+be is §2's own rule. Step 1 — it removes nothing: every document that compiles
+today still compiles, and the change is a refusal becoming legal. Step 2 — the
+subject is a section's paths, which **this spec owns**. So: an appended phase,
+which is what this is.
 
 - **Scope:** `core/src/emit.rs:portable_path` refuses any `..` segment outright,
-  before `typst_syntax::VirtualPath::new` sees the path at all. **That check was
-  correct when it was written and this spec is what made it wrong.** With one
-  file, *"contains `..`"* and *"escapes the document's folder"* were the same
+  before `typst_syntax::VirtualPath::new` sees the path. **That check was correct
+  when it was written and this spec is what made it wrong.** With one file,
+  *"contains `..`"* and *"escapes the document's folder"* were the same
   statement. §2's section-relative rule separated them: a destination written in
   `sections/method.md` is prefixed with `sections/` by
   `core/src/sections.rs:Sources::resolve`, so `../figures/plot.svg` becomes
   `sections/../figures/plot.svg`, which is `figures/plot.svg` — inside the
   master's own folder, escaping nothing, and refused anyway.
 
-  **The order is what hides it.** `core/src/emit.rs:step`'s `Tag::Image` arm
-  calls `core/src/emit.rs:check_image` on `dest_url` as the author wrote it and
-  calls `Sources::resolve` on the statement after, so the check never sees the
-  path that would resolve. This phase flips the two: resolve first, check the
-  resolved path, and report against what the author wrote.
+  **The fix is to split the check by what each shape is about, and NOT to flip
+  the order.** An earlier draft proposed checking the resolved path instead of
+  the written one; review found that reverses a decision §2 made deliberately,
+  and it is recorded here so it is not proposed again.
+  `core/src/emit.rs:step`'s `Tag::Image` arm checks *before* it resolves because
+  `Sources::resolve` is `format!("{directory}/{dest}")` with no guard — so
+  `/x.png` in a section becomes `sections//x.png`, and `typst-syntax` 0.15.1 maps
+  a non-leading empty segment to `Component::Current` and ignores it. Checking
+  after the prefix would therefore **launder an absolute path into a relative
+  one**, which is exactly what
+  `core/tests/golden_test.rs:the_prefix_launders_no_path_the_dialect_refuses`
+  exists to prevent, and it would turn `![alt]()` in a section into
+  `image with no file extension` because `dest.is_empty()` would no longer hold.
 
-  **The blanket scan goes, and Typst decides instead.** `typst-syntax` 0.15.1's
-  `Segments::push_component` pops a segment for `Component::Parent` and returns
-  `PathError::Escapes` only when there is no segment left to pop — which is
-  exactly the rule this dialect wants, stated once, by the layer that owns the
-  virtual root. `core/src/emit.rs:PathShape`'s `DotDot` becomes an escape shape
-  and its sentence changes with it.
+  **So the shapes divide, and each is checked where it means something:**
 
-  **`portable_path` is shared with the `bibliography` frontmatter key and that
-  caller does not change.** Frontmatter exists only in a master — §2 refuses a
-  section's own — so a master's `../refs.bib` still escapes and is still refused,
-  now because it escapes rather than because it contains two dots. A message
-  change, not a rule change.
+  - **A property of what the author wrote** — a scheme, a leading `/`, a
+    backslash, an empty destination — stays checked on the written destination,
+    before the prefix, exactly as today. That is what the laundering test
+    protects and none of it changes.
+  - **Escaping the root** is the one shape that is a property of *where the path
+    lands*, and it is the only one that moves. It is checked on the resolved path
+    by `VirtualPath::new`, whose `Segments::push_component` pops a segment for a
+    parent component and returns `PathError::Escapes` only when there is nothing
+    left to pop — the rule this dialect wants, stated once by the layer that owns
+    the virtual root.
 
-  **The resolved path is an identity, and normalising it is the point.**
-  `core/src/lib.rs:collect` keys `supplied`, `seen` and the world's `FileId` on
-  it, and both wrappers dedupe on it, so `figures/plot.svg` named by the master
-  and `../figures/plot.svg` named by a section must arrive as **one** key. That
-  is the failure the `Tag::Image` arm's own comment warns about — *"a caller
-  resolving them differently would set one figure twice, silently"* — and it is
-  why the normalisation belongs at `Sources::resolve`, where the identity is
-  already settled, and nowhere else.
+  **The backslash stops being inferred from an error.** `portable_path` ends
+  `VirtualPath::new(dest).map_err(|_| PathShape::Backslash)` today, and once
+  `Escapes` can arrive there it would be reported as *"a backslash in its path"*.
+  The written-shape check tests `dest.contains('\\')` directly instead, which
+  is what makes the two distinguishable at all.
 
-  **No caller changes.** `core/src/lib.rs:image_paths` already returns resolved
-  paths, `cli/src/main.rs:run` already resolves them against the master's
-  directory, and `app/src/watch.rs:classify` already joins them onto a root that
-  is that same directory. A figure beside the master rather than beside the
-  section is watched, read and supplied by the machinery that exists.
+  **`core/src/emit.rs:PathShape` gains `Escapes` and keeps `DotDot` for
+  nothing**, so the variant goes. Both renderings are user-facing and asserted
+  byte-exactly today, so both are written here rather than left to the
+  implementer: `PathShape::image` reads **`a path that leaves the document's
+  folder`** and `PathShape::key` reads **`a path that leaves the document's
+  folder`** — the same words in both, because unlike the other three shapes this
+  one is about the destination's *effect* and not its spelling, and there is no
+  second phrasing to earn.
+
+  **Normalisation settles the identity, and it must cover both branches of
+  `resolve`.** `core/src/lib.rs:collect` keys `supplied`, `seen` and the world's
+  `FileId` on the resolved path, so `figures/plot.svg` named by the master and
+  `../figures/plot.svg` named by a section must arrive as **one** key — the
+  failure the `Tag::Image` arm's comment warns about. `Sources::resolve` has a
+  `"" => dest.to_string()` branch for the master's own paths, and normalising
+  only the prefixed branch would leave `figures/../plot.svg` in a master
+  un-normalised while a section's equivalent normalised — the same identity
+  failure in the other direction. Both branches normalise. **`resolve` returns
+  `String` infallibly and keeps doing so**: a path that will not normalise
+  (`sections/../../escape.png`) falls through unchanged, so `check_image` is
+  still what refuses it and still names the author's line.
+
+  **`portable_path` has three callers, not two.** The `bibliography` frontmatter
+  key reads it, and there the widening is **a rule change and not only a message
+  change**: a master writing `figures/../refs.bib` goes from refused to accepted,
+  which is the same widening this phase intends and is stated rather than
+  discovered. `core/src/emit.rs:lone_markdown_link` is the third, deciding by
+  `portable_path(dest).is_err()` whether an empty-text link is an include marker
+  — so `[](sub/../one.md)` becomes a marker where today it is a plain link. That
+  follows from the rule and is accepted; the gate pins it either way.
+
+  **How `portable_path` decomposes is left to the implementer — one function
+  called twice, or two — but one constraint is not free to discover:**
+  `core/src/frontmatter.rs:parse` holds no `Sources`, so the escape check cannot
+  move wholly into the `Tag::Image` arm. Both arrangements satisfy the gate
+  identically.
+
+  **Two message-selection edges carry today's order rather than a new one.**
+  Where an escape and a bad extension both apply — `../../a.bmp` — the shape is
+  named first, as it is today. And `![alt](figures/..)` moves from
+  `image with a '..' path segment` to `image with no file extension`, which is
+  nonsense input reaching a different sentence and is recorded so it is not read
+  as a defect. **Marker paths are not normalised where image destinations are**,
+  so `sub/../one.md` stays as written in `SectionRef.path` and in
+  `Location.file` — the author's own spelling is what a message should name, and
+  clause 7 pins the behaviour either way.
+
+  **No caller of `image_paths` changes.** `core/src/lib.rs:image_paths` already
+  returns `Sources::resolve`'s output; `cli/src/main.rs:read_assets` and
+  `app/src/document.rs:read_assets_with` already join it onto the master's
+  directory; and `app/src/watch.rs:classify` already compares against
+  `root(document).join(asset)`, `root` being the master's own parent. A figure
+  beside the master rather than beside the section is watched, read and supplied
+  by the machinery that exists.
 
 - **Exit gate:** In the workspace suite:
   1. A master naming `sections/one.md`, that section naming
      `../figures/plot.svg`, and `figures/plot.svg` on disk: `md_to_pdf` returns
-     bytes, and `--emit-typst` writes the path `figures/plot.svg` exactly once.
+     bytes, and `--emit-typst` writes the path `figures/plot.svg`.
   2. A section naming `../../escape.png` — climbing past the master's own folder
-     — is refused, naming the shape, the section file and the line, in the
-     wording §2's widened messages use.
-  3. The master naming `../x.png` is refused, as it is today.
-  4. The master naming `figures/plot.svg` and a section naming
-     `../figures/plot.svg` in the same document: `image_paths` returns one entry,
-     and the caller supplies one asset for it.
-  5. `../refs.bib` in the master's frontmatter is refused.
-  6. **The corpus check Phase 1 used, re-run:** every document in this tree
+     — is refused as `image with a path that leaves the document's folder`,
+     naming the section file and the line, per §2's widened messages.
+  3. The master naming `../x.png` is refused with the same sentence.
+  4. **The laundering test still passes, with one row rewritten.**
+     `core/tests/golden_test.rs:the_prefix_launders_no_path_the_dialect_refuses`
+     keeps its `/x.png` and `https://` rows **byte-identical** — that is the
+     clause that proves the order was not flipped — and its `../x.png` row moves
+     from a refusal to a compile. `![alt]()` in a section is still
+     `image with an empty destination`.
+  5. **The identity holds across both spellings.** A master naming
+     `figures/plot.svg` and a section naming `../figures/plot.svg`:
+     `image_paths` returns **two entries naming the same string** — it
+     deduplicates nothing, by its own documented contract, and the caller's
+     `seen` set is what supplies one asset — and `--emit-typst` writes that
+     string in both places. A master naming `figures/../plot.svg` normalises to
+     `plot.svg`, which is the `""`-branch clause.
+  6. `../refs.bib` in the master's frontmatter is refused as
+     `key 'bibliography' takes a path beside the document, not a path that leaves
+     the document's folder`; `figures/../refs.bib` is accepted.
+  7. `[](sub/../one.md)` is read as an include marker.
+  8. **The corpus check Phase 1 used, re-run:** every document in this tree
      compiles to a byte-identical PDF and byte-identical Typst source either side
      of the commit. Nothing that was legal changes; only something that was
      refused becomes legal.
+  9. `cargo test --workspace` passes, as Phases 1, 2 and 3 each closed with —
+     load-bearing here, since this phase moves several shipped byte-exact
+     assertions.
 
 - **Close-out:** **`rules/pipeline.md`** — the seven refused destination shapes,
-  `portable_path`'s rule, and the section-prefix passage, all three of which state
-  the old rule. **`README.md`** carries the sentence this phase falsifies in so
-  many words — *"a path with a `..` segment, which escapes the document's own
-  folder — a section's included, so a section cannot reach up out of the folder
-  it sits in"* — and it is rewritten, not annotated, the README being
+  `portable_path`'s rule, the section-prefix passage, **and the bibliography-key
+  passage**, which states the `..` rule a fourth time. **`rules/desktop.md`**'s
+  watch-loop section argues the whole watch set from *"`check_image` refuses … a
+  `..` segment"*; the conclusion survives and the premise does not, so the
+  argument is restated. **`README.md`** carries the sentence this phase falsifies
+  in so many words — *"a path with a `..` segment, which escapes the document's
+  own folder — a section's included, so a section cannot reach up out of the
+  folder it sits in"* — and it is rewritten, not annotated, the README being
   user-facing documentation rather than a record. **Its own push**; nothing here
   depends on another phase's, and `mpdf-010` does not depend on this one.
 

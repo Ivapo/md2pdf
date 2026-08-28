@@ -2,6 +2,87 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 5 only — 2026-08-28 — same reviewer, resumed with the author's changelog — **READY (converged)**
+
+All three blockers confirmed resolved against the code. The reviewer re-derived
+every row of `the_prefix_launders_no_path_the_dialect_refuses` under the split
+rule — `/x.png` still refused by `starts_with('/')` on the written destination,
+`https://` still by `has_scheme`, and `../x.png` now compiling because
+`VirtualPath::new("sections/../x.png")` walks `Normal → Parent → Normal` to
+`/x.png` — and confirmed `![alt]()` still reaches
+`image with an empty destination`.
+
+**Three checks it ran that the author had not asked for, and each could have
+bitten.** `web/index.html` carries no path-shape wording, so
+`core/tests/page_examples_test.rs:every_refusal_prints_the_sentence_beside_it` is
+untouched and the close-out's omission of `web/` is correct rather than a gap.
+Normalising `resolve`'s `""` branch changes the emitted string for `./x.png` and
+`figures//x.png` spellings, which would break clause 8's byte-identical corpus
+check — no document in `tests/fixtures/`, `samples/` or `README.md` uses either,
+so it passes. And `dest.contains('\\')` is equivalent to the `Backslash` error it
+replaces, since `components()` splits on `/` and a backslash lands inside a
+segment `Segment::new` rejects, so `golden_test.rs:933` and `frontmatter.rs:496`
+both stand unchanged. It also verified the string `leaves the document` appears
+nowhere in the repo, so the new sentence collides with no `contains()`
+assertion.
+
+Four non-blocking folded in on convergence. The one worth the record:
+**`core/src/frontmatter.rs:parse` holds no `Sources`**, so the escape check
+cannot move wholly into the `Tag::Image` arm — which leaves `portable_path`'s
+decomposition genuinely open but not free to discover.
+
+### Round 1 — Phase 5 only — 2026-08-28 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode): yes**, and this is the phase of the two drafted in this
+sitting that produces the observable unmediated — a section naming
+`../figures/plot.svg` compiles with the figure where there is no legal way to
+write it today. It is the right one because the alternative is that a top-level
+`figures/` folder stays unusable from a section, which is the constraint that put
+`emit.svg`, `mark.svg`, `parse.svg` and `pipeline.svg` inside
+`samples/showcase/sections/` rather than beside the master — a layout forced by a
+rule rather than chosen.
+
+One generalist rather than a panel. **Three blocking findings, all accepted; no
+rejections.**
+
+1. **The draft proposed flipping `check_image` and `Sources::resolve`, and that
+   order is load-bearing.** The draft called it an accident — *"the order is what
+   hides it"* — and it is a decision this spec's §2 made deliberately.
+   `Sources::resolve` is `format!("{directory}/{dest}")` with no guard, so
+   `/x.png` in a section becomes `sections//x.png`, and `typst-syntax` 0.15.1
+   maps a non-leading empty segment to `Component::Current` and ignores it:
+   checking after the prefix **launders an absolute path into a relative one**,
+   which `core/tests/golden_test.rs:the_prefix_launders_no_path_the_dialect_refuses`
+   exists to prevent and which that test would have caught at implementation
+   time. Second instance, same cause: `![alt]()` in a section would have moved
+   from `image with an empty destination` to `image with no file extension`.
+   **Resolved by splitting the check rather than flipping it** — a scheme, a
+   leading `/`, a backslash and an empty destination are properties of *what the
+   author wrote* and stay checked before the prefix; escaping the root is a
+   property of *where the path lands* and is the only shape that moves. The
+   discarded flip is recorded in the phase so it is not proposed again.
+2. **Gate clause 5 asserted something `image_paths` cannot return.** Its own doc
+   says *"The list may name one path more than once. The caller deduplicates
+   it,"* and `emit` pushes one `ImageRef` per `Tag::Image`. An implementer taking
+   the clause literally would have added a dedupe that `cli/src/main.rs:read_assets`,
+   `app/src/document.rs:read_assets_with` and `collect`'s per-reference
+   `MissingImage` all depend on not existing. The clause now asserts two entries
+   naming one string, and names `seen` as what supplies one asset.
+3. **The new escape shape's user-facing sentences were never written**, and the
+   gate clause meant to check them pointed at a §2 that carries no path-shape
+   wording — so it would have passed against whatever the implementer wrote.
+   Both renderings are now in the phase text, `DotDot` goes rather than being
+   repurposed, and three clauses quote the resulting sentences.
+
+Eight non-blocking, all accepted. Two were latent: **`portable_path` has a third
+caller**, `core/src/emit.rs:lone_markdown_link`, which decides by
+`portable_path(dest).is_err()` whether an empty-text link is an include marker,
+so `[](sub/../one.md)` becomes a marker — now stated and gated. And the
+`map_err(|_| PathShape::Backslash)` that survives would have **reported an escape
+as a backslash**, which the phase now avoids by testing `dest.contains('\\')`
+directly.
+
+
 ### Round 2 — Phase 4 only — 2026-08-25 — same reviewer, resumed with the author's changelog — **READY (converged)**
 
 All three blockers confirmed resolved against the file, with each new claim
