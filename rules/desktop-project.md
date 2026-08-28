@@ -6,8 +6,8 @@ sources:
 covers: >
   the project the desktop app opens: the root the opened file climbs one level
   to and the cap that is chosen rather than derived, the two edges that answer
-  as no candidate, the masters discovered under the root and the four ways one
-  of them becomes the file that compiles, the walk and the merge and why they
+  as no candidate, the masters discovered in the root and the reason that search
+  does not recurse, the four ways one of them becomes the file that compiles, the walk and the merge and why they
   are two functions rather than one, the filter that is each channel's own
   comparison, the total order the panel cannot reorder itself against, the
   confinement the walk obeys and the one a write obeys differently, and the one
@@ -35,10 +35,17 @@ roots below the master, recoverable only by opening the master. A parent with no
 parent and a grandparent that will not `read_dir` are both *no candidate*, so the
 root is `watch::root`'s answer unchanged, which is every single-file document.
 
-`app/src/document.rs:masters` is every `.md` under the root whose text names a
-section, and `discover_main` resolves them: one is main whatever the author
-opened, none makes the opened file main, several take the opened file when it is
-one of them and the byte-wise first when it is not. **It never leaves the main
+`app/src/document.rs:masters` is every `.md` **directly in** the root whose text
+names a section, and `discover_main` resolves them: one is main whatever the
+author opened, none makes the opened file main, several take the opened file when
+it is one of them and the byte-wise first when it is not. **It does not recurse,
+and that is a property rather than a preference**: `emit::landed_path` refuses a
+marker climbing out of the document's folder, so a section always sits at or
+below its master and a master is never below its own sections — the climb answers
+"above", this answers "at", and below is another project's. Recursion got it
+wrong in the window, which is what `samples/` is in the suite to catch: a
+single-file document sits there beside the whole `showcase/` project, and
+`showcase/showcase.md` was taken for the one master of `samples/`. **It never leaves the main
 unset** — an empty pane is a worse answer than a guess the panel marks and the
 author corrects in one action, and alphabetical claims that the same folder opens
 the same way twice rather than claiming which is right.

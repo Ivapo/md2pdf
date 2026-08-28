@@ -553,18 +553,34 @@ pub fn merge(found: Vec<Entry>, named: &[String]) -> Vec<Entry> {
     entries
 }
 
-/// Every `.md` under `root` that names a section, root-relative, in the panel's
-/// order.
+/// Every `.md` **directly in** `root` that names a section, in the panel's order.
 ///
 /// **Discovery is total, so the common case needs no configuration.**
 /// `md2pdf_core::section_paths` reads the master's own text and its body cannot
 /// fail — it returns `Result` for signature symmetry with the two walks beside
-/// it and constructs `Ok` unconditionally — so *"a `.md` under the root whose
-/// text names section markers"* is a decidable test over every markdown file in
-/// the tree.
+/// it and constructs `Ok` unconditionally — so *"a `.md` here whose text names
+/// section markers"* is a decidable test over every markdown file in one
+/// directory.
+///
+/// **It does not recurse, and the reason is a property rather than a
+/// preference.** A master cannot name a section above itself:
+/// `core/src/emit.rs:landed_path` refuses a marker that climbs out of the
+/// document's own folder, so `[](../a.md)` is not an include at all. Every
+/// section therefore sits at or below its master's directory, which means the
+/// master of the opened file is at the root or *above* it and never in a
+/// subdirectory of it — [`project_root`]'s climb answers "above", and this
+/// answers "at".
+///
+/// **A recursive walk got this wrong in the window, which is what the exit
+/// gate's `samples/article.md` case is now here to catch.** `samples/` holds a
+/// single-file document beside the whole `showcase/` project, so recursion
+/// found `showcase/showcase.md`, called it the one master, and compiled it for
+/// an author who had opened `article.md`. A `.md` in a subdirectory that names
+/// sections is another project's master, not this root's.
 pub fn masters(root: &Path) -> Vec<String> {
     walk(root)
         .into_iter()
+        .filter(|path| !path.contains('/'))
         .filter(|path| kind_of(path) == Some(Kind::Markdown))
         .filter(|path| {
             std::fs::read_to_string(root.join(path))
@@ -1252,6 +1268,50 @@ mod tests {
         assert_eq!(masters(&fixture("panel")), ["book.md"]);
         assert_eq!(masters(&fixture("panel/loose")), Vec::<String>::new());
         assert_eq!(masters(&fixture("panel-pair")), ["alpha.md", "beta.md"]);
+    }
+
+    /// **A master in a subdirectory belongs to another project, not this root.**
+    ///
+    /// `samples/` is the case that proves it and the case that caught it: a
+    /// single-file document sits there beside the whole `showcase/` project, so
+    /// a discovery that recursed found `showcase/showcase.md`, called it the one
+    /// master, and compiled the showcase for an author who opened
+    /// `article.md` — which the window gate reported and no fixture had.
+    ///
+    /// It is a property rather than a preference. A master cannot name a
+    /// section above itself, `landed_path` refusing a marker that climbs out of
+    /// the document's folder, so every section sits at or below its master and
+    /// a master is never below its own sections. `project_root` answers
+    /// "above"; this answers "at"; below is somebody else's document.
+    ///
+    /// **The real tree, not a fixture**, because the defect was that the
+    /// fixtures were all tidier than the repository the app is developed in.
+    #[test]
+    fn a_master_in_a_subdirectory_is_not_this_roots_master() {
+        let samples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../samples");
+
+        assert!(
+            samples.join("showcase/showcase.md").is_file(),
+            "the tree this case is about has moved"
+        );
+        assert_eq!(
+            masters(&samples),
+            Vec::<String>::new(),
+            "a project one directory down was taken for this root's own"
+        );
+        assert_eq!(
+            discover_main(&samples, &samples.join("article.md")),
+            "article.md",
+            "opening a single-file document compiled somebody else's master"
+        );
+
+        // And the showcase, opened as itself, still finds its own.
+        let showcase = samples.join("showcase");
+        assert_eq!(masters(&showcase), ["showcase.md"]);
+        assert_eq!(
+            discover_main(&showcase, &showcase.join("sections/text.md")),
+            "showcase.md"
+        );
     }
 
     /// Clause 3's discovery half. The store is read by the session, not here;
