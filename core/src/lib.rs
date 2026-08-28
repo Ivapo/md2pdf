@@ -13,6 +13,14 @@ mod frontmatter;
 mod math;
 mod sections;
 
+/// The file extensions this dialect accepts as an image.
+///
+/// **The crate's first re-export**, and it is one because the constant belongs
+/// beside its only other reader, `emit::check_image` — moving it here would
+/// split the table from the refusal it decides. A caller listing the files a
+/// document could draw reads this rather than keeping a list of its own.
+pub use emit::IMAGE_EXTENSIONS;
+
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 

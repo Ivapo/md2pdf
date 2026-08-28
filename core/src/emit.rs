@@ -62,7 +62,13 @@ const PRELUDE_NAMES: &str =
 /// everything that survives the walk has an extension the table names. That is
 /// what lets the pre-compile check say "the extension decides the format" and
 /// mean it.
-const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "svg", "svgz", "pdf"];
+///
+/// **It is public, and `crate::IMAGE_EXTENSIONS` re-exports it.** A caller that
+/// wants to know which files this dialect will accept as a figure — the desktop
+/// app's file panel is the one that asked — must read this list rather than
+/// write a second one beside it, or the two drift and a perfectly legal `.jpg`
+/// becomes invisible to the window that would compile it.
+pub const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "svg", "svgz", "pdf"];
 
 /// One list the walk is inside.
 struct ListFrame {
