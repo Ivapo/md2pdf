@@ -135,19 +135,19 @@ pub struct Status {
     /// there. It rides the status because the status is already fetched on the
     /// path that draws, so this needs no command of its own.
     pub anchors: Vec<document::Anchor>,
-    /// The sections the open master names, in the order it reads them.
+    /// The project's files, in the order the panel draws them.
     ///
     /// It rides the status for the reason the anchors do: the status is already
     /// fetched on the path that draws, so the panel needs no command of its own.
-    /// Empty for a document that names no section, which is what draws no panel.
-    pub sections: Vec<String>,
-    /// The file name of the document the pane is holding, if one is open.
+    /// Empty exactly when no document is open.
+    pub entries: Vec<document::Entry>,
+    /// Which of them compiles, root-relative with `/` separators.
     ///
-    /// The panel lists the master above the sections it names, and the master
-    /// is the one file in that list this page could not otherwise name. The
-    /// *name* and not the path: the panel is a list of one document's parts,
-    /// and where that document sits on the disk is the title bar's business.
-    pub master: Option<String>,
+    /// **Spelled the way an entry is**, and not as the bare file *name* this
+    /// field carried while the panel listed one document's parts — the page has
+    /// to match it against a row to mark it, and two files of that name in
+    /// different folders must not both light up.
+    pub main: Option<String>,
 }
 
 /// The pane's state, as Rust holds it.
@@ -162,7 +162,29 @@ pub struct Status {
 /// where no test could reach it.
 #[derive(Default)]
 pub struct Preview {
-    document: Option<PathBuf>,
+    /// What the panel lists, and what the watch is rooted at.
+    ///
+    /// **It does not move when a row is clicked.** [`Session::open`] re-roots
+    /// the watch on every open, so a click that re-rooted would strand the
+    /// author below their own project with no way back up. The root changes on
+    /// an explicit Open and at no other time.
+    root: Option<PathBuf>,
+    /// Which file under the root compiles, root-relative with `/` separators.
+    main: Option<String>,
+    /// Which file the pane holds and `⌘S` writes.
+    ///
+    /// Equal to [`Preview::main`] resolved against the root for the whole of
+    /// `mpdf-010` Phase 1; Phase 2 is what lets the two differ.
+    edited: Option<PathBuf>,
+    /// The files under the root, as the last walk of the disk found them.
+    ///
+    /// **Refreshed on two occasions only** — an open, and a `Change::Tree`
+    /// event — and never recomputed in [`Preview::status`], which the page calls
+    /// on every render and which would then walk the disk on every keystroke.
+    /// The marked-missing rows are not in here: they come off the text in
+    /// [`Preview::status`], which is why the disk half of the panel is stable
+    /// and only the missing half moves while a marker is half-typed.
+    tree: Vec<document::Entry>,
     buffer: String,
     saved: String,
     assets: Vec<String>,
@@ -185,7 +207,12 @@ impl Preview {
 
     /// The document the pane is showing, if one is open.
     pub fn document(&self) -> Option<&Path> {
-        self.document.as_deref()
+        self.edited.as_deref()
+    }
+
+    /// The project the panel is listing, if one is open.
+    pub fn root(&self) -> Option<&Path> {
+        self.root.as_deref()
     }
 
     /// The text the pane holds, which is the text that compiles.
@@ -215,7 +242,7 @@ impl Preview {
     /// set with no bytes and no failure — and calling it *failed* is the safe
     /// direction, because a *failed* pane refuses an export.
     pub fn state(&self) -> State {
-        match (self.document.is_some(), self.stale, self.pdf.is_some()) {
+        match (self.edited.is_some(), self.stale, self.pdf.is_some()) {
             (false, _, _) => State::Empty,
             (true, false, true) => State::Current,
             (true, true, true) => State::Stale,
@@ -224,6 +251,13 @@ impl Preview {
     }
 
     /// Everything the window says about the last compile, in one value.
+    ///
+    /// **The panel's two halves are put together here and nothing is read off
+    /// the disk.** [`Preview::tree`] is the walk, taken at an open and at a
+    /// `Change::Tree` event; the marked-missing rows come off `sections`, which
+    /// every compile assigns from the master's own text. So a keystroke that
+    /// half-types a marker moves one row and walks no directory, which is what
+    /// makes this cheap enough to call on every render.
     pub fn status(&self) -> Status {
         Status {
             state: self.state(),
@@ -234,13 +268,23 @@ impl Preview {
             revision: self.revision,
             reloaded: self.reloaded,
             anchors: self.anchors.clone(),
-            sections: self.sections.clone(),
-            master: self
-                .document
-                .as_ref()
-                .and_then(|path| path.file_name())
-                .map(|name| name.to_string_lossy().into_owned()),
+            entries: self.entries(),
+            main: self.main.clone(),
         }
+    }
+
+    /// The panel's rows: the disk walk, plus the sections the master names that
+    /// the walk did not find.
+    fn entries(&self) -> Vec<document::Entry> {
+        let Some(main) = self.main.as_deref() else {
+            return Vec::new();
+        };
+        let named: Vec<String> = self
+            .sections
+            .iter()
+            .map(|section| document::beside(main, section))
+            .collect();
+        document::merge(self.tree.clone(), &named)
     }
 
     /// The bytes an export may write, or why it may not.
@@ -283,7 +327,7 @@ impl Preview {
     /// It compiles nothing. The typing debounce decides when a compile falls
     /// due, because one keystroke is not a document.
     pub fn edit(&mut self, text: String) {
-        if self.document.is_some() {
+        if self.edited.is_some() {
             self.buffer = text;
         }
     }
@@ -294,7 +338,7 @@ impl Preview {
     /// state a compile failure leaves, because that is what the author needs
     /// to see either way and it is the sentence the terminal prints.
     pub fn load(&mut self) {
-        let Some(document) = self.document.clone() else {
+        let Some(document) = self.edited.clone() else {
             return;
         };
 
@@ -318,7 +362,7 @@ impl Preview {
     /// suppression that would have to win a race.
     pub fn save(&mut self) -> Result<(), String> {
         let document = self
-            .document
+            .edited
             .clone()
             .ok_or_else(|| "no document is open".to_string())?;
 
@@ -337,7 +381,7 @@ impl Preview {
     /// mid-write — counts as [`External::Unchanged`]: the app keeps what it
     /// has, and the write's next event decides.
     pub fn reload(&mut self) -> External {
-        let Some(document) = self.document.clone() else {
+        let Some(document) = self.edited.clone() else {
             return External::Unchanged;
         };
         let Ok(file) = document::read_document(&document) else {
@@ -382,7 +426,7 @@ impl Preview {
     /// shows and the page the pane opens on always describe the page on screen
     /// rather than the last attempt at one.
     pub fn compile(&mut self) {
-        let Some(document) = self.document.clone() else {
+        let Some(document) = self.edited.clone() else {
             return;
         };
 
@@ -423,6 +467,14 @@ impl Preview {
 pub struct Session {
     state: Arc<Mutex<Preview>>,
     on_render: Arc<dyn Fn() + Send + Sync>,
+    /// The one file this app writes outside the author's own folders: which
+    /// root is remembered as compiling which file.
+    ///
+    /// **It is a parameter and not a call to the platform**, so a test hands in
+    /// a scratch directory and the rule that reads it stays on the testable
+    /// side of the window. `crate::main` resolves the real one from Tauri's own
+    /// path resolver, which is the authority on the bundle identifier.
+    store: PathBuf,
     watch: Option<Watch>,
     typing: Option<mpsc::Sender<()>>,
 }
@@ -433,10 +485,11 @@ impl Session {
     /// The callback carries no payload. The window's copy of it emits an event
     /// and the page then asks for the bytes, because handing them through the
     /// event would serialize them as a JSON array of numbers, one per byte.
-    pub fn new(on_render: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn new(store: PathBuf, on_render: impl Fn() + Send + Sync + 'static) -> Self {
         Self {
             state: Arc::new(Mutex::new(Preview::default())),
             on_render: Arc::new(on_render),
+            store,
             watch: None,
             typing: None,
         }
@@ -447,18 +500,45 @@ impl Session {
         self.state.lock().expect("the preview lock was poisoned")
     }
 
-    /// Open a document: read it, compile it once, and watch its directory from
-    /// now on.
+    /// Open what the author picked: find the project it sits in, read the file
+    /// that project compiles, and watch the whole of it from now on.
+    ///
+    /// **This opens the file it landed on rather than the file it was handed.**
+    /// The root is `crate::document::project_root`'s one-level climb, so a
+    /// double-click on a section finds the master above it; the main is the
+    /// store's answer for that root when it has one, and
+    /// `crate::document::discover_main` when it does not.
+    ///
+    /// **The store is read first, on every open**, or it is a thing written and
+    /// never used. An override naming a file the disk no longer holds falls
+    /// through to discovery rather than opening nothing.
     ///
     /// The previous document's page and text go with it. A page kept across an
     /// open would belong to a file the window no longer names.
-    pub fn open(&mut self, document: PathBuf) -> Result<(), String> {
-        let root = watch::root(&document);
+    pub fn open(&mut self, opened: PathBuf) -> Result<(), String> {
+        let root = document::project_root(&opened);
+        let main = document::read_override(&self.store, &root)
+            .filter(|main| root.join(main).is_file())
+            .unwrap_or_else(|| document::discover_main(&root, &opened));
+
+        self.open_at(root, main)
+    }
+
+    /// The open, once the root and the main are decided.
+    ///
+    /// Shared with [`Session::set_main`], so the store and the window can never
+    /// disagree about which file compiles: there is one path that puts a
+    /// document in the pane, and both callers take it.
+    fn open_at(&mut self, root: PathBuf, main: String) -> Result<(), String> {
+        let document = root.join(&main);
 
         {
             let mut preview = self.preview();
             *preview = Preview {
-                document: Some(document.clone()),
+                root: Some(root.clone()),
+                main: Some(main),
+                edited: Some(document.clone()),
+                tree: document::files_under(&root),
                 ..Preview::default()
             };
             preview.load();
@@ -474,14 +554,40 @@ impl Session {
             watch::TYPING_DEBOUNCE,
             self.recompile(document.clone()),
         ));
-        self.watch = Some(watch::start(
-            &root,
-            watch::DEBOUNCE,
-            self.classifier(document.clone()),
-            self.on_change(document),
-        )?);
+        let classify = self.classifier(root.clone(), document.clone());
+        let on_change = self.on_change(root.clone(), document);
+        self.watch = Some(watch::start(&root, watch::DEBOUNCE, classify, on_change)?);
 
         Ok(())
+    }
+
+    /// Set which file under the open root compiles, and remember it.
+    ///
+    /// The store is written *before* the open, so a window that opened and then
+    /// failed to remember cannot happen: the fact is on disk or the author is
+    /// told why it is not.
+    pub fn set_main(&mut self, main: String) -> Result<(), String> {
+        let root = self
+            .preview()
+            .root()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| "no document is open".to_string())?;
+
+        // **Confined, and not merely checked for existence.** The path comes
+        // from the panel, which got it from this app's own listing — but a
+        // command is a command, and `root.join("../../secrets.md")` names a
+        // real file on plenty of machines. Resolving it and asking for its
+        // root-relative spelling back is the same rule the walk obeys: a path
+        // that lands outside the root has no such spelling, and one that lands
+        // inside by another route comes back spelled the one way.
+        let landed = root.join(&main);
+        if !landed.is_file() || document::relative(&root, &landed).as_deref() != Some(main.as_str())
+        {
+            return Err(format!("{main} is not a file in this project"));
+        }
+
+        document::write_override(&self.store, &root, &main)?;
+        self.open_at(root, main)
     }
 
     /// Take the pane's text, and start the clock on the compile it will want.
@@ -505,7 +611,11 @@ impl Session {
     /// That list follows the buffer, because the buffer is the document now: a
     /// figure named in text that has not been saved is watched for all the
     /// same.
-    fn classifier(&self, document: PathBuf) -> impl Fn(&Path) -> Option<Change> + Send + 'static {
+    fn classifier(
+        &self,
+        root: PathBuf,
+        document: PathBuf,
+    ) -> impl Fn(&Path) -> Option<Change> + Send + 'static {
         let state = Arc::clone(&self.state);
         move |path| {
             let assets = state
@@ -513,7 +623,7 @@ impl Session {
                 .expect("the preview lock was poisoned")
                 .assets
                 .clone();
-            watch::classify(path, &document, &assets)
+            watch::classify(path, &root, &document, &assets)
         }
     }
 
@@ -531,7 +641,7 @@ impl Session {
     /// window. And nothing is announced when nothing happened: the app's own
     /// save arrives here, changes nothing, and must not redraw a frame the
     /// reader has scrolled.
-    fn on_change(&self, document: PathBuf) -> impl FnMut(Changed) + Send + 'static {
+    fn on_change(&self, root: PathBuf, document: PathBuf) -> impl FnMut(Changed) + Send + 'static {
         let state = Arc::clone(&self.state);
         let on_render = Arc::clone(&self.on_render);
 
@@ -539,7 +649,7 @@ impl Session {
             let mut announce = false;
             {
                 let mut preview = state.lock().expect("the preview lock was poisoned");
-                if preview.document.as_deref() != Some(document.as_path()) {
+                if preview.edited.as_deref() != Some(document.as_path()) {
                     return;
                 }
 
@@ -553,6 +663,16 @@ impl Session {
 
                 if changed.assets && !taken {
                     preview.compile();
+                    announce = true;
+                }
+
+                // **A file the document does not name moved: the panel is out
+                // of date and the page is not.** This walks the disk and stops
+                // — no compile, so `revision` stands still and the page draws
+                // nothing again. It is announced all the same, because the
+                // panel is drawn off the status the announcement fetches.
+                if changed.tree {
+                    preview.tree = document::files_under(&root);
                     announce = true;
                 }
             }
@@ -575,7 +695,7 @@ impl Session {
         move || {
             {
                 let mut preview = state.lock().expect("the preview lock was poisoned");
-                if preview.document.as_deref() != Some(document.as_path()) {
+                if preview.edited.as_deref() != Some(document.as_path()) {
                     return;
                 }
                 preview.compile();
@@ -625,10 +745,19 @@ mod tests {
 
     /// A session whose compiles can be counted, which is the seam every case
     /// below is read through.
+    ///
+    /// Its store is a scratch file this process owns, so a test never reads or
+    /// writes the store the installed app keeps — and a case that wants an
+    /// override writes one into it and says so.
     fn counted() -> (Session, Arc<AtomicUsize>) {
+        counted_with(document::store_file(&scratch_dir("store-of-the-session")))
+    }
+
+    /// The same, with the store named, for the cases that put something in it.
+    fn counted_with(store: PathBuf) -> (Session, Arc<AtomicUsize>) {
         let compiles = Arc::new(AtomicUsize::new(0));
         let counter = Arc::clone(&compiles);
-        let session = Session::new(move || {
+        let session = Session::new(store, move || {
             counter.fetch_add(1, Ordering::SeqCst);
         });
         (session, compiles)
@@ -706,9 +835,18 @@ mod tests {
 
     /// A preview holding one document, read from disk and compiled, built
     /// without a session.
+    ///
+    /// The root is the document's own directory and the main is the document,
+    /// which is what a single-file open lands on and is what every case using
+    /// this is about.
     fn compiled(document: &Path) -> Preview {
+        let root = watch::root(document);
+        let name = document::title(document);
         let mut preview = Preview {
-            document: Some(document.to_path_buf()),
+            root: Some(root.clone()),
+            main: Some(name),
+            edited: Some(document.to_path_buf()),
+            tree: document::files_under(&root),
             ..Preview::default()
         };
         preview.load();
@@ -1251,10 +1389,36 @@ mod tests {
         let expected = md2pdf_core::md_to_pdf(&markdown, &article_assets(&dir)).unwrap();
         assert_eq!(written, expected);
 
-        // Nothing recompiled: not for the export, and not for the PDF it left
-        // in the very directory the loop watches.
+        // **Nothing recompiled**, not for the export and not for the PDF it
+        // left in the very directory the loop watches — `revision` is what
+        // "recompiled" means, and it has not moved.
+        //
+        // The *announcement* did happen, and that is `mpdf-010` Phase 1's
+        // `Change::Tree` arriving on a real filesystem rather than in a
+        // constructed case: a file appeared in the project, so the panel is out
+        // of date and the page is fetched again to redraw it. The counter
+        // beside `revision` is what tells the two apart.
         settle();
-        assert_eq!(compiles.load(Ordering::SeqCst), 1);
+        let after = session.preview().status();
+        assert_eq!(after.revision, 1, "a file appearing in the project compiled");
+        assert!(
+            compiles.load(Ordering::SeqCst) > 1,
+            "the panel was never told the export had landed"
+        );
+
+        // And it is listed, PDF and all. `pdf` is in
+        // `md2pdf_core::IMAGE_EXTENSIONS` because a PDF is a legal figure in
+        // this dialect, so a document's own export appears beside its figures.
+        // That is `specs/file_panel_spec.md` OQ-3, pinned rather than
+        // special-cased on a guess.
+        assert!(
+            after
+                .entries
+                .iter()
+                .any(|entry| entry.path == "article.pdf" && entry.kind == document::Kind::Image),
+            "the exported PDF is not in the panel: {:?}",
+            after.entries.iter().map(|e| &e.path).collect::<Vec<_>>()
+        );
     }
 
     /// The first of two refusals: the bytes exist and are known to be old.
@@ -1370,16 +1534,20 @@ mod tests {
     /// deleted would hold a phantom panel for the life of the open document,
     /// because no later compile could restore an empty list.
     ///
-    /// `master` rides along, being the other field the panel reads and the
-    /// other one nothing else asserts. It is a file *name* and not a path,
-    /// because the panel lists one document's parts and where that document
-    /// sits is the window title's business.
+    /// **The disk half does not move with it, and that is the point.** Before
+    /// `mpdf-010` the whole panel was this list, so deleting a marker emptied
+    /// the panel; now the files are still on the disk and still listed, and
+    /// what the deletion costs is the one marked-missing row. That is the
+    /// flicker `mpdf-008` §2 accepted, reduced to the half that has to move.
+    ///
+    /// `main` rides along, being the other field the panel reads and the other
+    /// one nothing else asserts. It is root-relative and not a bare file name,
+    /// because the page matches it against a row.
     #[test]
-    fn a_master_that_stops_naming_sections_loses_its_parts() {
+    fn a_master_that_stops_naming_sections_loses_its_marked_missing_rows() {
         let dir = scratch_dir("parts-deleted");
         std::fs::create_dir_all(dir.join("sections")).unwrap();
         std::fs::write(dir.join("sections/one.md"), "# One\n\nText.\n").unwrap();
-        std::fs::write(dir.join("sections/two.md"), "# Two\n\nText.\n").unwrap();
         let document = dir.join("report.md");
         std::fs::write(&document, "[](sections/one.md)\n\n[](sections/two.md)\n").unwrap();
 
@@ -1388,22 +1556,221 @@ mod tests {
         assert_eq!(wait_for(&compiles, 1), 1, "opening compiles once");
 
         let opened = session.preview().status();
-        assert_eq!(opened.master.as_deref(), Some("report.md"));
-        assert_eq!(opened.sections, ["sections/one.md", "sections/two.md"]);
+        assert_eq!(opened.main.as_deref(), Some("report.md"));
+        assert_eq!(
+            opened
+                .entries
+                .iter()
+                .map(|entry| (entry.path.as_str(), entry.missing))
+                .collect::<Vec<_>>(),
+            [
+                ("report.md", false),
+                ("sections/one.md", false),
+                ("sections/two.md", true),
+            ],
+            "the section that is named and absent is the row the author needs"
+        );
 
         session.edit("# A master that names nothing now.\n".to_string());
         assert_eq!(wait_for(&compiles, 2), 2, "a pause in the typing compiles");
 
         let after = session.preview().status();
+        assert_eq!(
+            after
+                .entries
+                .iter()
+                .map(|entry| entry.path.as_str())
+                .collect::<Vec<_>>(),
+            ["report.md", "sections/one.md"],
+            "the deleted marker left its row behind"
+        );
         assert!(
-            after.sections.is_empty(),
-            "the deleted markers left rows behind: {:?}",
-            after.sections
+            after.entries.iter().all(|entry| !entry.missing),
+            "nothing is named and absent once the markers are gone"
         );
         assert_eq!(
-            after.master.as_deref(),
+            after.main.as_deref(),
             Some("report.md"),
             "the document is still the one that is open"
+        );
+    }
+
+
+    // -- the project, at the session -------------------------------------
+    //
+    // `mpdf-010` Phase 1's exit gate, clauses 3 and 7. The pieces they are
+    // built from are pinned in `crate::document`'s own tests; these are the
+    // claims about what the window does with them.
+
+    /// **Clause 3, and the phase's whole observable.**
+    ///
+    /// Opening a section from Finder compiles the master above it. Before this
+    /// phase the same double-click compiled that one section standalone, so the
+    /// two openings produce the same PDF now and produced different ones then —
+    /// which is the difference a reader of this test is meant to see.
+    ///
+    /// The bytes are compared rather than the paths, and `is_some` is asserted
+    /// beside them: two failures are equal too, and a fixture that stopped
+    /// compiling would otherwise leave this passing and proving nothing.
+    #[test]
+    fn opening_a_section_compiles_the_master_that_names_it() {
+        let panel = fixture("panel");
+        let store = document::store_file(&scratch_dir("nothing-remembered"));
+
+        let (mut session, compiles) = counted_with(store.clone());
+        session.open(panel.join("sections/text.md")).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1, "opening compiles once");
+
+        let (main, edited, bytes) = {
+            let preview = session.preview();
+            (
+                preview.status().main,
+                preview.document().map(Path::to_path_buf),
+                preview.pdf().map(<[u8]>::to_vec),
+            )
+        };
+        assert_eq!(main.as_deref(), Some("book.md"));
+        assert_eq!(
+            edited,
+            Some(panel.join("book.md")),
+            "the pane holds the main, which is where Phase 1 leaves the two"
+        );
+
+        let (mut direct, direct_compiles) = counted_with(store);
+        direct.open(panel.join("book.md")).unwrap();
+        assert_eq!(wait_for(&direct_compiles, 1), 1);
+
+        assert!(
+            bytes.is_some(),
+            "the fixture master did not compile, so the comparison below is vacuous"
+        );
+        assert_eq!(
+            bytes,
+            direct.preview().pdf().map(<[u8]>::to_vec),
+            "opening the section and opening the master produced different pages"
+        );
+    }
+
+    /// Clause 3's second half: the store is read first, and discovery is not
+    /// consulted when it answers.
+    ///
+    /// `other.md` names no section, so discovery would never land on it — which
+    /// is what makes this case tell the two apart.
+    #[test]
+    fn a_stored_override_decides_which_file_compiles() {
+        let panel = fixture("panel");
+        let store = document::store_file(&scratch_dir("override"));
+        document::write_override(&store, &panel, "other.md").unwrap();
+
+        let (mut session, compiles) = counted_with(store);
+        session.open(panel.join("sections/text.md")).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        assert_eq!(
+            session.preview().status().main.as_deref(),
+            Some("other.md"),
+            "discovery answered where the store already had"
+        );
+    }
+
+    /// An override naming a file the disk no longer holds falls through to
+    /// discovery, rather than opening nothing.
+    ///
+    /// The store is keyed by root and a wrong root cannot be corrected from
+    /// inside the panel, so a stale key must not be able to strand a window.
+    #[test]
+    fn an_override_naming_nothing_falls_back_to_discovery() {
+        let panel = fixture("panel");
+        let store = document::store_file(&scratch_dir("stale-override"));
+        document::write_override(&store, &panel, "deleted.md").unwrap();
+
+        let (mut session, compiles) = counted_with(store);
+        session.open(panel.join("sections/text.md")).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        assert_eq!(session.preview().status().main.as_deref(), Some("book.md"));
+    }
+
+    /// Setting the main moves the pane, marks the new row, and is remembered
+    /// the next time that folder is opened.
+    ///
+    /// The reopen is what makes the last claim worth asserting: a field written
+    /// into `Preview` and not onto the disk would pass every line above it.
+    #[test]
+    fn setting_the_main_moves_the_pane_and_is_remembered() {
+        let dir = scratch_dir("set-main");
+        std::fs::write(dir.join("first.md"), "# First\n\nText.\n").unwrap();
+        std::fs::write(dir.join("second.md"), "# Second\n\nText.\n").unwrap();
+
+        let store = document::store_file(&scratch_dir("set-main-store"));
+        let (mut session, compiles) = counted_with(store.clone());
+        session.open(dir.join("first.md")).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+        assert_eq!(session.preview().status().main.as_deref(), Some("first.md"));
+
+        session.set_main("second.md".to_string()).unwrap();
+        assert_eq!(wait_for(&compiles, 2), 2, "the switch compiles once");
+        let after = session.preview().status();
+        assert_eq!(after.main.as_deref(), Some("second.md"));
+        assert!(
+            session.preview().text().contains("# Second"),
+            "the pane is still holding the file it was told to leave"
+        );
+
+        // **A path out of the project is refused, and nothing moves** — both
+        // the one that names nothing and the one that names a real file
+        // somewhere else, which is the case an existence check alone would let
+        // through.
+        std::fs::write(dir.parent().unwrap().join("escape.md"), "# Elsewhere\n").unwrap();
+        for asked in ["../escape.md", "nothing.md", "/etc/hosts"] {
+            assert!(
+                session.set_main(asked.to_string()).is_err(),
+                "{asked} was accepted as this project's main"
+            );
+            assert_eq!(session.preview().status().main.as_deref(), Some("second.md"));
+        }
+
+        // And a second window over the same folder lands on it without asking.
+        let (mut again, again_compiles) = counted_with(store);
+        again.open(dir.join("first.md")).unwrap();
+        assert_eq!(wait_for(&again_compiles, 1), 1);
+        assert_eq!(again.preview().status().main.as_deref(), Some("second.md"));
+    }
+
+    /// **Clause 7 on a real filesystem.** A file appearing in the project
+    /// refreshes the panel and compiles nothing.
+    ///
+    /// `revision` is what "compiles nothing" means as an assertion: it moves
+    /// only on a compile that produced bytes. The announcement does happen, and
+    /// must — the panel is drawn off the status that announcement fetches.
+    #[test]
+    fn a_file_appearing_in_the_project_refreshes_the_panel_and_compiles_nothing() {
+        let dir = scratch_dir("tree-event");
+        let document = article_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        let before = session.preview().status();
+        assert!(
+            !before.entries.iter().any(|entry| entry.path == "notes.md"),
+            "the file under test was already listed"
+        );
+
+        std::fs::write(dir.join("notes.md"), "# A file nobody names\n").unwrap();
+        assert_eq!(wait_for(&compiles, 2), 2, "the panel was never told");
+        settle();
+
+        let after = session.preview().status();
+        assert_eq!(
+            after.revision, before.revision,
+            "a file the document does not name caused a compile"
+        );
+        assert!(
+            after.entries.iter().any(|entry| entry.path == "notes.md"),
+            "the new file is not in the panel: {:?}",
+            after.entries.iter().map(|e| &e.path).collect::<Vec<_>>()
         );
     }
 
@@ -1456,7 +1823,12 @@ mod tests {
     /// against each other**, rather than usage compared against a declaration.
     ///
     /// `anchors` holds one, and must: `Anchor` is not reachable in the JSON at
-    /// all while the list is empty.
+    /// all while the list is empty. `entries` holds one for the same reason.
+    ///
+    /// **The count of ten did not move across `mpdf-010` Phase 1**, which
+    /// removed `sections` and `master` and added `entries` and `main`. It is a
+    /// coincidence and it is named here so nobody "fixes" the literal to
+    /// silence a failure that is really about a field.
     #[test]
     fn the_page_typedefs_name_exactly_the_fields_status_serializes() {
         const PAGE: &str = include_str!("../dist/index.html");
@@ -1470,8 +1842,12 @@ mod tests {
             revision: 3,
             reloaded: 1,
             anchors: vec![document::Anchor { line: 1, page: 1 }],
-            sections: vec!["sections/one.md".to_string()],
-            master: Some("report.md".to_string()),
+            entries: vec![document::Entry {
+                path: "sections/one.md".to_string(),
+                kind: document::Kind::Markdown,
+                missing: false,
+            }],
+            main: Some("report.md".to_string()),
         };
         let sent = serde_json::to_value(&status).expect("a `Status` that will not serialize");
 
@@ -1518,5 +1894,31 @@ mod tests {
             named, riding,
             "the page's `Anchor` typedef and the anchors a `Status` carries name different fields"
         );
+
+        let mut listed: Vec<String> = sent["entries"][0]
+            .as_object()
+            .expect("an `Entry` that is not a JSON object")
+            .keys()
+            .cloned()
+            .collect();
+        let mut drawn = typedef_properties(PAGE, "Entry");
+        listed.sort_unstable();
+        drawn.sort_unstable();
+        assert_eq!(
+            drawn.len(),
+            3,
+            "the page's `Entry` typedef declares {} properties: {:?}",
+            drawn.len(),
+            drawn
+        );
+        assert_eq!(
+            drawn, listed,
+            "the page's `Entry` typedef and the entries a `Status` carries name different fields"
+        );
+
+        // The kind crosses as a bare lowercase word, which is what the page
+        // switches on. A `rename_all` dropped here would send `"Markdown"` and
+        // every row would draw as the fallback.
+        assert_eq!(sent["entries"][0]["kind"], "markdown");
     }
 }

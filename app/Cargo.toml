@@ -16,16 +16,18 @@ path = "src/main.rs"
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 
-# `serde_json` is here and not above: the only thing that needs it is the test
-# comparing the front end's `Status` typedef to a serialized `Status`, and it is
-# already in `Cargo.lock` at this version by way of `tauri`, so it adds no crate
-# to the tree.
-[dev-dependencies]
-serde_json = "1.0.151"
-
+# `serde_json` was a dev-dependency until `mpdf-010` Phase 1, when the one fact
+# this app remembers about a project — which file under a root compiles — went
+# into a JSON object in Application Support, and reading it became something the
+# app does rather than something a test does. **The mitigating fact survives the
+# move**: it is already in `Cargo.lock` at this version by way of `tauri`, so
+# promoting it adds no crate to the tree. It still serves the test comparing the
+# front end's `Status` typedef to a serialized `Status`, which is what it was
+# here for.
 [dependencies]
 md2pdf-core = { path = "../core" }
 notify = "8.2.0"
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 tauri = { version = "2.11.5", features = [] }
 tauri-plugin-dialog = "2.7.2"

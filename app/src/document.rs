@@ -250,6 +250,466 @@ pub fn default_output(document: &Path) -> PathBuf {
     document.with_extension("pdf")
 }
 
+// ---------------------------------------------------------------------------
+// The project: its root, its files, the main among them, and the one fact this
+// app remembers about it. `mpdf-010` Phase 1.
+//
+// Four ordinary functions, because a panel that could only be checked by
+// opening a window would have no exit gate but a screenshot — this file's own
+// header, applied to the newest thing in it.
+// ---------------------------------------------------------------------------
+
+/// What one row of the panel is.
+///
+/// **A directory is never an entry.** The page derives the folder headings and
+/// the indentation from the path's own segments, which is a thing a page can do
+/// and a thing a nested node type would make `crate::preview::Status` carry
+/// twice.
+///
+/// This crosses to the page inside that `Status`, so it serializes — the same
+/// reason [`Anchor`] is declared here rather than borrowed from `core`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Entry {
+    /// Root-relative, with `/` separators on every platform, so the page can
+    /// split it into segments without knowing what a path is here.
+    pub path: String,
+    /// Which of the three channels of the pipeline would read this file.
+    pub kind: Kind,
+    /// True for a path the master names that the disk does not hold.
+    ///
+    /// It is the row the author most needs to see: it is the state
+    /// `md2pdf_core::Error::MissingSection` refuses on, and a panel built from
+    /// the disk alone would be silent about exactly the file that broke the
+    /// document.
+    pub missing: bool,
+}
+
+/// The three kinds of file the pipeline reads, which are the three the panel
+/// lists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Kind {
+    Markdown,
+    Bibliography,
+    Image,
+}
+
+/// Which channel would read this path, or `None` for a file the pipeline has no
+/// use for.
+///
+/// **Each channel is compared the way that channel compares it**, and the
+/// asymmetry is inherited rather than invented, so nobody "fixes" it into a
+/// panel that disagrees with the compiler:
+///
+/// - markdown is `eq_ignore_ascii_case("md")`, as `core/src/emit.rs`'s
+///   `lone_markdown_link` reads an include marker;
+/// - a bibliography is folded to lower case and matched against `bib`, `yml`
+///   and `yaml`, as `core/src/bibliography.rs` does. **All three, not `.bib`
+///   alone**: a document whose frontmatter names `refs.yml` compiles, and a
+///   panel blind to it would tell the author this app could not read it —
+///   which is `mpdf-010` §2's argument for taking the image list off `core`
+///   rather than hand-writing a subset, applied to the channel beside it;
+/// - an image is matched case-*sensitively* against
+///   [`md2pdf_core::IMAGE_EXTENSIONS`], as `core/src/emit.rs`'s `check_image`
+///   does, reading `VirtualPath::extension` — which is the function Typst's own
+///   format detection reads.
+fn kind_of(path: &str) -> Option<Kind> {
+    let name = path.rsplit('/').next()?;
+    let (_, extension) = name.rsplit_once('.')?;
+
+    if extension.eq_ignore_ascii_case("md") {
+        return Some(Kind::Markdown);
+    }
+    if matches!(extension.to_lowercase().as_str(), "bib" | "yml" | "yaml") {
+        return Some(Kind::Bibliography);
+    }
+    if md2pdf_core::IMAGE_EXTENSIONS.contains(&extension) {
+        return Some(Kind::Image);
+    }
+    None
+}
+
+/// Where the project the author opened begins.
+///
+/// **The opened file's parent is where the search starts, not where it stops.**
+/// [`crate::watch::root`] is `document.parent()`, so a double-click on
+/// `showcase/sections/text.md` would root the project at `showcase/sections` —
+/// below the master that names it, which the panel would then never list and
+/// discovery would never find. Taking that parent as the root makes the whole
+/// point of the panel unreachable, which is why this exists rather than being
+/// left to `watch::root`.
+///
+/// **The rule**: start at the opened file's parent; if any `.md` in *that
+/// directory's* parent names the opened file as one of its sections, the root is
+/// the parent instead. `md2pdf_core::section_paths` is what answers "names it",
+/// reading text and constructing `Ok` unconditionally, so the test is total over
+/// every markdown file in that one directory. Which of them matched is not
+/// returned, so the unordered `read_dir` costs no determinism: every match gives
+/// the same answer.
+///
+/// **One level is a cap, and it is chosen rather than derived.** An earlier
+/// draft argued it was a property of `mpdf-008`'s refusal of an include inside
+/// an included section; that refusal is about a master naming a *master*, where
+/// this looks for the master of a *file*, which a deeper relative path reaches
+/// with no nesting at all — `[](parts/ch1/text.md)` is a supported marker. So
+/// `parts/ch1/text.md` roots at `parts/ch1`, below its own master, which is
+/// verbatim the failure the paragraph above says this prevents, surviving one
+/// level down. **That cost is asserted in this file's own tests** rather than
+/// left as a defect nobody noticed, and `specs/file_panel_spec.md` OQ-7 carries
+/// the question. The cap is argued on cost instead: climbing further means
+/// reading markdown in `~/Documents` and above to guess where the project is,
+/// and this app has never opened a file the author did not name or a document
+/// did not name.
+///
+/// Two edges answer the same way, and neither is an error in the window: a
+/// parent with no parent, and a grandparent that will not `read_dir`. Both are
+/// *no candidate found*, so the root is the opened file's own parent, which is
+/// [`crate::watch::root`]'s answer unchanged and is every single-file document.
+pub fn project_root(opened: &Path) -> PathBuf {
+    let here = crate::watch::root(opened);
+    let Some(above) = here.parent().filter(|up| !up.as_os_str().is_empty()) else {
+        return here;
+    };
+    let Ok(entries) = std::fs::read_dir(above) else {
+        return here;
+    };
+
+    let opened = crate::watch::resolve(opened);
+    for entry in entries.flatten() {
+        let candidate = entry.path();
+        if kind_of(&candidate.to_string_lossy()) != Some(Kind::Markdown) || !candidate.is_file() {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&candidate) else {
+            continue;
+        };
+        let names_it = md2pdf_core::section_paths(&text).is_ok_and(|sections| {
+            sections
+                .into_iter()
+                .any(|section| crate::watch::resolve(&above.join(&section.path)) == opened)
+        });
+        if names_it {
+            return above.to_path_buf();
+        }
+    }
+
+    here
+}
+
+/// Every file under `root`, root-relative, in the panel's order.
+///
+/// **The order is total and computed here**, so the panel cannot reorder itself
+/// between two compiles of the same tree: within each directory, files
+/// alphabetically first, then subdirectories alphabetically, each expanded where
+/// it sits. Byte-wise on the segment and not a locale collation — a
+/// locale-dependent order is not reproducible by a second person, which is what
+/// the exit gate needs it to be.
+///
+/// **The walk obeys the confinement rule, and that is not only a later phase's
+/// concern.** A symlink under the root pointing at a directory elsewhere would
+/// otherwise put that directory's files in the panel as though they were the
+/// project's, and the phase after this one would open one of them in the pane.
+/// Links are resolved *before* the check rather than after, and a directory
+/// already visited is not visited again, so a link that loops back inside the
+/// root costs one skip rather than a stack.
+fn walk(root: &Path) -> Vec<String> {
+    let real = crate::watch::resolve(root);
+    let mut found = Vec::new();
+    let mut seen = HashSet::new();
+    descend(&real, &real, "", &mut seen, &mut found);
+    found
+}
+
+fn descend(
+    root: &Path,
+    here: &Path,
+    prefix: &str,
+    seen: &mut HashSet<PathBuf>,
+    found: &mut Vec<String>,
+) {
+    if !seen.insert(here.to_path_buf()) {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(here) else {
+        return;
+    };
+
+    let mut files: Vec<String> = Vec::new();
+    let mut directories: Vec<String> = Vec::new();
+
+    for entry in entries.flatten() {
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
+        };
+        let landed = crate::watch::resolve(&entry.path());
+        if !landed.starts_with(root) {
+            continue;
+        }
+        if landed.is_dir() {
+            directories.push(name);
+        } else {
+            files.push(name);
+        }
+    }
+
+    files.sort_unstable();
+    directories.sort_unstable();
+
+    for name in files {
+        found.push(format!("{prefix}{name}"));
+    }
+    for name in directories {
+        let below = crate::watch::resolve(&here.join(&name));
+        descend(root, &below, &format!("{prefix}{name}/"), seen, found);
+    }
+}
+
+/// The panel's order, as a comparison, so the union below sorts by the same rule
+/// the walk emitted.
+///
+/// At the first segment the two paths differ on: a path with nothing left after
+/// it is a file *in this directory* and sorts before one that still has
+/// segments to go, which is a file in a subdirectory beside it. Otherwise the
+/// segments are compared as bytes.
+fn order(left: &str, right: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+
+    let mut left = left.split('/');
+    let mut right = right.split('/');
+
+    loop {
+        return match (left.next(), right.next()) {
+            (Some(here), Some(there)) => {
+                let (last_here, last_there) =
+                    (left.clone().next().is_none(), right.clone().next().is_none());
+                if here == there && last_here == last_there {
+                    continue;
+                }
+                match (last_here, last_there) {
+                    (true, false) => Ordering::Less,
+                    (false, true) => Ordering::Greater,
+                    _ => here.as_bytes().cmp(there.as_bytes()),
+                }
+            }
+            (None, Some(_)) => Ordering::Less,
+            (Some(_), None) => Ordering::Greater,
+            (None, None) => Ordering::Equal,
+        };
+    }
+}
+
+/// What the panel lists is [`files_under`] and [`merge`], and it is two
+/// functions rather than one because the app runs them at two different rates.
+///
+/// **The union is the point.** A tree built from the disk alone loses the one
+/// thing the panel this replaces was good at: a section the master names and the
+/// disk does not hold is exactly the row the author needs to see. And splitting
+/// it is what keeps the panel honest while a marker is half-typed — the disk
+/// half is stable and only the marked-missing half moves, which is strictly less
+/// motion than the shipped panel had.
+///
+/// The disk half: every file under `root` the pipeline can read.
+///
+/// **This is the half that costs a walk.** `crate::preview::Preview` holds its
+/// answer and refreshes it at an open and at a `crate::watch::Change::Tree`
+/// event, where [`merge`] below runs on every status. A panel that walked the
+/// disk to answer a keystroke would put a `read_dir` per directory in front of
+/// every character typed.
+pub fn files_under(root: &Path) -> Vec<Entry> {
+    walk(root)
+        .into_iter()
+        .filter_map(|path| {
+            kind_of(&path).map(|kind| Entry {
+                path,
+                kind,
+                missing: false,
+            })
+        })
+        .collect()
+}
+
+/// The union: the files found, plus the paths `named` holds that they do not.
+///
+/// Pure, and cheap enough to run on every render — which is what lets the disk
+/// half stay still while the marked-missing half follows the text.
+///
+/// `named` is root-relative, which is `crate::preview::Preview`'s job to make
+/// it: `md2pdf_core::section_paths` answers relative to the master, and the
+/// master need not sit at the root.
+pub fn merge(found: Vec<Entry>, named: &[String]) -> Vec<Entry> {
+    let mut entries = found;
+
+    for path in named {
+        if entries.iter().all(|entry| &entry.path != path) {
+            entries.push(Entry {
+                path: path.clone(),
+                kind: Kind::Markdown,
+                missing: true,
+            });
+        }
+    }
+
+    entries.sort_by(|left, right| order(&left.path, &right.path));
+    entries
+}
+
+/// Every `.md` under `root` that names a section, root-relative, in the panel's
+/// order.
+///
+/// **Discovery is total, so the common case needs no configuration.**
+/// `md2pdf_core::section_paths` reads the master's own text and its body cannot
+/// fail — it returns `Result` for signature symmetry with the two walks beside
+/// it and constructs `Ok` unconditionally — so *"a `.md` under the root whose
+/// text names section markers"* is a decidable test over every markdown file in
+/// the tree.
+pub fn masters(root: &Path) -> Vec<String> {
+    walk(root)
+        .into_iter()
+        .filter(|path| kind_of(path) == Some(Kind::Markdown))
+        .filter(|path| {
+            std::fs::read_to_string(root.join(path))
+                .ok()
+                .and_then(|text| md2pdf_core::section_paths(&text).ok())
+                .is_some_and(|sections| !sections.is_empty())
+        })
+        .collect()
+}
+
+/// Which file under `root` compiles, when nothing is remembered about it.
+///
+/// - **exactly one master → that file**, whatever the author opened;
+/// - **no master → the file the author opened**, which is every single-file
+///   document and is this app's behaviour before the panel existed;
+/// - **more than one master → the opened file if it is itself one of them,
+///   otherwise the byte-wise alphabetically first**, and the panel marks which
+///   it landed on.
+///
+/// **This never leaves the main unset.** An empty pane and no page is a worse
+/// answer than a guess the author can see and correct in one action, and the
+/// mark in the panel is what makes the guess visible. Alphabetical is not a
+/// claim about which is right — it is a claim that the same folder opens the
+/// same way twice, which a set iteration order would not be.
+pub fn discover_main(root: &Path, opened: &Path) -> String {
+    let here = relative(root, opened)
+        .unwrap_or_else(|| opened.file_name().unwrap_or_default().to_string_lossy().into_owned());
+
+    let mut masters = masters(root);
+    match masters.len() {
+        0 => here,
+        1 => masters.remove(0),
+        _ if masters.contains(&here) => here,
+        _ => masters.remove(0),
+    }
+}
+
+/// A path under `root`, spelled the way an [`Entry`] is: root-relative, `/`
+/// separators, and `None` when it is not under the root at all.
+///
+/// Both sides are canonicalized, for [`crate::watch::classify`]'s reason: on
+/// macOS the Open dialog hands over `/var/…` where the filesystem spells it
+/// `/private/var/…`, so comparing them as they arrive matches nothing.
+pub fn relative(root: &Path, path: &Path) -> Option<String> {
+    let root = crate::watch::resolve(root);
+    let path = crate::watch::resolve(path);
+    let rest = path.strip_prefix(&root).ok()?;
+
+    let mut spelled = String::new();
+    for part in rest.components() {
+        if !spelled.is_empty() {
+            spelled.push('/');
+        }
+        spelled.push_str(&part.as_os_str().to_string_lossy());
+    }
+    (!spelled.is_empty()).then_some(spelled)
+}
+
+/// One root-relative path joined onto the directory another sits in.
+///
+/// The master need not sit at the root, and `md2pdf_core::section_paths`
+/// answers relative to the master — so a master at `parts/book.md` naming
+/// `text.md` means the root-relative `parts/text.md`. A `..` is resolved
+/// lexically, which is enough: `core/src/emit.rs`'s `landed_path` has already
+/// refused any path that climbs out of the master's own folder.
+pub fn beside(main: &str, named: &str) -> String {
+    let mut segments: Vec<&str> = match main.rsplit_once('/') {
+        Some((directory, _)) => directory.split('/').collect(),
+        None => Vec::new(),
+    };
+    for part in named.split('/') {
+        match part {
+            "." | "" => {}
+            ".." => {
+                segments.pop();
+            }
+            part => segments.push(part),
+        }
+    }
+    segments.join("/")
+}
+
+/// The one file the store lives in, inside the directory the platform gives
+/// this app.
+///
+/// **Not a dotfile in the author's own folder**, and that was refused for two
+/// reasons either of which is sufficient: it is the manifest
+/// `specs/desktop_app_spec.md` §1.1 parks, arriving by another name; and it
+/// writes a file into a directory the author may have under version control,
+/// which this app has never done and should not start doing as a side effect of
+/// a panel. The cost is accepted and stated: **the choice does not travel with
+/// the files.**
+pub fn store_file(support: &Path) -> PathBuf {
+    support.join("projects.json")
+}
+
+/// What one root is remembered as compiling, keyed by the root's canonical path.
+///
+/// A `BTreeMap` so two writes of the same map produce the same bytes.
+type Store = std::collections::BTreeMap<String, String>;
+
+/// The store as it stands, or an empty one.
+///
+/// **A missing, unreadable or malformed store is nothing remembered, never an
+/// error in the window.** The one fact in here is a convenience; a window that
+/// refused to open a document because a JSON file in Application Support had
+/// been truncated would be trading the whole app for it.
+fn read_store(store: &Path) -> Store {
+    std::fs::read_to_string(store)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+/// Which file this root is remembered as compiling, if any.
+pub fn read_override(store: &Path, root: &Path) -> Option<String> {
+    read_store(store).remove(&key(root))
+}
+
+/// Remember that this root compiles `main`.
+///
+/// **A failed write is reported**, where a failed read is not: a set-main that
+/// silently does not stick is worse than one that says why, and the author has
+/// just asked for it in as many words.
+pub fn write_override(store: &Path, root: &Path, main: &str) -> Result<(), String> {
+    let mut held = read_store(store);
+    held.insert(key(root), main.to_string());
+
+    let text = serde_json::to_string_pretty(&held)
+        .map_err(|e| format!("cannot write {}: {e}", store.display()))?;
+
+    if let Some(parent) = store.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
+    }
+    std::fs::write(store, text).map_err(|e| format!("cannot write {}: {e}", store.display()))
+}
+
+/// A root as the store keys it: the path the filesystem really spells.
+fn key(root: &Path) -> String {
+    crate::watch::resolve(root).to_string_lossy().into_owned()
+}
+
 /// Read every file the document names, from beside the document.
 ///
 /// This mirrors `cli/src/main.rs:read_assets`: a path resolves against the
@@ -746,5 +1206,186 @@ mod tests {
     #[test]
     fn the_title_is_the_documents_file_name() {
         assert_eq!(title(Path::new("/tmp/notes/paper.md")), "paper.md");
+    }
+
+    // -- the project: root, discovery, listing, store ----------------------
+    //
+    // `mpdf-010` Phase 1's exit gate, clauses 1 through 6. The fixture is
+    // `tests/fixtures/panel/`, created by that phase: `samples/showcase/`
+    // gains a `showcase.pdf` for any developer who has run its own README, and
+    // `pdf` is in `IMAGE_EXTENSIONS`, so an exact-enumeration gate over the
+    // sample tree is not reproducible by a second person.
+
+    /// Clause 1. **The root climbs, and it climbs exactly once.**
+    ///
+    /// The first case is the whole phase's observable: opening a section from
+    /// Finder must find the master above it, or the window compiles one section
+    /// standalone as it does today.
+    ///
+    /// **The last case asserts the cap rather than accepting it.**
+    /// `parts/ch1/deep.md` is named by `book.md` as `[](parts/ch1/deep.md)` — a
+    /// supported marker, not merely an unrefused one — and it still roots at
+    /// `parts/ch1`, because `parts/` holds no markdown for the climb to find.
+    /// That is `specs/file_panel_spec.md` §2's stated cost, pinned here so a
+    /// later change to the climb has to change this line deliberately.
+    #[test]
+    fn the_root_climbs_one_level_and_stops() {
+        let panel = fixture("panel");
+
+        assert_eq!(project_root(&panel.join("sections/text.md")), panel);
+        assert_eq!(project_root(&panel.join("book.md")), panel);
+        assert_eq!(
+            project_root(&panel.join("loose/orphan.md")),
+            panel.join("loose"),
+            "no `.md` above `loose/` names it, so it is its own root"
+        );
+        assert_eq!(
+            project_root(&panel.join("parts/ch1/deep.md")),
+            panel.join("parts/ch1"),
+            "the cap: `parts/` holds no markdown, so the climb finds nothing"
+        );
+    }
+
+    /// Clause 2. Discovery is the `.md` files whose text names sections.
+    #[test]
+    fn discovery_is_every_markdown_that_names_a_section() {
+        assert_eq!(masters(&fixture("panel")), ["book.md"]);
+        assert_eq!(masters(&fixture("panel/loose")), Vec::<String>::new());
+        assert_eq!(masters(&fixture("panel-pair")), ["alpha.md", "beta.md"]);
+    }
+
+    /// Clause 3's discovery half. The store is read by the session, not here;
+    /// what this pins is the answer when nothing is remembered.
+    #[test]
+    fn the_main_is_the_one_master_or_the_first_of_several() {
+        let panel = fixture("panel");
+        let pair = fixture("panel-pair");
+
+        // One master: whatever the author opened, the master compiles.
+        assert_eq!(discover_main(&panel, &panel.join("sections/text.md")), "book.md");
+        assert_eq!(discover_main(&panel, &panel.join("book.md")), "book.md");
+
+        // None: the file the author opened, which is every single-file document
+        // and is this app's behaviour before the panel existed.
+        let loose = panel.join("loose");
+        assert_eq!(discover_main(&loose, &loose.join("orphan.md")), "orphan.md");
+
+        // Several: the opened file when it is one of them, else the byte-wise
+        // first — a claim that the same folder opens the same way twice, not a
+        // claim about which is right.
+        assert_eq!(discover_main(&pair, &pair.join("note.md")), "alpha.md");
+        assert_eq!(discover_main(&pair, &pair.join("beta.md")), "beta.md");
+    }
+
+    /// Clause 4. **The listing, against the manifest beside the fixture.**
+    ///
+    /// The manifest is a `.txt` and sits in `tests/fixtures/` rather than in
+    /// `tests/fixtures/panel/`, so it cannot become a row in the listing it
+    /// defines.
+    ///
+    /// `sections/missing.md` is handed in as a path the master names. `book.md`
+    /// deliberately does not name it: a master naming a file the disk lacks
+    /// refuses with `MissingSection`, and the byte-for-byte claim in
+    /// `crate::preview`'s own test needs `book.md` to compile.
+    #[test]
+    fn the_listing_is_the_disk_and_what_the_master_names() {
+        let named = [
+            "sections/text.md".to_string(),
+            "parts/ch1/deep.md".to_string(),
+            "sections/missing.md".to_string(),
+        ];
+        let listed = merge(files_under(&fixture("panel")), &named);
+
+        let spelled: Vec<(&str, Kind, bool)> = listed
+            .iter()
+            .map(|entry| (entry.path.as_str(), entry.kind, entry.missing))
+            .collect();
+
+        assert_eq!(
+            spelled,
+            [
+                ("book.md", Kind::Markdown, false),
+                ("cover.jpg", Kind::Image, false),
+                ("other.md", Kind::Markdown, false),
+                ("refs.bib", Kind::Bibliography, false),
+                ("refs.yml", Kind::Bibliography, false),
+                ("loose/orphan.md", Kind::Markdown, false),
+                ("parts/ch1/deep.md", Kind::Markdown, false),
+                ("sections/mark.svg", Kind::Image, false),
+                ("sections/missing.md", Kind::Markdown, true),
+                ("sections/text.md", Kind::Markdown, false),
+            ],
+            "the listing and `tests/fixtures/panel-manifest.txt` disagree"
+        );
+    }
+
+    /// Clause 5. **Confinement, tested where it can fail.**
+    ///
+    /// `tests/fixtures/panel/outside` is a symlink to
+    /// `tests/fixtures/panel-decoy/`, a committed sibling so the link resolves
+    /// the same on any clone. The target holds a `.md` and a `.png` that both
+    /// match the filter — a link to a directory holding nothing it matched
+    /// would pass under an implementation with no confinement at all, which is
+    /// why the target holds two files that do.
+    #[test]
+    fn the_walk_does_not_follow_a_link_out_of_the_root() {
+        let decoy = fixture("panel-decoy");
+        assert!(
+            fixture("panel/outside").is_dir(),
+            "the fixture's symlink did not survive the checkout"
+        );
+        assert_eq!(
+            files_under(&decoy)
+                .iter()
+                .map(|entry| entry.path.as_str())
+                .collect::<Vec<_>>(),
+            ["decoy.md", "decoy.png"],
+            "the decoy must hold rows the filter matches, or the clause below proves nothing"
+        );
+
+        assert!(
+            files_under(&fixture("panel"))
+                .iter()
+                .all(|entry| !entry.path.starts_with("outside")),
+            "a link out of the root put its target's files in the panel"
+        );
+    }
+
+    /// Clause 6. The store round-trips, and a truncated one is nothing
+    /// remembered rather than an error in the window.
+    #[test]
+    fn the_store_remembers_one_fact_per_root_and_forgives_a_bad_file() {
+        let dir = scratch_dir("store");
+        let store = store_file(&dir);
+        let root = fixture("panel");
+        let other = fixture("panel-pair");
+
+        assert_eq!(read_override(&store, &root), None, "a store with no file");
+
+        write_override(&store, &root, "other.md").unwrap();
+        write_override(&store, &other, "beta.md").unwrap();
+        assert_eq!(read_override(&store, &root).as_deref(), Some("other.md"));
+        assert_eq!(read_override(&store, &other).as_deref(), Some("beta.md"));
+
+        // A second write of the same root replaces rather than accumulates.
+        write_override(&store, &root, "book.md").unwrap();
+        assert_eq!(read_override(&store, &root).as_deref(), Some("book.md"));
+        assert_eq!(read_override(&store, &other).as_deref(), Some("beta.md"));
+
+        std::fs::write(&store, "{\"/some/root\": ").unwrap();
+        assert_eq!(
+            read_override(&store, &root),
+            None,
+            "a truncated store is nothing remembered, and never an error"
+        );
+    }
+
+    /// The path arithmetic the panel's union needs: a master that does not sit
+    /// at the root names its sections relative to itself.
+    #[test]
+    fn a_section_is_named_beside_the_master_that_reads_it() {
+        assert_eq!(beside("book.md", "sections/text.md"), "sections/text.md");
+        assert_eq!(beside("parts/book.md", "text.md"), "parts/text.md");
+        assert_eq!(beside("parts/book.md", "../shared/text.md"), "shared/text.md");
     }
 }

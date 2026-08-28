@@ -92,15 +92,28 @@ fn main() {
             // The watch loop compiles with nobody asking, so the session is
             // built with the one thing it cannot decide for itself: how to
             // tell the page that a compile happened.
+            //
+            // The second thing it cannot decide for itself is where the one
+            // fact it remembers about a project lives. **Tauri's own resolver
+            // answers it**, because `tauri.conf.json`'s identifier is what
+            // names the directory and nothing else here should have to know it.
+            // A resolver that cannot answer leaves the store beside nothing and
+            // the app remembers nothing, which is the same state a first launch
+            // is in.
+            let support = app.path().app_data_dir().unwrap_or_default();
             let handle = app.handle().clone();
-            app.manage(Mutex::new(Session::new(move || {
-                let _ = handle.emit(RENDERED, ());
-            })));
+            app.manage(Mutex::new(Session::new(
+                document::store_file(&support),
+                move || {
+                    let _ = handle.emit(RENDERED, ());
+                },
+            )));
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             open_document,
+            set_main,
             document_text,
             edit,
             save,
@@ -150,8 +163,13 @@ fn main() {
 /// not an error here — it is a state the page draws, and it arrives through
 /// [`current_pdf`] like any other.
 ///
-/// The title is set before the compile, so the window names the document the
-/// user opened whether or not it compiled.
+/// **The title is set twice, and both are needed.** Once before the compile
+/// with the path the user picked, so the window names something whether or not
+/// the compile succeeded — which is what it has always done — and once after,
+/// because `Session::open` now opens the file the *project* compiles rather
+/// than the file it was handed. A double-click on a section titles the window
+/// `text.md` for the length of one compile and `showcase.md` after it, which is
+/// the truth in both instants.
 ///
 /// The command is `async`, which puts the compile on the runtime's pool rather
 /// than on the thread that draws the window.
@@ -167,10 +185,38 @@ async fn open_document(
         .set_title(&document::title(&document))
         .map_err(|e| e.to_string())?;
 
-    session
-        .lock()
-        .expect("the session lock was poisoned")
-        .open(document)
+    let opened = {
+        let mut session = session.lock().expect("the session lock was poisoned");
+        session.open(document)?;
+        session.preview().document().map(document::title)
+    };
+
+    if let Some(name) = opened {
+        window.set_title(&name).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Set which file under the open project compiles, and remember it.
+///
+/// The window is retitled for [`open_document`]'s reason: the pane is now
+/// holding a different file.
+#[tauri::command]
+async fn set_main(
+    window: tauri::Window,
+    session: tauri::State<'_, Mutex<Session>>,
+    path: String,
+) -> Result<(), String> {
+    let opened = {
+        let mut session = session.lock().expect("the session lock was poisoned");
+        session.set_main(path)?;
+        session.preview().document().map(document::title)
+    };
+
+    if let Some(name) = opened {
+        window.set_title(&name).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 /// The document Finder handed over, if one is waiting.

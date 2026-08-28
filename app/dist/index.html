@@ -116,13 +116,19 @@
       }
 
       /*
-        The section panel. It lists the parts of the open document: the master
-        first, then the sections it names in the order it reads them, each
-        named as the master writes it — `sections/method.md` and not
-        `method.md`, because that is the master's own word for it, it is what
-        the author would edit, and two sections of the same name in different
-        folders must not read alike. A document naming no section draws no
-        panel at all, so a single-file window is unchanged.
+        The file panel. It lists the project: every file under the root that
+        this dialect can read — markdown, bibliographies and every extension it
+        accepts as a figure — with folders derived here from the path segments
+        and the file that compiles marked. **Every open document draws one**,
+        including a lone `.md` that names nothing, which is what lets an author
+        build a first section without leaving the window.
+
+        Rust sends a flat list of `{ path, kind, missing }` and no directories.
+        The headings and the indent below are read off `path`, which is a thing
+        a page can do and a thing a nested node type would make `Status` carry
+        twice. The order is Rust's too — files before folders, each byte-wise
+        alphabetical — so the panel cannot reorder itself between two compiles
+        of the same tree.
 
         **A left column, before the text pane, and the placement is
         load-bearing rather than taste.** It is the panel `mpdf-003` Phase 7
@@ -131,18 +137,17 @@
         the left of it. `#divider` takes its grab point from the text pane's
         own left edge because of this element.
 
-        **The rows do not load, and that is decided rather than deferred.**
-        Loading a section into the pane breaks "the pane holds exactly one
-        file", and four things turn on it: `render_with` keeps only the anchors
-        whose location names no file, `Session::on_change` runs the
-        external-change rule on the buffer the pane holds and never on a
-        section, `save` writes to the document's own path, and the join reads
-        every section off the disk. A phase that wants loading rows inverts the
-        first, forks the second, redirects the third and makes the fourth take
-        one file's text from memory — which is a phase, not a detail. So the
-        rows are a list and are deliberately not dressed as buttons.
+        **The rows still do not open, and one gesture on them does.** A row's
+        body is inert; the `main` button that appears on a markdown row sets
+        which file compiles and is deliberately not the row itself, because the
+        next phase gives the row body a meaning of its own — clicking it puts
+        that file in the pane. Four things turn on the body being inert until
+        then, and each is a thing that phase changes: `render_with` keeps only
+        the anchors whose location names no file, `Session::on_change` runs the
+        external-change rule on the buffer the pane holds, `save` writes to the
+        edited file's own path, and the join reads every section off the disk.
 
-        `mpdf-008` Phase 4.
+        `mpdf-010` Phase 1, replacing `mpdf-008` Phase 4's section panel.
       */
       #files {
         flex: 0 0 auto;
@@ -158,9 +163,9 @@
         display: none;
       }
       /*
-        Collapsed is not hidden, and the two are different states. A document
-        naming no section has no panel and no toggle — `hidden`. A document that
-        has one the reader has folded away keeps its toggle — `.collapsed`.
+        Collapsed is not hidden, and the two are different states. No document
+        open at all has no panel and no toggle — `hidden`. A reader who folded
+        the panel away keeps the toggle, so they can get it back — `.collapsed`.
       */
       #files.collapsed {
         display: none;
@@ -207,6 +212,9 @@
         list-style: none;
       }
       #files li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         padding: 4px 12px;
         white-space: nowrap;
         color: var(--quiet);
@@ -216,10 +224,83 @@
           Menlo,
           monospace;
       }
-      /* The one the pane is actually holding. */
+      /*
+        The indent is a padding on the row and not a margin on its text, so the
+        marks below still start at the panel's own edge whatever the depth. One
+        step per segment above the root, set from the page.
+      */
+      #files li[data-depth='1'] { padding-left: 26px; }
+      #files li[data-depth='2'] { padding-left: 40px; }
+      #files li[data-depth='3'] { padding-left: 54px; }
+      #files li[data-depth='4'] { padding-left: 68px; }
+      /*
+        Deeper than four and the indent stops growing rather than eating the
+        panel. The path is still the row's title, so nothing is unreadable.
+      */
+      #files li[data-depth='5'] { padding-left: 82px; }
+
+      /*
+        A folder heading. It is a row like the others so the indent rule reaches
+        it, and it names one segment rather than the whole path — the rows under
+        it carry the rest.
+      */
+      #files li.folder {
+        color: var(--quiet);
+        opacity: 0.75;
+      }
+      #files li.folder .name::after {
+        content: '/';
+      }
+      /* The one that compiles. */
       #files li.here {
         color: var(--ink);
         box-shadow: inset 2px 0 0 var(--ink);
+      }
+      /*
+        A file the master names that the disk does not hold. It is the row the
+        author most needs, so it is marked rather than dimmed: the compile is
+        refusing on exactly this path.
+      */
+      #files li.missing .name {
+        color: var(--alarm);
+        text-decoration: line-through;
+      }
+      #files li .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #files li .mark {
+        margin-left: auto;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        color: var(--ink);
+      }
+      /*
+        The gesture that sets which file compiles, and the only thing on a row
+        that can be clicked. It appears on hover and on focus, so it is
+        reachable from the keyboard without being nine buttons on screen at
+        once; `margin-left: auto` puts it where the `main` mark sits, because
+        only one of the two is ever on a row.
+      */
+      #files li .set {
+        margin-left: auto;
+        padding: 0 6px;
+        border: 1px solid var(--edge);
+        border-radius: 3px;
+        background: var(--ground);
+        color: var(--quiet);
+        font: inherit;
+        font-size: 10px;
+        cursor: pointer;
+        visibility: hidden;
+      }
+      #files li:hover .set,
+      #files li .set:focus-visible {
+        visibility: visible;
+      }
+      #files li .set:hover {
+        color: var(--ink);
+        border-color: var(--ink);
       }
 
       /*
@@ -676,7 +757,7 @@
   <body>
     <header>
       <button id="toggle" type="button" aria-expanded="true" aria-controls="files" hidden>
-        Sections
+        Files
       </button>
       <button id="numbers" type="button" aria-pressed="false" aria-controls="lines">
         Lines
@@ -711,8 +792,8 @@
     </header>
     <main>
       <div id="mirror" aria-hidden="true"></div>
-      <nav id="files" hidden aria-label="The document's files">
-        <h2>Document</h2>
+      <nav id="files" hidden aria-label="The project's files">
+        <h2>Files</h2>
         <ol id="parts"></ol>
       </nav>
       <div id="lines" hidden aria-hidden="true"></div>
@@ -760,9 +841,9 @@
         check is `app/typecheck.mjs`, which is not part of any build — see
         `app/tsconfig.json` for why its settings are what they are.
 
-        **`Status` and `Anchor` are the point, and they are the two that can
-        lie.** `invoke` returns an untyped value and this page reads ten fields
-        off it by name, so a field renamed in Rust would break the window
+        **`Status`, `Anchor` and `Entry` are the point, and they are the three
+        that can lie.** `invoke` returns an untyped value and this page reads ten
+        fields off it by name, so a field renamed in Rust would break the window
         silently at runtime. `app/src/preview.rs`'s own test compares the
         `@property` lists below against a serialized `Status` — two declarations
         checked against each other, rather than usage checked against a
@@ -783,8 +864,23 @@
        * @property {number} revision
        * @property {number} reloaded
        * @property {Anchor[]} anchors
-       * @property {string[]} sections
-       * @property {string | null} master
+       * @property {Entry[]} entries
+       * @property {string | null} main
+       */
+
+      /**
+       * One file in the project, and one row of the panel:
+       * `app/src/document.rs:Entry`.
+       *
+       * `path` is root-relative with `/` separators on every platform, so this
+       * page splits it into segments without knowing what a path is on the
+       * machine it is running on. **A directory is never one of these** — the
+       * folder headings are derived from the segments here.
+       *
+       * @typedef {object} Entry
+       * @property {string} path
+       * @property {'markdown' | 'bibliography' | 'image'} kind
+       * @property {boolean} missing
        */
 
       /**
@@ -1145,20 +1241,23 @@
       }
 
       /*
-        Draw the file list. The master is marked as the one the pane holds —
-        positionally, because today it always is.
+        Draw the project's files. The row whose path is `main` is marked, by
+        name and not by position — a project's master need not be its first
+        file, and two files of the same name in different folders must not both
+        light up.
 
-        It is rebuilt on every status, which is every compile, and that is fine
-        because the rows are inert. It would not be once they held a selection,
-        which is one of the things "the rows do not load" above buys.
+        It is rebuilt on every status, which is every compile, and that is
+        still fine: **the rows hold no selection.** Which file compiles lives in
+        Rust and arrives in the status, so a rebuild cannot lose it, and the one
+        button on a row reads its path off the DOM at the moment it is clicked.
+        A row that remembered something of its own would make this wrong.
 
-        **The list tracks the text exactly and retains nothing.** A master
-        whose markers are deleted loses the rows on the next compile, because
-        `section_paths` cannot fail and an empty list is therefore the answer
-        rather than a failure to answer. The cost is a panel that flickers
-        while a marker is half-typed; if that ever proves unbearable the answer
-        is to damp this redraw, never to retain a list the text has stopped
-        naming.
+        **The disk half of the list is stable and only the marked-missing half
+        moves.** Rust walks the directory at an open and at a filesystem event
+        under the root, never per keystroke; the rows for files a master names
+        and the disk does not hold come off the text and do follow it. That is
+        strictly less motion than the section panel this replaces, which was
+        entirely the text's.
       */
       const files = document.getElementById('files')
       const list = document.getElementById('parts')
@@ -1173,9 +1272,14 @@
         test could hold. But that rule is about state that *decides
         behaviour*, and a fold decides nothing but its own drawing — nothing
         else reads it. Moving it to `Preview` would buy nothing either: both
-        die with the process, this app persists nothing to disk, and a fold
-        already survives an Open where it lives, `parts` reapplying
-        `.collapsed` on every status.
+        die with the process, and a fold already survives an Open where it
+        lives, `parts` reapplying `.collapsed` on every status.
+
+        **This app does now persist one thing**, since `mpdf-010` Phase 1: which
+        file a project compiles, in Application Support. That is deliberately
+        not a precedent for the fold. It is remembered because it is a decision
+        the author made about their document and would have to make again; a
+        fold is where a scrollbar was.
       */
       let folded = false
 
@@ -1187,7 +1291,10 @@
 
       /** @param {Status} state */
       function parts(state) {
-        files.hidden = state.sections.length === 0
+        // **Absent is exactly "no document is open".** Every open document
+        // draws a panel, including one that names nothing — which is what lets
+        // an author build a first section from inside the window.
+        files.hidden = state.state === 'empty'
         toggle.hidden = files.hidden
         if (files.hidden) {
           list.replaceChildren()
@@ -1195,18 +1302,114 @@
         }
 
         files.classList.toggle('collapsed', folded)
+        list.replaceChildren(...panelRows(state.entries, state.main))
+      }
 
-        const row = (name, here) => {
-          const li = document.createElement('li')
-          li.textContent = name
-          li.className = here ? 'here' : ''
-          return li
+      /**
+       * The panel's rows: one per entry, with a heading wherever the folder
+       * changes.
+       *
+       * Rust sends no directories and sends the entries already ordered — files
+       * before folders, each byte-wise alphabetical — so a heading is needed
+       * exactly where a path's leading segments differ from the last one's, and
+       * the depth is how many segments precede the name.
+       *
+       * @param {Entry[]} entries
+       * @param {string | null} main
+       * @returns {HTMLElement[]}
+       */
+      function panelRows(entries, main) {
+        const drawn = []
+        let folder = []
+
+        for (const entry of entries) {
+          const segments = entry.path.split('/')
+          const here = segments.slice(0, -1)
+
+          // Where the folder changed, name every segment of it that is new.
+          // A file two directories deeper than the last one is two headings,
+          // which is what makes the panel readable without sending a tree.
+          let shared = 0
+          while (shared < here.length && here[shared] === folder[shared]) shared++
+          for (let at = shared; at < here.length; at++) {
+            drawn.push(folderRow(here[at], at))
+          }
+          folder = here
+
+          drawn.push(fileRow(entry, here.length, entry.path === main))
         }
+        return drawn
+      }
 
-        list.replaceChildren(
-          row(state.master ?? 'the document', true),
-          ...state.sections.map((section) => row(section, false))
-        )
+      /** @param {string} name @param {number} depth @returns {HTMLElement} */
+      function folderRow(name, depth) {
+        const li = document.createElement('li')
+        li.className = 'folder'
+        li.dataset.depth = String(Math.min(depth, 5))
+        const label = document.createElement('span')
+        label.className = 'name'
+        label.textContent = name
+        li.append(label)
+        return li
+      }
+
+      /**
+       * One file's row: its name, and either the mark that says it compiles or
+       * the button that would make it.
+       *
+       * **The button carries the path rather than the row's text**, because the
+       * text is the last segment and the path is what Rust is handed. Only a
+       * markdown file gets one: nothing else can be the file that compiles.
+       *
+       * @param {Entry} entry @param {number} depth @param {boolean} here
+       * @returns {HTMLElement}
+       */
+      function fileRow(entry, depth, here) {
+        const li = document.createElement('li')
+        li.className = `${here ? 'here ' : ''}${entry.missing ? 'missing' : ''}`.trim()
+        li.dataset.depth = String(Math.min(depth, 5))
+        li.dataset.kind = entry.kind
+        li.title = entry.missing
+          ? `${entry.path} — named by the document, and not on disk`
+          : entry.path
+
+        const label = document.createElement('span')
+        label.className = 'name'
+        label.textContent = entry.path.split('/').pop() ?? entry.path
+        li.append(label)
+
+        if (here) {
+          const mark = document.createElement('span')
+          mark.className = 'mark'
+          mark.textContent = '◀ main'
+          li.append(mark)
+        } else if (entry.kind === 'markdown' && !entry.missing) {
+          const set = document.createElement('button')
+          set.type = 'button'
+          set.className = 'set'
+          set.textContent = 'main'
+          set.title = `Compile ${entry.path} instead`
+          set.addEventListener('click', () => setMain(entry.path))
+          li.append(set)
+        }
+        return li
+      }
+
+      /*
+        Set which file the project compiles.
+
+        It goes through `clear()` for `openDocument`'s reason and not for
+        tidiness: Rust rebuilds the preview from scratch, restarting `revision`
+        and `reloaded` at 0, and this page compares its own counters against
+        them.
+      */
+      async function setMain(path) {
+        clear()
+        try {
+          await invoke('set_main', { path })
+        } catch (problem) {
+          fail(problem)
+        }
       }
 
       /*
@@ -1554,8 +1757,8 @@
 
         Five shipped causes move the *width* term: the divider, a window
         resize, the section panel folding, the line gutter, and an open
-        itself, since the panel is shown for any document naming sections and
-        the status that decides it arrives before the bytes do.
+        itself, since the panel is shown for any open document at all and the
+        status that decides it arrives before the bytes do.
       */
       function decideMode() {
         let whole = 0
@@ -2025,8 +2228,14 @@
         if (drawing) pages.classList.add('stale')
       }
 
-      // Back to the empty state, holding no document's page and no text.
+      // Back to the empty state, holding no document's page, no text and no
+      // project. The panel goes with them: it is drawn for every open document
+      // now, so the previous project's files would otherwise stay on screen
+      // through the open that replaces them.
       function clear() {
+        files.hidden = true
+        toggle.hidden = true
+        list.replaceChildren()
         message.hidden = false
         divergence.hidden = true
         error.hidden = true

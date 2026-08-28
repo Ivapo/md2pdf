@@ -1,0 +1,46 @@
+The listing `tests/fixtures/panel/` must produce, and the one path it is handed
+that the disk does not hold.
+
+**This file sits beside the fixture and not inside it**, so it cannot become a
+row in the listing it defines. `mpdf-010` Phase 1's exit gate, clause 4.
+
+The order is `mpdf-010` §2's: within each directory, files byte-wise
+alphabetically first, then subdirectories byte-wise alphabetically, each
+expanded where it sits. It is computed in Rust so the panel cannot reorder
+itself between two compiles of the same tree.
+
+`sections/missing.md` is the one entry the walk does not find. It is the path
+`listing` is handed as one the master names, and `book.md` deliberately does not
+name it: a master that named a file the disk lacks would refuse with
+`MissingSection`, and clause 3 needs `book.md` to compile so its byte-for-byte
+claim has bytes on both sides.
+
+  path                   kind          missing
+  ---------------------  ------------  -------
+  book.md                markdown      no
+  cover.jpg              image         no
+  other.md               markdown      no
+  refs.bib               bibliography  no
+  refs.yml               bibliography  no
+  loose/orphan.md        markdown      no
+  parts/ch1/deep.md      markdown      no
+  sections/mark.svg      image         no
+  sections/missing.md    markdown      YES
+  sections/text.md       markdown      no
+
+`refs.yml` is here for the reason `cover.jpg` is. The dialect reads a
+bibliography as a `.bib`, a `.yml` or a `.yaml` — `core/src/bibliography.rs`
+folds the extension to lower case and matches all three — so a panel that listed
+`.bib` alone would be blind to a bibliography the pipeline compiles perfectly
+well, which is the same defect `mpdf-010` §2 argues against for `.jpg`.
+
+What is in the fixture and contributes nothing:
+
+  notes.txt    an extension no channel of the pipeline reads
+  draft.typ    the source the pipeline writes, never one it reads as a figure
+  outside      a symlink to `tests/fixtures/panel-decoy/`, which holds a `.md`
+               and a `.png` that both match the filter — so a listing with no
+               confinement would put two rows here, and the clause that says it
+               does not cannot pass vacuously
+  parts/       holds no markdown of its own, which is what caps the climb at
+               `parts/ch1` for `parts/ch1/deep.md`

@@ -1,0 +1,15 @@
+# The bibliography the citation fixtures name, in Hayagriva's format. Typst
+# reads this and BibLaTeX `.bib`, and the emitter writes the same call either
+# way, so nothing here is a format the pipeline owns.
+#
+# The key carries a ':' and a '/' deliberately. That is exactly the shape
+# Typst's own label syntax cannot parse — `#cite(<DBLP:books/lib/Knuth86a>)`
+# fails with "unclosed label; unexpected slash", naming no line and no
+# construct — so a fixture keyed `knuth1986` would pass under either spelling
+# and prove nothing about `label("…")`.
+"DBLP:books/lib/Knuth86a":
+  type: book
+  title: "Computers and Typesetting, Volume A: The TeXbook"
+  author: Knuth, Donald E.
+  date: 1986
+  publisher: Addison-Wesley

@@ -91,16 +91,26 @@ pub fn root(document: &Path) -> PathBuf {
 
 /// What a path under the watch is, to the document the pane holds.
 ///
-/// The two are not the same event any more. An asset that moves is still "the
-/// page is out of date, compile", because nothing but the disk supplies a
-/// figure or a bibliography. The document that moves is "the disk moved,
-/// decide", because the pane's own buffer is what compiles now.
+/// The three are not the same event. An asset that moves is still "the page is
+/// out of date, compile", because nothing but the disk supplies a figure or a
+/// bibliography. The document that moves is "the disk moved, decide", because
+/// the pane's own buffer is what compiles now. And anything else under the root
+/// is "the project's files moved" — which the panel needs and the compile must
+/// not run for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Change {
     /// The open document itself.
     Document,
     /// One of the assets the document names: a figure, or its bibliography.
     Asset,
+    /// A path under the root that is neither.
+    ///
+    /// **This is the events the filter used to drop**, and the panel needs
+    /// exactly them: a file created, renamed or deleted anywhere in the project
+    /// changes what the panel lists and changes nothing about the page. So it
+    /// refreshes the listing and **does not compile**, which is
+    /// `crate::preview::Preview`'s `revision` standing still.
+    Tree,
 }
 
 /// What one settled window of events was about.
@@ -114,14 +124,25 @@ pub struct Changed {
     pub document: bool,
     /// At least one asset the document names moved.
     pub assets: bool,
+    /// At least one other path under the root moved, so the panel's listing is
+    /// out of date.
+    pub tree: bool,
 }
 
-/// Which of the two a change to this path is, or neither.
+/// Which of the three a change to this path is, or none of them.
 ///
-/// It is one of them when the path is the document, or one of the paths
-/// `md2pdf_core::image_paths` and `md2pdf_core::bibliography_path` returned for
-/// it. Everything else under the directory is dropped, which is what a
-/// directory-valued watch buys and pays for.
+/// It is the document when the path is the document, an asset when it is one of
+/// the paths `md2pdf_core::image_paths` and `md2pdf_core::bibliography_path`
+/// returned for it, and the tree when it is anything else under the root.
+/// Everything outside the root is dropped.
+///
+/// **The root is a parameter and is no longer re-derived from the document.**
+/// It was `root(document)` until `mpdf-010` Phase 1, which is the same
+/// directory only while the project is the document's own folder — and the
+/// climb that finds a master above an opened section makes the two differ. The
+/// *document and its assets* are still resolved against the document's own
+/// directory, which is where a path the markdown writes resolves; the root is
+/// what `Tree` is measured against.
 ///
 /// **The document stays in here**, though its events no longer mean "compile".
 /// A path dropped from the filter would never reach the rule that decides what
@@ -141,15 +162,18 @@ pub struct Changed {
 /// asset the document names before anyone creates it has no real path to
 /// resolve yet. Joining a relative path onto a resolved directory gives a
 /// resolved path either way.
-pub fn classify(event: &Path, document: &Path, assets: &[String]) -> Option<Change> {
+pub fn classify(event: &Path, project: &Path, document: &Path, assets: &[String]) -> Option<Change> {
     let name = document.file_name()?;
-    let root = resolve(&root(document));
+    let here = resolve(&root(document));
+    let project = resolve(project);
     let event = resolve(event);
 
-    if event == root.join(name) {
+    if event == here.join(name) {
         Some(Change::Document)
-    } else if assets.iter().any(|asset| event == root.join(asset)) {
+    } else if assets.iter().any(|asset| event == here.join(asset)) {
         Some(Change::Asset)
+    } else if event.starts_with(&project) {
+        Some(Change::Tree)
     } else {
         None
     }
@@ -157,7 +181,13 @@ pub fn classify(event: &Path, document: &Path, assets: &[String]) -> Option<Chan
 
 /// A path as the filesystem really spells it, or as given when it names
 /// nothing that exists — a file just deleted, or one not yet created.
-fn resolve(path: &Path) -> PathBuf {
+///
+/// **`crate::document`'s walk reads this one rather than spelling
+/// canonicalization a second way**, so the panel and the filter agree about
+/// what a path is. It returns its *input* when canonicalization fails, which is
+/// why it is the walk's spelling and not a write's: a file being created never
+/// canonicalizes, so a check built on it would pass a path textually.
+pub(crate) fn resolve(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
@@ -249,6 +279,7 @@ pub fn start(
                 match classify(path) {
                     Some(Change::Document) => (changed.document, counted) = (true, true),
                     Some(Change::Asset) => (changed.assets, counted) = (true, true),
+                    Some(Change::Tree) => (changed.tree, counted) = (true, true),
                     None => {}
                 }
             }
@@ -356,14 +387,19 @@ mod tests {
     }
 
     /// The document, both the figures it names and the bibliography it
-    /// declares reach the loop, and they reach it as two different things. A
-    /// sibling the document never names reaches it as neither, though the
-    /// watch covers it.
+    /// declares reach the loop, and they reach it as three different things. A
+    /// sibling the document never names is the third, `Change::Tree`, which the
+    /// panel reads and the compile ignores. Only a path outside the root is
+    /// nothing at all.
     ///
     /// The bibliography is nothing special here, and that is the finding: it
     /// is one more string in the one list, sorted by the same comparison.
+    ///
+    /// **`mpdf-010` Phase 1's gate, clause 7.** The root and the document's own
+    /// directory are the same here, which is every document this app opened
+    /// before the climb existed; the test below is the one where they differ.
     #[test]
-    fn the_filter_sorts_the_document_from_its_assets_and_drops_the_rest() {
+    fn the_filter_sorts_the_document_from_its_assets_and_its_project() {
         let dir = scratch_dir("filter");
         let document = dir.join("figure.md");
         let assets = [
@@ -373,13 +409,47 @@ mod tests {
         ];
 
         let real = dir.canonicalize().unwrap();
-        let sort = |path: PathBuf| classify(&path, &document, &assets);
+        let sort = |path: PathBuf| classify(&path, &dir, &document, &assets);
 
         assert_eq!(sort(real.join("figure.md")), Some(Change::Document));
         assert_eq!(sort(real.join("refs.yml")), Some(Change::Asset));
         assert_eq!(sort(real.join("dot.png")), Some(Change::Asset));
         assert_eq!(sort(real.join("figures/mark.svg")), Some(Change::Asset));
-        assert_eq!(sort(real.join("notes.txt")), None);
+        assert_eq!(
+            sort(real.join("notes.txt")),
+            Some(Change::Tree),
+            "a file under the root the document does not name is the panel's"
+        );
+        assert_eq!(
+            sort(real.parent().unwrap().join("elsewhere.md")),
+            None,
+            "outside the root is nothing at all"
+        );
+    }
+
+    /// The root and the document's directory are two things now, and each
+    /// answer is measured against the right one.
+    ///
+    /// A section under `sections/` is the document; its own figure beside it is
+    /// an asset, resolved against the *document's* directory; the master above
+    /// it is the tree, because the root is the project rather than the folder
+    /// the pane's file sits in.
+    #[test]
+    fn a_root_above_the_document_still_resolves_the_assets_beside_it() {
+        let project = scratch_dir("above");
+        let inside = project.join("sections");
+        std::fs::create_dir_all(&inside).unwrap();
+
+        let document = inside.join("method.md");
+        let assets = ["mark.svg".to_string()];
+        let real = project.canonicalize().unwrap();
+        let sort = |path: PathBuf| classify(&path, &project, &document, &assets);
+
+        assert_eq!(sort(real.join("sections/method.md")), Some(Change::Document));
+        assert_eq!(sort(real.join("sections/mark.svg")), Some(Change::Asset));
+        assert_eq!(sort(real.join("book.md")), Some(Change::Tree));
+        assert_eq!(sort(real.join("figures/plot.svg")), Some(Change::Tree));
+        assert_eq!(sort(real.parent().unwrap().join("outside.md")), None);
     }
 
     /// The event and the document name the same file and differ only by
@@ -396,7 +466,10 @@ mod tests {
             "the scratch directory is not symlinked, so this case proves nothing"
         );
 
-        assert_eq!(classify(&event, &document, &[]), Some(Change::Document));
+        assert_eq!(
+            classify(&event, &dir, &document, &[]),
+            Some(Change::Document)
+        );
     }
 
     /// Two events inside the window are one compile; two outside are two.
