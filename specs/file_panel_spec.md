@@ -32,7 +32,9 @@ phases:
     by: null
 
 extends: null
-supersedes: null
+supersedes:
+  - id: mpdf-008
+    phases: ["Phase 4 — the document shows its parts"]
 superseded_by: null
 related: [mpdf-002, mpdf-003, mpdf-008, mpdf-009]
 reference: >

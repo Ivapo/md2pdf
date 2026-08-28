@@ -28,8 +28,8 @@ phases:
   - name: "Phase 4 — the document shows its parts"
     reviewed: 2026-08-25
     shipped: 2026-08-25
-    cut: null
-    by: null
+    cut: 2026-08-28
+    by: mpdf-010
   - name: "Phase 5 — a section may name a figure beside the master"
     reviewed: 2026-08-28
     shipped: 2026-08-28

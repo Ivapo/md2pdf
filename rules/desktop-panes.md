@@ -13,10 +13,11 @@ covers: >
   redraw that moves the reader and the three causes that decide where to, the
   anchor path that opens on the author's own page and the one file it is
   filtered to, the status the page places and never composes, the panel that
-  names the document's parts and the two states it keeps apart, the rows that do
-  not load and the invariant they keep, the fold the page holds and the list that
-  retains nothing, the text the reader can select and the stream it is read
-  off, the link filter and the destination a click resolves, the scaffolding the
+  lists the project's files and the two states it keeps apart, the flat entries
+  it is drawn from and the folders derived rather than sent, the fold the page
+  holds, the inert row and the one button on it, the disk half that is walked
+  twice and the missing half that follows the text, the text the reader can
+  select and the stream it is read off, the link filter and the destination a click resolves, the scaffolding the
   bundle does not carry and the app supplies, the gutter whose rows are as tall
   as their lines render, the follow
   that keeps the numbers against their lines, the caret's two marks and the
@@ -24,7 +25,7 @@ covers: >
   two declarations it holds to each other, and the seven defects that check
   does not reach
 max_lines: 300
-generated: 2026-08-26
+generated: 2026-08-28
 ---
 
 # Desktop panes
@@ -179,45 +180,49 @@ wrote.
 
 ## The panel
 
-**A document that names sections says so in a panel**, a left column beside the
-text pane at `max-width: 40%`: the master first, then the sections in the order
-the master reads them, with the one the pane is holding marked. A section is
-named as the master writes it — `sections/method.md`, not `method.md` — because
-two of that name in different folders must not read alike. A document that names
-none draws no panel at all, so a single-file window is what it was.
+**Every open document draws a panel**, a left column beside the text pane at
+`max-width: 40%` listing the project: every file under the root that this
+dialect can read, with the one that compiles marked. A lone `.md` naming nothing
+draws one too, which is what lets an author build a first section without
+leaving the window, and is the visible reversal of the panel `mpdf-008` Phase 4
+shipped.
 
-The list is `Render::sections`, which is the list `render_with` already computed
-for the watch — `named`, taken before either shopping list can be asked
-anything. **It is a plain `Vec` where `Render::assets` is an `Option`**, because
-`assets` is `None` exactly when the caller must keep the list it has, which is a
-sentence about a watch filter and not a thing a panel can draw. It crosses in
-`Status`, beside the anchors and for their reason: the status is already fetched
-on the path that draws, so it costs no command. `Status::master` rides with it,
-carrying the file *name* of the document the pane holds — the one row the page
-could not otherwise name, and a name rather than a path because where the
-document sits is the title's business.
+`Status::entries` is a flat `Vec` of `document::Entry` — `{ path, kind,
+missing }`, `path` root-relative with `/` separators, `kind` one of `markdown`,
+`bibliography` or `image`. **A directory is never an entry**: `parts` derives the
+headings and the indent from the path's own segments, a thing a page can do and a
+thing a nested node type would make `Status` carry twice. `Status::main` rides
+with it, spelled the same way — root-relative and not the bare file *name* it
+carried while the panel listed one document's parts, or the page could not match
+it to a row. Both cross for the anchors' reason: the status is already fetched on
+the path that draws, so the panel costs no command.
 
-**Absent and folded are two states.** `hidden` is a document that names no
-section, and it takes the toggle with it; `.collapsed` is a reader who folded
-the panel, and the toggle stays so they can get it back. **The fold is the
-page's own**, a variable reapplied on every status rather than a field in
-`Preview`: §2's rule is about state that decides behaviour, and a fold decides
-nothing but its own drawing.
+**Absent and folded are two states.** `hidden` is exactly *no document is open*,
+and it takes the toggle with it; `.collapsed` is a reader who folded the panel,
+and the toggle stays so they can get it back. `clear()` sets the first, because
+a panel drawn for every document would otherwise hold the previous project's
+files across the open that replaces them. **The fold is the page's own**, a
+variable reapplied on every status rather than a field in `Preview`: §2's rule is
+about state that decides behaviour, and a fold decides nothing but its own
+drawing. The store this app now keeps is not a precedent for it — a main is a
+decision about the document, a fold is where a scrollbar was.
 
-**The rows do not load, and four things turn on it.** Loading one would break
-*the pane holds exactly one file*: `render_with` keeps only the anchors whose
-location names no file, `Session::on_change` runs the external-change rule on
-the buffer the pane holds, `save` writes to the document's own path, and the
-join reads every section off the disk. So the rows are a list and are not
-dressed as buttons, and the panel is rebuilt whole on every status — right only
-while they hold no selection.
+**A row's body is inert and one button on it is not.** The `main` button appears
+on a markdown row on hover and on focus and sets which file compiles; the row
+itself does nothing, because the next phase gives the body a meaning — clicking
+it puts that file in the pane. So the panel is still rebuilt whole on every
+status, and that is still right: **the rows hold no selection.** Which file
+compiles lives in Rust and arrives in the status, and the button reads its path
+off the DOM at the moment it is clicked. `specs/file_panel_spec.md` OQ-5 carried
+only the gesture; the four cases it settles are pinned in `document.rs`'s tests.
 
-**The list tracks the text exactly and retains nothing.** `section_paths` cannot
-fail, so an empty list is the answer rather than a failure to answer, and
-`Preview::compile` assigns unconditionally where it keeps the asset list on
-`None` — a master whose markers are deleted loses the rows on the next compile.
-The cost is a flicker while a marker is half-typed; the remedy would be to damp
-the redraw, never to retain a list the text has stopped naming.
+**The disk half is stable and only the marked-missing half moves.**
+`document::files_under` walks the tree at an open and at a `Change::Tree` event,
+and `Preview` holds the answer; `document::merge` adds the sections the master
+names that the walk did not find, on every status, off `Preview::sections` and
+off no directory. So a half-typed marker moves one row where the shipped section
+panel lost all of them — strictly less motion than `mpdf-008` §2 accepted — and
+`status()` still reads nothing from the disk.
 
 ## The gutter
 

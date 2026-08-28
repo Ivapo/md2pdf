@@ -94,7 +94,8 @@ $ cargo tauri dev
 ```
 
 That opens a window. Press `⌘O`, or the Open button, and pick a markdown file: the
-window puts its text in the left pane and draws the page on the right. `cargo tauri dev`
+window finds the document that file belongs to, puts its text in the left pane, lists the
+project's files beside it and draws the page on the right. `cargo tauri dev`
 needs the Tauri CLI (`cargo install tauri-cli`); without it,
 `cargo run --release -p md2pdf-app` opens the same window and skips the
 rebuild-on-change.
@@ -106,9 +107,10 @@ divider to give either side more room. **`Lines` in the header numbers the pane 
 the line your cursor is on**, so an error that names a line names somewhere you can see.
 
 **Save the file in another program and the page redraws too** — with one exception. The
-window watches the folder the document sits in, so editing a section, a figure or the
-bibliography elsewhere redraws it as well. If the pane holds unsaved edits when the file
-changes underneath, the app keeps your text and says so rather than choosing for you:
+window watches the whole project, so editing a section, a figure or the bibliography
+elsewhere redraws it as well, and adding or removing a file shows up in the list. If the
+pane holds unsaved edits when the file changes underneath, the app keeps your text and
+says so rather than choosing for you:
 save to write the pane over the file, or open the file again to take it. It never merges
 the two.
 
@@ -153,17 +155,30 @@ until you type. A page that is stale, or no page at all, is refused rather than 
 **A `.md` file double-clicked in Finder opens in the app**, once it is the handler for
 that extension. macOS gives an installed editor the first claim on `.md`, so if
 double-clicking still opens your editor, pick a markdown file, press `⌘I`, and set
-*Open With* to md2pdf followed by *Change All*. Opening a second file this way switches
-the window to it, and **unsaved edits in the pane are lost** — the same as reopening
-from the Open dialog. Save first if you want to keep them.
+*Open With* to md2pdf followed by *Change All*. Double-clicking a section opens its whole
+document, per the project rule below. Opening a second file this way switches the window
+to it, and **unsaved edits in the pane are lost** — the same as reopening from the Open
+dialog. Save first if you want to keep them.
 
-The pane holds one file — the one you opened. A master's sections are read from disk
+**The window opens a project, not just a file.** Open any markdown file and the app
+looks for the document it belongs to: if a file in the folder above names it as a
+section, that folder is the project. So double-clicking `sections/method.md` gives you
+the whole book, not one chapter of it. A file nobody names is its own project, which is
+every single-file document and is what the app has always done. The one limit: a section
+more than one folder below its master roots at its own folder — open the master instead.
+
+**Every document lists its folder down the left**: the markdown, the bibliographies and
+the images under the project's root, folders and all, with the file that compiles marked
+`◀ main`. A file the document names that is not on disk is listed too, struck through,
+because that is the file the next compile will refuse on. Hover a markdown row and a
+`main` button appears: click it and that file becomes the one that compiles, and the app
+remembers your choice the next time you open that folder. It remembers it in its own
+Application Support folder and writes nothing into yours. `Files` in the header folds the
+list away and brings it back.
+
+The pane holds one file — the one that compiles. A master's sections are read from disk
 and drawn on the page, not edited here, so save a section in your own editor and the
-window redraws. **A document written across several files lists its parts down the
-left**: the master first, then the sections in the order it reads them, each named the
-way the master writes it. The rows are a list and not links, for the same reason — the
-pane holds the one file. `Sections` in the header folds the list away and brings it
-back, and a document written in a single file has neither the list nor the button. The Install section above has the build command and the one thing an
+window redraws. The Install section above has the build command and the one thing an
 unsigned bundle cannot do.
 
 ## What the markdown may contain

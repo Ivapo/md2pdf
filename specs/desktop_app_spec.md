@@ -5,7 +5,7 @@ note: >
   A macOS desktop app that shows the PDF while you write: a Tauri window wraps
   the same core crate, watches the document and its images, and re-renders.
 status: accepted
-last_updated: 2026-08-27
+last_updated: 2026-08-28
 
 phases:
   - name: "Phase 1 — the window, and one compile on screen"
@@ -146,6 +146,24 @@ core crate. It is not a rewrite."
 - Out of scope, parked: multi-file projects and manifests, a document library
   or recent-files list, printing, PDF export options, theming, collaboration,
   and anything agentic.
+
+  > **CORRECTED 2026-08-28, by `mpdf-010` Phase 1.** The bullet above is kept as
+  > it was written, and its first clause is no longer true: **multi-file
+  > projects are in scope and shipped.** The app opens a project rather than a
+  > file — the folder the opened document belongs to, found by one level of
+  > climb — lists what is under it, and lets the author say which file in it
+  > compiles.
+  >
+  > **Manifests are still parked, and that is the half worth keeping.** Nothing
+  > is written into the author's own folder. The one fact the app remembers per
+  > project lives in its own Application Support directory, keyed by the root's
+  > canonical path, and `mpdf-010` §2 records why a dotfile beside the document
+  > was refused: it is this clause arriving under another name, and it would put
+  > a file into a directory the author may have under version control. **The
+  > document library and the recent-files list are still parked too** — the app
+  > opens one project at a time, through the dialog or a Finder association,
+  > exactly as it opened one document. Printing, export options, theming,
+  > collaboration and anything agentic are untouched.
 
 ## 2. Design
 

@@ -22,13 +22,14 @@ covers: >
   the name a caption or a display equation declares and
   the reference that points at it, the citation the broken-link callback claims, the
   reference list it earns and the four ways the bibliography channel refuses,
+  the extension table the crate re-exports and why,
   the LaTeX subset a formula may hold and the prelude
   it compiles against, the bundled looks and the call contract they meet, the equation numbering
   the author asks for and the look formats, the figure numbering a document may
   section by, the heading anchors a compile reports,
   the Typst world and its bundled fonts, and the CLI contract
 max_lines: 960
-generated: 2026-08-24
+generated: 2026-08-28
 ---
 
 # Pipeline
@@ -57,6 +58,12 @@ markdown**, because a document written in several files is not one document unti
 are joined in. `md_to_pdf` and `md_to_pdf_with_anchors` take them in the same `Asset`
 slice as the images and the bibliography and ignore an asset the document never names.
 `md_to_html` takes none, and is the one entry point a master is not fully answered by.
+`core/src/emit.rs:IMAGE_EXTENSIONS` is the crate's one non-function export, reaching a
+caller through the first `pub use` `lib.rs` has ever carried rather than by moving, so
+the table stays beside `check_image`, the refusal it decides. It is public because a caller
+listing the files a document *could* draw — the desktop app's file panel — must read this
+list rather than keep one of its own, which would drift and make a legal `.jpg` invisible
+to the window that would compile it.
 
 **`md_to_pdf` is a wrapper over `md_to_pdf_with_anchors`**, not a second route to the
 same bytes — two paths over one input that could disagree eventually do — so a caller

@@ -11,11 +11,13 @@ sources:
   - app/dist/index.html
   - app/tsconfig.json
 covers: >
-  the desktop app: the crate and its files, the window and its menu, the
-  commands and the signal between them, the file I/O the app owns and the two read passes one
-  closure serves, the three answers the asset list gives and the filter reads,
-  the section list the panel reads and the two status fields it rides in,
-  the watch loop and the filter and the two debounces it runs on, the buffer
+  the desktop app: the crate and its files, the window and its menu, the two
+  titles an open sets, the commands and the signal between them, the file I/O the
+  app owns and the two read passes one closure serves, the three answers the
+  asset list gives and the filter reads, the project this file hands to a rule of
+  its own, the panel's two status fields and the union built where no disk is
+  read, the watch loop and its third answer and the two debounces it runs on,
+  the three values the state holds where it held one, the buffer
   that compiles and the rule an external change runs, the state the loop writes
   and the four states it reports, the export and its two refusals, the errors it
   puts on the page, the bundle and the document association that launches it,
@@ -23,7 +25,7 @@ covers: >
   declarations it is type-checked against and where they may not live, and
   the configuration facts a build enforces
 max_lines: 500
-generated: 2026-08-25
+generated: 2026-08-28
 ---
 
 # Desktop
@@ -32,15 +34,16 @@ A macOS window that shows the PDF while you write it. `md2pdf-app` is the second
 wrapper around `md2pdf-core`, beside `md2pdf-cli`, and it calls no other code of
 this project's own; **`core` gained one function for it, in Phase 6, and nothing
 in any other phase** — `core/src/lib.rs:md_to_pdf_with_anchors`, which is
-additive and left every existing signature alone. Today it opens one *document*
-at a time — one file, or a master and the sections it names — holds that
-document's own text in a pane beside the page, recompiles when the typing stops,
-opens the page on the heading the caret is under, says what state the page is
-in, saves the text back, and writes the page to a file the user names. It
-bundles into an `.app` and a `.dmg`, and a `.md` double-clicked in Finder
-launches it on that document. **The bundle is
-unsigned**, which is a credential this machine does not hold rather than a step
-skipped; `specs/desktop_app_spec.md`'s OQ-8 carries what that costs.
+additive and left every existing signature alone. Today it opens one *project*
+at a time — the folder a document sits in, with one file under it set as the one
+that compiles — lists that folder's files down the left, holds the compiled
+file's text in a pane beside the page, recompiles when the typing stops, opens
+the page on the heading the caret is under, says what state the page is in, saves
+the text back, and writes the page to a file the user names. It bundles into an
+`.app` and a `.dmg`, and a `.md` double-clicked in Finder launches it on that
+file's project. **The bundle is unsigned**, a credential this machine does not
+hold rather than a step skipped; `specs/desktop_app_spec.md` OQ-8 says what that
+costs.
 
 **The pane's text is what compiles**, and several claims below turn on it. The
 file beside it need never have held that text. **The pane holds exactly one
@@ -55,10 +58,11 @@ declarations and modules that nothing here builds**: `app/types/pdfjs/` is the
 two vendored `.mjs` modules under `dist/pdfjs/`, which with their shared
 Apache-2.0 licence make three more. Of the twelve that are this project's,
 `src/` is `main.rs` and three modules. `Cargo.toml` names `tauri` 2.11.5,
-`tauri-plugin-dialog` 2.7.2, `notify` 8.2.0 and `serde` 1.0.229 with its `derive`
-feature, with `tauri-build` 2.6.3 under `[build-dependencies]` and `serde_json`
-1.0.151 under `[dev-dependencies]` — one test needs it, and `tauri` already puts
-that exact version in `Cargo.lock`, so it adds no crate to the tree; `build.rs`
+`tauri-plugin-dialog` 2.7.2, `notify` 8.2.0, `serde` 1.0.229 with its `derive`
+feature and `serde_json` 1.0.151, with `tauri-build` 2.6.3 under
+`[build-dependencies]` and **no dev-dependencies at all** — `serde_json` was one
+until the store made reading JSON the app's job rather than a test's, and `tauri`
+already puts that version in `Cargo.lock`, so it adds no crate to the tree; `build.rs`
 calls `tauri_build::build()`. `tauri.conf.json` sets `app.withGlobalTauri: true`, which
 puts the API on `window.__TAURI__` and is what removes the bundler and the node
 toolchain entirely — `build.frontendDist` is `dist`, a directory of static files,
@@ -89,7 +93,7 @@ capability added for either. `app/gen/` is generated and is not committed.
 
 `app/src/main.rs` holds only what needs a window. `main` registers the dialog
 plugin, builds the menu, manages one `Mutex<Session>` and one
-`app/src/main.rs:Pending`, registers nine commands, and — since the bundle —
+`app/src/main.rs:Pending`, registers ten commands, and — since the bundle —
 **builds the app rather than running it**, so that it can hand `App::run` a
 callback and see the run events a `.run(generate_context!())` never surfaces.
 
@@ -103,22 +107,25 @@ and so costs no capability. `core:default` already carries
 `core:event:allow-listen`, so neither those events nor the `rendered` signal
 below needs an entry either.
 
-`app/src/main.rs:open_document` titles the window with the document's file name
-before the compile, so the window names what the user opened whether or not it
-compiled, then hands the path to the session. **It returns no bytes.** The
-compile and the fetch are two calls, because the watch loop compiles with nobody
-asking. The command is `async`, so the compile runs off the thread that draws
-the window.
+`app/src/main.rs:open_document` **titles the window twice, and both are
+needed**: once from the path the user picked before the compile, so the window
+names something whether or not it compiled, and once from the session after,
+because the open lands on the file the *project* compiles rather than the one it
+was handed. A double-click on a section reads `text.md` for one compile and
+`showcase.md` after it, both true in their instant. `set_main` is the same
+shape. **It returns no bytes.** The compile and the fetch are two calls, because
+the watch loop compiles with nobody asking. The command is `async`, so the
+compile runs off the thread that draws the window.
 
 `app/src/main.rs:current_pdf` is the fetch, and `rendered` — a signal carrying
 **no payload**, emitted after every compile — is what asks for it. The bytes
-cross as a `tauri::ipc::Response`, which reaches the page as an `ArrayBuffer`; a
-returned `Vec<u8>`, or an event carrying them, would serialize as a JSON array
-of numbers, one per byte. Its `Err` is a state and not a fault: a stale pane
-keeps its bytes and gets the message instead.
+cross as a `tauri::ipc::Response`, reaching the page as an `ArrayBuffer`; a
+returned `Vec<u8>`, or an event carrying them, would serialize as a JSON array of
+numbers, one per byte. Its `Err` is a state and not a fault: a stale pane keeps
+its bytes and gets the message instead.
 
-`app/src/main.rs:status` answers the same signal, and is **a second command
-rather than a wider return**, because the bytes cross raw and a status does not.
+`app/src/main.rs:status` answers the same signal, **a second command rather than
+a wider return**, because the bytes cross raw and a status does not.
 `app/src/main.rs:document_text` answers it too, and only when the status says the
 buffer was replaced from disk. `app/src/main.rs:export_path` and
 `app/src/main.rs:export` are the two halves of Save a Copy.
@@ -129,7 +136,7 @@ therefore cross the IPC boundary and the debounce is Rust's**, which is what put
 the interval on the testable side of the window: a debounce in the page would be
 logic reachable only by typing at one.
 
-Eight of the nine commands are wrappers over a plain function.
+Nine of the ten commands are wrappers over a plain function.
 `app/src/main.rs:pending_open` is the ninth and is not: it reads no session and
 **takes** a slot the run event filled, which the section on the bundle below
 explains.
@@ -220,10 +227,16 @@ says otherwise: the document's path with a `.pdf` extension. It duplicates
 `cli/src/main.rs:default_output`, because sharing it would make one crate's
 binary reachable from the other.
 
+## The project
+
+`rules/desktop-project.md` has it: the root the opened file climbs to, the
+masters under it, the listing the panel draws, and the one fact remembered.
+
 ## The watch loop
 
-`app/src/watch.rs:root` is the whole watch set: **the document's own directory,
-watched recursively**. `core/src/emit.rs:written_shape` refuses a URI scheme, a
+`app/src/watch.rs:root` is the document's own directory; **the watch set is the
+project root above it**, watched recursively, and the two differ exactly when the
+climb found a master above the opened file. `core/src/emit.rs:written_shape` refuses a URI scheme, a
 leading `/` and a backslash, `core/src/emit.rs:landed_path` refuses a path that
 leaves the document's folder, and `core/src/frontmatter.rs` puts the bibliography
 under that same rule, so every path a document can legally name resolves under
@@ -247,8 +260,13 @@ recursive and `sections/` sits under it, so a section is one more string in that
 one list, and it arrives as `Change::Asset` and never `Change::Document` —
 `Preview::reload`'s rule is about the buffer the pane holds, which is never a
 section. **It sorts rather
-than admits**: an event is `Change::Document` or `Change::Asset` or neither,
-because the two no longer mean the same thing. **A bibliography is one more string in that one list**
+than admits**: an event is `Change::Document`, `Change::Asset`, `Change::Tree` or
+nothing. **`Tree` is the events this dropped** — any path under the root the
+document does not name — and the panel needs exactly them. **The root is a
+parameter, no longer re-derived from the document**, since the two can differ:
+the document and its assets still resolve against the document's *own* directory,
+where a path the markdown writes resolves, and only `Tree` is measured against
+the root. **A bibliography is one more string in that one list**
 rather than an arm of its own: the split is the open document against everything
 the disk supplies, and a bibliography sits on the second side for the reason a
 figure does. It also makes a *dropped* `bibliography:` key free, since
@@ -288,10 +306,15 @@ whole mechanism by which opening a second document moves both.
 
 ## The state
 
-`app/src/preview.rs:Preview` is what the loop writes and the pane shows: **the
-text the pane holds and the text as it stood at the last open or save**, the last
-good PDF bytes, how long they took, the asset list the filter reads, two counters,
-a stale flag, the error and the divergence. The two strings are what
+`app/src/preview.rs:Preview` is what the loop writes and the pane shows. **Three
+values where it held one**: `root`, what the panel lists and the watch covers;
+`main`, which file under it compiles, root-relative; `edited`, what the pane
+holds and `⌘S` writes, equal to `main` under the root for now. **The root moves
+only on an explicit Open** — a click that re-rooted would strand the author below
+their own project with no way back up. Beside them: **the text the pane holds and
+the text as it stood at the last open or save**, the last good PDF bytes, how
+long they took, the asset list the filter reads, the disk walk the panel is drawn
+from, two counters, a stale flag, the error and the divergence. The two strings are what
 `app/src/preview.rs:external_change` compares, and holding them here rather than
 in the page is what keeps that rule testable at all.
 
@@ -329,14 +352,16 @@ path that draws**, so following the caret needs no command of its own. Like the
 compile time, they are replaced on a success and kept on a failure, so they always
 describe the page on screen rather than the last attempt at one.
 
-**`sections` and `master` ride with them and for their reason**, the status being
+**`entries` and `main` ride with them and for their reason**, the status being
 already fetched on the path that draws, so the panel costs no command of its own.
-`sections` is `Render::sections` unchanged, assigned on every compile whether or
-not it succeeded. `master` is the file *name* of the document the pane holds — a
-name and not a path, because the panel lists one document's parts and where that
-document sits is the title's business. **The pane still holds exactly one file**,
-which is what the panel's rows not loading protects; `rules/desktop-panes.md`
-has the four things that turn on it.
+`entries` is put together here and **reads nothing off the disk**: `Preview::tree`
+is the walk, refreshed at an open and a `Tree` event and never in `status()`,
+which the page calls on every render, and the marked-missing rows come off
+`Preview::sections`, which every compile assigns from the master's text.
+`main` is root-relative, not the bare name it was, so the page can match it to a
+row. **The pane still holds exactly one file** — `main` and `edited` are equal
+until the phase that separates them; `rules/desktop-panes.md` has what turns on
+it.
 
 ## The rule an external change runs
 
@@ -365,19 +390,31 @@ the write.
 
 ## The session
 
-`app/src/preview.rs:Session` is that state plus the two loops. `Session::open`
-points the preview at a document, clears the previous one's page and text, reads
-and compiles once, and only then swaps the loops — old dropped before new
+`app/src/preview.rs:Session` is that state plus the two loops and the store's
+path — **a parameter and not a call to the platform**, so a test hands in a
+scratch file and `main.rs` resolves the real one where the `AppHandle` is.
+`Session::open` finds the project the opened file sits in and **reads the store
+first**, or it is a thing written and never used; an override naming a file the
+disk no longer holds falls through to discovery rather than opening nothing. It
+then hands root and main to `open_at`, which `Session::set_main` also takes, so
+the store and the window cannot disagree. It clears the previous document's page
+and text, reads and compiles once, and only then swaps the loops — old dropped before new
 started, so no two of them ever hold a document. Both callbacks check the
 document before writing, because dropping a `Watch` or a typing channel does not
 join its thread and a thread mid-compile could otherwise write its page over a
 newer one.
 
-`Session::on_change` is where the document's events and the assets' events reach
-different code: an asset is a bare recompile, and the document runs the rule. A
-window that took the disk copy compiled inside the rule and read the new assets
-on the way, so one window never compiles twice, and **nothing is announced when
-nothing happened**.
+`Session::on_change` is where the three kinds of event reach different code: an
+asset is a bare recompile, the document runs the rule, and **a `Tree` event walks
+the disk and stops** — no compile, so `revision` stands still, which is what
+"does not compile" means as an assertion. It is announced all the same, because
+the panel is drawn off the status the announcement fetches. A window that took
+the disk copy compiled inside the rule and read the new assets on the way, so one
+window never compiles twice, and **nothing is announced when nothing happened**.
+
+`Session::set_main` **confines rather than merely checking existence**: it asks
+`document::relative` for the path's root-relative spelling back, which
+`root.join("../../secrets.md")` cannot answer where `is_file` would have said yes.
 
 ## The export
 
