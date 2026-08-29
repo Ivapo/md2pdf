@@ -60,7 +60,7 @@ phases:
     by: null
   - name: "Phase 11 — the footer bar"
     reviewed: 2026-08-29
-    shipped: null
+    shipped: 2026-08-29
     cut: null
     by: null
 
