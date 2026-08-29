@@ -118,6 +118,7 @@ fn main() {
             discard,
             asset_bytes,
             create_file,
+            trash_file,
             document_text,
             edit,
             save,
@@ -321,6 +322,35 @@ fn create_file(session: tauri::State<'_, Mutex<Session>>, path: String) -> Resul
     // The lock is dropped before the write, for [`asset_bytes`]'s reason: a
     // create on a slow volume is unbounded in a way nothing else here is.
     document::create_file(&root, &path)
+}
+
+/// Move one of the project's files to the Trash, named from a row.
+///
+/// **The rule is `document::trash_file`'s and the session's is
+/// `preview::Session::trash`'s, and none of either is here.** This app's first
+/// *destructive* operation, so the division matters more here than anywhere:
+/// what a command holds is what no test in this repository can reach.
+///
+/// **Not `std::fs::remove_file`.** There is no undo anywhere in this app — not
+/// for an edit, not for a save, not for an export — and the Trash is the
+/// platform's own undo for exactly this operation. That is also why nothing
+/// asks twice: a confirmation stands in for an undo where there is none, and
+/// Finder does not confirm a move to the Trash for the same reason.
+///
+/// `document::move_to_trash` is the real call, handed in here, because
+/// `preview::Session::trash` takes it as a parameter so that the suite can
+/// exercise every clause without leaving a file in anybody's Trash.
+///
+/// **Nothing is announced from here.** The session announces, having refreshed
+/// the panel itself — which it must, since a deleted section classifies as
+/// `crate::watch::Change::Asset` and never reaches the listing refresh a create
+/// rides on.
+#[tauri::command]
+fn trash_file(session: tauri::State<'_, Mutex<Session>>, path: String) -> Result<(), String> {
+    session
+        .lock()
+        .expect("the session lock was poisoned")
+        .trash(path, document::move_to_trash)
 }
 
 /// The document Finder handed over, if one is waiting.

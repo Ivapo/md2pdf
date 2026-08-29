@@ -84,6 +84,19 @@ const DIVERGED: &str = "this file changed on disk, and the pane holds unsaved ed
 const SWITCHING: &str = "the pane holds unsaved edits, so it is still holding this file. \
     Save to keep them, or discard them to open the other file.";
 
+/// The report a refused *delete* leaves for the author.
+///
+/// **Its own sentence, and not [`SWITCHING`]'s.** That one closes *"discard
+/// them to open the other file"*, and **nothing is being opened by a delete** —
+/// so reusing it would put a lie in the window, verbatim the argument that made
+/// `SWITCHING` not [`DIVERGED`]. The shape is the same for the third time: name
+/// both ways out, and take neither.
+///
+/// It rides `Preview::divergence` with the other two, so one refusal does not
+/// arrive in the window twice.
+const TRASHING: &str = "the pane holds unsaved edits, and this is the file it is holding. \
+    Save to keep them, or discard them to move it to the Trash.";
+
 /// OQ-5's rule: what an event naming the open document means.
 ///
 /// Three strings and two comparisons. `file` is what the disk holds now,
@@ -660,7 +673,7 @@ impl Session {
             return Err(format!("{main} is not a file in this project"));
         }
 
-        if self.refused_while_dirty() {
+        if self.refused_while_dirty(SWITCHING) {
             return Ok(());
         }
 
@@ -694,7 +707,7 @@ impl Session {
             return Err(format!("{path} is not a file in this project"));
         };
 
-        if self.refused_while_dirty() {
+        if self.refused_while_dirty(SWITCHING) {
             return Ok(());
         }
 
@@ -706,6 +719,99 @@ impl Session {
         (self.on_render)();
 
         self.arm(root.clone(), root.join(main), landed)
+    }
+
+    /// Move one of the project's files to the Trash.
+    ///
+    /// **The template is [`Session::set_edited`]'s and not a command's**, and
+    /// the compiler forces it eventually: a delete has to refuse on the main,
+    /// set `Preview::divergence`, call [`Session::arm`] and write
+    /// `Preview::tree`, and all four are private to this file. So the
+    /// confinement and the OS call are `crate::document::trash_file` and this
+    /// is everything that touches the session.
+    ///
+    /// **Three refusals, and they do not arrive the same way.** The main and the
+    /// two `crate::document::trash_file` makes come back as `Err`, which the
+    /// page draws in the error bar exactly as it draws [`Session::set_edited`]'s
+    /// — and none of the three is reachable from a row: the main row draws no
+    /// button, and every other row came out of this app's own listing. The
+    /// dirty-buffer one rides `Preview::divergence` and returns `Ok(())`, as
+    /// [`Session::refused_while_dirty`] does, so one refusal does not arrive in
+    /// the window two ways.
+    ///
+    /// **That one is asked only of the file the pane is holding**, which is the
+    /// difference from [`Session::set_edited`] and [`Session::set_main`], where
+    /// it is unconditional: deleting some *other* file throws no unsaved work
+    /// away, so refusing there would be a refusal with nothing behind it.
+    ///
+    /// **The panel is refreshed here and not by the watch, and that is forced.**
+    /// `crate::watch::classify` answers the **first** match and a section the
+    /// master names is already in the asset list `crate::document::render_with`
+    /// builds — so deleting one answers `Change::Asset`, never `Change::Tree`,
+    /// and [`Session::on_change`] refreshes the listing only under
+    /// `changed.tree`. The panel would keep an ordinary unmarked row for a file
+    /// that is gone. **The asymmetry with the create is real rather than an
+    /// inconsistency**: a *created* file is not in the asset list, so the watch
+    /// classifies that one correctly. This app made the change and knows it; the
+    /// watch is for changes it did not make. `crate::document::merge` then puts
+    /// the path back as `missing: true`, because the master still names it.
+    ///
+    /// `mpdf-010` Phase 4.
+    pub fn trash(
+        &mut self,
+        path: String,
+        trash: impl FnOnce(&Path) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let (root, main, held) = {
+            let preview = self.preview();
+            match (preview.root.clone(), preview.main.clone()) {
+                (Some(root), Some(main)) => (root, main, preview.edited_relative()),
+                _ => return Err("no document is open".to_string()),
+            }
+        };
+
+        if path == main {
+            return Err(format!(
+                "{path} is the file this project compiles. Set another file as main first."
+            ));
+        }
+
+        // Only the pane's own file can cost the author anything.
+        let holding = held.as_deref() == Some(path.as_str());
+        if holding && self.refused_while_dirty(TRASHING) {
+            return Ok(());
+        }
+
+        document::trash_file(&root, &path, trash)?;
+
+        {
+            let mut preview = self.preview();
+            preview.tree = document::files_under(&root);
+        }
+
+        if !holding {
+            (self.on_render)();
+            return Ok(());
+        }
+
+        // **[`Session::set_edited`]'s own body, and both halves are
+        // load-bearing.** `arm` is what keeps the loops alive, since both guard
+        // on a path captured when they were started. But **arming without
+        // loading is worse than not arming**: the buffer would still hold the
+        // *trashed* file's text while `edited` names the main, so
+        // `Preview::save` would write a deleted section over the master and
+        // `crate::document::render_project`'s closure would answer the main from
+        // that same buffer once the two paths are equal — and nothing would
+        // announce either.
+        let document = root.join(&main);
+        {
+            let mut preview = self.preview();
+            preview.edited = Some(document.clone());
+            preview.load();
+        }
+        (self.on_render)();
+
+        self.arm(root, document.clone(), document)
     }
 
     /// Drop what the pane holds and take the file again.
@@ -720,7 +826,7 @@ impl Session {
         (self.on_render)();
     }
 
-    /// Is there unsaved work a switch would throw away? Then say so and stop.
+    /// Is there unsaved work this gesture would throw away? Then say so and stop.
     ///
     /// **It reports through `Preview::divergence` and not through an `Err`.**
     /// The caller's `Err` is where a path outside the project goes, and the
@@ -728,15 +834,21 @@ impl Session {
     /// would be one problem in two places. This is a status, and the page places
     /// it exactly as it places every other status sentence.
     ///
+    /// **The sentence is the caller's**, because the three occasions are three
+    /// different claims and each of the others would be false on the other two:
+    /// [`SWITCHING`] names an open, [`TRASHING`] names the Trash. The field they
+    /// share carries one at a time, which costs nothing — all three name the
+    /// same two exits.
+    ///
     /// It announces, because nothing else will: no compile ran, so the page
     /// would otherwise never fetch the status carrying the sentence.
-    fn refused_while_dirty(&self) -> bool {
+    fn refused_while_dirty(&self, sentence: &str) -> bool {
         {
             let mut preview = self.preview();
             if preview.buffer == preview.saved {
                 return false;
             }
-            preview.divergence = Some(SWITCHING.to_string());
+            preview.divergence = Some(sentence.to_string());
         }
         (self.on_render)();
         true
@@ -2233,6 +2345,233 @@ mod tests {
         assert_eq!(
             preview.pdf().expect("the compile failed"),
             md2pdf_core::md_to_pdf(&markdown, &article_assets(&dir)).unwrap()
+        );
+    }
+
+    // -- a file moved to the Trash ------------------------------------------
+    //
+    // `mpdf-010` Phase 4. **Nothing here puts a file in anybody's Trash**: the
+    // call is a parameter all the way up to the command, so the three clauses
+    // below hand in a double — which removes the file as well as recording the
+    // call, since clause 7 turns on it being gone.
+
+    /// What the double was asked to move, as the clauses read it back.
+    type Moved = Arc<Mutex<Vec<PathBuf>>>;
+
+    /// A `Session::trash` call that records what it was asked to move and
+    /// removes it. `document::tests` has its own; this one is here because
+    /// that module is private to that file.
+    fn recording() -> (impl FnOnce(&Path) -> Result<(), String>, Moved) {
+        let moved = Arc::new(Mutex::new(Vec::new()));
+        let taken = Arc::clone(&moved);
+
+        let double = move |path: &Path| {
+            taken.lock().unwrap().push(path.to_path_buf());
+            std::fs::remove_file(path).map_err(|e| format!("the double could not remove: {e}"))
+        };
+        (double, moved)
+    }
+
+    /// **Clause 5.** The file that compiles is refused while it compiles.
+    #[test]
+    fn the_main_is_refused_and_nothing_is_moved() {
+        let (root, store) = showcase_in("phase4-main");
+        let (mut session, compiles) = counted_with(store);
+        session.open(root.join("showcase.md")).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        let (double, moved) = recording();
+        let refused = session
+            .trash("showcase.md".to_string(), double)
+            .expect_err("the main was trashed");
+
+        assert!(
+            refused.contains("compiles"),
+            "the refusal does not say why: {refused:?}"
+        );
+        assert!(
+            moved.lock().unwrap().is_empty(),
+            "a refused delete called the OS anyway"
+        );
+        assert!(root.join("showcase.md").is_file(), "the master is gone");
+    }
+
+    /// **Clause 6.** The file the pane holds: refused over unsaved work, and
+    /// over a clean buffer it falls back to the main — **three things and not
+    /// one**.
+    ///
+    /// The middle assertion is the clause. A build that armed the loops without
+    /// reading the main into the buffer passes the first and the third, and
+    /// then writes the *trashed* file's text over the master on the next `⌘S`.
+    #[test]
+    fn trashing_the_file_in_the_pane_refuses_over_work_and_otherwise_falls_back_to_the_main() {
+        let (root, store) = showcase_in("phase4-edited");
+        let (mut session, compiles) = counted_with(store);
+        session.open(root.join("showcase.md")).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+
+        session
+            .set_edited("sections/mathematics.md".to_string())
+            .unwrap();
+        settle();
+
+        let mine = "# Mine, unsaved\n\nStill being written.\n".to_string();
+        session.edit(mine.clone());
+        settle();
+
+        let (double, moved) = recording();
+        session
+            .trash("sections/mathematics.md".to_string(), double)
+            .unwrap();
+
+        let refused = session.preview().status();
+        assert!(
+            moved.lock().unwrap().is_empty(),
+            "the refusal moved the file anyway"
+        );
+        assert_eq!(
+            refused.edited.as_deref(),
+            Some("sections/mathematics.md"),
+            "the refusal moved the pane"
+        );
+        assert_eq!(session.preview().text(), mine, "it took the work");
+
+        let sentence = refused.divergence.expect("the refusal said nothing");
+        assert!(
+            !sentence.contains("open"),
+            "the refusal claims a file is being opened, which it is not: {sentence:?}"
+        );
+        assert!(
+            sentence.contains("Save") && sentence.contains("discard"),
+            "the refusal names fewer than two ways out: {sentence:?}"
+        );
+
+        // The second way out, and then the delete goes through.
+        session.discard();
+        let master = std::fs::read_to_string(root.join("showcase.md")).unwrap();
+        let seen = compiles.load(Ordering::SeqCst);
+
+        let (double, moved) = recording();
+        session
+            .trash("sections/mathematics.md".to_string(), double)
+            .unwrap();
+
+        assert_eq!(
+            *moved.lock().unwrap(),
+            [root.join("sections/mathematics.md")],
+            "the delete did not move the file the pane held"
+        );
+
+        // One: the pane falls back to the file that compiles.
+        assert_eq!(
+            session.preview().status().edited.as_deref(),
+            Some("showcase.md"),
+            "the pane is still holding a file that is gone"
+        );
+        // Two, **and this is the clause**: it was read, not assigned.
+        assert_eq!(
+            session.preview().text(),
+            master,
+            "the buffer still holds the trashed file's text"
+        );
+        assert_eq!(
+            session.preview().saved,
+            master,
+            "the last-saved text still belongs to the trashed file"
+        );
+        // Three: both loops survived the move, asserted as clause 5 of Phase 2
+        // asserts them — a subsequent edit compiles, and a subsequent external
+        // write runs the rule.
+        session.edit(mine.clone());
+        assert_eq!(
+            wait_for(&compiles, seen + 1),
+            seen + 1,
+            "the typing loop is dead"
+        );
+
+        std::fs::write(
+            root.join("showcase.md"),
+            "# Theirs\n\nBy another program.\n",
+        )
+        .unwrap();
+        assert_eq!(
+            wait_for(&compiles, seen + 2),
+            seen + 2,
+            "the watch loop is dead"
+        );
+        settle();
+        assert!(
+            session
+                .preview()
+                .status()
+                .divergence
+                .as_deref()
+                .is_some_and(|said| said.contains("changed on disk")),
+            "the rule did not run over the file the pane fell back to"
+        );
+    }
+
+    /// **Clause 7.** A section the master names goes, the panel keeps it as a
+    /// marked-missing row, and the next compile refuses by its name.
+    ///
+    /// **Over a scratch copy and not the committed fixture**, which Phase 3's
+    /// gate could use because a refusal writes nothing — a delete does not have
+    /// that property.
+    ///
+    /// The refusal is `document::read_sections_with`'s sentence and **not
+    /// `md2pdf_core::Error::MissingSection`**, which this app never reaches: `?`
+    /// short-circuits `render_with`'s chain before `core/src/sections.rs`'s only
+    /// raising site is called at all.
+    ///
+    /// *A note so it is not rediscovered:* [`copy_tree`] reads through
+    /// `std::fs::copy`, which follows a symlink, so `<copy>/outside` arrives as
+    /// a real directory holding the decoy's two files. No assertion here
+    /// depends on the row count.
+    #[test]
+    fn trashing_a_named_section_leaves_its_row_and_refuses_the_next_compile() {
+        let root = scratch_dir("phase4-section");
+        copy_tree(&fixture("panel"), &root);
+        let store = document::store_file(&scratch_dir("phase4-section-store"));
+
+        let (mut session, compiles) = counted_with(store);
+        session.open(root.join("book.md")).unwrap();
+        assert_eq!(wait_for(&compiles, 1), 1);
+        assert_eq!(session.preview().status().main.as_deref(), Some("book.md"));
+
+        let (double, moved) = recording();
+        session
+            .trash("sections/text.md".to_string(), double)
+            .unwrap();
+        assert_eq!(*moved.lock().unwrap(), [root.join("sections/text.md")]);
+        assert!(!root.join("sections/text.md").exists());
+
+        // The panel is the command's own re-walk: the watch answers `Asset` for
+        // a path in the asset list and would never refresh the listing.
+        let listed = session.preview().status().entries;
+        assert!(
+            listed
+                .iter()
+                .any(|entry| entry.path == "sections/text.md" && entry.missing),
+            "the deleted section is not the marked-missing row the master still names: {:?}",
+            listed
+                .iter()
+                .map(|entry| (entry.path.as_str(), entry.missing))
+                .collect::<Vec<_>>()
+        );
+
+        session.preview().compile();
+        let error = session
+            .preview()
+            .error()
+            .map(str::to_string)
+            .expect("the compile succeeded without a section it names");
+        assert!(
+            error.contains("cannot read") && error.contains("for the section"),
+            "the refusal is not the app's own sentence: {error:?}"
+        );
+        assert!(
+            error.contains("sections/text.md"),
+            "the refusal does not name the file: {error:?}"
         );
     }
 

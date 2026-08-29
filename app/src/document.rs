@@ -954,8 +954,7 @@ pub fn trash_file(
     path: &str,
     trash: impl FnOnce(&Path) -> Result<(), String>,
 ) -> Result<(), String> {
-    let landed =
-        landing(root, path).ok_or_else(|| format!("{path} is outside this project"))?;
+    let landed = landing(root, path).ok_or_else(|| format!("{path} is outside this project"))?;
 
     // `symlink_metadata` and not `exists`, which follows the link and reports a
     // dangling one absent — and a dangling link is a row this panel draws, so
@@ -2239,9 +2238,12 @@ mod tests {
     //
     // Each clause says where it runs, per Phase 3's standard.
 
+    /// What the double was asked to move, as the clauses read it back.
+    type Moved = Arc<Mutex<Vec<PathBuf>>>;
+
     /// A [`trash_file`] call that records what it was asked to move and moves
     /// it — to nowhere, which is what makes the clauses cheap.
-    fn recording() -> (impl FnOnce(&Path) -> Result<(), String>, Arc<Mutex<Vec<PathBuf>>>) {
+    fn recording() -> (impl FnOnce(&Path) -> Result<(), String>, Moved) {
         let moved = Arc::new(Mutex::new(Vec::new()));
         let taken = Arc::clone(&moved);
 
@@ -2294,14 +2296,25 @@ mod tests {
     /// a create an existing file is refused by the exists-rule first. For a
     /// delete that inverts exactly: the file has to be **there**, or the
     /// not-there rule refuses and the confinement rule never executes.
+    ///
+    /// **The absolute spelling is this test's own scratch and not a literal
+    /// `/tmp/escape.md`**, which is the one difference from Phase 3's clause and
+    /// is forced by the inversion: that one asserts the path is *absent*, so a
+    /// shared name costs nothing, where this one has to **create** it — and a
+    /// delete clause writing `/tmp/escape.md` is a delete clause breaking
+    /// [`a_create_that_would_land_outside_the_project_is_refused_by_name`] on
+    /// the same machine. Both spellings still name one file in the root's
+    /// parent, which is what the clause is about.
     #[test]
     fn a_trash_that_would_leave_the_project_is_refused_by_name() {
         let above = scratch_dir("trash-escape");
         let root = above.join("project");
         std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(above.join("escape.md"), b"not the project's").unwrap();
 
-        for path in ["/tmp/escape.md", "../escape.md"] {
+        let escape = above.join("escape.md");
+        let absolute = escape.to_string_lossy().into_owned();
+
+        for path in [absolute.as_str(), "../escape.md"] {
             let landed = root.join(path);
             std::fs::write(&landed, b"not the project's").unwrap();
             assert!(
@@ -2357,12 +2370,16 @@ mod tests {
         let (double, moved) = recording();
         trash_file(&root, "secret.png", double).unwrap();
 
-        assert_eq!(*moved.lock().unwrap(), [link.clone()], "the join was not the path moved");
-        assert!(
-            link.symlink_metadata().is_err(),
-            "the link is still there"
+        assert_eq!(
+            moved.lock().unwrap().as_slice(),
+            std::slice::from_ref(&link),
+            "the join was not the path moved"
         );
-        assert!(target.is_file(), "the trash followed the link and took the target");
+        assert!(link.symlink_metadata().is_err(), "the link is still there");
+        assert!(
+            target.is_file(),
+            "the trash followed the link and took the target"
+        );
     }
 
     /// Clause 4. Nothing at that name is refused, in a sentence of its own.

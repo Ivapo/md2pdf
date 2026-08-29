@@ -505,14 +505,25 @@
         color: var(--ink);
       }
       /*
-        The gesture that sets which file compiles, and the only thing on a row
-        that can be clicked. It appears on hover and on focus, so it is
-        reachable from the keyboard without being nine buttons on screen at
-        once; `margin-left: auto` puts it where the `main` mark sits, because
-        only one of the two is ever on a row.
+        The row's own gestures, and there are two of them now: `main` sets which
+        file compiles, `trash` moves the file to the Trash. Each appears on
+        hover and on focus, so they are reachable from the keyboard without
+        being eighteen buttons on screen at once.
+
+        **`margin-left: auto` moved from the button to the group, and that is a
+        correction rather than a tidy.** OQ-5 put it on `.set` "because only one
+        of the two is ever on a row" — meaning the button and the `◀ main` mark
+        — and a non-main markdown row now draws two buttons. Two elements each
+        claiming the free space would push the first off that edge, so they
+        share it inside `.controls` and the mark keeps it alone on the row that
+        has no buttons at all.
       */
-      #files li .set {
+      #files li .controls {
+        display: flex;
+        gap: 4px;
         margin-left: auto;
+      }
+      #files li .controls button {
         padding: 0 6px;
         border: 1px solid var(--edge);
         border-radius: 3px;
@@ -523,13 +534,22 @@
         cursor: pointer;
         visibility: hidden;
       }
-      #files li:hover .set,
-      #files li .set:focus-visible {
+      #files li:hover .controls button,
+      #files li .controls button:focus-visible {
         visibility: visible;
       }
-      #files li .set:hover {
+      #files li .controls button:hover {
         color: var(--ink);
         border-color: var(--ink);
+      }
+      /*
+        The one destructive gesture in this app wears the one alarming colour,
+        and only under the pointer: quiet like its neighbour until it is about
+        to be pressed, so a row does not read as a warning at rest.
+      */
+      #files li .controls .trash:hover {
+        color: var(--alarm);
+        border-color: var(--alarm);
       }
 
       /*
@@ -2011,16 +2031,51 @@
           mark.className = 'mark'
           mark.textContent = '◀ main'
           li.append(mark)
-        } else if (entry.kind === 'markdown' && !entry.missing) {
-          const set = document.createElement('button')
-          set.type = 'button'
-          set.className = 'set'
-          set.textContent = 'main'
-          set.title = `Compile ${entry.path} instead`
-          set.addEventListener('click', () => setMain(entry.path))
-          li.append(set)
+          return li
         }
+
+        /* The two buttons share one right edge rather than each claiming it,
+           which is what `.controls` is for and the whole of why it exists. */
+        const controls = document.createElement('span')
+        controls.className = 'controls'
+
+        if (entry.kind === 'markdown' && !entry.missing) {
+          controls.append(
+            control('set', 'main', `Compile ${entry.path} instead`, () => setMain(entry.path))
+          )
+        }
+        /* **A marked-missing row gets none**: it names a file the disk does not
+           hold, so there is nothing to move — and the `main` row returned
+           above, its file being the one refused. Images and bibliographies do
+           get one: the panel lists them, and a figure the document stopped
+           naming is a thing to be rid of. */
+        if (!entry.missing) {
+          controls.append(
+            control('trash', 'trash', `Move ${entry.path} to the Trash`, () =>
+              trashFile(entry.path)
+            )
+          )
+        }
+
+        if (controls.childElementCount > 0) li.append(controls)
         return li
+      }
+
+      /**
+       * One of a row's small quiet buttons.
+       *
+       * @param {string} kind @param {string} label @param {string} title
+       * @param {() => void} act
+       * @returns {HTMLButtonElement}
+       */
+      function control(kind, label, title, act) {
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = kind
+        button.textContent = label
+        button.title = title
+        button.addEventListener('click', act)
+        return button
       }
 
       /*
@@ -2059,6 +2114,35 @@
         hideAsset()
         try {
           await invoke('set_edited', { path })
+        } catch (problem) {
+          fail(problem)
+        }
+      }
+
+      /*
+        Move one of the project's files to the Trash.
+
+        **Nothing asks first**, and that is the decision rather than an
+        omission: the Trash is the platform's own undo for this operation, and
+        a confirmation is what stands in for an undo where there is none.
+        Finder does not confirm a move to the Trash for the same reason.
+
+        **Nothing here redraws the panel either.** A deleted section is already
+        in the asset list, so the watch answers `Change::Asset` and never the
+        listing refresh a create rides on — Rust re-walks and announces, and
+        `refresh` draws what comes back.
+
+        A refusal comes back as a throw and lands in the error bar, exactly as
+        `openInPane`'s does. None of the three is reachable from a row: the
+        `main` row draws no button, and every other row came out of this app's
+        own listing.
+      */
+      async function trashFile(path) {
+        // The figure you are looking at may be the one going: put the text back
+        // rather than leave a picture of a file that is gone.
+        hideAsset()
+        try {
+          await invoke('trash_file', { path })
         } catch (problem) {
           fail(problem)
         }
