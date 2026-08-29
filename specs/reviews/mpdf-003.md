@@ -2,6 +2,112 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 11 only — 2026-08-29 — the same reviewer, resumed — **READY (converged)**
+
+Blocker 3's gate half confirmed resolved by construction rather than by reading: the
+reviewer built the footer in the position the scope mandates and evaluated all three
+of clause 4's conjuncts as an implementer would write them —
+`main.nextElementSibling === footer`, `footer.nextElementSibling === script`, and
+`body.lastElementChild !== footer` — all true simultaneously, so the clause is
+satisfiable by and only by that position. `<script` has exactly one hit in the file,
+so "the module `<script>`" has a unique referent.
+
+**Clause 5's added sentence was measured rather than accepted.** At 620px in the empty
+state the header is 46.5px and does not grow; with the fixture open and `#status`
+worded it is 66px. So a tester who armed before opening really would read the positive
+control as satisfied by nothing — the false-negative-as-pass the sentence names — and
+it is load-bearing rather than decorative.
+
+The four non-blocking rewrites all spot-checked: 47/66/81 against rects of
+47.25/66/80.5, including the two figures that round in opposite directions.
+
+### Round 2 — Phase 11 only — 2026-08-29 — the same reviewer, resumed — **NOT READY**
+
+Blockers 1 and 2 resolved; **blocker 3 was half-fixed, and the half that was missed
+made the phase worse than it had been.** The scope was corrected to name the footer's
+position exactly and gate clause 4 was left asserting `body`'s last element — so the
+document then held a paragraph explaining that phrasing names the wrong place, and a
+gate keyed to it. That is the author's error and is recorded as one: an implementer
+meeting a scope and a gate that disagree is likelier to resolve it by weakening the
+gate until it passes.
+
+The round re-measured what it had queried. `offsetHeight` overshoots `innerHeight` by
+one at 900px and not at 420px, exactly as the fix now states. The 627px derivation
+reproduces to 626.86 from the seven children's real widths, and `flexWrap` is `nowrap`.
+
+**One concern was raised and discharged inside the round**: clause 5 counts
+`ResizeObserver` errors, the 21 were counted in a Chromium harness, and a WKWebView
+that never reports the event would make the count vacuously zero. Discharged from the
+repo — `tests/gates/mpdf-009-phase5.js` is pasted into a `cargo tauri dev` Web
+Inspector and its own comment records a run reporting "21 uncaught", so the idiom is
+proven in the target environment.
+
+Four non-blocking, all accepted. The sharpest: **627px is the document-open,
+status-worded threshold** — `#toggle` is `hidden` until a document opens and `#status`
+is empty before a compile, so arming before opening reads a false negative on the
+control as a pass.
+
+### Round 1 — Phase 11 only — 2026-08-29 — fresh reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode — one appended phase):** the phase produces no observable and
+says so in its first line; the PDF is byte-identical because no Rust reaches the
+compile path, and clause 1 is the check. Still the right thing to build: Phase 10
+shipped a product name the window stops saying at the first `⌘O`
+(`app/src/document.rs:title`), and a status bar is where an application whose title
+belongs to the document keeps its own name.
+
+Three blocking, eight non-blocking. Nothing was rejected in any round.
+
+**Blocker 1 is the round's best catch, and it falsified half the phase's own
+motivation.** The draft claimed the file being edited is "named nowhere the panel can
+be collapsed away from". But `app/src/main.rs:set_edited` ends in `window.set_title`
+handed `document::title(session.preview().document())`; `app/src/preview.rs:document`
+returns `edited` and `app/src/document.rs:title` returns the bare `file_name()` — **so
+the title bar already carries the exact string the cell was specified to show.** The
+claim was **withdrawn rather than reworded**, and the withdrawal recorded in place. The
+cell is kept on a smaller argument that the phase now states outright: it is a second,
+quieter copy, bought for the title bar being native chrome that macOS dims when the
+window is not frontmost. **The root-relative path — the one thing the title bar cannot
+carry — was weighed and declined for length, by the human author, after being shown
+this finding.** The phase names the cell as the part to cut if a second placement is
+not worth 24px.
+
+**Blocker 2: the gate's sum named no measurement method, and the idiomatic one fails on
+correct code.** The header is 46.5px at 13px/1.5, so `offsetHeight` rounds to 47 and a
+three-term `offsetHeight` sum overshoots `innerHeight` by one at some widths and not
+others — while every gate in `tests/gates/` so far reaches for `offsetHeight`. Clause 4
+now names `getBoundingClientRect().height`. The round also found that the prototype
+log's own derivation, "47 + 588 + 24 = 660", does not sum: it mixed two readings taken
+at different moments.
+
+**Blocker 3: scope and gate disagreed on where the footer goes.** `body`'s element
+children are `HEADER, MAIN, SCRIPT`, so "after `</main>`" and "last element of `body`"
+name two different places.
+
+Non-blocking, all accepted: `edited` joined `Status` in `mpdf-010` **Phase 2**, not
+Phase 1; the panel-marking quote belongs to the comment above
+`app/dist/index.html:parts`, not to `rules/desktop.md` (the misattribution had
+propagated from the prototype log, and was corrected there too); clause 1 credited
+`core`'s suite with pinning the PDF, where `golden_test.rs` compares *Typst* byte for
+byte and its PDF assertions are `starts_with(b"%PDF")` smoke checks; clause 4 named no
+fixture, where every gate in `tests/gates/` does — now `tests/fixtures/panel`; a
+dark/light toggle was announced as next against §1.1's parked theming, re-affirmed one
+day before this phase was appended; and the empty-state duplicate brand was unstated.
+
+**One non-blocking was already fixed before the review returned, by the author
+re-deriving his own numbers.** "The header wraps to three lines at a 420px window" was
+wrong twice: Chrome clamps a window below about 500px, so the prototype measured a
+500px viewport and wrote 420 down anyway; and the header is `flex-wrap: nowrap` and
+never wraps as a row — its items' text wraps inside them. Replaced by a derived
+threshold, **627px** = 555px of children + six 8px gaps + 24px padding, which round 2
+reproduced to 626.86.
+
+**Deferred, with reason**: promoting the bare-name decision to a §2
+`(decision, recorded)` subsection. Phase 10 used the same phase-local idiom, and
+blocker 1's resolution moved that decision's substance into the phase body at length;
+where decisions live is not a call to make inside a readiness round.
+
+
 ### Round 3 — Phase 10 only — 2026-08-29 — the same reviewer, resumed — **READY (converged)**
 
 The consent blocker confirmed resolved against the sources rather than the

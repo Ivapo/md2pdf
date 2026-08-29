@@ -58,6 +58,11 @@ phases:
     shipped: 2026-08-29
     cut: null
     by: null
+  - name: "Phase 11 — the footer bar"
+    reviewed: 2026-08-29
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -2307,6 +2312,216 @@ the bundle does not carry.
   name and the `cargo run --release -p …` invocation. **`CLAUDE.md`: none needed**
   — its stanza names the observable and the `mpdf-` id prefix, and this phase
   changes neither; the repository and the engine keep their name. One push.
+
+### Phase 11 — the footer bar
+*Produces the observable: **no**, and the argument is that this phase changes what
+the window says about itself and nothing about what it makes.* The PDF is
+byte-identical across it — no Rust reaches the compile path at all — and clause 1
+is the check. **What it buys is one fact, and the phase is careful not to claim
+two.** The product name is on screen only until the first `⌘O`: after an open the
+title is the document's own file name (`app/src/document.rs:title`), which is
+right, and which leaves the application nameless for the rest of the session. A
+phase that produces no observable earns its place here because a status bar is
+where an application whose title belongs to the document keeps its own name.
+
+An earlier draft of this paragraph claimed a second fact — that the file being
+edited is named nowhere else — and **round 1 falsified it against the code**. It
+is not repaired by rewording; it is withdrawn, and the cell it was arguing for is
+kept on a different and smaller argument, below.
+
+Appended 2026-08-29, per §6.1 step 2: the desktop app's chrome is this spec's
+subject, and its window has been since Phase 1. **Strictly after Phase 10**, and
+the dependency is not decorative: clause 2 asserts the brand cell against the
+bundle's own `productName`, which a phase before the rename could not have passed.
+
+- **Scope:** **`app/dist/index.html`** — a `<footer>` holding two cells,
+  `#edited` and `#brand`, placed **after `</main>` and before the module
+  `<script>`**, which is the position the gate reads. Stated exactly because
+  `body`'s element children are `HEADER, MAIN, SCRIPT` today, so "last element of
+  `body`" and "after `</main>`" name two different places and an implementer told
+  only the second would fail a clause keyed to the first. The CSS for them; one element lookup beside the
+  others; and **one line in `app/dist/index.html:report`**. Plus **one test in
+  `app/src/preview.rs`**, which clause 2 describes.
+
+  **No Rust in the window path, and that is a fact rather than a preference.**
+  Both `edited` and `main` already ride `app/src/preview.rs:Status` — `mpdf-010`
+  Phase 2 put `edited` beside `main`, which Phase 1 had added — so this phase
+  adds no field, no command, no capability
+  and no dependency. The front end is handed everything it needs today.
+
+  **The cell is `Status::edited`, not `Status::main`.** They are equal at every
+  open and free to differ from the first click on a row, which
+  `rules/desktop-project.md` records as the pair it is. `main` is what compiles;
+  `edited` is what the pane holds and what `⌘S` writes. **The bar names the file
+  you are typing in.**
+
+  **It therefore duplicates the window title, and that is a decision rather than
+  an oversight.** `app/src/main.rs:set_edited` already ends in
+  `window.set_title`, handed `document::title(session.preview().document())`;
+  `app/src/preview.rs:document` returns `edited` and `app/src/document.rs:title`
+  returns the bare `file_name()` — **so the title bar carries this exact string
+  today**. Round 1 of the review established it, and the phase states it rather
+  than letting an implementer discover the cell is a second copy.
+
+  **What the duplication buys, which is the whole of the argument for the cell:**
+  the title bar is native chrome outside the content area, macOS dims it when the
+  window is not frontmost, and it sits above the header rather than beside the
+  pane, so it is furthest from the pane's foot and nearest its head. The footer puts the string where the eye already
+  is, in the app's own ink, at full contrast. **The phase does not claim the
+  information is new** — a second, quieter placement of the same string is all it
+  is, and if that is not worth 24px the cell is the part to cut, not the bar.
+
+  **The root-relative path was the alternative and was weighed here, not
+  overlooked**: it is precisely the thing the title bar *cannot* carry, so it
+  would have made the cell carry something new. It was declined for length, after
+  the prototype rendered both. That trade is recorded because it is the one a
+  later reader is most likely to want to reverse.
+
+  **The bare file name, not the root-relative path** — decided 2026-08-29 by
+  looking, against a prototype that rendered four candidates at a forced-narrow
+  width. Recorded because the decision went against the working note's own lean
+  and against what the prototype recommended. The path under an ordinary ellipsis
+  reads `sections/notes-and-sources....`, which **eats the file name — the one
+  segment that identifies the file**; a left ellipsis (`direction: rtl`) keeps it,
+  and was measured not to reorder parens, brackets, digits, `§` or accents across
+  seven paths. The bare name was preferred anyway, for being shorter.
+
+  **Its cost is recorded rather than hidden: bare names collide.** A project
+  holding `sections/notes.md` and `drafts/notes.md` shows `notes.md` for either,
+  and the footer cannot tell them apart. **The collision is already known in this
+  codebase**: the comment above `app/dist/index.html:parts` says the panel marks
+  the main "by name and not by position … two files of the same name in different
+  folders must not both light up", and the panel answers it by carrying the
+  root-relative path where this cell does not. The
+  left-ellipsis material is measured and stays available if it ever bites.
+
+  **Nothing marks that `edited` differs from `main`**, so the bar can name a file
+  the page beside it did not come from. Considered for v1 and declined: the panel
+  already carries the distinction, marking one row `main` and lighting the edited
+  one. A dim on the cell, a marker word and a second cell for `main` were the
+  three shapes weighed. **A phase that adds a bar is not the phase to invent a
+  vocabulary for a distinction another pane already draws.**
+
+  **The cell is its own element, and `report` composes nothing into the status
+  string.** `app/dist/index.html:report` places words chosen in Rust — the four
+  states and the compile time are worded there so tests can check them — and a
+  file name folded into that string would put a page-side value inside a
+  Rust-side sentence. The new line sits beside `parts(state)` and writes its own
+  cell's `textContent`.
+
+  **The bar takes 24px from `main`** — 23px and its rule, the page setting no
+  global `box-sizing` — and the geometry is measured rather than assumed.
+  **The sum must be read off `getBoundingClientRect().height`, not
+  `offsetHeight`**, and that is a correctness point rather than a style one: the
+  header's own height is **46.5px** at 13px/1.5, so `offsetHeight` rounds it to 47
+  and a three-term `offsetHeight` sum overshoots `innerHeight` by one at some
+  widths and not others. Every gate in `tests/gates/` so far reaches for
+  `offsetHeight`, so the natural implementation of clause 4 **fails on correct
+  code** unless this is said. In the prototype `header + main + footer` summed
+  exactly to `innerHeight`, `#text` took the reduced height, and repeated resizes
+  produced **no `ResizeObserver` error**. That is the class `mpdf-009` Phase 3
+  found twenty-one of in a single run, which is why clause 5 re-checks it rather
+  than trusting this paragraph.
+
+  **`min-width: 0` on the cell and `flex: none` on the brand are load-bearing.**
+  Without them a long name pushes the brand out of the bar. Measured in the
+  prototype: with those two rules the footer stays **24px tall with the brand
+  intact down to a 240px viewport**, the bare name never truncating.
+
+  **The header has no equivalent rule, and its behaviour below a measured width is
+  the contrast this phase is designed against — not a defect it fixes.** The
+  header is `flex-wrap: nowrap`, so it never wraps *as a row*; instead its items'
+  own text wraps inside them and the bar grows taller. **The threshold is 627px,
+  and it is derived rather than observed**: its seven visible children measure
+  68 + 62 + 86 + 73 + 59 + 114 + 93 = 555px, plus six 8px gaps and 24px of
+  padding. At 627px the header is 47px; at 620px it is 66px, and at 500px 81px — **read
+  as `offsetHeight`**, the rects being 47.25, 66 and 80.5, and quoted that way
+  here only because the whole numbers are what a reader sees.
+  **This phase does not fix that** — it is shipped behaviour, and §6.1's first
+  further rule keeps a phase from rewriting one. It is stated so a round does not
+  read the footer's two rules as arbitrary, and clause 5 uses it as a control.
+
+  **Not in this phase, named so they are not smuggled in.** A dark/light toggle
+  is the obvious next cell and **is not promised here**: §1.1 parks theming, and
+  its 2026-08-28 note re-affirmed that parking one day before this phase was
+  appended. Adding one amends that bullet before it is a phase. The status line and
+  the fit control stay in the header. No page number, no caret line or column, no
+  word count. **Whether `Letur` should be quieter or brighter than the file name
+  is unsettled** — both are `--quiet` and it looked right, but nobody chose it.
+
+  **In the empty state the name is on screen twice**, the window title being
+  `Letur` before the first open and the brand cell saying it too. It resolves at
+  the first `⌘O`, which is the case Phase 10 argued from, and it is stated here
+  because clause 4 puts exactly that state in front of the tester.
+
+- **Exit gate:**
+
+  1. `cargo test --workspace` passes with **one test more than before the phase** —
+     clause 2's — and every other count unchanged. **The PDF does not move**, and the honest reason is
+     that **no Rust reaches the compile path at all** rather than that a test
+     would catch it: `core/tests/golden_test.rs` compares the emitted *Typst*
+     byte for byte and its PDF assertions are `starts_with(b"%PDF")` smoke checks,
+     so that suite pins the stage before the one this clause is about.
+  2. **The brand cell cannot drift from the bundle.** A new test in
+     `app/src/preview.rs`, in the idiom of
+     `app/src/preview.rs:the_page_typedefs_name_exactly_the_fields_status_serializes`,
+     `include_str!`s both `../dist/index.html` and `../tauri.conf.json` and asserts
+     `#brand`'s text is exactly `productName`. Phase 10's own text says a brand
+     cell must not say a name the bundle does not carry; **this clause is what
+     makes that mechanical rather than a promise**, and it is the one thing here a
+     later rename could falsify in silence.
+  3. `bun app/typecheck.mjs` exits 0, as it does today — Phase 9's check, run over
+     a file this phase edits. **Not part of `cargo test`**, for the reason
+     `app/typecheck.mjs` states in its own header.
+  4. **The window gate**, `tests/gates/mpdf-003-phase11.js`, pasted into the Web
+     Inspector console of a `cargo tauri dev` window in the idiom `tests/gates/`
+     already uses — **opened on a copy of `tests/fixtures/panel`**, which is how
+     every gate there names its fixture and which holds the subfolder and the
+     second markdown file the last two clauses need. Printing PASS or FAIL for
+     each: **the footer is `main`'s next element sibling, and the last element
+     before the module `<script>`** — not `body.lastElementChild`, which is that
+     `<script>`; with a document open the left cell is **exactly the bare name of
+     `edited` and contains no `/`**; the brand reads `Letur`; **the three
+     `getBoundingClientRect().height` values sum to `innerHeight`**; the empty
+     state leaves the cell empty and the brand standing; and **after a row click that makes `edited` differ from
+     `main`, the cell names the clicked file rather than the one that compiles** —
+     which is the behaviour the third decision above chose and the one a reader
+     could most reasonably expect to be the other way.
+  5. **No `ResizeObserver` error at any width, and the bar keeps its height.** In
+     the same session the console is cleared, the pane is taken across at least
+     three widths — one above 627px and two below it — and the count of those
+     errors is zero while the footer stays 24px with its brand cell non-empty.
+     **Run it with the fixture open, as clause 4 leaves it**: `#toggle` carries
+     `hidden` until a document is open and `#status` is empty before one
+     compiles, and without both the header is narrower than 627px demands and
+     will not grow — a false negative on the control below, read as a pass.
+     **This is the clause that would catch the phase disturbing geometry it does
+     not own.** The 627px figure is the header's own derived threshold, above:
+     **the header growing taller while the footer does not is the positive
+     control** that the width really was narrow, so a run where the header never
+     grows has not tested anything and is not a pass. **Take the widths on the
+     pane, not on the window**: a window resize can be clamped or otherwise
+     answered with a viewport wider than asked for, and an implementer who
+     resizes and does not read `innerWidth` back has measured nothing. That is
+     recorded because it cost this phase's own prototype a wrong literal — in
+     Chromium, where the prototype ran, and **not a claim about this clause's own
+     WKWebView**, where the clamp may not apply at all.
+
+- **Close-out:** **`rules/desktop-panes.md`** — it declares `app/dist/index.html`
+  among its sources and already owns "the status the page places and never
+  composes", which is the rule the new line sits beside; the footer is a third
+  region of that one file and belongs with the other two. **Its cap will need
+  raising**: it stands at 405/420 and this adds a section, so the phase says so
+  rather than discovering it, in the idiom `mpdf-010` Phase 4's close-out used.
+  `rules/desktop.md` was the alternative and is the weaker one — it owns the
+  window and the menu, but its sources reach `app/dist/index.html` only
+  incidentally and it stands at 576/590. **`rules/desktop-geometry.md`,
+  `rules/desktop.md` and `rules/desktop-project.md`: none needed** — the first
+  covers the preview pane's own layout and neither of the others names the page's
+  chrome; to be verified by grep at close-out rather than asserted here.
+  **`README.md`**: `## The desktop app` gains one sentence — the bar names the file
+  you are editing, which is not always the file that compiles. **`CLAUDE.md`: none
+  needed.** One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
