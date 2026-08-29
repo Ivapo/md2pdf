@@ -807,6 +807,11 @@ pub fn beside(main: &str, named: &str) -> String {
 /// write and a title all go through the link the author made rather than behind
 /// it, and `crate::preview::Preview::status` goes on spelling it with [`spell`]
 /// the way the row is spelled.
+///
+/// **A file being created goes through [`landing`] instead**, and the line
+/// above is why: this refuses every path that is not already a file, which is
+/// the whole input domain of a create. An implementer who reads "the one
+/// confinement rule" and reuses it here would refuse every one.
 pub fn confined(root: &Path, path: &str) -> Option<PathBuf> {
     let landed = root.join(path);
     if !landed.is_file() {
@@ -838,6 +843,78 @@ pub fn asset_bytes(root: &Path, path: &str) -> Result<Vec<u8>, String> {
         confined(root, path).ok_or_else(|| format!("{path} is not a file in this project"))?;
 
     std::fs::read(&landed).map_err(|e| format!("cannot read {}: {e}", landed.display()))
+}
+
+/// Where a path from the panel would land, for a file that does not exist yet.
+///
+/// **[`confined`]'s sibling for a write**, and it exists because that one opens
+/// on `is_file`. `crate::watch::resolve` is no help either: it answers with its
+/// *input* when canonicalization fails, and a file being created never
+/// canonicalizes, so `root.join("../escape.md")` would survive a component-wise
+/// `starts_with` textually, `..` and all.
+///
+/// **So the parent is canonicalized, which does exist, and the final component
+/// is joined onto it.** A parent that will not canonicalize is a refusal too,
+/// which is how `newdir/x.md` is refused with no clause of its own —
+/// `specs/file_panel_spec.md` §1.2 makes folder creation a non-goal and this is
+/// the rule that keeps it one.
+///
+/// It answers with the **join and not the resolution**, for [`confined`]'s own
+/// reason: the write goes through the link the author made, and the sentence a
+/// refusal carries spells the path the way the row does.
+fn landing(root: &Path, path: &str) -> Option<PathBuf> {
+    let landed = root.join(path);
+    let real = landed.parent()?.canonicalize().ok()?;
+
+    real.starts_with(crate::watch::resolve(root))
+        .then_some(landed)
+}
+
+/// Make one empty file under `root`, named by the panel.
+///
+/// **The extension decides the kind and there is no kind parameter.** A kind
+/// that supplied the extension would make an extensionless name the normal
+/// input rather than a refusal, and would turn `notes.typ` into `notes.typ.md`.
+/// So [`kind_of`] is the predicate, and the create is accepted exactly where it
+/// answers [`Kind::Markdown`] or [`Kind::Bibliography`] — which takes the
+/// `.yml` and `.yaml` bibliographies `core/src/bibliography.rs` reads, because
+/// a `.bib`-only create would be the hand-written subset
+/// `specs/file_panel_spec.md` §2 refuses for `.jpg`: two lists that drift, and
+/// a panel listing a kind it cannot create. [`Kind::Image`] is refused with the
+/// rest; the panel does not make pictures.
+///
+/// It is asked first because it needs no filesystem at all.
+///
+/// **The file is made with `create_new` rather than checked and then
+/// written.** `O_EXCL` makes *already exists* the filesystem's own answer, so
+/// nothing here races with a check — and it refuses a **dangling symlink** at
+/// that name, which an `exists()` test would have reported absent and then
+/// written straight through, out of the project the parent above was
+/// canonicalized to keep it in.
+///
+/// **It is a function and not the command**, per this file's own header, for
+/// [`asset_bytes`]'s reason. `mpdf-010` Phase 3.
+pub fn create_file(root: &Path, path: &str) -> Result<(), String> {
+    match kind_of(path) {
+        Some(Kind::Markdown | Kind::Bibliography) => {}
+        _ => {
+            return Err(format!(
+                "{path} is neither markdown nor a bibliography: \
+                 a new file is a .md, .bib, .yml or .yaml"
+            ));
+        }
+    }
+
+    let landed =
+        landing(root, path).ok_or_else(|| format!("{path} would land outside this project"))?;
+
+    match std::fs::File::create_new(&landed) {
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            Err(format!("{path} already exists"))
+        }
+        Err(e) => Err(format!("cannot create {}: {e}", landed.display())),
+    }
 }
 
 /// The one file the store lives in, inside the directory the platform gives
@@ -1915,5 +1992,168 @@ mod tests {
         std::os::unix::fs::symlink(&elsewhere, &door).unwrap();
         assert!(root.join("door/deep.png").is_file());
         assert_eq!(confined(&root, "door/deep.png"), None);
+    }
+
+    // -- a file made from the panel -----------------------------------------
+    //
+    // `mpdf-010` Phase 3. This is the first time this app writes to a path the
+    // author did not choose in a native dialog, so the confinement clauses
+    // below are the point and the create is what carries them.
+    //
+    // **Each clause says where it runs.** The writes go to [`scratch_dir`], per
+    // that helper's own reason; the symlink refusal runs over the committed
+    // `tests/fixtures/panel/`, because that link resolves the same on any clone
+    // and because a refusal writes nothing. The fixture does not grow, so
+    // [`the_listing_is_the_disk_and_what_the_master_names`] keeps its eleven
+    // rows and `tests/fixtures/panel-manifest.txt` is untouched.
+
+    /// Clause 1. One file appears, it is empty, and nothing else in the tree
+    /// moved — checked by walking the root before and after rather than by
+    /// looking at the one path the create was given.
+    #[test]
+    fn a_create_puts_one_empty_file_in_the_project_and_nothing_else() {
+        let root = scratch_dir("create-one");
+        std::fs::create_dir_all(root.join("sections")).unwrap();
+        // Scratch directories outlive a run whose process id is reused, and
+        // `create_new` would then refuse for a reason that is not this clause.
+        let _ = std::fs::remove_file(root.join("sections/note.md"));
+
+        let before = walk(&root);
+        create_file(&root, "sections/note.md").unwrap();
+        let after = walk(&root);
+
+        let appeared: Vec<&String> = after.iter().filter(|path| !before.contains(path)).collect();
+        assert_eq!(
+            appeared,
+            [&"sections/note.md".to_string()],
+            "the create put something other than the file it was asked for in the tree"
+        );
+        assert_eq!(
+            after.len(),
+            before.len() + 1,
+            "the tree lost a path the create was not asked to touch"
+        );
+        assert_eq!(
+            std::fs::read(root.join("sections/note.md")).unwrap(),
+            Vec::<u8>::new(),
+            "the created file is not empty"
+        );
+    }
+
+    /// Clause 2. Both spellings of *outside* are refused, in the sentence that
+    /// says so rather than merely in some sentence.
+    ///
+    /// **Neither path may exist**, and that is what makes the clause
+    /// independent of the order the rules run in: a create's other refusal is
+    /// *already exists*, so an implementation checking existence first would
+    /// pass on the wrong rule for a path that happened to be there. It is the
+    /// mirror of Phase 5's clause 3 rather than a copy — for a *read* the file
+    /// has to exist or `is_file` refuses first.
+    #[test]
+    fn a_create_that_would_land_outside_the_project_is_refused_by_name() {
+        let above = scratch_dir("create-escape");
+        let root = above.join("project");
+        std::fs::create_dir_all(&root).unwrap();
+
+        for path in ["/tmp/escape.md", "../escape.md"] {
+            let landed = root.join(path);
+            assert!(
+                !landed.exists(),
+                "{} has to be absent, or this clause can pass on the exists-rule",
+                landed.display()
+            );
+            assert_eq!(
+                create_file(&root, path).err().as_deref(),
+                Some(format!("{path} would land outside this project").as_str()),
+                "{path} was not refused as leaving the project"
+            );
+            assert!(
+                !landed.exists(),
+                "a refused create still wrote {}",
+                landed.display()
+            );
+        }
+    }
+
+    /// Clause 3. A link out of the project is refused, over the fixture whose
+    /// link is committed.
+    ///
+    /// `Path::starts_with` is component-wise, so `…/fixtures/panel-decoy`
+    /// genuinely fails against `…/fixtures/panel` rather than passing as a
+    /// string prefix.
+    #[test]
+    fn a_create_through_a_link_out_of_the_project_is_refused() {
+        let root = fixture("panel");
+
+        assert!(
+            root.join("outside").is_dir(),
+            "the link must resolve, or the parent never canonicalizes and this proves nothing"
+        );
+        assert_eq!(
+            create_file(&root, "outside/escape.md").err().as_deref(),
+            Some("outside/escape.md would land outside this project")
+        );
+        assert!(
+            !root.join("outside/escape.md").exists(),
+            "a refused create wrote into the decoy"
+        );
+    }
+
+    /// Clause 4. An existing path is refused and keeps its bytes.
+    ///
+    /// It is `create_new` that makes this true rather than a check the write
+    /// races with, so the assertion is about the file and not about the order
+    /// two statements run in.
+    #[test]
+    fn a_create_over_an_existing_file_is_refused_without_truncating_it() {
+        let root = scratch_dir("create-exists");
+        std::fs::write(root.join("held.md"), b"the author's own text").unwrap();
+
+        assert_eq!(
+            create_file(&root, "held.md").err().as_deref(),
+            Some("held.md already exists")
+        );
+        assert_eq!(
+            std::fs::read(root.join("held.md")).unwrap(),
+            b"the author's own text",
+            "a refused create truncated the file it refused"
+        );
+    }
+
+    /// Clause 5. The kinds are the pipeline's own, read off the extension.
+    ///
+    /// **`.yml` and `.yaml` are the clause that matters.** They are what a
+    /// hand-written `.md`-or-`.bib` subset would refuse, and
+    /// `core/src/bibliography.rs` reads all three — so a panel that listed a
+    /// bibliography it could not create would be the drift `mpdf-010` §2
+    /// refuses for `.jpg`.
+    #[test]
+    fn a_create_takes_the_kinds_the_pipeline_reads_and_no_others() {
+        let root = scratch_dir("create-kinds");
+
+        for path in ["notes.typ", "notes", "figure.png"] {
+            let _ = std::fs::remove_file(root.join(path));
+            assert_eq!(
+                create_file(&root, path).err().as_deref(),
+                Some(
+                    format!(
+                        "{path} is neither markdown nor a bibliography: \
+                         a new file is a .md, .bib, .yml or .yaml"
+                    )
+                    .as_str()
+                ),
+                "{path} is not a file the pipeline reads and was not refused as one"
+            );
+            assert!(!root.join(path).exists(), "{path} was created anyway");
+        }
+
+        for path in ["section.md", "refs.bib", "refs.yml", "refs.yaml"] {
+            let _ = std::fs::remove_file(root.join(path));
+            create_file(&root, path).unwrap_or_else(|e| panic!("{path} was refused: {e}"));
+            assert!(
+                root.join(path).is_file(),
+                "{path} was accepted and not made"
+            );
+        }
     }
 }

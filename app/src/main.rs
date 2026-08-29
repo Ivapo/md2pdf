@@ -117,6 +117,7 @@ fn main() {
             set_edited,
             discard,
             asset_bytes,
+            create_file,
             document_text,
             edit,
             save,
@@ -293,6 +294,33 @@ fn asset_bytes(
     // across it stalls `status`, `save`, the watch and the compile behind one
     // reader looking at a picture.
     document::asset_bytes(&root, &path).map(tauri::ipc::Response::new)
+}
+
+/// Make one empty file in the project, named from the panel.
+///
+/// **The rule is [`document::create_file`]'s and none of it is here**, for
+/// [`asset_bytes`]'s reason — and this is the first time this app writes to a
+/// path the author did not choose in a native dialog, which is the reason that
+/// division matters most here.
+///
+/// **Nothing is announced.** The file lands under the watched root, so
+/// `crate::watch::classify` answers `Change::Tree` and
+/// `crate::preview::Session::on_change` refreshes the listing without
+/// compiling. Creation and an external `touch` reach the window by one path.
+#[tauri::command]
+fn create_file(session: tauri::State<'_, Mutex<Session>>, path: String) -> Result<(), String> {
+    let root = {
+        let session = session.lock().expect("the session lock was poisoned");
+        session
+            .preview()
+            .root()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| "no document is open".to_string())?
+    };
+
+    // The lock is dropped before the write, for [`asset_bytes`]'s reason: a
+    // create on a slow volume is unbounded in a way nothing else here is.
+    document::create_file(&root, &path)
 }
 
 /// The document Finder handed over, if one is waiting.

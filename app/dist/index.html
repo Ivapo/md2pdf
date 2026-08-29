@@ -294,7 +294,15 @@
       #toggle[aria-expanded='true']::before {
         transform: rotate(90deg);
       }
+      /*
+        The heading is a row so the one control the panel itself carries can sit
+        at its end, where `.mark` and `.set` sit on a file's row — `margin-left:
+        auto` in all three places, because the panel has one right edge and
+        everything that hangs off it should hang off it the same way.
+      */
       #files h2 {
+        display: flex;
+        align-items: center;
         margin: 0 0 6px;
         padding: 0 12px;
         font-size: 10px;
@@ -302,6 +310,94 @@
         letter-spacing: 0.08em;
         text-transform: uppercase;
         color: var(--quiet);
+      }
+      /*
+        The `+` that reveals the name field. It is drawn like `.set` and not
+        like a header button: it belongs to the panel, and the panel's controls
+        are small, quiet and square.
+
+        **It is always there, where `.set` appears on hover.** A row has nine
+        siblings and would be nine buttons at once; this is one, and a reader
+        looking for how to add a file has nowhere else to look.
+      */
+      #files h2 .new {
+        margin-left: auto;
+        padding: 0 6px;
+        border: 1px solid var(--edge);
+        border-radius: 3px;
+        background: var(--ground);
+        color: var(--quiet);
+        font: inherit;
+        font-size: 11px;
+        line-height: 1.4;
+        cursor: pointer;
+      }
+      #files h2 .new:hover,
+      #files h2 .new[aria-expanded='true'] {
+        color: var(--ink);
+        border-color: var(--ink);
+      }
+      /*
+        The name field, and the sentence a refused create leaves beside it.
+
+        **Both sit in `#files` and outside `<ol id="parts">`**, which is a
+        correctness constraint and not a layout preference: `parts()` replaces
+        that list whole on every status, and a field inside it would lose what
+        the author had typed to a filesystem event they did not cause. It is the
+        same fact as *the rows hold no selection*, read from the other side.
+
+        The refusal is Rust's sentence and this only places it, as every status
+        sentence is placed. **It does not go through `fail`** — that marks the
+        compiled page stale, and a create compiles nothing — **nor through the
+        divergence bar**, whose `Discard` is meaningless here. It is the same
+        exception `saySoInstead` takes, and it is the first refusal in this
+        panel a reader meets by typing.
+      */
+      #files #new-file {
+        display: flex;
+        gap: 6px;
+        margin: 0 0 6px;
+        padding: 0 12px;
+      }
+      #files #new-file[hidden] {
+        display: none;
+      }
+      #files #new-name {
+        flex: 1;
+        min-width: 0;
+        padding: 2px 6px;
+        border: 1px solid var(--edge);
+        border-radius: 3px;
+        background: var(--ground);
+        color: var(--ink);
+        font:
+          12px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      #files #new-file button {
+        flex: none;
+        padding: 2px 8px;
+        border-radius: 3px;
+        font:
+          12px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      #files #new-refusal {
+        margin: 0 0 6px;
+        padding: 0 12px;
+        color: var(--alarm);
+        font:
+          12px/1.4 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      #files #new-refusal[hidden] {
+        display: none;
       }
       #files ol {
         margin: 0;
@@ -945,7 +1041,43 @@
     <main>
       <div id="mirror" aria-hidden="true"></div>
       <nav id="files" hidden aria-label="The project's files">
-        <h2>Files</h2>
+        <h2>
+          Files
+          <button
+            id="new-toggle"
+            class="new"
+            type="button"
+            aria-expanded="false"
+            aria-controls="new-file"
+            title="New file…"
+          >
+            +
+          </button>
+        </h2>
+        <!--
+          The one gesture in this panel that is not a row, and it sits outside
+          `#parts` because `parts()` runs on every status — every compile, every
+          typing settle, every `Tree` event — and replaces that list whole. A
+          field inside it would be wiped under the author's fingers by a
+          filesystem event they did not cause. Panel-level rather than
+          per-row, and it takes the whole root-relative path.
+
+          `mpdf-010` Phase 3.
+        -->
+        <form id="new-file" hidden>
+          <input
+            id="new-name"
+            type="text"
+            required
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="sections/method.md"
+            aria-label="A new file, named relative to the project"
+          />
+          <button type="submit">New</button>
+        </form>
+        <p id="new-refusal" hidden></p>
         <ol id="parts"></ol>
       </nav>
       <div id="lines" hidden aria-hidden="true"></div>
@@ -1452,6 +1584,83 @@
         toggle.setAttribute('aria-expanded', String(!folded))
         files.classList.toggle('collapsed', folded)
       })
+
+      /*
+        The panel's own gesture: name a file and the project gains it.
+
+        **Showing or not is page state, and `folded` above is the precedent.**
+        The rule that keeps this app's state in Rust is about state that decides
+        *behaviour*; whether a text field is on screen decides nothing but its
+        own drawing, nothing else reads it, and putting it in `Preview` would
+        buy the same nothing a folded panel would.
+
+        `mpdf-010` Phase 3.
+      */
+      const newToggle = document.getElementById('new-toggle')
+      const newFile = /** @type {HTMLFormElement} */ (document.getElementById('new-file'))
+      const newName = /** @type {HTMLInputElement} */ (document.getElementById('new-name'))
+      const newRefusal = document.getElementById('new-refusal')
+
+      /**
+       * Show the name field, or put it away — emptying it either way.
+       *
+       * @param {boolean} open
+       */
+      function nameFile(open) {
+        newToggle.setAttribute('aria-expanded', String(open))
+        newFile.hidden = !open
+        newRefusal.hidden = true
+        newRefusal.textContent = ''
+        newName.value = ''
+        if (open) newName.focus()
+      }
+
+      newToggle.addEventListener('click', () => nameFile(newFile.hidden))
+
+      // **Not in the global handler at the figure surface below**, and it does
+      // not stop the event: `Escape` goes on meaning *no figure* as well, which
+      // is that handler's own promise that nothing else loses the key.
+      newName.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') nameFile(false)
+      })
+
+      /**
+       * Ask Rust for the file. The path is the whole root-relative spelling the
+       * panel's rows use, extension and all — the extension is what decides the
+       * kind, and `document::kind_of` is what reads it, so there is no kind to
+       * send.
+       *
+       * **A refusal lands beside the field and nowhere else.** `fail` would add
+       * `stale` to the compiled page, and a gesture that compiled nothing must
+       * not tell the reader their PDF is out of date; the divergence bar would
+       * draw a `Discard` beside it, which means nothing for a create. The
+       * sentence is Rust's — this places it, as every status sentence is placed.
+       *
+       * **Nothing here draws the new row.** The file lands under the watched
+       * root, so it arrives as `watch::Change::Tree` one debounce later and the
+       * panel is rebuilt off the status that follows, which is the same path an
+       * external `touch` takes.
+       *
+       * The field stays open on success and takes focus again: an author adding
+       * sections adds several, and the `+` is what says they are done.
+       *
+       * @param {SubmitEvent} event
+       */
+      async function createFile(event) {
+        event.preventDefault()
+        newRefusal.hidden = true
+        try {
+          await invoke('create_file', { path: newName.value })
+        } catch (problem) {
+          newRefusal.textContent = String(problem)
+          newRefusal.hidden = false
+          return
+        }
+        newName.value = ''
+        newName.focus()
+      }
+
+      newFile.addEventListener('submit', createFile)
 
       /** @param {Status} state */
       function parts(state) {
@@ -2696,6 +2905,11 @@
         files.hidden = true
         toggle.hidden = true
         list.replaceChildren()
+        // The field and its refusal go too, and that is the reason they sit
+        // outside `#parts` read backwards: nothing else in this function
+        // touches them, so a path typed for one project and a refusal raised in
+        // it would both survive the Open into the next.
+        nameFile(false)
         message.hidden = false
         divergence.hidden = true
         error.hidden = true
