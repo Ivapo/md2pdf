@@ -103,9 +103,11 @@ rebuild-on-change.
 **Type in the left pane and the page follows.** It redraws when you stop typing, and
 **the PDF is what the pane says, not what the file says** — so the page shows your
 unsaved work. `⌘S`, or the Save button, writes the pane back to whichever file it is
-holding. Drag the
-divider to give either side more room. **`Lines` in the header numbers the pane and marks
-the line your cursor is on**, so an error that names a line names somewhere you can see.
+holding. **The bar along the foot of the window names that file** — which, once you
+have clicked another file in the list, is not the file the page beside it comes from.
+Drag the divider to give either side more room. **`Lines` in the header numbers the
+pane and marks the line your cursor is on**, so an error that names a line names
+somewhere you can see.
 
 **Save the file in another program and the page redraws too** — with one exception. The
 window watches the whole project, so editing a section, a figure or the bibliography

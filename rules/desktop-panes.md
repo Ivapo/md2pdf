@@ -12,7 +12,9 @@ covers: >
   canvas and two layers inside it, the vendored renderer and its worker, the retained document a geometry-only redraw draws from, the
   redraw that moves the reader and the three causes that decide where to, the
   anchor path that opens on the author's own page and the one file it is
-  filtered to, the status the page places and never composes, the panel that
+  filtered to, the status the page places and never composes, the bar along the
+  foot and the two cells it carries, the file it names and the one it does not,
+  the panel that
   lists the project's files and the two states it keeps apart, the flat entries
   it is drawn from and the folders derived rather than sent, the fold the page
   holds, the three gestures on a row and the two marks it may carry, the two
@@ -29,7 +31,7 @@ covers: >
   pane that loses both when it empties, the check that reads this file and the
   two declarations it holds to each other, and the seven defects that check
   does not reach
-max_lines: 420
+max_lines: 460
 generated: 2026-08-28
 ---
 
@@ -187,6 +189,50 @@ through broken states constantly and blanking the pane would lose their place.
 `fail` is for the refusals that are not a compile status — an open that will not
 read, an export the pane cannot serve — and the next status replaces what it
 wrote.
+
+## The footer
+
+A bar along the foot of the window: 23px and its own 1px rule, so 24px taken out of
+`main`. Two cells, `#edited` on the left and `#brand` on the right. It is `main`'s
+next element sibling and the last element before the module script — **not `body`'s
+last element child**, which is that script.
+
+**The left cell is `Status::edited`, not `Status::main`**: the file the pane is
+holding, which from the first click on a panel row is not the file that compiles.
+`report` writes its `textContent` beside `parts(state)`, and the rule above holds —
+the status line is composed in Rust and a page-side value is never folded into it, so
+this is a cell of its own. The value is `state.edited?.split('/').pop() ?? ''`: the
+bare file name, and the empty state collapses the cell to nothing while the brand
+stays. **Nothing marks that `edited` may differ from `main`** — the panel below draws
+that distinction, and the bar does not repeat it.
+
+**It duplicates the window title**, which `main.rs:set_edited` sets to the same
+`document::title`. What the second placement buys is that the title is native chrome
+outside the content area, dimmed when the window is not frontmost and sitting above
+the header rather than at the pane's foot. **Bare names collide** and the bar tolerates
+it: a project holding `sections/notes.md` and `drafts/notes.md` shows `notes.md` for
+either, which is the hazard the panel answers by carrying the whole path.
+
+`#brand` is the literal `Letur`, and
+`preview.rs:the_brand_cell_says_exactly_the_bundles_product_name` holds it to
+`tauri.conf.json`'s `productName` by `include_str!` on both. **It is the one name in
+this app a rename could leave wrong in silence**, the page being outside every other
+suite here.
+
+**`min-width: 0` on the cell and `flex: none` on the brand are load-bearing**: without
+them a long name pushes the brand out of the bar. With them the footer holds one line
+and keeps the brand down to a 240px viewport. **The header has no equivalent rule**,
+and its behaviour is the contrast rather than a defect: it is `flex-wrap: nowrap`, so
+it never wraps *as a row* — its items' own text wraps inside them and the bar grows
+taller, below the 627px its seven visible children derive (555px, six 8px gaps and
+24px of padding). It is 47px above that width, 66px at 620 and 81px at 500.
+
+**The three boxes sum to `innerHeight` exactly, read off
+`getBoundingClientRect().height`.** Not `offsetHeight`: the header is 46.5px at
+13px/1.5, which rounds up, and a three-term `offsetHeight` sum overshoots by one at
+some viewports and not at others. The footer is a box in flow in the column the
+observer above watches and does not make it loop — measured across four widths and
+sixty per-frame width changes, zero of that error.
 
 ## The panel
 
