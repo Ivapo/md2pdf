@@ -55,9 +55,14 @@
      await __gate.widths()     <- clauses 6, 7, 8, 9
      __gate.report()
 
-   If `widths()` reports that it cannot drive the window, resize it by hand and
-   call `await __gate.sample()` at each width — one above 627px and two below —
-   then `__gate.widthsDone()`. The judging is the same either way.
+   **`widths()` may well report that it cannot drive the window, and that is
+   expected rather than a fault.** `core:default` grants the window *getters*
+   and not `allow-set-size`, so `setSize` rejects at the IPC; the gate probes it
+   and says so rather than asking for the capability, a permission widened to
+   run a check being one the shipped app would carry for ever. Then resize the
+   window by hand — one width above 627px and two different ones below — calling
+   `await __gate.sample()` after each drag, and `__gate.widthsDone()` at the
+   end. `sample()` says what is still wanted. The judging is the same either way.
 
    Paste this into the build before this phase and the banner never prints:
    the lookups below run at paste time and `arm()` throws
@@ -329,6 +334,14 @@
       const s = reading()
       samples.push(s)
       note(`sample ${samples.length}: ${said(s)}`)
+      // What is still wanted, so a hand-driven sweep knows when it is done
+      // rather than finding out from a failed clause 6.
+      const wide = samples.filter((x) => x.width > 627).length
+      const narrow = new Set(samples.filter((x) => x.width < 627).map((x) => x.width)).size
+      note(
+        `      have ${wide} above 627px and ${narrow} distinct below it; want 1 and 2. ` +
+          (wide >= 1 && narrow >= 2 ? 'Run __gate.widthsDone().' : 'Drag again, then sample again.')
+      )
       return s
     },
 
@@ -348,17 +361,50 @@
 
       const api = window['__TAURI__']
       const LogicalSize = (api.dpi && api.dpi.LogicalSize) || (api.window && api.window.LogicalSize)
-      const win = api.window.getCurrentWindow()
+      const win = api.window && api.window.getCurrentWindow && api.window.getCurrentWindow()
 
-      if (!LogicalSize || typeof win.setSize !== 'function') {
-        note('this window exposes no setSize — resize by hand instead:')
-        note('  one width above 627px and two below it, calling `await __gate.sample()` at each,')
-        note('  then `__gate.widthsDone()`. The judging is identical.')
+      /* **Whether this window will resize itself is settled by trying, not by
+         looking, and the difference cost a run.** `setSize` is on the object
+         whatever the bundle permits — Tauri v2 gates the window API in
+         `app/capabilities/default.json`, and this app grants `core:default`,
+         whose window set is `allow-scale-factor`, `allow-inner-size`,
+         `allow-title` and the rest of the *getters*, with no `allow-set-size`
+         among them. So a `typeof` check reports a function that rejects at the
+         IPC, and the first version of this gate threw out of the method after
+         printing its heading and nothing else.
+
+         The probe is a `setSize` to the size the window already has: a no-op
+         where it is allowed, and the refusal itself where it is not.
+
+         **This gate does not ask for the permission**, and that is the decision
+         rather than an oversight: a capability widened to run a check is a
+         capability the shipped app carries for ever, and the hand path below
+         measures the same thing. */
+      let scale = 1
+      let back = null
+      let refusal = ''
+      if (!LogicalSize || !win || typeof win.setSize !== 'function') {
+        refusal = 'this window exposes no setSize at all'
+      } else {
+        try {
+          scale = await win.scaleFactor()
+          back = await win.innerSize()
+          await win.setSize(back)
+        } catch (problem) {
+          refusal = `${(problem && (problem.message || problem)) || 'it refused'}`
+          back = null
+        }
+      }
+
+      if (back === null) {
+        note(`the window will not resize itself — ${refusal}`)
+        note('so take the widths by hand: drag the window wide, then narrow, then narrower —')
+        note('one width above 627px and two different ones below it — calling')
+        note('`await __gate.sample()` after each drag, then `__gate.widthsDone()`.')
+        note('Nothing is skipped: widthsDone() is the same judging either way.')
         return { passed: 0, failed: 0 }
       }
 
-      const scale = await win.scaleFactor()
-      const back = await win.innerSize()
       const height = Math.round(back.height / scale)
 
       /* **Asked for, then read back.** `setSize` is a request: a window manager
@@ -382,9 +428,15 @@
           await this.sample()
         }
       } finally {
-        await win.setSize(back)
-        await wait(900)
-        note(`restored to ${innerWidth}px`)
+        // The restore is a courtesy and must not replace the run's own result
+        // with its own failure, which is what an unguarded reject would do.
+        try {
+          await win.setSize(back)
+          await wait(900)
+          note(`restored to ${innerWidth}px`)
+        } catch (problem) {
+          note(`could not put the window back: ${(problem && problem.message) || problem}`)
+        }
       }
 
       return this.widthsDone()
