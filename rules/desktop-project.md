@@ -14,9 +14,10 @@ covers: >
   are two functions rather than one, the filter that is each channel's own
   comparison, the total order the panel cannot reorder itself against, the
   confinement the walk and the commands now share and the one a write obeys
-  differently, and the one
+  differently, the two further questions a create asks and the empty file it
+  stops at, and the one
   fact this app remembers about a folder and where it refuses to keep it
-max_lines: 120
+max_lines: 130
 generated: 2026-08-28
 ---
 
@@ -106,8 +107,26 @@ row the panel offered and every command refused, while the compile rendered it.
 The path `confined` answers with is the join and not the resolution, so a read, a
 write and a title go through the link the author made rather than behind it, and
 `Preview::status` spells it with `document::spell` exactly as the row is spelled.
-A write still resolves its **parent** instead, per the rule below: a file being
-created canonicalizes to nothing.
+
+**A file being created canonicalizes to nothing, so a write asks a fourth
+question.** `app/src/document.rs:landing` is `confined`'s sibling: it
+canonicalizes the **parent**, which does exist, joins the final component onto
+it, and answers with the join for the reason above. `watch::resolve` is no help:
+it answers with its *input* when canonicalization fails, so
+`root.join("../escape.md")` would survive a `starts_with` textually. A parent
+that will not canonicalize is a refusal too, which is how `newdir/x.md` is
+refused with no clause of its own and folder creation stays a non-goal.
+`app/src/document.rs:create_file` is the one caller, and asks two more:
+`document::kind_of` is the predicate, so the extension decides the kind and
+`.md`, `.bib`, `.yml` and `.yaml` are the panel's own filter minus the images it
+does not make; and `File::create_new` makes *already exists* the filesystem's
+answer rather than a check the write races with, which refuses a **dangling
+symlink** an existence test would have written straight through.
+
+It makes the file empty and stops — where an include marker sits is a
+document-order decision no file list can make — and nothing announces the row:
+it lands under the watched root, arrives as `watch::Change::Tree`, and the panel
+is rebuilt off the status that follows, one path for a create and a `touch`.
 
 `app/src/document.rs:store_file` names the one file this app writes outside the
 author's own folders — `projects.json` under the directory Tauri's resolver gives

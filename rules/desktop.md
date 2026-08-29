@@ -14,7 +14,7 @@ covers: >
   the desktop app: the crate and its files, the window and its menu, the two
   titles an open sets, the commands and the signal between them, the file I/O the
   app owns and the two read passes one closure serves, the fourth reader of a
-  path the author did not name in a dialog, the three answers the
+  path the author did not name in a dialog and the first write to one, the three answers the
   asset list gives and the filter reads, the project this file hands to a rule of
   its own, the panel's status fields and the union built where no disk is
   read, the watch loop and its fourth answer and the two debounces it runs on,
@@ -95,7 +95,7 @@ capability added for either. `app/gen/` is generated and is not committed.
 
 `app/src/main.rs` holds only what needs a window. `main` registers the dialog
 plugin, builds the menu, manages one `Mutex<Session>` and one
-`app/src/main.rs:Pending`, registers thirteen commands, and — since the bundle —
+`app/src/main.rs:Pending`, registers fourteen commands, and — since the bundle —
 **builds the app rather than running it**, so that it can hand `App::run` a
 callback and see the run events a `.run(generate_context!())` never surfaces.
 
@@ -141,13 +141,13 @@ therefore cross the IPC boundary and the debounce is Rust's**, which is what put
 the interval on the testable side of the window: a debounce in the page would be
 logic reachable only by typing at one.
 
-Twelve of the thirteen commands are wrappers over a plain function.
-`app/src/main.rs:pending_open` is the thirteenth and is not: it reads no session
+Thirteen of the fourteen commands are wrappers over a plain function.
+`app/src/main.rs:pending_open` is the fourteenth and is not: it reads no session
 and **takes** a slot the run event filled, which the section on the bundle below
-explains. `app/src/main.rs:asset_bytes` is the newest of the twelve and the split
-is load-bearing rather than tidy: this file has no test module, the crate is
-bin-only and `tauri::State` has a private field and no public constructor, so a
-rule written into a command is a rule nothing in this repository can reach.
+explains. `app/src/main.rs:create_file` is the newest of the thirteen and the
+split is load-bearing rather than tidy: this file has no test module, the crate
+is bin-only and `tauri::State` has a private field and no public constructor, so
+a rule written into a command is a rule nothing in this repository can reach.
 
 ## The file I/O
 
@@ -244,7 +244,10 @@ the window to draw and nothing about the document changes for it — no compile,
 buffer, no `Status` field. The bytes cross as a `tauri::ipc::Response` for
 `current_pdf`'s reason and reach the page as an `ArrayBuffer`; the page makes a
 blob of them, which wants neither Tauri's asset protocol, nor a scope in
-`app/tauri.conf.json`, nor a capability.
+`app/tauri.conf.json`, nor a capability. **`app/src/document.rs:create_file` is
+the first write to such a path**, `write_override`'s being into Application
+Support: it makes an empty file and stops, `rules/desktop-project.md` has the
+three rules it obeys, and the row arrives by the watch rather than by a return.
 
 `app/src/document.rs:default_output` is where an export lands unless the user says
 otherwise: **`main`'s** path with a `.pdf` extension, duplicating

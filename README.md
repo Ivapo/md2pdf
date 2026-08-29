@@ -178,6 +178,14 @@ remembers your choice the next time you open that folder. It remembers it in its
 Application Support folder and writes nothing into yours. `Files` in the header folds the
 list away and brings it back.
 
+**The `+` beside `Files` makes a new one.** Type the path you want it at, relative to
+the project — `sections/discussion.md` — and the app creates it empty and lists it. It
+takes markdown and bibliographies, `.md`, `.bib`, `.yml` and `.yaml`, and it will not
+write outside the project or over a file that is already there; it says so beside the
+field if you ask for either. It does **not** add the include marker to your master:
+where a new section belongs in a document is your decision, so write `[](…)` where you
+want it. Folders are not created — make the folder first, in Finder.
+
 **Click a file in that list and the pane opens it, while the page keeps showing the whole
 document.** So you can write chapter three and watch the book: the file that compiles and
 the file you are editing are two different things, and the list marks each. `⌘S` writes

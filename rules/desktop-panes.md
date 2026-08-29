@@ -15,7 +15,8 @@ covers: >
   filtered to, the status the page places and never composes, the panel that
   lists the project's files and the two states it keeps apart, the flat entries
   it is drawn from and the folders derived rather than sent, the fold the page
-  holds, the two gestures on a row and the two marks it may carry, the surface
+  holds, the two gestures on a row and the two marks it may carry, the panel's
+  own gesture that is on no row and the two things the page holds, the surface
   over the text pane and the three boxes that place it, the sentence it shows
   where a figure cannot be drawn, the sequence its read carries and the three
   ways back, the disk half
@@ -229,6 +230,20 @@ it was. A bibliography and a marked-missing row open nothing and say so in their
 is still rebuilt whole on every status, and that is still
 right: **the rows hold no selection.** Both files live in Rust and arrive in the
 status, and each control reads its path off the DOM at the moment it is clicked.
+
+**The panel's own gesture is not on a row, and that invariant is why.** A `+` at
+the end of the `<h2>` reveals a field taking a whole root-relative path, and the
+create is `document::create_file`. **It sits in `#files` and outside `<ol
+id="parts">`**: `parts` replaces that list whole on every status, so a field
+inside it would lose what the author had typed to an event they did not cause —
+the rows holding no selection is what buys that rebuild, and this is that same
+fact from the other side. Showing or not is the page's own, for the fold's
+reason, and `clear()` closes it and empties it and its sentence with the rows,
+which nothing else there touches. **A refusal is drawn beside the field**, in
+Rust's words and placed as every status sentence is, reaching neither `fail`,
+which would mark the compiled page stale for a gesture that compiled nothing,
+nor the divergence bar, whose `Discard` names nothing to discard. It is
+`saySoInstead`'s exception, and the one refusal here a reader reaches by typing.
 
 **The figure is a view over the text pane and not a third pane**, the way `Lines`
 is a view: `#viewer` is a `<figure>` positioned absolutely over `#text`'s own
