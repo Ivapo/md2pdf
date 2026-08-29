@@ -65,7 +65,7 @@ phases:
     by: null
   - name: "Phase 12 — the harness the page is driven by"
     reviewed: 2026-08-29
-    shipped: null
+    shipped: 2026-08-29
     cut: null
     by: null
 
@@ -891,6 +891,40 @@ list to one item.
   > behaviour half** — now for a measured reason rather than an unexamined one.
   > What the harness demonstrably reaches, Phase 12 closes and lists. What it
   > does not reach, it says it does not.
+  >
+  > **PART-ANSWERED again 2026-08-29, by Phase 12, and the behaviour half stays
+  > open.** `app/harness/` is committed — `stub.mjs`, `serve.mjs`, `checks.mjs`
+  > and `app/package.json` pinning `playwright` 1.62.1. Seven clauses, every one a
+  > property and none a metric literal, pass in Playwright's Chromium and WebKit;
+  > three deliberately broken copies of the page each fail exactly the clause that
+  > owns them, in both engines.
+  >
+  > **The falsification caught a defect in the suite itself before it shipped**,
+  > which is the clearest evidence that clause was worth having: the width-sweep
+  > check set only `Status::edited` to the long name, so the `cell-main` mutation
+  > emptied the cell, the sweep went vacuous and clause 3 failed for a reason
+  > clause 5 owns. The sweep now carries the name in `edited` **and** `main` — the
+  > bar's geometry is not the cell's wiring, and only one clause may assert the
+  > wiring.
+  >
+  > **The A/B re-ran by the phase's stated method and landed on its first
+  > disposition: 0 and 0, in all eight cells.** `e6c9602^` and `e6c9602`, Chromium
+  > and WebKit, headless and headed, at `devicePixelRatio` 2 with `#pages` at
+  > `clientWidth` 520 over the 71-page `tests/fixtures/long.md`, `e6c9602`'s own
+  > gate pasted in and `__gate.long()` completing **14 passed / 2 failed in every
+  > cell**. Zero `ResizeObserver` errors on both revisions everywhere. So the
+  > phase's stated limitation holds, it shipped as scoped, and **this question
+  > keeps its behaviour half**: the seven defects have still only ever been seen
+  > in a real `cargo tauri dev` window.
+  >
+  > One rig observation, recorded because it cost two runs: **a second or third
+  > browser launch in the same process hangs** — no browser process alive, the
+  > driver waiting on a promise that never settles. Reproduced in Chromium both
+  > while driving the 71-page document at `devicePixelRatio` 2 and under
+  > `checks.mjs --falsify`, which is three runs in a row. Both drivers now fork one
+  > process per cell; `--falsify` does it by re-entering `checks.mjs` with
+  > `--mutate`, so the forked path and the single-mutation path are one path and
+  > its exit code already means *isolated*.
 
 ## 4. Implementation phases
 
