@@ -2,6 +2,113 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 12 only — 2026-08-29 — the same reviewer, resumed — **READY (converged)**
+
+The blocker was confirmed resolved **by measurement rather than by reading**: serving the
+real `app/dist/index.html` at 240px with the 58-character name, Chromium reproduced the
+phase's literals to the digit — `#brand` at x=202.98 with both declarations, with
+`min-width: 0` alone and with `overflow: hidden` alone, and at **317.45, right edge
+342.47, outside the bar** with both dropped.
+
+**And the round checked that the mutation isolates**, which is what clause 3 actually
+demands. Under it the three boxes still sum to 600 = `innerHeight`, the footer is still
+24px, `main.nextElementSibling === footer` and `footer.nextElementSibling === script`
+both still hold, `documentElement.scrollWidth` is unchanged at 395, and nothing touches
+`#status`, `#parts` or the cell's text — so it fails the brand check and no other. The
+other two mutations isolate by construction: a `<script>` is `display: none`, so moving
+the footer past it changes no geometry, and rewiring `report`'s cell line touches only
+`editedCell.textContent`. The sweep's new 240px floor was also checked on the
+*unmutated* page: the header has grown to 66px there and the sum is still exact.
+
+Three non-blocking, all accepted. **The sharpest is a trap in clause 4**:
+`cli/src/main.rs:default_output` writes beside its input and `.gitignore` covers only
+`/samples/**/*.pdf`, so a harness compiling the fixture without `-o` leaves an untracked
+PDF in `tests/fixtures/` and fails clause 4's own "`git status` is clean". The scope now
+requires `-o` into the scratch directory. Also folded: `--doc` takes a directory or a
+file, which is `mpdf-010`'s one level of climb rather than looseness; and a 58-character
+`edited` is not among the fixture's eleven entries, so the panel marks no edited row
+during the sweep — recorded as the reason the sweep and the row-click stay two checks.
+
+### Round 2 — Phase 12 only — 2026-08-29 — the same reviewer, resumed — **NOT READY**
+
+Blockers 2 and 3 resolved and verified in the files. **Blocker 1's fix had introduced a
+new blocker, which is the pattern §3 of the loop warns about and the best catch of the
+episode.** Clause 3's second mutation was rewritten to drop both declarations, but the
+conditions that make it bite — a 240px viewport and a long name — were quoted only in
+the justifying paragraph. The scope pins the stub to `tests/fixtures/panel`, whose
+longest bare name is `missing.md` at ten characters, and the check being falsified named
+no width floor: an implementer writing the sweep at Phase 11's 900/620/500 over the
+fixture's own names lands back at round 1, with a mutation that fails nothing. Both
+conditions are now stated inside the check itself.
+
+The round re-measured what it queried, against the real served page, and confirmed the
+three corrections made outside the phase — the `CORRECTED` note on Phase 11, the CSS
+comment and the rule — including that `flex: none` on `#brand` really was not shown to
+matter. `cargo test --workspace` still 334/0/2 with the corrections in the tree.
+
+Five non-blocking, all accepted, and two were the author's own errors: the measured
+string is **58** characters and not 57, and `317.45` does not re-derive without the exact
+name, so both the phase and the `CORRECTED` note now quote it. Also: clause 5's headline
+read as though a completed run always passed, where its own dispositions say otherwise;
+`serve.mjs` had a revision axis but no document axis, which clause 5 needs since it runs
+on `long.md`; "changes no line of the page" contradicted a close-out that edits a CSS
+comment; and `md2pdf-cli` is the crate where `md2pdf` is the binary.
+
+### Round 1 — Phase 12 only — 2026-08-29 — fresh reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode — one appended phase):** the phase produces no observable and
+says so in its first line, arguing it — no Rust, no executable line of the page, PDF
+byte-identical, clause 1 the check. Whether it is the right thing to build is the live
+question and was put to the reviewer rather than assumed: OQ-10's justification for the
+wide half was falsified in the same session, so the phase rests on a smaller claim and
+must earn a node manifest in a Cargo workspace on that alone.
+
+Three blocking, nine non-blocking. Nothing was rejected in any round.
+
+**Blocker 1 is the round's best catch, and it falsified a claim `mpdf-003` Phase 11 had
+already shipped.** Clause 3's mutation was to drop `min-width: 0` from `#edited` and
+watch the brand leave the bar — but `overflow: hidden` in the same rule already zeroes
+the flex item's automatic minimum size, so the mutation does nothing and the clause was
+unsatisfiable. Re-measuring sharpened it: **the two declarations each supply that
+minimum independently**, so they are redundant with each other and dropping *either*
+alone changes nothing; only dropping both pushes the brand off the bar. Phase 11's
+"`min-width: 0` on the cell and `flex: none` on the brand are load-bearing" was
+therefore wrong in three places at once — the spec, the page's CSS comment and
+`rules/desktop-panes.md` — and all three were corrected, the spec keeping its original
+text under a dated `CORRECTED` note per §6.1.
+
+**Blocker 2: gate clause 5 had no failure condition.** Both its outcomes were declared
+"a result worth having either way", so nothing about it could stop the phase, and the
+branch that mattered stated no disposition. It was a measurement task appended to a
+gate. It now passes only on a completed, recorded run, says outright that completing it
+is necessary and not sufficient, and gives three exhaustive outcomes — one of which
+halts the phase and forces a re-scope, which per §7 clears `reviewed`.
+
+**Blocker 3: clause 5's method was not reproducible from the phase.** It named two
+commits and a gate file; every parameter that makes the A/B mean anything — dpr 2, a
+520px pane, the 71-page document, both engines, `long()` — lived only in OQ-10's note,
+which records a run rather than a procedure. Nor did the scope supply the machinery:
+`serve.mjs` served the working tree only. The method is now stated in full and
+`serve.mjs` gained `--rev`.
+
+Non-blocking, all accepted: seven gates and not six; the stub's return data and fixture
+were unspecified though several checks key to them; the stub's injection point
+interacts with the element-order check and had to be `<head>`; "`report` composes
+nothing" is not directly assertable and was reworded; the close-out edited two rules
+without extending their `sources`, which §8.1 makes unregenerable; the
+Chromium-by-continuity argument was decorative, since no literal may be encoded and both
+engines must pass; the Phase 11 anecdote was loose — the gate was committed with the
+defect and corrected *before* the shipped marker, so it did not ship broken; and the
+lockfile and the scratch directory's placement were unstated, the latter mattering
+because `generate_context!` walks `frontendDist` into the shipped binary.
+
+**The round's most useful non-blocking finding is not a defect but a judgement**: with
+the A/B gone, the harness as scoped has **no automated consumer** — CI unwired, the
+seven gates unmigrated, no manual clause replaced. It was accepted rather than argued
+away, and the phase now says so outright, naming a person as the consumer and stating
+that if that is not worth a node manifest the phase is the thing to cut rather than
+shrink.
+
 ### Round 3 — Phase 11 only — 2026-08-29 — the same reviewer, resumed — **READY (converged)**
 
 Blocker 3's gate half confirmed resolved by construction rather than by reading: the

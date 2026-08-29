@@ -63,6 +63,11 @@ phases:
     shipped: 2026-08-29
     cut: null
     by: null
+  - name: "Phase 12 — the harness the page is driven by"
+    reviewed: 2026-08-29
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -855,6 +860,37 @@ list to one item.
   > run. The harness was a scratch file and was thrown away. Committing it is
   > the wide half, and it still carries OQ-2's price: a browser driver is a node
   > toolchain. *(needs-input — the price is a judgement, not a measurement)*
+  >
+  > **The `needs-input` is answered, 2026-08-29 — build it. And on the same day
+  > the evidence that justified the wide half did not survive being
+  > re-measured.**
+  >
+  > The judgement is the author's and is recorded as one: the price of a browser
+  > driver is accepted, and **Phase 12** commits the harness.
+  >
+  > **What that session then falsified is this question's own argument.** The
+  > claim above is that the wide half is the only thing reaching the seven
+  > behaviour defects, and its whole evidence is `mpdf-009` Phase 3's A/B — 0
+  > `ResizeObserver` errors before `overflow-x: auto`, 21 after. **That A/B could
+  > not be re-established.** The gate as it stood at the fix
+  > (`e6c9602:tests/gates/mpdf-009-phase5.js`) was run against both revisions of
+  > the page, served from a harness at `devicePixelRatio` 2, a 520px pane and the
+  > same 71-page document: **0 errors on the pre-fix revision and 0 on the fixed
+  > one** — in Chromium and in WebKit, headless and headed, `long()` completing
+  > 12 passed / 4 failed on both, and **clause 14, the one the fix commit credits
+  > with 19 of the 20 and describes as "a drag being scrolled under", executing
+  > and passing on the guilty revision.** This is not a stimulus that was missed.
+  >
+  > The difference from the original is the driver: the 21 were first seen in a
+  > real `cargo tauri dev` window, and the Chromium reproduction was a real
+  > Chrome driven through a browser extension, where this was Playwright. **Why
+  > Playwright does not report them is unestablished, and nothing here claims
+  > it.**
+  >
+  > **So Phase 12 takes the narrower claim, and this question stays open for the
+  > behaviour half** — now for a measured reason rather than an unexamined one.
+  > What the harness demonstrably reaches, Phase 12 closes and lists. What it
+  > does not reach, it says it does not.
 
 ## 4. Implementation phases
 
@@ -2428,6 +2464,22 @@ bundle's own `productName`, which a phase before the rename could not have passe
   prototype: with those two rules the footer stays **24px tall with the brand
   intact down to a 240px viewport**, the bare name never truncating.
 
+  > **CORRECTED 2026-08-29, by Phase 12's round 1.** The paragraph above is kept as
+  > it was written; **its attribution is wrong.** What holds the brand is that
+  > `#edited` has a zero automatic minimum size, and `min-width: 0` and
+  > `overflow: hidden` each supply that independently — so the two are redundant
+  > with each other and **dropping either alone changes nothing**. The literals
+  > are name-dependent, so the name is given: with `edited` =
+  > `notes-and-sources-for-the-second-chapter-final-revision.md` (58 characters) at a
+  > 240px viewport, `#brand` sits at x=202.98 and 25.02px wide with both declarations,
+  > with `min-width: 0` alone, and with `overflow: hidden` alone, and is pushed to
+  > x=317.45 — off the bar — only when **both** are gone. Identical in Chromium and
+  > WebKit.
+  > `flex: none` on `#brand` was not shown to matter at any width tested. The
+  > *observation* stands — the footer does stay 24px with the brand intact to 240px —
+  > only not for the reason given. Found because Phase 12 tried to key a gate
+  > mutation to the claim and the mutation did nothing.
+
   **The header has no equivalent rule, and its behaviour below a measured width is
   the contrast this phase is designed against — not a defect it fixes.** The
   header is `flex-wrap: nowrap`, so it never wraps *as a row*; instead its items'
@@ -2522,6 +2574,228 @@ bundle's own `productName`, which a phase before the rename could not have passe
   **`README.md`**: `## The desktop app` gains one sentence — the bar names the file
   you are editing, which is not always the file that compiles. **`CLAUDE.md`: none
   needed.** One push.
+
+### Phase 12 — the harness the page is driven by
+*Produces the observable: **no**, and the argument is that it adds no Rust, changes
+no executable line of the page — one CSS comment is corrected, below — and is a test
+instrument rather than a feature.* The PDF is
+byte-identical across it and clause 1 is the check. **What it buys is that the rig
+every pane phase builds stops being thrown away.** It has been written from scratch
+four times — `mpdf-009` Phase 3, `mpdf-009` Phase 5, this spec's Phase 11 prototype,
+and Phase 11's own gate rehearsal — and each time the stub was re-guessed.
+
+**The one worked example, stated precisely rather than at its most flattering.**
+Phase 11's gate was committed (`ac69be4`) with a `typeof win.setSize === 'function'`
+check that cannot see a capability denial, cost two window runs that printed a heading
+and nothing else, and was corrected (`141ea85`) **before** the phase's `shipped` marker
+(`9c6b03a`). So it did not ship broken; the loop caught it. What it cost was two runs
+by a person at a window, and the cause was a throwaway stub that omitted `setSize`
+where the real window *refuses* it — which a committed stub fixes once.
+
+Appended 2026-08-29, per §6.1 step 2: OQ-10 is this spec's own question and the
+desktop front end is its subject. **Strictly after Phase 11**, whose gate is the
+worked example the checks are drawn from.
+
+**The claim is narrower than OQ-10's wide half, and that is a decision made on a
+measurement rather than a hedge.** OQ-10's note of the same day records it: the A/B
+that justified the wide half — 0 `ResizeObserver` errors before `overflow-x: auto`, 21
+after — **could not be re-established**, with the era's own gate, on the guilty
+revision, at `devicePixelRatio` 2 and a 520px pane, in either engine, headed or
+headless, with the guilty clause executing and passing. **So this phase does not claim
+to reach the seven behaviour defects.** It claims what it can demonstrate, lists it,
+and says plainly what it leaves to a person at a window.
+
+**What consumes it, said plainly because the honest answer is thin.** Nothing
+automated does. CI is not wired (below), the seven gates in `tests/gates/` are not
+migrated, and no manual clause in a shipped gate is replaced. **`checks.mjs` is run by
+a person** — before a change to `app/dist/index.html` is committed, and before a pane
+phase's gate is written, which is the moment the rig has been rebuilt four times for.
+That is the whole of the consumer story, and if it is not worth a node manifest, this
+phase is the thing to cut rather than to shrink.
+
+- **Scope:** a committed **`app/harness/`**, three files and a manifest.
+
+  **`app/harness/stub.mjs`** — the `window.__TAURI__` the page is handed.
+  **Its point is fidelity to what the app refuses, not only to what it answers.**
+  `window.getCurrentWindow().setSize` is present and **rejects**, in the words
+  `app/capabilities/default.json`'s `core:default` produces, that grant being the
+  window getters and no setter. **A stub that omits what the real thing forbids tests
+  the wrong half**, which is the Phase 11 finding this file exists to make permanent.
+
+  **What it returns is specified, because several checks are keyed to it.**
+  `invoke('status')` answers an `app/src/preview.rs:Status` built from
+  **`tests/fixtures/panel`** — the fixture Phase 11's gate used, whose eleven rows,
+  subfolders and second markdown file the panel and row-click checks need — with
+  `main` `book.md`, `edited` settable, and the four states reachable so
+  `app/dist/index.html:report` can be driven through each. `invoke('current_pdf')`
+  answers **real compiled bytes**, produced at harness start by
+  `cargo run -p md2pdf-cli` — the crate's binary is `md2pdf` — from the document in
+  play, **with `-o` pointing into the scratch directory**. The flag is not optional
+  here: `cli/src/main.rs:default_output` writes beside the input, `.gitignore` covers
+  only `/samples/**/*.pdf`, and a PDF left in `tests/fixtures/` fails clause 4, because `pdf.js` is not stubbed and the pane must actually
+  rasterise. `invoke('document_text')`, `invoke('set_edited')`, `invoke('edit')` and
+  `invoke('pending_open')` answer as the app does; `dialog` and `event.listen` are
+  present, the latter storing callbacks so a check can fire `rendered`.
+
+  **`app/harness/serve.mjs`** — copies a page into a scratch directory, injects the
+  stub **into `<head>`**, and serves it. Three things are decided here rather than
+  left to the implementer:
+
+  - **It copies rather than edits.** `app/typecheck.mjs` dies unless
+    `app/dist/index.html` holds exactly one `<script type="module">` line and one
+    `</script>` line, so a stub written into the real file breaks the check this
+    repository already runs in CI.
+  - **The stub goes in `<head>`, and the position is load-bearing.** The page reads
+    `window['__TAURI__']` at module top level, so the stub must run first — and a
+    `<script>` injected into `<body>` would sit between `</main>` and the module
+    script, changing the very element order the first check asserts.
+  - **It serves a named revision, not only the working tree**: `--rev <sha>` writes
+    `git show <sha>:app/dist/index.html` and that revision's `app/dist/pdfjs/` into
+    the scratch directory. Clause 5 cannot be run without this, and an A/B between two
+    revisions is the one thing this rig has historically been used for.
+  - **And a named document, because the revision axis is not the only one clause 5
+    needs**: `--doc <path>` chooses what the stub opens, `tests/fixtures/panel` being
+    the default and `tests/fixtures/long.md` — the 71-page document `long_document_test`
+    pins — being what clause 5 requires. **It takes a directory or a file**, which is
+    not looseness but the app's own project model: `mpdf-010`'s one level of climb
+    resolves either into a root and a document.
+
+  The scratch directory lives **outside `app/dist/`** — `generate_context!` walks
+  `frontendDist` recursively into the shipped binary — and is gitignored, the
+  precedent being `app/.mirror/`.
+
+  **`app/harness/checks.mjs`** — the assertions.
+  `bun app/harness/checks.mjs`, with `--webkit` for the other engine.
+
+  **Chromium is the default, and the default decides little.** Every literal is
+  forbidden below and clause 2 requires both engines to pass, so this is not a
+  fidelity choice and is not dressed as one: the WebKit-is-nearer argument was tested
+  and is false where it would matter — against the same page the header's rect reads
+  **47.40625** in Playwright's WebKit, **46.75** in its Chromium and **47** in the
+  window, and at the narrow widths WebKit agrees with Chromium (66, 80.5) and not with
+  the window (79). Chromium is first because it is the engine every recorded run in
+  `mpdf-009` used and the one a contributor most likely already has; WebKit is kept
+  because a second engine catches what one cannot, not because it is truer.
+
+  **From which follows the one rule every check obeys: assert a property, never a
+  metric literal.** The sum is exact; the footer does not change height; the header
+  grows below its own threshold; the cell holds the last path segment. **No check may
+  encode 46.5, 46.75, 47, 66, 79, 80.5 or 627**, and `rules/desktop-geometry.md`
+  carries why.
+
+  **What the checks cover**, each a property: the page's element order, and that the
+  footer is `main`'s next sibling and the last element before the module script; that
+  the three boxes sum to `innerHeight` read as rects; that the footer keeps its height and its brand across a
+  width sweep **that reaches a 240px viewport while `Status::edited` names a file whose
+  bare name is at least 58 characters** — both conditions stated because neither is
+  reachable from the default fixture, whose longest bare name is `missing.md`, and
+  without them clause 3's second mutation falsifies nothing. **That name is therefore
+  not one of the fixture's eleven entries, so the panel marks no edited row during the
+  sweep** — which is why the sweep and the row-click check are two checks and must not
+  be folded into one; that **`#status`'s text contains no value the
+  page chose** — which is what "places and never composes" is assertable as, the
+  sentence itself being composed in Rust from `state` and `time`; that the left cell is
+  the last segment of `Status::edited` and follows a row click rather than
+  `Status::main`; that `app/dist/index.html:parts` draws one row per entry with the
+  folders derived; and that no uncaught error reaches the console through any of it.
+
+  **`app/package.json` and `bun.lock`**, pinning `playwright`. **The price is OQ-2's
+  and is paid deliberately rather than absorbed**: this repository gains a node
+  manifest it has never had, and the browser binaries are a `playwright install` a
+  contributor runs once. It sits under `app/` beside `typecheck.mjs` and
+  `tsconfig.json` rather than at the root, because the workspace is Cargo's and nothing
+  outside this crate reads it. `.gitignore` gains `node_modules` and the scratch
+  directory.
+
+  **Not in this phase, named so they are not smuggled in.** **CI is not wired, and the
+  precedent points the other way** — `.github/workflows/typecheck.yml` already runs a
+  bun script on pushes touching the page, so "not `cargo test`" is honoured either way
+  and the reason is cost alone: a browser download per run is a different order of
+  expense from `bunx tsc`, and nobody has measured it. **The seven gates in
+  `tests/gates/` are not migrated**: they are records of runs already made, and
+  rewriting a record is not what this buys. And **no check here replaces a manual
+  clause in a shipped gate** — the window is still the only place the seven behaviour
+  defects have ever been seen.
+
+- **Exit gate:**
+
+  1. `cargo test --workspace` passes **unchanged at 334 passed, 0 failed and 2 ignored
+     across nine binaries**, no `.rs` file edited, so **the PDF does not move**.
+  2. `bun app/harness/checks.mjs` exits 0, and `bun app/harness/checks.mjs --webkit`
+     exits 0, **each printing the same clause count**. A clause that passes in one
+     engine and not the other is a finding to record, not a number to relax.
+  3. **The suite is falsified before it is trusted**, which is the clause that makes
+     the rest mean anything. Against three deliberately broken copies of the page,
+     **each mutation fails exactly the clause that owns it and no other**, in both
+     engines:
+     - the `<footer>` moved to after the module `<script>` — fails the element-order
+       check alone;
+     - **`min-width: 0` *and* `overflow: hidden` both dropped from `#edited`** — fails
+       the brand-survives-a-width-sweep check alone;
+     - `app/dist/index.html:report`'s cell line rewired to `state.main` — fails the
+       row-click check alone.
+
+     **The second mutation drops two declarations because dropping either alone
+     changes nothing, and that is measured rather than assumed.** Each independently
+     zeroes the flex item's automatic minimum size, so they are redundant with each
+     other. **The literals are name-dependent, so the name is given**: with
+     `edited` = `notes-and-sources-for-the-second-chapter-final-revision.md` (58
+     characters) at a 240px viewport, `#brand` sits at x=202.98 and 25.02px wide with
+     both declarations, with `min-width: 0` alone, and with `overflow: hidden` alone —
+     and is pushed to x=317.45, off the bar, only when **both** are gone. Identical in
+     Chromium and WebKit. A different name gives a different x and the same three-way
+     result. **Phase 11's own claim that `min-width: 0` is
+     load-bearing is corrected by this phase**, in the page's comment and in
+     `rules/desktop-panes.md`; the correction is in scope precisely because a gate
+     cannot be keyed to a mutation that does nothing.
+  4. `bun app/typecheck.mjs` still exits 0, and **`git status` is clean after a full
+     run** — the harness serves a copy and must leave `app/dist/index.html` untouched.
+  5. **The A/B is re-run by a stated method, and what its answer means is decided in
+     advance.** The run must complete and both counts be written into the phase's
+     commit — a harness that cannot perform it fails this clause outright, `--rev` and
+     `--doc` being scoped above for exactly this. **Completing it is necessary and not
+     sufficient**: which of the three outcomes below lands decides whether the phase
+     ships on this gate at all. The method, in full, because OQ-10's note records a run
+     rather than a procedure: serve `e6c9602^` and `e6c9602` on two ports with
+     `--rev`; open the 71-page `tests/fixtures/long.md` document; drive with
+     `devicePixelRatio` 2 and a viewport that leaves `#pages` at `clientWidth` 520;
+     paste `e6c9602:tests/gates/mpdf-009-phase5.js`, run `__gate.arm()` then
+     `await __gate.long()`, and count window `error` events whose message names
+     `ResizeObserver`; do it in both engines, headless and headed.
+
+     **The three outcomes have stated dispositions, so the clause can direct the phase
+     rather than merely report:**
+     - **0 and 0** — this phase's stated limitation holds, OQ-10 keeps its behaviour
+       half open, and the phase ships as scoped.
+     - **0 before and non-zero after, or non-zero before and 0 after** — the harness
+       reaches the class after all, this phase's central limitation is wrong, and **the
+       scope is too small**: the phase does not ship on this gate. Its scope is
+       rewritten to claim the wide half, which per §7 clears `reviewed` and takes a new
+       round.
+     - **any other pattern**, including non-zero on both — the A/B does not isolate the
+       fix in this rig, which is a defect in the harness rather than a result about the
+       page. It is recorded, and the phase ships as scoped with OQ-10 carrying it.
+
+- **Close-out:** **`rules/desktop-panes.md`**, `## What checks it, and what that does
+  not reach` — the section is exactly this phase's subject, and its closing sentence,
+  that `tests/gates/mpdf-009-phase5.js` "pasted into a console, is still the only thing
+  that does", is what changes. The seven-defect list stays and **gains the measured
+  note** that the harness does not reach them either. **Its `## The footer` section is
+  corrected** with clause 3's measurement. **Both its `sources:` and
+  `rules/desktop.md`'s must gain the files their new claims are made from** —
+  `app/harness/*` and `app/package.json` respectively — or the next `/sync-rules`
+  regenerates the claims away, per §8.1. Caps: 457/475 and 587/605, both with room.
+  **`rules/desktop-geometry.md`: none needed** — the property-not-literal rule is
+  already there, which is what this phase builds on. **`README.md`: none needed**, and
+  the reason is that it documents the app for the people who use it and has never
+  carried the test surface — neither `app/typecheck.mjs` nor `tests/gates/` appears in
+  it. **`CLAUDE.md`: none needed.** **Three of these landed during the review that produced this
+  phase and are already in the tree**, so they arrive with the spec commit rather than
+  the implementation: `app/dist/index.html`'s footer comment, which loses the false
+  half of its `min-width: 0` claim — a comment, no rule and no behaviour — the same
+  correction in `rules/desktop-panes.md`'s `## The footer`, and the dated `CORRECTED`
+  note on Phase 11, per §6.1's first further rule. **OQ-10** takes a further dated note recording what shipped and
+  what is still open. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

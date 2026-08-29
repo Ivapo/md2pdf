@@ -223,9 +223,12 @@ either, which is the hazard the panel answers by carrying the whole path.
 this app a rename could leave wrong in silence**, the page being outside every other
 suite here.
 
-**`min-width: 0` on the cell and `flex: none` on the brand are load-bearing**: without
-them a long name pushes the brand out of the bar. With them the footer holds one line
-and keeps the brand down to a 240px viewport. **The header has no equivalent rule**,
+**What keeps the brand in the bar is `#edited`'s zero automatic minimum size**, and
+`min-width: 0` and `overflow: hidden` **each supply it independently** — so the pair is
+redundant with each other: dropping either alone changes nothing, and dropping both
+pushes the brand off the bar. `flex: none` on `#brand` was not shown to matter at any
+width tested. As the cell stands the footer holds one line and keeps the brand down to
+a 240px viewport. **The header has no equivalent rule**,
 and its behaviour is the contrast rather than a defect: it is `flex-wrap: nowrap`, so
 it never wraps *as a row* — its items' own text wraps inside them and the bar grows
 taller, below the 627px its seven visible children derive (555px, six 8px gaps and

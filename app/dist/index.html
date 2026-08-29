@@ -1038,10 +1038,15 @@
         quieter placement of the same string and claims nothing more — if that
         is not worth 24px, the cell is the part to cut and not the bar.
 
-        **`min-width: 0` here and `flex: none` on the brand are load-bearing.**
-        Without them a long name pushes the brand out of the bar; with them the
-        footer holds one line and keeps `Letur` standing down to a 240px
-        viewport. **The header has no equivalent rule**, and its behaviour is
+        **What keeps the brand in the bar is that this cell has a zero
+        automatic minimum size**, without which a long name pushes the brand out.
+        `min-width: 0` and `overflow: hidden` **each supply that on their own**,
+        so the two are redundant with each other and dropping either alone
+        changes nothing — measured, after an earlier comment here claimed
+        `min-width: 0` was load-bearing by itself. Both are kept: the first says
+        what is meant, the second is wanted anyway for the ellipsis. With the
+        cell as it stands the footer holds one line and keeps `Letur` standing
+        down to a 240px viewport. **The header has no equivalent rule**, and its behaviour is
         the contrast this bar is drawn against rather than a defect it fixes: it
         is `flex-wrap: nowrap`, so it never wraps as a row — instead its items'
         own text wraps inside them and the bar grows taller, below a width its
