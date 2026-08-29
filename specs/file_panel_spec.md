@@ -21,7 +21,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 3 — a file is created from the panel"
-    reviewed: null
+    reviewed: 2026-08-28
     shipped: null
     cut: null
     by: null
@@ -930,31 +930,159 @@ is created outside the app, which is the point at which the author leaves the
 window and loses the preview. This phase is the smaller half of closing that;
 Phase 2 is the larger half and produces the observable for both.*
 
-- **Scope:** A command taking a path relative to the root and a kind — `.md` or
-  `.bib` — which resolves and canonicalizes per §2's confinement rule, refuses a
-  path that escapes the root or names an existing file, and creates it empty.
-  Ordinary function in `app/src/document.rs` with the write injected, matching
-  that file's existing seam. **Not every refusal is reachable without a
-  filesystem**, and the phase should not claim otherwise: §2's write rule
-  canonicalizes the parent, which is a real call on a real directory, and the
-  symlink case in the gate below needs a real link. The seam keeps the
-  *write* out of the test; the resolution is checked against a temporary
-  directory the test creates.
+- **Scope:** A command taking **one argument — a root-relative path, extension
+  and all** — which confines it per §2's write rule, refuses a path that escapes
+  the root or names an existing file, and creates it empty. `app/src/main.rs`
+  registers it in `generate_handler!` and reads the root off the session, which
+  is `app/src/main.rs:asset_bytes`'s own shape exactly; the rule is a plain
+  function in `app/src/document.rs`, per that file's header.
 
-  The panel gains the gesture and the name field. A created file appears in the
-  panel by the watch event Phase 1 already classifies — the panel is not told
-  about it directly, so creation and an external `touch` reach the window by one
-  path.
+  **The extension decides the kind, and there is no kind parameter.** An earlier
+  draft took a path *and* a kind — `.md` or `.bib` — and review found the two
+  cannot both be built: a kind that supplies the extension makes an extensionless
+  name the normal input rather than the refusal the gate wants, and turns
+  `notes.typ` into `notes.typ.md`. So the path carries its own extension and
+  **`app/src/document.rs:kind_of` is what reads it**, the create being accepted
+  exactly when that answers `Markdown` or `Bibliography`. This is §2's *"from the
+  pipeline's own list"* argument applied a second time: `kind_of` already accepts
+  a `.yml` and a `.yaml` bibliography, because `core/src/bibliography.rs` does,
+  and a create that offered `.bib` alone would be the hand-written subset §2
+  refuses — two lists that drift, and a panel that lists a file kind it cannot
+  create. `Image` is refused with the rest: the panel does not make pictures.
 
-- **Exit gate:** In the Rust suite: a create under the root produces the file and
-  no other; `../escape.md`, `/tmp/escape.md`, and a path through a symlink
-  leaving the root are each refused with a sentence naming what was asked for;
-  an existing path is refused without truncating it; a `.typ` or extensionless
-  name is refused. At the window: creating `sections/discussion.md` puts a row in
-  the panel and leaves the page unchanged.
+  **`app/src/document.rs:confined` is the wrong helper and the create needs a
+  sibling.** It opens `if !landed.is_file() { return None }`, so it refuses every
+  path that does not yet exist — which is the create's entire input domain — and
+  its own doc comment calls it *"the one confinement rule three commands share"*,
+  so an implementer reading the code is invited to reuse it and would refuse
+  every create. §2's write rule is the one that applies: **canonicalize the
+  parent, which does exist, and join the final component to it**, refusing
+  anything that does not land under the canonical root. A parent that does not
+  canonicalize is a refusal too, which is how `newdir/x.md` is refused without a
+  clause of its own — §1.2 makes folder creation a non-goal and this is the rule
+  that keeps it one.
 
-- **Close-out:** `rules/desktop.md` (the commands, the file I/O the app owns),
-  `rules/desktop-panes.md` (the panel's gestures). README: the panel's actions.
+  **The write is not injected**, and the seam sentence an earlier draft carried
+  is withdrawn: the injected seam in `app/src/document.rs` is a *read*, existing
+  to count reads for a Phase 1 gate, and this file's only **write** —
+  `app/src/document.rs:write_override` — is a plain `std::fs::write` tested
+  against a real `scratch_dir`. §2's rule canonicalizes a real parent anyway, so
+  an injected write would buy a seam the test still has to go around. This
+  follows `write_override`: plain `std::fs`, checked against a scratch tree.
+
+  **The name field lives in `#files` and outside `<ol id="parts">`, which is a
+  correctness constraint rather than a layout preference.**
+  `app/dist/index.html:parts` runs on *every* status — every compile, every
+  typing settle, every `Tree` event, `.DS_Store` included — and does
+  `list.replaceChildren(...)`, whose in-code comment states the invariant the
+  shipped panel rests on: *"A row that remembered something of its own would make
+  this wrong."* A field inside `#parts` is therefore wiped under the author's
+  fingers by a filesystem event they did not cause. It goes beside the panel's
+  own `<h2>Files</h2>`, is panel-level rather than per-row, and takes the whole
+  root-relative path — which is what the window gate's `sections/discussion.md`
+  needs, and what keeps `rules/desktop-panes.md`'s *"the rows hold no
+  selection"* true.
+
+  **Sitting outside `#parts` is also why the field must be cleared explicitly.**
+  `app/dist/index.html:clear()` empties `#parts` and hides `#files`, and touches
+  nothing else in the panel — so a path typed for one project and a refusal
+  raised in it would both survive the Open into the next one, which is the same
+  reasoning that put them there read backwards. `clear()` empties the field and
+  its sentence with the rows.
+
+  **A refusal is drawn beside that field, and both other routes are already
+  refused in this spec.** `app/dist/index.html:fail` adds `stale` to the
+  compiled page, which a gesture that compiled nothing must not do — that was
+  Phase 5 round 1's blocking finding and is now written into
+  `rules/desktop-panes.md` — and `Preview::divergence` draws a `Discard` button
+  beside its sentence, which is meaningless for a create. So the sentence Rust
+  returns is placed in the panel, where the gesture is and where the author is
+  looking. This is the same exception Phase 5 took and for the same stated
+  reason: a label about the panel's own action, not a status about the document.
+  **Unlike `Session::set_edited`'s refusal, this one is reachable by typing**,
+  so it is the first refusal in this panel a reader actually meets.
+
+  **The created file does not go into the pane** — §2's *"Phase 3 creates the
+  file and stops"*, stated here because it is otherwise an inference. It appears
+  in the panel by the watch event Phase 1 already classifies: `Change::Tree`,
+  which `app/src/watch.rs:classify` answers for any path under the root that is
+  neither `main`, `edited` nor a named asset, and which
+  `app/src/preview.rs:Session::on_change` turns into a listing refresh with no
+  compile. The panel is not told about the create directly, so creation and an
+  external `touch` reach the window by one path. **`Status` gains no field**, so
+  `app/src/preview.rs:the_page_typedefs_name_exactly_the_fields_status_serializes`'s
+  `declared.len() == 11` does not move — named because Phase 5 named its own
+  knock-on and this phase's answer is that there isn't one.
+
+- **Exit gate:** In the Rust suite, and **each clause says where it runs**,
+  because this is the first phase of this spec whose gate writes:
+
+  1. **Over a fresh `app/src/document.rs:scratch_dir`** — that helper's own doc
+     comment is *"so runs do not collide and the repository stays clean"* — a
+     create of `sections/note.md` under a root holding `sections/` produces that
+     file, empty, **and no other path in the tree**, checked by walking the root
+     before and after.
+  2. **The confinement refusals, and the two sentences are distinguishable.**
+     `/tmp/escape.md` and `../escape.md` are each refused **over a scratch root**,
+     and the clause asserts the *outside-the-project* sentence rather than merely
+     *a* sentence: a create's other refusal is *already exists*, and a clause
+     gated only on "some sentence" passes on the wrong rule. **Neither path may
+     exist on disk for this clause** — the mirror of Phase 5's clause 3 rather
+     than a copy of it, since for a *create* an existing file would be refused
+     by the exists-rule first and the confinement rule would never execute.
+     Both, and not only `../escape.md`: a machine that happens to hold
+     `/tmp/escape.md` would otherwise fail this clause for an environmental
+     reason under an implementation that checks existence first, and requiring
+     the absence of both is what makes it independent of that ordering. The
+     clause also asserts no file appeared at the resolved path.
+  3. **The symlink case runs over `tests/fixtures/panel/`**, which Phase 1 built:
+     `outside/escape.md` through the committed `<fixture>/outside` link to
+     `tests/fixtures/panel-decoy/` is refused. It runs there rather than over
+     scratch because the link is already committed and resolves the same on any
+     clone, **and because this clause writes nothing** — a refusal cannot dirty
+     a tracked tree. **The fixture does not grow and
+     `tests/fixtures/panel-manifest.txt` is not edited**, which is this phase's
+     deliberate difference from Phase 5.
+  4. **An existing path is refused without truncating it**, over scratch: the
+     file is written with bytes first and its contents are compared after.
+  5. **The extension rule**, which needs no filesystem at all past a root: a
+     `.typ`, an extensionless name and a `.png` are each refused; a `.md`, a
+     `.bib`, a `.yml` and a `.yaml` are each accepted. The last two are the
+     clause that would catch a hand-written `.md`-or-`.bib` subset.
+
+  At the window, on `tests/gates/mpdf-010-phase3.js`, **over a copy of the
+  fixture made outside the repository** — `cp -R tests/fixtures/panel
+  "$TMPDIR/mpdf-010-phase3"`, which the script's own header states as its one
+  setup step. The fixture itself is fully tracked and is enumerated to eleven
+  rows by `app/src/document.rs:the_listing_is_the_disk_and_what_the_master_names`,
+  so creating a twelfth row in it would fail that test on the next `cargo test`;
+  `samples/showcase/` is tracked too, and **there is no delete in this app until
+  Phase 4**, so nothing in the gate could undo either. Remaking the copy is what
+  makes the run re-runnable, which Phase 2's gate made an explicit property and
+  this one keeps.
+
+  Open `<copy>/sections/text.md`, which roots at `<copy>` per Phase 1's climb.
+  Create `sections/discussion.md`: after `settled()` — the panel is refreshed by
+  the watch and not by the command's return, so the row lands one
+  `app/src/watch.rs:DEBOUNCE` later and "puts a row in the panel" read literally
+  is a race — the panel holds a new row under the `sections` heading, in §2's
+  order, `invoke('status')`'s `revision` and `edited` are **unchanged**, and the
+  drawn page is the same one. Then create `../escape.md` and the refusal appears
+  **beside the name field with the page not marked `stale`** and no `Discard`
+  button, which is the clause the two refused routes exist to make checkable.
+
+- **Close-out:** `rules/desktop.md` — the file I/O the app owns, and **two
+  counted literals that move**: *"registers thirteen commands"* becomes fourteen
+  and *"Twelve of the thirteen commands are wrappers over a plain function"*
+  becomes thirteen of the fourteen. `rules/desktop-panes.md` — **this phase makes
+  no sentence in it false**, which is the difference from Phases 2 and 5 and is
+  worth saying: the row is unchanged, so *"A row carries two gestures and can
+  carry two marks"* stands, and *"the rows hold no selection"* stands and is now
+  load-bearing rather than incidental — it is the reason the field sits outside
+  `#parts`, which that file should record. What moves is the `covers:` clause
+  "the two gestures on a row and the two marks it may carry", which gains the
+  panel's own field beside them, and a new paragraph for the field, its refusal
+  and its clearing. README: the panel's actions.
 
 ### Phase 4 — a file is moved to the Trash
 *Produces the observable: **no** — or rather it produces one only by breaking

@@ -2,6 +2,170 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 3 only — 2026-08-28 — same reviewer, resumed with the author's changelog — **READY (converged)**
+
+All four blockers confirmed resolved **against the rewritten file**, and the
+reviewer re-derived two things rather than taking the changelog's word:
+
+- **`kind_of` as the predicate, over all seven gate cases.** An extensionless
+  name refuses at `name.rsplit_once('.')?`; `.typ` falls through all three arms;
+  `.png` answers `Image`, which the scope refuses; `.md`, `.bib`, `.yml` and
+  `.yaml` are exactly the `Markdown`/`Bibliography` answers, matching
+  `core/src/bibliography.rs`'s three. It is private at
+  `app/src/document.rs:408` and the create rule sits in that same module, so it
+  is reachable with no visibility change and `app/src/main.rs` never needs it.
+- **The fixture-copy venue.** `tests/fixtures/panel/book.md` holds
+  `[](sections/text.md)`, so `document::project_root` opening
+  `<copy>/sections/text.md` roots at `<copy>`; `document::masters` returns
+  exactly `book.md`, so `main = edited = book.md` and the gate's "`edited`
+  unchanged" is well-defined. **`cp -R` on macOS implies `-P`**, so
+  `<copy>/outside` arrives as a symlink whose relative target does not exist
+  under `$TMPDIR`: `descend` keeps it, `files_under` drops it because
+  `kind_of("outside")` is `None` for a name with no extension. `cp -RL` would
+  make it a real directory adding two rows, which still breaks no clause,
+  the window gate enumerating none.
+
+**One finding was stronger than the changelog claimed.** The author argued the
+field must sit outside `<ol id="parts">` because `parts()` rebuilds it; the
+reviewer grepped the page and found `files.replaceChildren`, `files.innerHTML`
+and `files.append` appear **nowhere** — `parts()` and `clear()` touch only
+`list`, `files.hidden`, `toggle.hidden` and `files.classList`. So the placement
+is structurally safe against every rebuild path the page has, not merely against
+the one that motivated it. A second consequence for free: `#files` is one of the
+three boxes Phase 5's `ResizeObserver` watches, so a panel whose width changes
+with the field re-mirrors the figure surface with no new occasion to enumerate.
+
+Also confirmed for Rust clause 3: `Path::starts_with` is component-wise, so
+`…/fixtures/panel-decoy` genuinely fails against `…/fixtures/panel` rather than
+passing as a string prefix.
+
+**Three non-blocking findings, all folded in after convergence:**
+
+1. Clause 2 required `../escape.md` to be absent but said nothing about
+   `/tmp/escape.md`. A machine that happens to hold the latter would fail the
+   clause for an environmental reason under an implementation that checks
+   existence first. **Both paths must now be absent**, which makes the clause
+   independent of the check ordering.
+2. **Nothing said when the field and its refusal clear.** `clear()` touches only
+   `#parts`, `files.hidden` and `toggle.hidden`, so a path typed for one project
+   and a refusal raised in it would both survive the Open into the next — the
+   placement argument read backwards. `clear()` now empties both with the rows.
+3. The close-out named a `rules/desktop-panes.md` sentence and then withdrew the
+   claim in the same clause. Corrected to what is actually true: **this phase
+   makes no sentence in that file false**, which is its difference from Phases 2
+   and 5; the row is unchanged, and *"the rows hold no selection"* stands and
+   becomes load-bearing rather than incidental. What moves is the `covers:`
+   clause and a new paragraph.
+
+Numbers re-measured in this round, so a later round can trust them:
+`generate_handler!` lists **thirteen** commands and `grep -c '#[tauri::command]'`
+is 13, so the close-out's fourteen and thirteen-of-fourteen are right;
+`declared.len() == 11` at `app/src/preview.rs:2332` and this phase adds no
+`Status` field; `tests/fixtures/panel-manifest.txt` is **eleven** rows;
+`watch::DEBOUNCE` is 100 ms; `git ls-files tests/fixtures/panel` returns
+thirteen tracked entries including `outside`.
+
+### Round 1 — Phase 3 only — 2026-08-28 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode — Phase 3, the first round on it).** *Does this phase
+produce the observable, and is it the right one?* It produces none and says so,
+arguing it on the shape of the task rather than assuming it: `mpdf-008` made a
+document several files, every one of them is created outside the app, and that
+is the moment the author leaves the window and loses the preview — Phase 3
+closes the smaller half, Phase 2 having produced the observable for both. That
+is explicit, it agrees with §4's preamble, and Phase 3 is nobody's prerequisite.
+**Answer: yes, and the omission is argued rather than assumed.**
+
+`spec-lint` clean before the round: 0 errors, 57 citations on this document.
+
+**Four blocking findings, all accepted, all verified against the code by the
+author before acting on any of them.** The common cause is that Phases 1, 2 and
+5 have shipped since this phase's text was drafted, and the code moved under it.
+
+1. **"a path relative to the root *and a kind*" and "a `.typ` or extensionless
+   name is refused" cannot both be built.** A kind that supplies the extension
+   makes an extensionless name the normal input rather than a refusal, and turns
+   `notes.typ` into `notes.typ.md`; an extension read off the path means there is
+   no kind, and then the natural implementation — `document::kind_of` — admits
+   `.yml` and `.yaml`, which "`.md` or `.bib`" excludes. Three readings, none
+   stated. **Resolved toward the extension**: one path argument, `kind_of` the
+   predicate, accepted on `Markdown` or `Bibliography`. The `.yml`/`.yaml`
+   observation decided the direction rather than being a footnote — a
+   `.bib`-only create is the hand-written subset §2 already refuses for `.jpg`,
+   and would make the panel list a kind it cannot create.
+2. **"The panel gains the gesture and the name field" had no attachment point,
+   and the obvious one is destroyed under the author's fingers.**
+   `app/dist/index.html:parts` runs on every status — every compile, every
+   typing settle, every `Tree` event, `.DS_Store` included — and does
+   `list.replaceChildren(...)`, whose in-code comment states the invariant the
+   shipped panel rests on: *"A row that remembered something of its own would
+   make this wrong."* **Resolved**: the field sits in `#files` outside
+   `<ol id="parts">`, beside the panel's own `<h2>`, panel-level rather than
+   per-row, taking the whole root-relative path the window gate needs.
+3. **A refused create had no surface, and both available routes were already
+   refused in this spec.** `app/dist/index.html:fail` does
+   `if (drawing) pages.classList.add('stale')`, marking the compiled page out of
+   date for a gesture that compiled nothing — verbatim Phase 5 round 1's
+   blocking finding, now a written rule in `rules/desktop-panes.md`; and
+   `Preview::divergence` draws a `Discard` button beside its sentence, which is
+   meaningless for a create. **Resolved**: the sentence is drawn beside the name
+   field, the same exception Phase 5 took and for the same stated reason. Unlike
+   `Session::set_edited`'s refusal — unreachable in the window, the panel only
+   ever offering rows it listed — **this one is reachable by typing**, so it is
+   the first refusal in this panel a reader actually meets.
+4. **The window gate named no project, was not re-runnable, and broke a shipped
+   test in this spec's own gate venue.** `tests/fixtures/panel/` is fully tracked
+   and enumerated to eleven rows by
+   `app/src/document.rs:the_listing_is_the_disk_and_what_the_master_names`;
+   creating `sections/discussion.md` there adds a twelfth and fails that test and
+   the manifest on the next `cargo test`. `samples/showcase/` is tracked too, and
+   **there is no delete in this app until Phase 4**, so nothing in the gate could
+   undo either. **Resolved**: the window gate runs over a copy of the fixture
+   made outside the repository, remade each run, which is Phase 2's
+   re-runnability property kept. The fixture does not grow and the manifest is
+   not edited — this phase's deliberate difference from Phase 5, which did grow
+   it.
+
+**Eight non-blocking findings, all accepted.** Three changed the design rather
+than the wording and are worth the record:
+
+- **`document::confined` cannot serve the create.** It opens
+  `if !landed.is_file() { return None }`, refusing every path that does not yet
+  exist — the create's entire input domain — while its own doc comment calls it
+  *"the one confinement rule three commands share"*, so an implementer reading
+  the code is invited to reuse it and would refuse every create. It landed in
+  Phase 5's post-ship code review, after §2 was written. The phase now says the
+  create needs a sibling and restates §2's parent-canonicalizing rule where the
+  implementer reads it; `newdir/x.md` falls out of that rule, which is what keeps
+  §1.2's no-folder-creation a non-goal without a clause of its own.
+- **"with the write injected, matching that file's existing seam" overstated the
+  precedent, and the claim is withdrawn.** The injected seam in
+  `app/src/document.rs` is a *read*, existing to count reads for a Phase 1 gate;
+  that file's only write, `write_override`, is not injected at all and is tested
+  against a real `scratch_dir`. §2's rule canonicalizes a real parent anyway, so
+  the seam would be one the test still has to go around. The create is now plain
+  `std::fs` checked against a scratch tree, following `write_override`.
+- **The `../escape.md` clause could pass without the confinement rule
+  executing**, both refusals being gated only on "a sentence naming what was
+  asked for". The clause now asserts the outside-the-project sentence
+  specifically and requires the path not to exist — **the mirror of Phase 5's
+  clause 3 rather than a copy**, since for a *create* an existing file is refused
+  by the exists-rule first, where for a *read* a missing one is refused by
+  `is_file` first.
+
+The remaining five: each gate clause now names its venue (`scratch_dir` for the
+writes, the committed fixture for the symlink refusal, which writes nothing);
+`app/src/main.rs` and `generate_handler!` named, with `main.rs:asset_bytes` as
+the exact template; `settled()` and `watch::DEBOUNCE` in the window clause,
+since the panel is refreshed by the watch and not by the command's return, so
+"puts a row in the panel" read literally is a race; the created file explicitly
+**not** going into the pane, per §2's *"creates the file and stops"*; and a
+close-out naming the exact sentences and both counted literals, which is the
+standard Phases 2 and 5 set and this one was a notch below.
+
+**Nothing was rejected.** Every one of the twelve findings was confirmed against
+the code before it was folded in.
+
 ### Phase 5 — a code review after shipping — 2026-08-28 — five findings, four fixed and one recorded
 
 `/code-review` at `high` over `70860ba..HEAD`, run after the phase had shipped
