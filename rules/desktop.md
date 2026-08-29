@@ -33,7 +33,7 @@ generated: 2026-08-28
 
 # Desktop
 
-A macOS window that shows the PDF while you write it. `md2pdf-app` is the second
+A macOS window that shows the PDF while you write it. `letur` is the second
 wrapper around `md2pdf-core`, beside `md2pdf-cli`, and it calls no other code of
 this project's own; **`core` gained one function for it, in Phase 6, and nothing
 in any other phase** — `core/src/lib.rs:md_to_pdf_with_anchors`, which is
@@ -513,7 +513,7 @@ function of the text and the asset bytes, and the text the app compiles is the
 pane's; a buffer with unsaved edits is a different document from the one on disk,
 and the two front ends then agree about nothing except their own inputs. No
 single test holds even the qualified claim: `CARGO_BIN_EXE_md2pdf` reaches only
-integration tests of the package defining that binary, and `md2pdf-app` declares
+integration tests of the package defining that binary, and `letur` declares
 a `[[bin]]` and no `[lib]`. It is gated in two halves, in `app/src/preview.rs`
 and `cli/tests/cli_test.rs`, meeting at an in-test `md_to_pdf` call.
 
@@ -535,12 +535,12 @@ bundle below runs at all away from `cargo`.
 on** — while that key is false the two obvious commands disagree, `cargo tauri
 build` skipping the bundle and the standalone `cargo tauri bundle` making one
 anyway. `bundle.targets` is `app` and `dmg`, leaving
-`target/release/bundle/macos/md2pdf.app` and a `.dmg` beside it named for the
+`target/release/bundle/macos/Letur.app` and a `.dmg` beside it named for the
 version and the architecture. **`productName` renames the `.app` and not what is
-inside it**: the bundle is `md2pdf.app` and `CFBundleExecutable` is
-`md2pdf-app`. `tauri-cli` pins at 2.10.1, as everything here pins.
+inside it**: the bundle is `Letur.app` and `CFBundleExecutable` is
+`letur`. `tauri-cli` pins at 2.10.1, as everything here pins.
 
-`Contents/Resources/` holds `md2pdf.icns` and nothing else, and **no font ships
+`Contents/Resources/` holds `Letur.icns` and nothing else, and **no font ships
 there**: `core/src/lib.rs` embeds all five faces with `include_bytes!` and the
 Typst world exposes those alone, so one added there would be dead weight.
 
@@ -554,7 +554,7 @@ the fix goes, and both need an Apple Developer credential.
 
 **A bundle gets its own privacy identity, and the watch loop depends on one.**
 Under `cargo tauri dev` the process inherits the terminal's grants; as
-`dev.md2pdf.desktop` it does not, and `watch.rs:start` watches a whole directory
+`dev.letur.desktop` it does not, and `watch.rs:start` watches a whole directory
 recursively. A document under `~/Documents`, `~/Desktop` or `~/Downloads` can
 compile once through the open panel and then stop redrawing — the silent-failure
 class the canonicalization note above records, by another route.

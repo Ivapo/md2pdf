@@ -39,7 +39,7 @@
   const { invoke } = window['__TAURI__'].core
 
   /* The window's title is not `document.title` — `set_title` sets the native
-     title bar, where the page's own `<title>` says `md2pdf` and never changes.
+     title bar, where the page's own `<title>` says `Letur` and never changes.
      Phase 1's gate learned this the hard way and it is the one Tauri call here
      beyond `invoke`. */
   const titled = async () => {

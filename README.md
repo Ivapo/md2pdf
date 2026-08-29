@@ -20,7 +20,7 @@ The desktop app builds into a real macOS application:
 $ cargo tauri build
 ```
 
-That writes `target/release/bundle/macos/md2pdf.app`, and a `.dmg` beside it under
+That writes `target/release/bundle/macos/Letur.app`, and a `.dmg` beside it under
 `target/release/bundle/dmg/`. Drag the `.app` into `/Applications` and launch it from
 there; double-clicking a `.md` file opens it too.
 
@@ -84,10 +84,10 @@ it serves inspection rather than a standalone `typst compile`.
 
 ## The desktop app
 
-There is a second front end: a macOS window that shows the PDF while you write it. It
-wraps the same core crate, so it converts exactly what the command converts and refuses
-exactly what the command refuses, in the same words — a document written across several
-files included.
+There is a second front end, **Letur**: a macOS window that shows the PDF while you write
+it. It wraps the same core crate, so it converts exactly what the command converts and
+refuses exactly what the command refuses, in the same words — a document written across
+several files included.
 
 ```console
 $ cargo tauri dev
@@ -97,7 +97,7 @@ That opens a window. Press `⌘O`, or the Open button, and pick a markdown file:
 window finds the document that file belongs to, puts its text in the left pane, lists the
 project's files beside it and draws the page on the right. `cargo tauri dev`
 needs the Tauri CLI (`cargo install tauri-cli`); without it,
-`cargo run --release -p md2pdf-app` opens the same window and skips the
+`cargo run --release -p letur` opens the same window and skips the
 rebuild-on-change.
 
 **Type in the left pane and the page follows.** It redraws when you stop typing, and
@@ -157,7 +157,7 @@ until you type. A page that is stale, or no page at all, is refused rather than 
 **A `.md` file double-clicked in Finder opens in the app**, once it is the handler for
 that extension. macOS gives an installed editor the first claim on `.md`, so if
 double-clicking still opens your editor, pick a markdown file, press `⌘I`, and set
-*Open With* to md2pdf followed by *Change All*. Double-clicking a section opens its whole
+*Open With* to Letur followed by *Change All*. Double-clicking a section opens its whole
 document, per the project rule below. Opening a second file this way switches the window
 to it, and **unsaved edits in the pane are lost** — the same as reopening from the Open
 dialog. Save first if you want to keep them.

@@ -157,7 +157,7 @@ right.
 
 `app/src/document.rs:store_file` names the one file this app writes outside the
 author's own folders — `projects.json` under the directory Tauri's resolver gives
-`dev.md2pdf.desktop` — and `read_override`/`write_override` keep one main per
+`dev.letur.desktop` — and `read_override`/`write_override` keep one main per
 canonical root in it, a `BTreeMap` so two writes of one map are two identical
 files. **A missing, unreadable or malformed store is nothing remembered and never
 an error in the window**; a failed *write* is reported, the author having just

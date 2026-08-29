@@ -34,7 +34,7 @@
   const { invoke } = window['__TAURI__'].core
 
   /* **The window's title is not `document.title`.** `set_title` sets the native
-     title bar; the page's own `<title>` says `md2pdf` and never changes, so a
+     title bar; the page's own `<title>` says `Letur` and never changes, so a
      clause reading it reported a failure about the wrong string. This is the one
      Tauri call here beyond `invoke`, and it costs no capability: `allow-title`
      is already in `core:window`'s default set, which `core:default` grants. */
