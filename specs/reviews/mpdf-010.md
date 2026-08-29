@@ -2,6 +2,177 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 4 only — 2026-08-28 — same reviewer, resumed with the author's changelog — **READY (converged, at the cap)**
+
+The round-2 blocker confirmed resolved **against the files**, and the reviewer
+re-read the whole phase rather than the changed paragraphs, re-checking every
+claim the three rounds touched: the third confinement question against
+`landing`'s parent-canonicalizing body and `confined`'s `is_file()` opening; the
+self-refresh against `classify`'s first-match chain, `on_change`'s
+`if changed.tree`, `files_under` and `merge`; the section-read sentence against
+`read_sections_with`'s format string and `core/src/sections.rs:section_text`
+being unreachable behind the `?`; `objc2-foundation` 0.3.2 in `Cargo.lock`;
+`declared.len() == 11`; and both `max_lines` figures. **No newly introduced
+blocking issues.**
+
+Two residual nits, both folded in after convergence: the gate preamble said the
+double only *records* where item 3 now says it also removes, and clause 1's
+"with that path" was disambiguated to the join `landing` answers. The word
+*stub* was replaced by *double* throughout, the two having been used for one
+thing.
+
+### Round 2 — Phase 4 only — 2026-08-28 — same reviewer, resumed with the author's changelog — **NOT READY**
+
+All eight blockers confirmed resolved, and the reviewer re-derived the two
+claims that were **new** this round rather than repairs: that
+`symlink_metadata()` succeeds on a dangling link and fails on a `missing: true`
+path, which is what the widened existence test needs; and that the self-refresh
+really produces the marked-missing row — `Preview::sections` is assigned from
+`render.sections` on every compile including a failed one, `entries()` runs
+`merge` on every `status()`, and `merge` adds the path back once `files_under`
+stops finding it, with no compile needed.
+
+**One newly introduced blocker, and it was the author's fix that introduced
+it** — the pattern §3 of the loop names, met in the wild:
+
+- Round 1's text said *"the buffer is discarded only if it is clean"*. The
+  rewrite specified `Session::arm` for the loops and **dropped the buffer's
+  fate**. A build that arms without loading leaves the *trashed* file's text in
+  the buffer while `edited` names `main`, so `Preview::save` writes a deleted
+  section over the master, `render_project`'s closure answers `main` from that
+  same buffer once the two paths are equal, and nothing announces —
+  `classify` → `Edited` → `reload` → `read_document` fails → `External::Unchanged`
+  leaves `announce = false`. **And the rewritten gate clause could not tell the
+  builds apart**: it had replaced "read the field" with "both loops are live",
+  which all three broken builds satisfy. Resolved by naming the fallback as
+  `Session::set_edited`'s **own body** — set, load, announce, re-arm — and by
+  making clause 6 assert three things, the middle one being that `buffer` and
+  `saved` are `main`'s own text byte-for-byte.
+
+**Four non-blocking findings, all accepted:**
+
+1. **`asset_bytes` was the wrong template.** A delete must refuse on `main`, set
+   `Preview::divergence`, call `Session::arm` and write `Preview::tree`, and all
+   four are private to `app/src/preview.rs` and unreachable from a command. The
+   shape is `Session::set_edited`'s: a `pub fn` on `Session` with a thin command
+   over it.
+2. The test double must **remove** the file, not only record the call — clauses
+   1, 3 and 7 each turn on the file being gone.
+3. Clause 4 asked for two sentences where the rule can make one distinction:
+   `merge` marks a row missing *because* the walk did not find it, so both
+   inputs are the same `symlink_metadata()` failure inside a function that never
+   sees `Preview::sections`.
+4. **Three controls on a row where the CSS argument was written for one.** OQ-5
+   records `.set` at `margin-left: auto` "because only one of the two is ever on
+   a row"; a non-main markdown row now draws `main` and the delete together.
+
+### Round 1 — Phase 4 only — 2026-08-28 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode — Phase 4, the first round on it).** *Does this phase
+produce the observable, and is it the right one?* It produces none and says so,
+declining even the degenerate one it could have claimed: deleting a named
+section does change the PDF, by breaking it into a refusal, and a refusal is not
+what this project produces. Its argument is symmetry with Phase 3 — a panel that
+creates and cannot remove leaves the author in the Finder for half the task,
+which is the state Phase 3 was written to end. **Answer: yes, and the omission
+is argued rather than assumed**, with the caveat recorded that symmetry is the
+*only* argument and the unpriced trash dependency could still change it. The
+caveat was put to the human before the rewrite, together with the confirmation
+question below; the answer was to rewrite and continue.
+
+`spec-lint` clean before the round: 0 errors, 67 citations on this document.
+
+**Seven blocking findings, all accepted, none rejected, each confirmed against
+the code before it was acted on** — and the common cause is the one Phase 3 had:
+Phases 1, 2, 3 and 5 all shipped after this phase's text was drafted.
+
+1. **"Reuses Phase 3's confinement rule unchanged" named a rule that does not
+   fit, and neither shipped rule fits.** `confined` opens on `is_file()`, so it
+   refuses every `missing: true` row and every dangling-symlink row the walk
+   lists; `landing` canonicalizes only the parent, so it accepts a `secret.png`
+   that is a link out of the project — which `confined` refuses and
+   `a_link_out_of_the_project_is_refused_however_it_is_spelled` pins. **Resolved
+   as a third question**: `landing` for *the name is under the root*, unchanged,
+   plus `symlink_metadata().is_ok()` for *something is at it*. That also settled
+   the reviewer's separate finding that deleting a symlink row was undecided —
+   the delete acts on the **name and not the resolution**, so the link goes and
+   its target stays, which is the opposite of `confined`'s reading for a read
+   and deliberately so.
+2. **The phase named no file, no function, no command and no gesture**, against
+   §3's "each phase names the files and functions to touch". **Resolved**: five
+   numbered scope items.
+3. **"A confirmation precedes every delete" had no mechanism**, and the app has
+   none: `app/capabilities/default.json` grants `core:default` and the two file
+   dialogs, so a native `ask` wants a new permission and a rewritten
+   description, while the alternatives compose text in the window or put state
+   on a row `parts()` rebuilds. **Resolved by withdrawing the confirmation**, on
+   the human's call: §2's own argument is that the Trash *is* the undo a
+   confirmation stands in for, and Finder does not confirm a move to the Trash
+   for that reason. §2 carries the dated `CORRECTED` note.
+4. **The gate's "confinement refusals of Phase 3, re-run against delete" do not
+   transfer.** Those clauses assert the path is *absent*, which for a delete
+   means the not-there rule refuses first and confinement never executes; and
+   the fixture clause runs on tracked files "because this clause writes
+   nothing", which a delete does not. **Resolved**: clause 2 is the mirror and
+   writes the file first, clause 7 moved to a scratch copy, every clause names
+   its venue.
+5. **"Leaves the panel holding a marked-missing row" was false.** `classify`
+   returns the **first** match and a named section is already in the asset list,
+   so a delete answers `Asset`, never `Tree`, and `on_change` refreshes the tree
+   only under `changed.tree`. **Resolved**: the delete re-walks itself, which it
+   may because the app made the change and knows it — the watch is for changes
+   the app did not make. The asymmetry with Phase 3 is argued rather than left
+   as an inconsistency: a *created* file is not in the asset list, so the watch
+   classifies it correctly.
+6. **"`edited` falls back to `main`" as an assignment kills both loops**, which
+   Phase 2's scope item 4 already records. (Fixing this is what introduced round
+   2's blocker.)
+7. **The dirty-buffer refusal had no sentence, and `SWITCHING` is false here** —
+   it opens *"…discard them to open the other file"* and nothing is being
+   opened, verbatim §2's argument for why `SWITCHING` is not `DIVERGED`.
+
+**An eighth blocker the author found while verifying the seven.** The phase said
+the next compile refuses with `md2pdf_core::Error::MissingSection`. **This app
+never reaches it**: `app/src/document.rs:read_sections_with` fails first with
+*"cannot read {path} for the section {location}"* and `?` short-circuits
+`render_with`'s chain before `core/src/sections.rs:section_text` — the only site
+raising it — is called. The scope and the gate are now keyed to the sentence
+that exists. The same imprecision sits in §2's union paragraph and in
+`document::Entry::missing`'s doc comment, both shipped and both describing a
+*panel row* rather than a compile, so neither was reopened.
+
+**Seven non-blocking findings, all accepted.** The two that changed the design:
+
+- **The trash pick is decided in the spec rather than deferred to plan mode.**
+  The author measured it and the two options turned out to be **the same call**:
+  `trash` 5.2.6's macOS implementation is
+  `objc2_foundation::NSFileManager::trashItemAtURL_resultingItemURL_error`.
+  `objc2-foundation` is already in `Cargo.lock` at 0.3.2 by way of `tauri`, so
+  declaring it **adds no crate to the tree** — verbatim the `serde_json`
+  argument `app/Cargo.toml` records for Phase 1 — where `trash` adds one
+  compiled crate on macOS plus 206 lines of `TrashItem`, listing and restore
+  this app never calls. Features: `NSFileManager`, `NSURL`, `NSError`,
+  `NSString`. Cost stated: one more version this app pins itself rather than
+  inherits. `trash`'s MSRV 1.85.0 and the workspace's edition 2024 on 1.97.1
+  were both checked; neither route is toolchain-blocked, and CI builds only
+  wasm and TypeScript so an unconditional `objc2-foundation` breaks nothing
+  there.
+- **A suite that really trashes files writes into the developer's `~/.Trash`**,
+  which nothing cleans and `scratch_dir`'s "the repository stays clean" has no
+  reach over. **Resolved by injecting the OS call**, with a paragraph on why
+  that is deliberately *not* Phase 3's "the write is not injected" answer: that
+  reversal turned on the write being a plain `std::fs::write` a scratch tree
+  could check, and this call's whole effect is outside the repository.
+
+The remaining five: the counted literals that move (fourteen commands to
+fifteen, thirteen-of-fourteen to fourteen-of-fifteen), the `Status`-gains-no-field
+statement so `declared.len() == 11` is not guessed at, both `max_lines` caps
+named with their measured numbers (`rules/desktop-panes.md` 379/380,
+`rules/desktop.md` 556/560) rather than discovered, the missing window-gate
+script and its `$TMPDIR` setup — which Phase 3's gate had explicitly relied on
+there being *no* delete in this app — and §4's preamble tension, reworded to "a
+precedent and not a prerequisite".
+
 ### Phase 3 shipped — 2026-08-28 — the window gate, and three things the rounds did not measure
 
 `tests/gates/mpdf-010-phase3.js`, over `cp -R tests/fixtures/panel

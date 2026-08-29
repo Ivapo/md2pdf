@@ -26,7 +26,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 4 — a file is moved to the Trash"
-    reviewed: null
+    reviewed: 2026-08-28
     shipped: null
     cut: null
     by: null
@@ -460,6 +460,21 @@ undo for exactly this operation. `tauri-plugin-fs` offers no trash call and
 neither does `std`, so this costs a dependency: the `trash` crate, or an
 `NSFileManager trashItemAtURL` call through `objc2`. Phase 4 prices both and
 picks one; the decision recorded here is only that a plain unlink is refused.
+
+**CORRECTED 2026-08-28, in Phase 4's review round 1: the same argument retires
+the confirmation.** The paragraph above says the Trash *is* the platform's undo
+for this operation, and a confirmation is what stands in for an undo where there
+is none. Finder itself does not confirm a move to the Trash, for that reason. So
+Phase 4 ships **no confirmation**, and the sentence its scope carried — *"A
+confirmation precedes every delete"* — is withdrawn rather than built: it was
+drafted beside the Trash decision without noticing that the one makes the other
+redundant. The cost of being wrong is one file in the Trash, recoverable by Put
+Back, which is less than this app charges for a save. Round 1 priced what the
+confirmation would have cost, which is what makes this a saving rather than a
+preference: `app/capabilities/default.json` grants `core:default` and the two
+file dialogs and nothing else, so a native `ask` wants a new permission and a
+rewritten description, and the two alternatives either compose text in the
+window or put state on a row that `app/dist/index.html:parts` rebuilds.
 
 ## 3. Open questions
 
@@ -1087,44 +1102,228 @@ Phase 2 is the larger half and produces the observable for both.*
 ### Phase 4 — a file is moved to the Trash
 *Produces the observable: **no** — or rather it produces one only by breaking
 the document, when the file deleted is one the master names and the next compile
-refuses with `MissingSection`. A refusal is not the observable this project
+refuses by that file's name. A refusal is not the observable this project
 produces, so this phase claims none. Its argument is symmetry with Phase 3 and
 nothing more: a panel that creates and cannot remove leaves the author in the
 Finder for half the task, which is the state Phase 3 was written to end.*
 
-- **Scope:** Depends on Phase 3's confinement rule and reuses it unchanged. The
-  trash call is the one open cost: `trash` (the crate) and an
-  `NSFileManager trashItemAtURL` call through `objc2` are both priced in the
-  plan-mode pass — dependency weight, what it adds to the bundle, and whether it
-  builds under the workspace's pinned toolchain — and one is picked with the
-  measurement recorded in the review record.
+- **Scope:** Depends on Phase 3 for a **precedent and not a prerequisite** —
+  §4's preamble says none of these three phases is the other's, and that holds:
+  Phase 3 could be cut and this one still built, because what it borrows is a
+  shape, `app/src/document.rs:landing`, rather than a feature. Nothing outside
+  this repository.
 
-  **A plain unlink is refused**, per §2.
+  **1. The rule is a third confinement question, and "Phase 3's, unchanged" was
+  wrong.** Round 1 found that neither shipped rule serves a delete unchanged, and
+  the correction is recorded here so it is not re-derived:
+  `app/src/document.rs:confined` opens on `is_file()`, so it refuses a
+  `missing: true` row and a dangling symlink the walk lists;
+  `app/src/document.rs:landing` canonicalizes only the **parent**, so it accepts
+  `secret.png` where that name is a symlink resolving out of the project — which
+  `confined` refuses and
+  `app/src/document.rs:a_link_out_of_the_project_is_refused_however_it_is_spelled`
+  pins as a refusal for every other command.
 
-  Three cases get stated rules rather than inherited behaviour: deleting the
-  **edited** file leaves the pane holding a buffer whose path is gone, and the
-  answer is that `edited` falls back to `main` and the buffer is discarded only
-  if it is clean — a dirty buffer refuses the delete, per §2's switch rule, since
-  the two are the same hazard; deleting **main** is refused outright while it is
-  main; deleting a file the master **names** is allowed, and the next compile
-  refuses with `MissingSection`, which is the existing, recoverable behaviour and
-  is what the marked-missing row in §2's union exists to show.
+  A delete wants both halves of a question neither asks: **the name is under the
+  root, and something is at it.** So a `trash_file` in `app/src/document.rs` reuses
+  `landing` for the first half — the same parent-canonicalizing rule, genuinely
+  unchanged — and adds `symlink_metadata().is_ok()` for the second, which is
+  `is_file()`'s answer widened to *anything at that name*.
 
-  A confirmation precedes every delete.
+  **That settles the symlink row, which was undecided.** `landing` answers with
+  the join, so the delete acts on the **name and not the resolution**: a
+  `cover.jpg` pointing at `figures/cover.jpg` trashes the link and leaves the
+  figure. That is the opposite of `confined`'s reading for a read, and
+  deliberately — a read wants the bytes the author meant, where a delete wants
+  the row the author clicked, and the target of a link out of the project is not
+  the project's to move. It is also what makes the widened existence test safe:
+  a dangling link is a row the panel draws, and trashing it removes exactly the
+  row.
 
-- **Exit gate:** In the Rust suite: the confinement refusals of Phase 3, re-run
-  against delete; deleting main is refused; deleting the edited file with a dirty
-  buffer is refused and with a clean buffer moves `edited` to `main`; deleting a
-  named section leaves the panel holding a marked-missing row and the next
-  compile refusing by name. And the one claim no unit test can make, run at the
-  window and recorded in the review record: **the deleted file is in the Trash
-  and can be put back**, checked by eye on macOS 26.5.2, because a call that
-  silently unlinked would pass every assertion above.
+  **2. The trash call, priced.** The two options are **the same call**, which the
+  phase's own text did not know: `trash` 5.2.6's macOS implementation is
+  `objc2_foundation::NSFileManager::trashItemAtURL_resultingItemURL_error`. So
+  the pick is about packaging, and it goes to **`objc2-foundation` directly**.
+  The measurement, recorded in the review record: it is already in `Cargo.lock`
+  at 0.3.2 by way of `tauri`, so declaring it **adds no crate to the tree** —
+  verbatim the argument `app/Cargo.toml`'s own comment records for the
+  `serde_json` promotion in Phase 1 — where `trash` adds one compiled crate on
+  macOS and 206 lines of `TrashItem`, listing and restore this app never calls.
+  The features are `NSFileManager`, `NSURL`, `NSError` and `NSString`. The cost
+  is stated rather than hidden: it is one more version this app pins itself
+  rather than inherits, under `app/Cargo.toml`'s *"Every version is pinned"*.
+  `trash`'s own MSRV of 1.85.0 and the workspace's edition 2024 on 1.97.1 were
+  checked and neither route is blocked by the toolchain.
 
-- **Close-out:** `rules/desktop.md` (the file I/O the app owns, and the
-  dependency the bundle gains), `rules/desktop-panes.md` (the panel's gestures).
-  README: that deletion is to the Trash, which is the kind of promise a user
-  reads before they trust it.
+  **3. The OS call is injected, and that is deliberately not Phase 3's answer.**
+  Phase 3 withdrew an injected write because §2's rule canonicalizes a real
+  parent anyway and the write itself was a plain `std::fs::write` a scratch tree
+  could check. Neither holds here: the call's whole effect is **outside the
+  repository**, in the developer's own `~/.Trash`, which nothing cleans and
+  `app/src/document.rs:scratch_dir`'s doc comment — *"so runs do not collide and
+  the repository stays clean"* — has no reach over. So `trash_file` takes the
+  call as a parameter, the way `app/src/document.rs:render_with` takes its read,
+  and `app/src/main.rs` passes the real one. Every refusal below is then
+  reachable with nothing entering the Trash, and the one claim that needs a real
+  Trash is the window's. **The double removes the file as well as recording the
+  call**: gate clauses 1, 3 and 7 each turn on the file actually being gone, and
+  one that only counted would pass all three over an unchanged tree.
+
+  **4. The command and the gesture.** **The template is
+  `app/src/preview.rs:Session::set_edited`'s and not
+  `app/src/main.rs:asset_bytes`'s**, which round 2 corrected: a delete must also
+  refuse on `main`, set `Preview::divergence`, call `Session::arm` and write
+  `Preview::tree` — and `arm`, `tree`, `divergence` and `on_render` are all
+  private to `app/src/preview.rs` and unreachable from `app/src/main.rs`. So the
+  part that touches the session is a `pub fn` on `Session`, the confinement and
+  the OS call are the plain function in `app/src/document.rs`, and the
+  `#[tauri::command]` is thin over the first — registered in
+  `generate_handler!`. The compiler forces this eventually; naming it here saves
+  a planner one wrong structure.
+
+  The gesture is a **third control on the row**, drawn like
+  `app/dist/index.html`'s `.set`: revealed on hover and on focus, carrying the
+  entry's own `path`. **OQ-5's `margin-left: auto` argument was written for one
+  control and now has to seat two** — a non-main markdown row draws `main` and
+  this one together — so the two share that edge inside a group rather than each
+  claiming it, and the `◀ main` mark keeps it alone on the row that has no
+  `main` button. Named because it is the one place this phase touches CSS whose
+  reasoning is already recorded against a smaller case. It holds no state — there is no confirmation, per §2's
+  correction — so `app/dist/index.html:parts` may go on rebuilding the panel
+  whole and *"the rows hold no selection"* stays true. **A `main` row and a
+  `missing: true` row get none**: the first is refused below, and the second
+  names a file the disk does not hold, so there is nothing to move.
+
+  **5. The three cases, and the fourth the panel needs.**
+
+  - **Deleting `main` is refused outright** while it is main, in a sentence of
+    its own.
+  - **Deleting `edited`** refuses first while the buffer diverges from `saved`,
+    which is §2's switch rule and the same hazard. It needs **a sentence of its
+    own**, not `app/src/preview.rs:SWITCHING`, which opens *"the pane holds
+    unsaved edits, so it is still holding this file. Save to keep them, or
+    discard them to open the other file"* — nothing is being opened by a delete,
+    so reusing it would put a lie in the window, verbatim §2's argument for why
+    `SWITCHING` is not `DIVERGED`. It rides `app/src/preview.rs:Preview`'s
+    `divergence` and returns `Ok(())`, as `Session::refused_while_dirty` does, so
+    one refusal does not arrive in the window two ways.
+
+    Over a clean buffer the fallback is
+    **`app/src/preview.rs:Session::set_edited`'s own body and not a field
+    write**: set `edited`, `Preview::load` it, announce, and re-arm. **Both
+    halves are load-bearing and round 2 found the second missing.**
+    `Session::arm` is what keeps the loops alive — Phase 2's scope item 4
+    records that both guard on a path captured when they were started, so a
+    command that moves `edited` and stops leaves the typing debounce compiling
+    nothing and every filesystem event dropped. But **arming without loading is
+    worse than not arming**: the buffer still holds the *trashed* file's text
+    while `edited` now names `main`, so `app/src/preview.rs:Preview::save`
+    writes a deleted section over the master, and
+    `app/src/document.rs:render_project`'s closure answers `main` from that same
+    buffer once the two paths are equal — the next compile draws the deleted
+    section as the whole document. Nothing announces either, so the window never
+    shows it happen.
+  - **Deleting a file the master names is allowed**, and the next compile
+    refuses. **Not with `md2pdf_core::Error::MissingSection`**, which this
+    phase's text claimed and which this app never reaches:
+    `app/src/document.rs:read_sections_with` fails first with *"cannot read
+    {path} for the section {location}"* and `?` propagates before
+    `core/src/sections.rs:section_text` — the only place `MissingSection` is
+    raised — is called at all. The recoverable behaviour is the same; the
+    sentence is the app's, and the gate below is keyed to the sentence that
+    exists.
+  - **The panel is refreshed by the command and not by the watch**, which is
+    this phase's one departure from Phase 3 and is forced.
+    `app/src/watch.rs:classify` answers the **first** match, and a section the
+    master names is already in the asset list `app/src/document.rs:render_with`
+    builds — so deleting it answers `Change::Asset`, never `Change::Tree`, and
+    `app/src/preview.rs:Session::on_change` refreshes `preview.tree` only under
+    `changed.tree`. The panel would keep an ordinary unmarked row for a file that
+    is gone. **The asymmetry with Phase 3 is real rather than an inconsistency**:
+    a created file is not in the asset list, so the watch classifies it
+    correctly; a deleted section is, so it cannot. The delete therefore re-walks
+    with `app/src/document.rs:files_under` itself, which it may because the app
+    made the change and knows it — the watch is for changes the app did not make.
+    `app/src/document.rs:merge` then adds the path back as `missing: true`,
+    because the master still names it, which is the row §2's union exists to
+    show.
+
+  **`Status` gains no field**, so
+  `app/src/preview.rs:the_page_typedefs_name_exactly_the_fields_status_serializes`'s
+  `declared.len() == 11` does not move — named because Phases 3 and 5 named their
+  own knock-on and this phase's answer is again that there isn't one.
+
+- **Exit gate:** In the Rust suite, and **each clause says where it runs**, per
+  Phase 3's standard. The injected call means every clause here writes nothing to
+  any Trash: the double records what it was asked to move, and removes it.
+
+  1. **The happy path, over `app/src/document.rs:scratch_dir`.** Trashing
+     `sections/note.md` calls the double exactly once with the path `landing`
+     answers — the join, `<root>/sections/note.md` — and the walk
+     before and after differs by exactly that entry — the shape of Phase 3's
+     clause 1, run backwards.
+  2. **Confinement, and the clause is the *mirror* of Phase 3's rather than a
+     copy.** Phase 3 required `../escape.md` to be **absent**, because for a
+     create an existing file is refused by the exists-rule first; for a delete
+     that is inverted, so this clause **writes `escape.md` in the scratch root's
+     parent first** — otherwise the not-there rule refuses and the confinement
+     rule never executes. It asserts the outside-the-project sentence
+     specifically, that the double was **not** called, and that the file is still
+     there afterwards.
+  3. **A link out of the project trashes the link and not its target**, over
+     scratch: a `secret.png` in the root pointing at a file outside it is
+     accepted — `landing` confines the *name* — the double is called with the
+     root's own path, and the target still exists. This is the clause that
+     distinguishes this rule from `confined`, which refuses the same row.
+  4. **Nothing at that name is refused**, in a sentence of its own, with the
+     double uncalled. **One sentence and not two**, which round 2 corrected:
+     `merge` marks a row missing *because* the walk did not find it, so a
+     `missing: true` path and a plain absent one are the same
+     `symlink_metadata()` failure inside a function that never sees
+     `Preview::sections` — a clause asking for two would be asking for a
+     distinction the rule cannot make. Both inputs are still run, since what is
+     pinned is that the panel's marked-missing row is not a special case.
+  5. **`main` is refused** while it is main, and the double is uncalled.
+  6. **`edited` with a dirty buffer is refused in a sentence that does not claim
+     a file is being opened**, and neither `edited` nor the buffer moves. With a
+     clean buffer, **three things and not one**: `edited` becomes `main`; the
+     pane's `buffer` and `saved` are `main`'s **own text**, byte-for-byte, which
+     is what says the file was re-read rather than the field assigned; and both
+     loops are live afterwards, asserted the way Phase 2's clause 5 asserts them
+     — a subsequent external write still runs the rule and a subsequent edit
+     still compiles. **The middle one is the clause, and round 2 found it
+     missing.** Liveness alone passes a build that arms without loading, and
+     that build writes the deleted file's text over the master on the next
+     `⌘S`.
+  7. **A named section, over a scratch copy of `tests/fixtures/panel/`** — not
+     the committed fixture, which Phase 3's gate could use because a refusal
+     writes nothing and a delete does not have that property: trashing
+     `sections/text.md` leaves `merge`'s listing holding it as `missing: true`,
+     and the next compile fails with the *"cannot read … for the section …"*
+     sentence, matched on that text and not on `MissingSection`.
+
+  At the window, on `tests/gates/mpdf-010-phase4.js`, **over a copy of the
+  fixture made outside the repository**, exactly as Phase 3's gate is set up and
+  for a reason this phase makes sharper: this is the app's first destructive
+  operation, and `tests/fixtures/panel/` is tracked. The claim no unit test can
+  make, because the call is injected everywhere else and a double proves nothing
+  about the OS: **the trashed file is in the Trash and Put Back returns it to the
+  project**, checked by eye on macOS 26.5.2 and recorded in the review record. A
+  call that silently unlinked would pass every assertion above.
+
+- **Close-out:** `rules/desktop.md` — the file I/O the app owns, the dependency
+  the bundle gains, and **two counted literals that move**: *"registers fourteen
+  commands"* becomes fifteen and *"Thirteen of the fourteen commands are wrappers
+  over a plain function"* becomes fourteen of the fifteen.
+  `rules/desktop-project.md` — the third confinement question and the row a
+  delete acts on by name. `rules/desktop-panes.md` — the row's **third** gesture,
+  its `covers:` clause "the two gestures on a row and the two marks it may carry"
+  following it. **Both caps are at their limit and the close-out says so rather
+  than discovering it**: `rules/desktop-panes.md` is 379 body lines against
+  `max_lines: 380` and `rules/desktop.md` 556 against 560, so each either trims or
+  moves its cap in this phase's own commit, with the reason stated. README: that
+  deletion is to the Trash, which is the kind of promise a user reads before they
+  trust it, and that nothing asks twice.
 
 ### Phase 5 — an image row shows the figure
 *Produces the observable: **no**. Nothing here compiles, no PDF differs, and the
