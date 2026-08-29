@@ -27,7 +27,7 @@ covers: >
   the vendored renderer the front end imports and what embedding it costs, the
   declarations it is type-checked against and where they may not live, and
   the configuration facts a build enforces
-max_lines: 590
+max_lines: 605
 generated: 2026-08-28
 ---
 
@@ -86,6 +86,17 @@ them and are read by nothing the app builds — what they are for is
 `rules/desktop-panes.md`. `capabilities/default.json` grants
 `core:default` to the window labelled `main`, plus **one entry per dialog** —
 `dialog:allow-open` and `dialog:allow-save`.
+
+**What that withholds is worth stating beside what it carries.** `core:window:default`
+is the window's *getters* — `allow-scale-factor`, `allow-inner-size`, `allow-title`,
+the `is-*` family — and **no setter**, so nothing in the page can resize, move or
+retitle the window. The retitling this app does is `main.rs`'s own `set_title`, from
+Rust, where capabilities do not apply. **A setter called from the page is a function
+that exists and rejects at the IPC**: `setSize` is on `getCurrentWindow()` whatever the
+manifest says, and answers `window.set_size not allowed. Permissions associated with
+this command: core:window:allow-set-size`. So which of them are reachable is a question
+to settle by calling one, never by `typeof` — which cost `tests/gates/mpdf-003-phase11.js`
+two runs.
 
 Two configuration facts cost a build each. **`icons/icon.png` is required** —
 without it `generate_context!` panics with "failed to open icon" — and **it must

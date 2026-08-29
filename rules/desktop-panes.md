@@ -31,7 +31,7 @@ covers: >
   pane that loses both when it empties, the check that reads this file and the
   two declarations it holds to each other, and the seven defects that check
   does not reach
-max_lines: 460
+max_lines: 475
 generated: 2026-08-28
 ---
 
@@ -195,7 +195,11 @@ wrote.
 A bar along the foot of the window: 23px and its own 1px rule, so 24px taken out of
 `main`. Two cells, `#edited` on the left and `#brand` on the right. It is `main`'s
 next element sibling and the last element before the module script — **not `body`'s
-last element child**, which is that script.
+last element child**, and those are two facts rather than one restated. By the file
+`body` ends `FOOTER, SCRIPT`; **at runtime it ends `FOOTER, SCRIPT, CANVAS`**, `pdf.js`
+appending a hidden zero-size canvas of its own to measure text with. So the last
+element child is the script by source order and that canvas by the DOM, and the footer
+is neither.
 
 **The left cell is `Status::edited`, not `Status::main`**: the file the pane is
 holding, which from the first click on a panel row is not the file that compiles.
@@ -225,7 +229,12 @@ and keeps the brand down to a 240px viewport. **The header has no equivalent rul
 and its behaviour is the contrast rather than a defect: it is `flex-wrap: nowrap`, so
 it never wraps *as a row* — its items' own text wraps inside them and the bar grows
 taller, below the 627px its seven visible children derive (555px, six 8px gaps and
-24px of padding). It is 47px above that width, 66px at 620 and 81px at 500.
+24px of padding). **That threshold and the heights under it are Chromium's**, and
+`rules/desktop-geometry.md` has why that matters: there the header is 47px above the
+width, 66px at 620 and 81px at 500, where the WKWebView this ships on reads 47 above
+and 79 below. The widths it has been measured at there — 445 and 677 — do not bracket
+627, so the derived figure is unconfirmed in the shipping engine. **What holds in both
+is the shape**: the header grows and the footer does not.
 
 **The three boxes sum to `innerHeight` exactly**, which is how the bar's cost is
 checked. `rules/desktop-geometry.md` has the reading that sum must be taken by, and
