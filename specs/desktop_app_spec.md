@@ -5,7 +5,7 @@ note: >
   A macOS desktop app that shows the PDF while you write: a Tauri window wraps
   the same core crate, watches the document and its images, and re-renders.
 status: accepted
-last_updated: 2026-08-28
+last_updated: 2026-08-29
 
 phases:
   - name: "Phase 1 — the window, and one compile on screen"
@@ -51,6 +51,11 @@ phases:
   - name: "Phase 9 — what checks the front end"
     reviewed: 2026-08-27
     shipped: 2026-08-27
+    cut: null
+    by: null
+  - name: "Phase 10 — the editor is named Letur"
+    reviewed: 2026-08-29
+    shipped: null
     cut: null
     by: null
 
@@ -2105,6 +2110,203 @@ Phase 7 and from Phase 8, and this spec owns it.
 
   **`README.md`: none needed** — its app section documents behaviours a reader
   meets, and this changes none. **`CLAUDE.md`: none needed.** One push.
+
+### Phase 10 — the editor is named Letur
+*Produces the observable: **no**, and the argument is that this phase changes
+what the app is called and nothing about what it makes.* The PDF is byte-identical
+across it and the gate below says so. What it buys is a name for the thing that is
+not the converter. **`md2pdf` names an engine** — the library, the command, the
+dialect, this repository — and it has been serving double duty as the name of a
+window that is an editor. The two have become separable products: one is a command
+you run over a file and are done with, the other is an application you keep open
+all day. A phase that produces no observable earns its place here because **the
+name is the one part of an application its user says out loud**, and because
+nothing else in this corpus would record why the window stopped sharing the
+engine's.
+
+Appended 2026-08-29, per §6.1 step 2: the app's identity is this spec's subject,
+and its packaging has been since Phase 5.
+
+There is a second reason to do it now rather than later. **After an open, the
+window title is the document's own file name** (`app/src/document.rs:title`), which
+is right — the author is editing `method.md`, not "the app" — but it means the
+product name is on screen only until the first `⌘O` and nowhere afterwards. **A
+footer bar carrying the name is the intended next phase and is not yet written**;
+this one is its prerequisite either way, because a brand cell must not say a name
+the bundle does not carry.
+
+- **Scope:** **`app/tauri.conf.json`** (`productName`, `identifier`, the window's
+  launch `title`), **`app/Cargo.toml`** (`[package] name`, `[[bin]] name`,
+  `description`), **`app/src/main.rs`** (the module doc, and the submenu title in
+  `app/src/main.rs:menu`), **`app/src/document.rs`** (one string:
+  `app/src/document.rs:scratch_dir`'s temp-directory prefix, which is inside
+  `#[cfg(test)]`), **`app/dist/index.html`** (the `<title>`, and nothing else in
+  that file), **`README.md`**, and **`rules/desktop.md`** and
+  **`rules/desktop-project.md`**. `Cargo.lock` changes too and is not edited by
+  hand: cargo rewrites the `md2pdf-app` package entry on the first build.
+
+  **No logic changes.** Every `.rs` edit is a string — a doc comment, a menu
+  label, a test's scratch-directory prefix — and no function's body moves. That is
+  a narrower claim than "no behaviour changes", which would be false; see the
+  store, below.
+
+  **`md2pdf` stays the engine's name, everywhere it already is one.** The `core`
+  and `cli` packages, the `md2pdf` binary the CLI installs, every `md2pdf_core::`
+  path in the app's own source, the dialect, and this repository keep it. The
+  rename is exactly one package wide. **The CLI is the deliverable most of this
+  corpus is about** and renaming it would rename the observable's producer, which
+  nobody asked for and which every spec here cites by name.
+
+  **The crate's directory stays `app/`.** Three `rules/` files declare their
+  sources by path under it — `app/dist/index.html`, `app/src/preview.rs`,
+  `app/Cargo.toml` — and four specs and their review records cite dozens more.
+  Moving the directory would rewrite all of them to say nothing new, and
+  `spec-lint`'s citation check would be the thing that found each one. **The
+  package is named `letur`; the folder it lives in is just where the app is.**
+
+  **The identifier becomes `dev.letur.desktop`, and the shape is a decision.**
+  `dev.letur.app` was the obvious reading of the name and is refused: `tauri-cli`
+  2.10.1 — the version this crate pins — warns *"The bundle identifier … ends with
+  `.app`. This is not recommended because it conflicts with the application bundle
+  extension on macOS"*, verbatim, on every bundle build. It is a `log::warn!` and
+  would not fail the build, which is exactly why it would become a warning nobody
+  reads. `.desktop` is what `dev.md2pdf.desktop` already used, so the convention is
+  inherited rather than invented.
+
+  **The identifier move has three costs, and only the first is cosmetic.**
+
+  The first is LaunchServices: macOS keys the `.md` document association off the
+  identifier — `bundle.fileAssociations` in the same file is otherwise untouched —
+  and **keeps the old identifier registered for as long as an old bundle exists on
+  disk**, so an author who installed the app before this phase sees both in "Open
+  With" until they delete it.
+
+  The second is the store. **`app/src/main.rs` resolves the app's data directory
+  through `app.path().app_data_dir()`, which Tauri names from the identifier**, and
+  `app/src/document.rs:store_file` puts `projects.json` in it. So
+  `~/Library/Application Support/dev.md2pdf.desktop/projects.json` becomes
+  `…/dev.letur.desktop/projects.json`, and **every project's remembered main file
+  is orphaned** — `mpdf-010` Phase 1's one remembered fact — its scope's
+  clause 4 — for every root the author has set one on.
+
+  **It is not migrated, and that is the decision rather than an oversight.** What
+  is lost is one string per project, and the app is not broken by losing it: with
+  nothing remembered it falls back to the discovery rule `mpdf-010` §2 already
+  specifies, which is the state a first launch is in — a case `read_store` is
+  already written to treat as ordinary. A one-shot migration path is permanent code
+  answering a one-time event on the machines of an app at version 0.1.0 that has
+  never been distributed. The author re-picks a main in each project they had set
+  one in, and **the old directory is left in place rather than deleted**, so
+  anything it holds is recoverable by hand.
+
+  **The third cost is consent, and this project has already been bitten by it
+  once.** macOS keys TCC grants to the bundle identifier, so **`dev.letur.desktop`
+  is a stranger to every grant `dev.md2pdf.desktop` was given**.
+  `rules/desktop.md`'s `## The bundle` records what that costs here:
+  `app/src/watch.rs:start` watches a whole directory recursively, so a document
+  under `~/Documents`, `~/Desktop` or `~/Downloads` **can compile once through the
+  open panel and then stop redrawing, silently** — the app looks like it is
+  working and is not. Phase 5's gate case (2) third observation was written for
+  exactly this and states its precondition as "the first launch of this identity",
+  which **this phase re-creates for every installed copy**. That is not an
+  argument for keeping the old identifier: consent is a prompt the author answers
+  once, against a name they chose. It is an argument for re-running that
+  observation, which clause 7 does — and it is named here because a redraw that
+  stops is the one failure in this phase that would not look like one.
+
+  **The binary is renamed with its package**, so the bundle becomes
+  `Letur.app/Contents/MacOS/letur`. Phase 5 gated on `Contents/MacOS/md2pdf-app`
+  inside `md2pdf.app` and made a point of the two names differing; that clause is
+  now `letur` inside `Letur.app` and the gate below re-runs it under the new names.
+  **Phase 5's text is not edited** — it is the record of what shipped then, per
+  §6.1's first further rule.
+
+  **Case is a decision rather than a typo.** `Letur` — capitalised — is the
+  product: `productName`, the launch title, the README. `letur` is the package, the
+  binary, and the identifier's last component but one. Finder shows the first;
+  `cargo` and `otool` show the second.
+
+  **The application menu's own title is not this phase's to set.** macOS takes it
+  from the bundle, so the `SubmenuBuilder::new(app, "md2pdf")` string in
+  `app/src/main.rs:menu` is not what the menu displays; it is renamed for the
+  source's own consistency, and the gate below reads the menu off a built bundle
+  rather than crediting that edit for it.
+
+  **The name means something, and the meaning is the reason it was chosen.**
+  Icelandic *letur* is type, typeface, lettering — what the engine turns the
+  author's markdown into. It was checked for collisions before adoption: free on
+  crates.io, npm and PyPI, no GitHub repository of the name, nothing of the name
+  on the App Store, and `letur.app`, `letur.dev` and `letur.io` all unregistered.
+  The known collisions are a village in Albacete and a Spanish food brand named
+  after it, neither in software.
+
+- **Exit gate:**
+
+  1. `cargo test --workspace` passes, with the same test count as before the phase.
+     **The PDF does not move**: `core`'s byte-comparison tests and the app's own
+     export test are in that run and are the check.
+  2. `cargo build --release -p letur` succeeds, and **the engine is untouched**:
+     `cargo run -p md2pdf-cli -- samples/article.md` still writes
+     `samples/article.pdf`, from a binary still called `md2pdf`.
+  3. `cargo tauri build` produces `target/release/bundle/macos/Letur.app`, and
+     `otool -L Letur.app/Contents/MacOS/letur` names only `/usr/lib` and
+     `/System/Library`, which is Phase 5's clause re-run under the new names.
+     **The build logs no bundle-identifier warning.**
+  4. `plutil -p Letur.app/Contents/Info.plist` reports `CFBundleIdentifier` of
+     `dev.letur.desktop`, `CFBundleName` of `Letur`, `CFBundleExecutable` of
+     `letur`, and a `CFBundleDocumentTypes` entry for `md` with
+     `net.daringfireball.markdown` — **the association survived the identifier
+     change**, which nothing else in the build would report.
+  5. **Read from that built bundle**, not from `cargo tauri dev`: a launch with no
+     document titles the window `Letur` and the application menu reads `Letur`;
+     after `⌘O` the title is the document's file name, unchanged from today.
+  6. **The store relocates and the app survives it.** Opening a project whose main
+     was remembered under the old identifier compiles the file the discovery rule
+     picks, with no error in the window;
+     `~/Library/Application Support/dev.letur.desktop/projects.json` appears once a
+     main is set again, and the `dev.md2pdf.desktop` directory is still there,
+     untouched.
+  7. **Consent is re-granted, because the identity is new.** Phase 5's gate case
+     (2) third observation, re-run under `dev.letur.desktop`: a document under
+     `~/Documents`, edited and saved in another editor, redraws the page. Its
+     precondition is met by construction — this *is* the first launch of this
+     identity — and **a page that draws once through the open panel and then stops
+     is the negative this clause exists to catch**, not a pass.
+  8. `grep -rn "md2pdf-app\|md2pdf\.app" --include="*.rs" --include="*.toml"
+     --include="*.json" --include="*.yml" --include="*.md" --include="Cargo.lock" .`
+     — **both spellings, the hyphen and the dot, and `Cargo.lock` named explicitly
+     because none of the other patterns match it** — returns hits in `specs/` only,
+     which is history and does not move, and none in `rules/`, `README.md`, `app/`
+     or `Cargo.lock`.
+
+- **Close-out:** **`rules/desktop.md`** — it names `md2pdf-app` in its opening
+  sentence, in `## The export` and in `## The bundle` (where it states the bundle
+  is `md2pdf.app` and `CFBundleExecutable` is `md2pdf-app`), and it declares
+  `app/Cargo.toml` among its sources, so `/sync-rules` reaches all of it — **except one literal**:
+  `## The bundle` says `Contents/Resources/` holds `md2pdf.icns`, which the bundler
+  derives from `productName` and which therefore becomes `Letur.icns`. No declared
+  source states the bundler's naming rule, so that word is corrected by hand beside
+  the regeneration, the same class of miss as `desktop-project.md` below. **`##
+  The document association` is the section to read while doing this**: it is where
+  the identifier's effect on `CFBundleDocumentTypes` is written down.
+
+  **`rules/desktop-project.md` is corrected by hand, and cannot be regenerated
+  into truth.** It states that `projects.json` lives under the directory Tauri's
+  resolver gives `dev.md2pdf.desktop`, which this phase makes false — but its
+  declared sources are `app/src/document.rs` and `app/src/preview.rs`, and the
+  identifier string is in neither, so `/sync-rules` would leave the stale name
+  standing. Correcting it is part of the phase, not of the tool.
+
+  **`rules/desktop-panes.md` and `rules/desktop-geometry.md`: none needed** — both
+  declare sources under `app/`, but neither names the package, the product, the
+  bundle or the front end's `<title>`: verified by grep, and named and excused
+  rather than silently skipped.
+
+  **`README.md`**: two sections, not one. `## Install` states the bundle path
+  `target/release/bundle/macos/md2pdf.app`, and `## The desktop app` carries the
+  name and the `cargo run --release -p …` invocation. **`CLAUDE.md`: none needed**
+  — its stanza names the observable and the `mpdf-` id prefix, and this phase
+  changes neither; the repository and the engine keep their name. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

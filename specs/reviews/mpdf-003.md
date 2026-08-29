@@ -2,6 +2,89 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 10 only — 2026-08-29 — the same reviewer, resumed — **READY (converged)**
+
+The consent blocker confirmed resolved against the sources rather than the
+changelog: `app/src/watch.rs:start` is the recursive watch, `rules/desktop.md`
+`## The bundle` carries the privacy-identity paragraph, and Phase 5's gate case (2)
+third observation does state "the first launch of this identity" as its
+precondition. **Three costs, three gates**, checked one by one: the store is
+clause 6, consent is clause 7, and LaunchServices is a stated consequence whose
+only checkable half — that the association survived — is clause 4's
+`CFBundleDocumentTypes` assertion. The gate renumbering to 1–8 leaves no dangling
+reference: nothing in this document, in `rules/`, or anywhere in the repo cites
+Phase 10's gate by number.
+
+**Clause 8 re-run verbatim with the new `--include="Cargo.lock"`**: it now reaches
+`Cargo.lock:2861`, so the conjunct that was vacuous is no longer. Every hit outside
+`specs/` falls inside a scoped file.
+
+One non-blocking comment, folded in: clause 4 and the consent paragraph each
+claimed to be "the one" thing that could fail silently, which two of them cannot
+both be. Clause 4's phrasing predated the third cost and was softened.
+
+### Round 2 — Phase 10 only — 2026-08-29 — the same reviewer, resumed — **NOT READY**
+
+One new blocking finding, and it is the round's best catch: **the identifier move
+resets macOS privacy consent**, which the phase's enumeration of costs stopped
+short of. TCC grants are keyed to the bundle identifier, `watch.rs:start` watches
+recursively, and `rules/desktop.md` already records the failure this produces — a
+document under `~/Documents` compiles once through the open panel and then stops
+redrawing, silently. Phase 5 wrote a by-eye gate case for exactly that and stated
+its precondition as "the first launch of this identity"; this phase re-creates that
+precondition for every installed copy and had no clause reaching it. Accepted: the
+phase now states three costs and gate clause 7 re-runs Phase 5's observation under
+the new identity, naming the negative so a draw-once-then-stop reads as a failure.
+
+Three non-blocking, all accepted. **Clause 8's `Cargo.lock` conjunct was vacuous** —
+none of its `--include` patterns match that filename, so a second person would have
+reported it clean without the command having looked. **The store was cited to
+`mpdf-010` Phase 5 and belongs to Phase 1**, its scope clause 4. **`md2pdf.icns` is
+a build-output literal no declared source states**, so `/sync-rules` cannot derive
+it from `productName`; the close-out now carves it out by hand, the same class of
+miss as `desktop-project.md`.
+
+### Round 1 — Phase 10 only — 2026-08-29 — fresh reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode — one appended phase):** the phase produces no observable,
+and says so in its first line rather than leaving it assumed — the PDF is
+byte-identical across it and clause 1 is the check. It is still the right thing to
+build: the app's identity is a decision nothing else in the corpus would record, it
+is the prerequisite for the footer phase, and the risk it carries is exactly what
+its gate is aimed at.
+
+Four blocking findings, all confirmed against the code before acting, all accepted.
+
+1. **`app/src/document.rs:scratch_dir` holds a `md2pdf-app` string the scope
+   forbade touching** — the phase's own grep clause would have failed against a
+   file the scope excluded.
+2. **"No behaviour changes" was false.** `app_data_dir()` is named from the
+   identifier and `store_file` puts `projects.json` in it, so the rename orphans
+   every project's remembered main. Replaced with the narrower true claim "no logic
+   changes", plus a decision paragraph: **not migrated**, argued from `read_store`
+   already treating a missing store as ordinary and from a one-shot migration being
+   permanent code for a one-time event on an undistributed 0.1.0 app. The live
+   store held three entries, two of them real project choices.
+3. **`rules/desktop-project.md` states the old identifier and `/sync-rules` cannot
+   fix it** — the string is in none of its declared sources. Now corrected by hand
+   as part of the phase.
+4. **`README.md`'s `## Install` states `md2pdf.app`**, which the scope's
+   "desktop-app section" did not reach and whose dot the hyphenated grep did not
+   match.
+
+Five non-blocking, all accepted. The sharpest changed a decision: **`dev.letur.app`
+was refused for `dev.letur.desktop`**, because `tauri-cli` 2.10.1 — the pinned
+version — warns that an identifier ending `.app` conflicts with the bundle
+extension. The warning string was confirmed verbatim in the installed binary. It is
+a `log::warn!` that would not fail a build, which is precisely why it would become
+a warning nobody reads. Also folded in: gate clause 5 now reads the built bundle,
+because **macOS takes the application-menu title from the bundle rather than from
+`SubmenuBuilder`**, so the clause was not verifying the edit it appeared to;
+`app/dist/index.html`'s `<title>`; a runnable CLI invocation in clause 2; and a
+forward reference that named a phase the corpus does not record.
+
+Nothing was rejected in any round.
+
 ### Round 2 — Phase 9 only — 2026-08-27 — the same reviewer, resumed — **READY (converged)**
 
 Both blockers confirmed resolved in the file as written, and **every re-keyed
