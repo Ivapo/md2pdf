@@ -38,13 +38,19 @@
 
    ORDER:
      __gate.arm()              <- BEFORE opening anything, from the empty state
-     open <copy>/sections/text.md
+     open <copy>/sections/text.md      <- the phase4 copy, and controls() checks
      await __gate.controls()   <- clause 1
      await __gate.remove()     <- clauses 2, 3
      await __gate.fallback()   <- clause 4
-     await __gate.section()    <- clauses 5, 6
+     await __gate.section()    <- clauses 5, 6, 7
      __gate.report()
      then the one claim by eye, which report() prints again
+
+   **Every run wants a fresh copy**, because four of the clauses delete. The
+   first thing `controls()` does is compare the panel's row set against the ten
+   a fresh copy holds, and stop with the `cp -R` line if it does not match —
+   which is what a second run on the same copy, or a run against Phase 3's copy,
+   would otherwise turn into unreadable counts three clauses later.
 
    Run this against the build before this phase and `__gate.controls()` reports
    clause 1 failed with every count at zero — `.trash` is in no row of that
@@ -184,33 +190,61 @@
       note(`the panel holds ${drawn().length} rows: ${drawn().join(' ')}`)
 
       /* `<copy>/sections/text.md` roots at `<copy>` by Phase 1's climb —
-         `book.md` names it — and discovery lands on `book.md`, the one master. */
-      if (opened.main !== 'book.md' || opened.edited !== 'book.md') {
+         `book.md` names it — and discovery lands on `book.md`, the one master.
+
+         **The row set is checked and not only the main**, because this gate
+         deletes: run against a copy some earlier gate already wrote to, or
+         against `$TMPDIR/mpdf-010-phase3`, and the clauses below would report
+         counts nobody can read. A fresh copy holds exactly these ten — the
+         eleven `tests/fixtures/panel-manifest.txt` names, less
+         `sections/missing.md`, which is a path the *Rust* clause hands to
+         `merge` directly and which `book.md` deliberately does not name, so no
+         window ever draws it. */
+      const fresh = [
+        'book.md',
+        'cover.jpg',
+        'other.md',
+        'plan.pdf',
+        'refs.bib',
+        'refs.yml',
+        'loose/orphan.md',
+        'parts/ch1/deep.md',
+        'sections/mark.svg',
+        'sections/text.md'
+      ].join(' ')
+      const here = opened.entries.map((e) => e.path).join(' ')
+
+      if (opened.main !== 'book.md' || opened.edited !== 'book.md' || here !== fresh) {
         ok(1, 'the controls are where they belong', false,
-          `the project did not open as expected: main ${opened.main}, edited ${opened.edited}`)
+          `this is not a fresh copy of the fixture — main ${opened.main}, edited ${opened.edited}\n` +
+          `      wanted: ${fresh}\n         got: ${here}\n` +
+          `      remake it: rm -rf "$TMPDIR/mpdf-010-phase4" && cp -R tests/fixtures/panel "$TMPDIR/mpdf-010-phase4"`)
         return tally('controls')
       }
 
-      /* Clause 1. **Four rows, four different answers**, and each is a rule:
+      /* Clause 1. **Three rows, three different answers**, and each is a rule:
          the main draws neither button, its file being the one the delete
-         refuses; a marked-missing row draws neither, naming a file the disk
-         does not hold; a non-main markdown row draws both, which is the pair
+         refuses; a non-main markdown row draws both, which is the pair
          `.controls` exists to seat since OQ-5's `margin-left: auto` was
          reasoned for a row that could only ever carry one; and an image row
-         draws the delete alone, nothing else being able to compile. */
+         draws the delete alone, nothing else being able to compile.
+
+         **The fourth rule — a marked-missing row draws neither — is clause 7
+         and not this one**, because this fixture has no such row to look at:
+         `book.md` names two sections and the disk holds both. Clause 5 makes
+         one by trashing a named section, which is the only way the window
+         ever gets one, and clause 7 reads it there. */
       const main = controlsOn('book.md')
-      const missing = controlsOn('missing.md')
       const other = controlsOn('other.md')
       const figure = controlsOn('cover.jpg')
 
       ok(
         1,
-        'the main and the missing row carry none, a markdown row carries both, a figure carries the delete',
+        'the main row carries none, a markdown row carries both, a figure carries the delete',
         main?.length === 0 &&
-          missing?.length === 0 &&
           other?.join(' ') === 'set trash' &&
           figure?.join(' ') === 'trash',
-        `book.md [${main}], missing.md [${missing}], other.md [${other}], cover.jpg [${figure}]`
+        `book.md [${main}], other.md [${other}], cover.jpg [${figure}]`
       )
 
       note('now run: await __gate.remove()')
@@ -345,6 +379,19 @@
           said.includes('text.md'),
         `row ${row ? `missing ${row.missing}` : 'absent'}, error bar hidden ${problem.hidden}, ` +
           `said "${said}"`
+      )
+
+      /* Clause 7. **The rule clause 1 could not reach.** The row clause 5 just
+         made is the only marked-missing row this window ever draws, and it
+         must carry no controls at all: `fileRow` gates both buttons on
+         `!entry.missing`, the `main` one because a file the disk does not hold
+         cannot compile and the delete because there is nothing there to move. */
+      const struck = controlsOn('text.md')
+      ok(
+        7,
+        'the marked-missing row carries neither button — there is nothing at that name to move',
+        struck?.length === 0 && rowFor('text.md')?.classList.contains('missing') === true,
+        `text.md [${struck}], classes "${rowFor('text.md')?.className ?? '(no row)'}"`
       )
 
       ok(6, 'no error reached the console', noise === 0,

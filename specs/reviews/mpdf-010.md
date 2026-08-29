@@ -2,6 +2,62 @@
 
 Append-only. One heading per round, newest first.
 
+### Phase 4 shipped — 2026-08-28 — the window gate, and two things the rounds did not measure
+
+`tests/gates/mpdf-010-phase4.js`, over `$TMPDIR/mpdf-010-phase4`: **eight
+clauses, all passing**, no console noise. The Rust half is seven clauses in
+`app/src/document.rs` and `app/src/preview.rs`, and the whole workspace suite is
+green.
+
+**Two claims only the window could make, and both held.** The panel is refreshed
+by the command and not by the watch — clause 2 asks `status` the instant the
+invoke resolves, with no wait at all, and the row is already gone, which no
+`settled()` could have established. And the four trashed files really are in
+`~/.Trash`, checked by path rather than by inference: every Rust clause hands in
+a double, so a call that silently unlinked would have passed all seven. **Finder's
+Put Back was then taken by eye and returned the file to the project**, which is
+the half of that claim no shell can make — a `remove_file` leaves no Put Back to
+take, and `trashItemAtURL` is what registers it.
+
+**Clause 5's sentence was confirmed at the window**, which is worth recording
+because it is round 1's eighth blocker paying off: the refusal reads *"cannot
+read …/sections/text.md for the section at line 12: No such file or directory"*
+— `app/src/document.rs:read_sections_with`'s own text, not
+`md2pdf_core::Error::MissingSection`, which this app never reaches.
+
+**Two things the rounds did not measure, both found by running the gate:**
+
+1. **The gate's first draft asserted a row the window can never draw.** Clause 1
+   checked that `sections/missing.md` carries no controls, reading
+   `tests/fixtures/panel-manifest.txt` as though it described the *panel*. It
+   describes the **listing function's** answer: `book.md` names two sections and
+   the disk holds both, so `merge` adds nothing and no marked-missing row exists
+   at open. The path is one the Rust clause hands `merge` directly. Resolved by
+   moving the rule to a **clause 7** that reads it after clause 5 has *made* a
+   marked-missing row by trashing a named section — which is the only way the
+   window ever gets one, and a stronger test than the original for it. The
+   implementation was right throughout: `fileRow` gates both buttons on
+   `!entry.missing`.
+
+2. **A delete gate needs a freshness check that a create gate does not.** The
+   first run went against Phase 3's copy and reported counts three clauses deep
+   that read as failures of this phase. `controls()` now compares the panel's
+   row set against the ten a clean copy holds and stops with the `cp -R` line.
+   Phase 3's gate could be run twice over one copy — a refusal writes nothing;
+   four of this one's clauses delete, so it cannot.
+
+**The close-out moved all three `max_lines` caps rather than trimming**, the
+reason being that trimming reviewed prose to make room for new prose is the
+worse trade: `rules/desktop-panes.md` 380 → 420, `rules/desktop.md` 560 → 590,
+and `rules/desktop-project.md` 130 → 150. The last is the one the phase text got
+wrong — it named 120/130 as "room", and the section ran to 26 lines after a
+tightening pass. `spec-lint`: 0 errors; `mpdf-010`'s rollup is now `done`.
+
+**One measurement the phase predicted exactly.** Declaring `objc2-foundation`
+0.3.2 added **one line to `Cargo.lock`** — `md2pdf-app`'s own dependency list —
+and no crate to the tree, which is verbatim the `serde_json` argument Phase 1
+recorded and the whole of why `trash` was refused.
+
 ### Round 3 — Phase 4 only — 2026-08-28 — same reviewer, resumed with the author's changelog — **READY (converged, at the cap)**
 
 The round-2 blocker confirmed resolved **against the files**, and the reviewer
