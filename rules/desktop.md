@@ -14,7 +14,8 @@ covers: >
   the desktop app: the crate and its files, the window and its menu, the two
   titles an open sets, the commands and the signal between them, the file I/O the
   app owns and the two read passes one closure serves, the fourth reader of a
-  path the author did not name in a dialog and the first write to one, the three answers the
+  path the author did not name in a dialog, the first write to one and the first
+  delete of one, the three answers the
   asset list gives and the filter reads, the project this file hands to a rule of
   its own, the panel's status fields and the union built where no disk is
   read, the watch loop and its fourth answer and the two debounces it runs on,
@@ -26,7 +27,7 @@ covers: >
   the vendored renderer the front end imports and what embedding it costs, the
   declarations it is type-checked against and where they may not live, and
   the configuration facts a build enforces
-max_lines: 560
+max_lines: 590
 generated: 2026-08-28
 ---
 
@@ -61,10 +62,15 @@ two vendored `.mjs` modules under `dist/pdfjs/`, which with their shared
 Apache-2.0 licence make three more. Of the twelve that are this project's,
 `src/` is `main.rs` and three modules. `Cargo.toml` names `tauri` 2.11.5,
 `tauri-plugin-dialog` 2.7.2, `notify` 8.2.0, `serde` 1.0.229 with its `derive`
-feature and `serde_json` 1.0.151, with `tauri-build` 2.6.3 under
+feature, `serde_json` 1.0.151 and `objc2-foundation` 0.3.2 for `NSError`,
+`NSFileManager`, `NSString` and `NSURL`, with `tauri-build` 2.6.3 under
 `[build-dependencies]` and **no dev-dependencies at all** — `serde_json` was one
-until the store made reading JSON the app's job rather than a test's, and `tauri`
-already puts that version in `Cargo.lock`, so it adds no crate to the tree; `build.rs`
+until the store made reading JSON the app's job rather than a test's. **Both of
+those last two are already in `Cargo.lock` at their version by way of `tauri`,
+so neither adds a crate to the tree**, and that fact is what picked
+`objc2-foundation` over the `trash` crate, whose macOS implementation is the
+same `NSFileManager` call. There is no `target.'cfg(...)'` table: this binary is
+macOS only by construction and `src/main.rs` says so. `build.rs`
 calls `tauri_build::build()`. `tauri.conf.json` sets `app.withGlobalTauri: true`, which
 puts the API on `window.__TAURI__` and is what removes the bundler and the node
 toolchain entirely — `build.frontendDist` is `dist`, a directory of static files,
@@ -95,7 +101,7 @@ capability added for either. `app/gen/` is generated and is not committed.
 
 `app/src/main.rs` holds only what needs a window. `main` registers the dialog
 plugin, builds the menu, manages one `Mutex<Session>` and one
-`app/src/main.rs:Pending`, registers fourteen commands, and — since the bundle —
+`app/src/main.rs:Pending`, registers fifteen commands, and — since the bundle —
 **builds the app rather than running it**, so that it can hand `App::run` a
 callback and see the run events a `.run(generate_context!())` never surfaces.
 
@@ -141,10 +147,10 @@ therefore cross the IPC boundary and the debounce is Rust's**, which is what put
 the interval on the testable side of the window: a debounce in the page would be
 logic reachable only by typing at one.
 
-Thirteen of the fourteen commands are wrappers over a plain function.
-`app/src/main.rs:pending_open` is the fourteenth and is not: it reads no session
+Fourteen of the fifteen commands are wrappers over a plain function.
+`app/src/main.rs:pending_open` is the fifteenth and is not: it reads no session
 and **takes** a slot the run event filled, which the section on the bundle below
-explains. `app/src/main.rs:create_file` is the newest of the thirteen and the
+explains. `app/src/main.rs:trash_file` is the newest of the fourteen and the
 split is load-bearing rather than tidy: this file has no test module, the crate
 is bin-only and `tauri::State` has a private field and no public constructor, so
 a rule written into a command is a rule nothing in this repository can reach.
@@ -248,6 +254,21 @@ blob of them, which wants neither Tauri's asset protocol, nor a scope in
 the first write to such a path**, `write_override`'s being into Application
 Support: it makes an empty file and stops, `rules/desktop-project.md` has the
 three rules it obeys, and the row arrives by the watch rather than by a return.
+
+**`app/src/document.rs:trash_file` is the first *destructive* one, and it moves
+to the Trash rather than unlinking.** There is no undo anywhere in this app —
+not for an edit, not for a save, not for an export — and the Trash is the
+platform's own undo for exactly this operation. **That is also why nothing asks
+twice**: a confirmation stands in for an undo where there is none, and Finder
+does not confirm a move to the Trash for the same reason. `rules/desktop-project.md`
+has the rule it obeys, which is neither of the other two.
+
+**The OS call is a parameter and `app/src/document.rs:move_to_trash` is what
+`app/src/main.rs` hands in** — the one function in `document.rs` no test in this
+repository calls. It is injected where `create_file`'s write deliberately is
+not, and the difference is where the effect lands: a `std::fs::write` goes into
+a `scratch_dir` the suite owns, where this call's whole effect is **outside the
+repository**, in a `~/.Trash` nothing cleans.
 
 `app/src/document.rs:default_output` is where an export lands unless the user says
 otherwise: **`main`'s** path with a `.pdf` extension, duplicating

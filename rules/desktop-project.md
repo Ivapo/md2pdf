@@ -13,11 +13,12 @@ covers: >
   they both name, the walk and the merge and why they
   are two functions rather than one, the filter that is each channel's own
   comparison, the total order the panel cannot reorder itself against, the
-  confinement the walk and the commands now share and the one a write obeys
-  differently, the two further questions a create asks and the empty file it
-  stops at, and the one
+  confinement the walk and the commands now share, the one a write obeys
+  differently and the third a delete asks, the two further questions a create
+  asks and the empty file it stops at, the row a delete acts on by name and the
+  panel it refreshes itself, and the one
   fact this app remembers about a folder and where it refuses to keep it
-max_lines: 130
+max_lines: 150
 generated: 2026-08-28
 ---
 
@@ -127,6 +128,32 @@ It makes the file empty and stops — where an include marker sits is a
 document-order decision no file list can make — and nothing announces the row:
 it lands under the watched root, arrives as `watch::Change::Tree`, and the panel
 is rebuilt off the status that follows, one path for a create and a `touch`.
+
+**A delete asks a third question, neither of the other two serving it.**
+`confined` opens on `is_file`, refusing a `missing: true` row and a dangling
+link the walk lists; `landing` alone accepts a `secret.png` that is a link out
+of the project. A delete wants both halves — **the name is under the root, and
+something is at it** — so `app/src/document.rs:trash_file` reuses `landing`
+unchanged for the first and adds `symlink_metadata` for the second, `is_file`'s
+question widened to *anything at that name*. **It therefore acts on the name and
+not the resolution**: a `cover.jpg` pointing at `figures/cover.jpg` loses the
+link and keeps the figure, which is the opposite of `confined`'s reading for a
+read and deliberately so — a read wants the bytes the author meant, a delete
+wants the row the author clicked.
+
+The OS call is a parameter where the create's write is not, the difference being
+where the effect lands: a `std::fs::write` goes into a scratch tree the suite
+owns, and this one goes outside the repository. `document::move_to_trash` is
+what `main.rs` hands in. **`preview::Session::trash` refuses the main outright
+and asks the dirty-buffer question only of the file the pane is holding** —
+deleting any other throws no unsaved work away — and it re-walks with
+`document::files_under` itself rather than waiting on the watch, which it must:
+`watch::classify` answers the **first** match and a section the master names is
+already in the asset list, so deleting one answers `Change::Asset` and never the
+`Tree` a create rides on. `document::merge` then puts the path back as
+`missing: true`. **The asymmetry with the create is real rather than an
+inconsistency**: a created file is in no asset list, so the watch gets that one
+right.
 
 `app/src/document.rs:store_file` names the one file this app writes outside the
 author's own folders — `projects.json` under the directory Tauri's resolver gives

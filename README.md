@@ -186,6 +186,19 @@ field if you ask for either. It does **not** add the include marker to your mast
 where a new section belongs in a document is your decision, so write `[](…)` where you
 want it. Folders are not created — make the folder first, in Finder.
 
+**Hover any other row and a `trash` button appears beside it: it moves that file
+to the Trash.** Not a delete — the Trash, so the file is in there under Finder's
+own `Put Back` if you did not mean it. **Nothing asks you twice**, and that is
+deliberate: a confirmation is what stands in for an undo where there is none,
+and this has one. The file that compiles has no such button — set another file
+as `main` first if you want that one gone — and neither does a struck-through
+row, which names a file that is not there to move. If you delete the file the
+pane is holding, the pane goes back to the one that compiles; if it holds
+unsaved edits the app will not delete it, and says so with `Discard` beside the
+sentence. Delete a section your document names and the row stays, struck
+through, and the next compile refuses by that file's name — which is the app
+telling you the document is broken, not the app breaking it.
+
 **Click a file in that list and the pane opens it, while the page keeps showing the whole
 document.** So you can write chapter three and watch the book: the file that compiles and
 the file you are editing are two different things, and the list marks each. `⌘S` writes

@@ -15,7 +15,8 @@ covers: >
   filtered to, the status the page places and never composes, the panel that
   lists the project's files and the two states it keeps apart, the flat entries
   it is drawn from and the folders derived rather than sent, the fold the page
-  holds, the two gestures on a row and the two marks it may carry, the panel's
+  holds, the three gestures on a row and the two marks it may carry, the two
+  rows the delete is not on and the edge two buttons share, the panel's
   own gesture that is on no row and the two things the page holds, the surface
   over the text pane and the three boxes that place it, the sentence it shows
   where a figure cannot be drawn, the sequence its read carries and the three
@@ -28,7 +29,7 @@ covers: >
   pane that loses both when it empties, the check that reads this file and the
   two declarations it holds to each other, and the seven defects that check
   does not reach
-max_lines: 380
+max_lines: 420
 generated: 2026-08-28
 ---
 
@@ -216,10 +217,11 @@ about state that decides behaviour, and a fold decides nothing but its own
 drawing. The store this app now keeps is not a precedent for it — a main is a
 decision about the document, a fold is where a scrollbar was.
 
-**A row carries two gestures and can carry two marks.** The body of a markdown
+**A row carries three gestures and can carry two marks.** The body of a markdown
 row is a `button.name` that puts that file in the pane; the `main` button appears
-beside it on hover and on focus and sets which file compiles. They were kept
-apart before there were two of them rather than after. **`here` is the file that
+beside it on hover and on focus and sets which file compiles; the `trash` button
+beside *that* moves the file to the Trash. The first two were kept apart before
+there were two of them rather than after. **`here` is the file that
 compiles and `.holding` is the file the pane shows** — one row at every open, two
 from the first click — and `.holding` wears the text pane's own `--ground` rather
 than `--band`, which sits a point from the panel's `--chrome` and would be
@@ -230,6 +232,31 @@ it was. A bibliography and a marked-missing row open nothing and say so in their
 is still rebuilt whole on every status, and that is still
 right: **the rows hold no selection.** Both files live in Rust and arrive in the
 status, and each control reads its path off the DOM at the moment it is clicked.
+
+**The delete is on every row but two, and nothing asks first.** The `main` row
+has none — its file is the one `Session::trash` refuses — and neither does a
+marked-missing row, which names a file the disk does not hold. An image and a
+bibliography both get one: the panel lists them, and a figure the document
+stopped naming is a thing to be rid of. **No confirmation**, because the Trash
+is the platform's own undo and a confirmation is what stands in for an undo
+where there is none — so the button holds no state and `parts` may go on
+rebuilding the panel whole.
+
+**Two buttons share one right edge inside `.controls`, and that is a
+correction.** `margin-left: auto` was on `.set` "because only one of the two is
+ever on a row", meaning the button and the `◀ main` mark; a non-main markdown
+row now draws two buttons, and two elements each claiming the free space would
+push the first off that edge. So the group claims it, the buttons lose it, and
+the mark keeps it alone on the row that has no buttons at all. `.trash` wears
+`--alarm` only under the pointer, so a row does not read as a warning at rest.
+
+**A refused delete is the one refusal in this panel that does reach `fail`**,
+against the rule below, and the exception is argued rather than overlooked: it
+is `openInPane`'s and `setMain`'s own route, and none of the three sentences is
+reachable from a row — the `main` row draws no button, and every other row came
+out of Rust's own listing, so only a hand-typed command or a file vanishing
+between the walk and the click gets one. The two refusals a reader *does* meet —
+the create's, and the figure's — keep their own surfaces.
 
 **The panel's own gesture is not on a row, and that invariant is why.** A `+` at
 the end of the `<h2>` reveals a field taking a whole root-relative path, and the
