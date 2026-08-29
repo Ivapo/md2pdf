@@ -1,7 +1,7 @@
 {
-  "productName": "md2pdf",
+  "productName": "Letur",
   "version": "0.1.0",
-  "identifier": "dev.md2pdf.desktop",
+  "identifier": "dev.letur.desktop",
   "build": {
     "frontendDist": "dist"
   },
@@ -10,7 +10,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "md2pdf",
+        "title": "Letur",
         "width": 900,
         "height": 1100
       }

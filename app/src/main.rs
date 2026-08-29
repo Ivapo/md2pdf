@@ -1,4 +1,4 @@
-//! `md2pdf-app` — show the PDF while you write it.
+//! `letur` — show the PDF while you write it.
 //!
 //! This binary owns the window and all file I/O. The core crate owns the
 //! pipeline and touches neither, which is what lets the same crate serve a
@@ -505,7 +505,7 @@ fn menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> 
 
     MenuBuilder::new(app)
         .items(&[
-            &SubmenuBuilder::new(app, "md2pdf")
+            &SubmenuBuilder::new(app, "Letur")
                 .about(None)
                 .separator()
                 .services()

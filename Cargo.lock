@@ -2699,6 +2699,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "letur"
+version = "0.1.0"
+dependencies = [
+ "md2pdf-core",
+ "notify",
+ "objc2-foundation",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+]
+
+[[package]]
 name = "libappindicator"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2855,20 +2869,6 @@ dependencies = [
  "log",
  "tendril",
  "web_atoms",
-]
-
-[[package]]
-name = "md2pdf-app"
-version = "0.1.0"
-dependencies = [
- "md2pdf-core",
- "notify",
- "objc2-foundation",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
 ]
 
 [[package]]

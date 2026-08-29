@@ -1,12 +1,12 @@
 [package]
-name = "md2pdf-app"
-description = "Desktop front end for md2pdf-core: it shows the PDF while you write."
+name = "letur"
+description = "Letur — the desktop front end for md2pdf-core: it shows the PDF while you write."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "md2pdf-app"
+name = "letur"
 path = "src/main.rs"
 
 # Every version is pinned, as core pins the Typst crates: a window is the part
