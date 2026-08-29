@@ -13,7 +13,8 @@ covers: >
   they both name, the walk and the merge and why they
   are two functions rather than one, the filter that is each channel's own
   comparison, the total order the panel cannot reorder itself against, the
-  confinement the walk obeys and the one a write obeys differently, and the one
+  confinement the walk and the commands now share and the one a write obeys
+  differently, and the one
   fact this app remembers about a folder and where it refuses to keep it
 max_lines: 120
 generated: 2026-08-28
@@ -93,6 +94,20 @@ each expanded where it sits — so the panel cannot reorder itself between two
 compiles of one tree. **The walk obeys the confinement rule**: a link resolving
 outside the canonical root contributes nothing and is not descended into, and a
 directory already visited is not visited twice.
+
+**The walk and the three commands ask one question, and that is a correction.**
+`app/src/document.rs:confined` is the whole rule — resolve the path, require its
+target under the resolved root — and `Session::set_main`, `Session::set_edited`
+and `document::asset_bytes` all go through it. They used to ask something
+stricter, that `document::relative` answer the same root-relative spelling back,
+and stricter was wrong in one direction: `descend` lists a link under its **own**
+name, so a `cover.jpg` pointing at `figures/cover.jpg` *inside* the project was a
+row the panel offered and every command refused, while the compile rendered it.
+The path `confined` answers with is the join and not the resolution, so a read, a
+write and a title go through the link the author made rather than behind it, and
+`Preview::status` spells it with `document::spell` exactly as the row is spelled.
+A write still resolves its **parent** instead, per the rule below: a file being
+created canonicalizes to nothing.
 
 `app/src/document.rs:store_file` names the one file this app writes outside the
 author's own folders — `projects.json` under the directory Tauri's resolver gives

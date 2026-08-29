@@ -236,10 +236,10 @@ classes of failure reach the page in the terminal's words — an `Error` through
 
 **`app/src/document.rs:asset_bytes` is a fourth reader of a path the author did
 not name in a dialog**, beside the walk, the compile's own closure and
-`preview::Session::set_edited`, and it obeys the rule all four do: `relative`
-must answer the root-relative spelling back, which `root.join("../secrets.png")`
-cannot, so a `..` and a symlink out of the root are refused by the same
-comparison and in the same sentence. It reads one of the project's figures for
+`preview::Session::set_edited`, and it obeys the rule all four do —
+`app/src/document.rs:confined`, which resolves the path and requires its target
+under the resolved root, so a `..`, an absolute path and a symlink leaving the
+root are refused by one comparison and in one sentence. It reads one of the project's figures for
 the window to draw and nothing about the document changes for it — no compile, no
 buffer, no `Status` field. The bytes cross as a `tauri::ipc::Response` for
 `current_pdf`'s reason and reach the page as an `ArrayBuffer`; the page makes a

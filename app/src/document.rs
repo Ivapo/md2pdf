@@ -785,17 +785,48 @@ pub fn beside(main: &str, named: &str) -> String {
     segments.join("/")
 }
 
+/// The file `path` names under `root`, or `None` when it is not one.
+///
+/// **The one confinement rule three commands share.** A path from the panel
+/// came from this app's own listing, but a command is a command, and
+/// `root.join("../../secrets.png")` names a real file on plenty of machines.
+/// So the path is resolved and its target must land under the resolved root —
+/// which refuses a `..`, an absolute path, and a symlink whose target is
+/// elsewhere, each by the same comparison.
+///
+/// **It is [`walk`]'s test and not a spelling round-trip, and that is a
+/// correction.** The three commands used to ask [`relative`] to answer the same
+/// spelling back, which is a *stricter* question than confinement and answers
+/// no to something confinement allows: [`descend`] lists a symlink under its own
+/// name, so a `cover.jpg` pointing at `figures/cover.jpg` inside the project was
+/// listed as a row and then refused as though it were outside — while the
+/// compile rendered it perfectly well. The two halves now ask one question, and
+/// the panel cannot offer a row no command will take.
+///
+/// The path it returns is the **join and not the resolution**, so a read, a
+/// write and a title all go through the link the author made rather than behind
+/// it, and `crate::preview::Preview::status` goes on spelling it with [`spell`]
+/// the way the row is spelled.
+pub fn confined(root: &Path, path: &str) -> Option<PathBuf> {
+    let landed = root.join(path);
+    if !landed.is_file() {
+        return None;
+    }
+
+    // Resolved explicitly rather than through `crate::watch::resolve`, which
+    // answers with its *input* when canonicalization fails: `root.join("../b")`
+    // survives a component-wise `starts_with` textually, `..` and all. Existence
+    // is settled above, so a failure here is a race or a permission, and either
+    // is a refusal.
+    let real = landed.canonicalize().ok()?;
+    real.starts_with(crate::watch::resolve(root))
+        .then_some(landed)
+}
+
 /// The bytes of one file under `root`, for the window to draw.
 ///
-/// **It confines rather than checking existence**, which is
-/// [`crate::preview::Session::set_main`]'s rule applied a third time: the path
-/// comes from the panel, which got it from this app's own listing — but a
-/// command is a command, and `root.join("../../secrets.png")` names a real file
-/// on plenty of machines. [`relative`] canonicalizes both sides, so a path that
-/// lands outside the root has no root-relative spelling to answer back, and one
-/// that reaches outside through a symlink has none either. The refusal is the
-/// sentence the other two use, so one refusal reads one way wherever it came
-/// from.
+/// It confines through [`confined`], which is the rule the two commands that
+/// move a path share.
 ///
 /// **It is a function and not the command**, per this file's own header:
 /// `app/src/main.rs` has no test module, the crate is bin-only and
@@ -803,10 +834,8 @@ pub fn beside(main: &str, named: &str) -> String {
 /// written into the command is a rule no test in this repository can reach.
 /// `mpdf-010` Phase 5.
 pub fn asset_bytes(root: &Path, path: &str) -> Result<Vec<u8>, String> {
-    let landed = root.join(path);
-    if !landed.is_file() || relative(root, &landed).as_deref() != Some(path) {
-        return Err(format!("{path} is not a file in this project"));
-    }
+    let landed =
+        confined(root, path).ok_or_else(|| format!("{path} is not a file in this project"))?;
 
     std::fs::read(&landed).map_err(|e| format!("cannot read {}: {e}", landed.display()))
 }
@@ -1819,5 +1848,72 @@ mod tests {
             asset_bytes(&root, "../escape.png").err().as_deref(),
             Some("../escape.png is not a file in this project")
         );
+    }
+
+    /// A symlink **into** the project is a row the panel offers, so it must be
+    /// a row a command takes.
+    ///
+    /// `descend` lists a link under its own name once its target resolves under
+    /// the root, so `cover.jpg -> figures/cover.jpg` is a row spelled
+    /// `cover.jpg`. The rule these commands used to apply — ask [`relative`] for
+    /// that spelling back — answered `figures/cover.jpg` and refused it, while
+    /// the compile rendered the same file perfectly well. The walk and the
+    /// commands ask one question now, and this is the case that told them apart.
+    #[test]
+    fn a_link_to_a_file_inside_the_project_is_a_file_in_this_project() {
+        let root = scratch_dir("link-inside");
+        std::fs::create_dir_all(root.join("figures")).unwrap();
+        std::fs::write(root.join("figures/real.png"), b"the figure itself").unwrap();
+
+        let link = root.join("cover.png");
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(root.join("figures/real.png"), &link).unwrap();
+
+        assert!(
+            files_under(&root)
+                .iter()
+                .any(|entry| entry.path == "cover.png"),
+            "the walk must offer the row, or this case is not the one under test"
+        );
+        assert_eq!(
+            asset_bytes(&root, "cover.png").unwrap(),
+            b"the figure itself",
+            "a link into the project was listed and then refused"
+        );
+        assert!(confined(&root, "cover.png").is_some());
+    }
+
+    /// And the link that leaves is still refused, by the same rule.
+    ///
+    /// Both halves in one test on purpose: a confinement that stopped refusing
+    /// would pass the clause above and fail here, and the two are the same
+    /// comparison read in opposite directions.
+    #[test]
+    fn a_link_out_of_the_project_is_refused_however_it_is_spelled() {
+        let outside = scratch_dir("link-outside");
+        std::fs::write(outside.join("secret.png"), b"not the project's").unwrap();
+
+        let root = scratch_dir("link-outside-root");
+        let link = root.join("secret.png");
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(outside.join("secret.png"), &link).unwrap();
+
+        assert!(
+            link.is_file(),
+            "the link must resolve, or `is_file` refuses first"
+        );
+        assert_eq!(confined(&root, "secret.png"), None);
+        assert_eq!(
+            asset_bytes(&root, "secret.png").err().as_deref(),
+            Some("secret.png is not a file in this project")
+        );
+
+        let elsewhere = scratch_dir("link-outside-dir");
+        std::fs::write(elsewhere.join("deep.png"), b"nor this").unwrap();
+        let door = root.join("door");
+        let _ = std::fs::remove_file(&door);
+        std::os::unix::fs::symlink(&elsewhere, &door).unwrap();
+        assert!(root.join("door/deep.png").is_file());
+        assert_eq!(confined(&root, "door/deep.png"), None);
     }
 }

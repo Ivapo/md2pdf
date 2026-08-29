@@ -45,7 +45,23 @@ before acting on any of them**, four fixed here and one deliberately left.
    repair — comparing the canonical target against the canonical root instead of
    requiring the spelling to round-trip — is a change to a confinement rule,
    which wants a decision rather than a drive-by. It **over**-refuses, so it is
-   a usability wart and not a hazard. It wants an OQ.
+   a usability wart and not a hazard.
+
+   **Fixed after all, on the second pass, and the decision it wanted turned out
+   to be small.** The stricter question was wrong in exactly one direction and
+   the looser one is the walk's own: `document::confined` resolves the path and
+   requires its target under the resolved root, which refuses a `..`, an
+   absolute path and a link out of the root by one comparison, and accepts a
+   link *into* the project the way the compile already does. All three commands
+   share it, so the rule is written once rather than three times. Two properties
+   made it cheap and both were checked rather than assumed: the path it answers
+   with is the **join** and not the resolution, so a read, a write and a title
+   go through the link the author made; and `Preview::edited_relative` spells
+   `edited` with `document::spell`, which is textual, so a link keeps its own
+   spelling and the panel marks the row the reader clicked. A/B'd against the
+   old rule — the new *link-into-the-project* clause fails under it and the two
+   *link-out* clauses pass under both, which is the pair of directions that
+   comparison has to get right.
 5. **The session lock was held across `std::fs::read`**, stalling `status`,
    `save`, the watch and the compile behind one reader looking at a picture.
    Fixed by dropping the guard after the root is cloned out, which is what

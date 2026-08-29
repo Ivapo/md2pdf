@@ -654,13 +654,9 @@ impl Session {
         // **Confined, and not merely checked for existence.** The path comes
         // from the panel, which got it from this app's own listing — but a
         // command is a command, and `root.join("../../secrets.md")` names a
-        // real file on plenty of machines. Resolving it and asking for its
-        // root-relative spelling back is the same rule the walk obeys: a path
-        // that lands outside the root has no such spelling, and one that lands
-        // inside by another route comes back spelled the one way.
-        let landed = root.join(&main);
-        if !landed.is_file() || document::relative(&root, &landed).as_deref() != Some(main.as_str())
-        {
+        // real file on plenty of machines. `document::confined` is the walk's
+        // own test, shared with `set_edited` and with the figure read.
+        if document::confined(&root, &main).is_none() {
             return Err(format!("{main} is not a file in this project"));
         }
 
@@ -694,11 +690,9 @@ impl Session {
             }
         };
 
-        let landed = root.join(&path);
-        if !landed.is_file() || document::relative(&root, &landed).as_deref() != Some(path.as_str())
-        {
+        let Some(landed) = document::confined(&root, &path) else {
             return Err(format!("{path} is not a file in this project"));
-        }
+        };
 
         if self.refused_while_dirty() {
             return Ok(());
