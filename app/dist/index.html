@@ -1523,6 +1523,22 @@
       const viewerPath = viewer.querySelector('.path')
       const viewerSheet = viewer.querySelector('.sheet')
       let viewing = null
+      /*
+        **Which request the surface belongs to**, and it is `renderSeq`'s idea
+        applied to a second asynchronous pass. The read crosses IPC, so a reader
+        who clicks a figure and changes their mind has a real window in which to
+        do it — and without this every one of those gestures was undone by the
+        bytes arriving afterwards: `Escape` put the figure back up, asking for a
+        markdown row drew the picture over the file it had just opened, and two
+        figures in flight left the bar naming one and the sheet holding the
+        other. Measured, not reasoned about: all three reproduce against a read
+        delayed 400 ms.
+
+        Every entry to `showAsset` and every exit through `hideAsset` takes the
+        next number, so a pass that comes back to find it moved has been
+        superseded and draws nothing.
+      */
+      let viewSeq = 0
 
       /*
         Keep the surface over the text pane's own column.
@@ -1546,6 +1562,9 @@
 
       /** One of the three ways back to the text, and the one the other two call. */
       function hideAsset() {
+        // **Before anything else**: a read still in flight is now superseded,
+        // and this is what stops it drawing over a reader who has left.
+        viewSeq++
         viewer.hidden = true
         viewerSheet.replaceChildren()
         if (viewing !== null) URL.revokeObjectURL(viewing)
@@ -1571,8 +1590,8 @@
        * @param {string} path
        */
       async function showAsset(path) {
+        const seq = ++viewSeq
         const extension = (path.split('.').pop() ?? '').toLowerCase()
-        viewerPath.textContent = path
 
         if (extension === 'pdf') {
           const said = document.createElement('p')
@@ -1580,6 +1599,7 @@
           said.textContent = 'A PDF figure is not drawn here.'
           if (viewing !== null) URL.revokeObjectURL(viewing)
           viewing = null
+          viewerPath.textContent = path
           viewerSheet.replaceChildren(said)
           viewer.hidden = false
           placeViewer()
@@ -1590,9 +1610,13 @@
         try {
           bytes = await invoke('asset_bytes', { path })
         } catch (problem) {
-          fail(problem)
+          // A refusal for a figure the reader has already left is not theirs to
+          // read, and the error bar is shared with the compile's own.
+          if (seq === viewSeq) fail(problem)
           return
         }
+
+        if (seq !== viewSeq) return
 
         if (viewing !== null) URL.revokeObjectURL(viewing)
         const type =
@@ -1606,6 +1630,10 @@
         const picture = document.createElement('img')
         picture.src = viewing
         picture.alt = path
+        // **The label is written here and not before the read**, or the bar
+        // names the last row clicked while the sheet holds the last one to
+        // arrive, which is the third of the three gestures this guard fixes.
+        viewerPath.textContent = path
         viewerSheet.replaceChildren(picture)
 
         viewer.hidden = false
@@ -1620,7 +1648,18 @@
       // leave a picture over it. `clear()` closes it too, an open being a new
       // project.
       addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !viewer.hidden) hideAsset()
+        /*
+          **Unconditional, and the condition it replaces was the defect.**
+          Guarding on `!viewer.hidden` reads as tidy and is wrong in the one
+          case that matters: while the read is in flight the surface is still
+          hidden, so the key did nothing, `viewSeq` never moved, and the bytes
+          arriving afterwards put the figure up on a reader who had just asked
+          for it to go away. `Escape` means *no figure*, whether one is up or
+          one is coming. It costs nothing in the empty state — a `hidden` that
+          is already true, a sheet already empty, no URL to revoke — and it
+          calls no `preventDefault`, so nothing else loses the key.
+        */
+        if (e.key === 'Escape') hideAsset()
       })
 
       /** @param {string} name @param {number} depth @returns {HTMLElement} */

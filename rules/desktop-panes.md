@@ -16,7 +16,8 @@ covers: >
   lists the project's files and the two states it keeps apart, the flat entries
   it is drawn from and the folders derived rather than sent, the fold the page
   holds, the two gestures on a row and the two marks it may carry, the surface
-  over the text pane and the three ways back, the disk half
+  over the text pane and the sequence its read carries and the three ways back,
+  the disk half
   that is walked twice and the missing half that follows the text, the text the reader can
   select and the stream it is read off, the link filter and the destination a click resolves, the scaffolding the
   bundle does not carry and the app supplies, the gutter whose rows are as tall
@@ -25,7 +26,7 @@ covers: >
   pane that loses both when it empties, the check that reads this file and the
   two declarations it holds to each other, and the seven defects that check
   does not reach
-max_lines: 340
+max_lines: 360
 generated: 2026-08-28
 ---
 
@@ -246,6 +247,17 @@ which is what makes its top padding free — flexbox distributes free space over
 items' **outer** sizes, so a figure's `max-height: 100%` resolves against a
 content box that already excludes it. `box-sizing` is not what does that, and two
 drafts of `mpdf-010` Phase 5 said it was.
+
+**The read crosses IPC, so the surface carries a sequence.** `viewSeq` is
+`renderSeq`'s idea applied to a second asynchronous pass: every entry to
+`showAsset` and every exit through `hideAsset` takes the next number, and a read
+that comes back to find it moved draws nothing and reports nothing. Without it
+each of the three ways back was undone by the bytes arriving after it, and the
+path label — written before the read rather than after — named the last row
+clicked while the sheet held the last one to arrive. **`Escape` is
+unconditional for the same reason**: while the read is in flight the surface is
+still hidden, so a guard on `!viewer.hidden` made the key do nothing in exactly
+the case a reader presses it.
 
 **Three ways back, because the reader arrives by three routes**: the surface's
 own control, `Escape`, and clicking a markdown row that opens — which already

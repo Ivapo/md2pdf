@@ -2,6 +2,43 @@
 
 Append-only. One heading per round, newest first.
 
+### Phase 5 — a defect found after shipping — 2026-08-28 — the surface had no sequence
+
+**Four gestures, one cause, none of them reached by the exit gate.** The read
+crosses IPC and `showAsset` had no supersession guard, so every way out of the
+surface was undone by the bytes arriving after it. Reproduced against the
+shipped file in the Chromium harness with the read delayed 400 ms, then fixed
+and re-reproduced as passing:
+
+1. `Escape` before the bytes land put the figure **up**, not away.
+2. Clicking a markdown row moved the pane and then drew the picture over the
+   file it had just opened.
+3. Two figures in flight left the bar naming one and the sheet holding the
+   other — the label was written *before* the read, so it named the last row
+   clicked while the sheet held the last one to arrive.
+4. A figure in flight overwrote a `.pdf` row's sentence.
+
+The fix is `viewSeq`, which is `renderSeq`'s own idea applied to a second
+asynchronous pass — the page had the pattern at seven sites in the render path
+and this pass did not use it. The label moved to after the guard.
+
+**And the `Escape` guard was itself the defect, which the first fix did not
+catch.** `if (e.key === 'Escape' && !viewer.hidden)` reads as tidy and is wrong
+in the one case that matters: while the read is in flight the surface is *still
+hidden*, so the key did nothing and `viewSeq` never moved. Case 1 went on
+failing after `viewSeq` landed. `Escape` is now unconditional — it means *no
+figure*, whether one is up or one is coming.
+
+**Why the gate did not reach any of this**, and the note is for the next phase
+rather than for this one: every clause waits for the figure to land before it
+measures, so the whole class of *a reader who changes their mind mid-read* is
+outside it. The eight clauses still pass unchanged after the fix. A window gate
+that only ever observes settled states cannot see a race, and the harness — a
+stub whose latency is a variable — is where this kind of claim is cheap.
+
+Found by asking whether the phase wanted a code review, before any review had
+been run.
+
 ### Phase 5 shipped — 2026-08-28 — the window gate, and three things the rounds did not measure
 
 **The window gate passes, at eight clauses of eight**, on `cargo tauri dev` on
