@@ -55,7 +55,7 @@ phases:
     by: null
   - name: "Phase 10 — the editor is named Letur"
     reviewed: 2026-08-29
-    shipped: null
+    shipped: 2026-08-29
     cut: null
     by: null
 
