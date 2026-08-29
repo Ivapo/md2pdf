@@ -127,7 +127,9 @@
         is absolutely positioned rather than a third flex child: `#divider`'s
         drag reads `#text`'s own box at every `pointerdown`, and a hidden
         textarea measures zero. Left and width are mirrored off `#text` by
-        `placeViewer`, which the script calls wherever that column can move.
+        `placeViewer`, which a `ResizeObserver` over the three boxes that decide
+        that column drives — `#files` and `#lines`, which are all that sit to
+        its left, and `#text`, whose own width the divider and the window set.
 
         **The pane goes on holding the file it held.** Nothing here touches
         `edited`, the buffer, the compile, the bytes or the anchors — `⌘S` still
@@ -1449,9 +1451,6 @@
         folded = !folded
         toggle.setAttribute('aria-expanded', String(!folded))
         files.classList.toggle('collapsed', folded)
-        // The fold takes its width out of this row, so the text pane's left
-        // edge moves and the figure over it has to follow.
-        placeViewer()
       })
 
       /** @param {Status} state */
@@ -1543,21 +1542,65 @@
       /*
         Keep the surface over the text pane's own column.
 
-        **This is an enumeration of causes in a file whose rule is that it
-        watches the pane and not the causes** — see the `ResizeObserver` over
-        `#pages` — and the exception is argued rather than assumed. An observer
-        over `#text` never fires at all here: folding the panel moves that
-        column's left edge without changing its size. And the observer over
-        `#pages` does not fire while the pane is hidden, which a figure may
-        perfectly well be up over. So the five callers are named: a show, a
-        window resize, the end of a divider drag, the panel fold and the line
-        gutter. The last two are the ones an enumeration drops, and both shift
-        `#text`'s left edge.
+        **What decides that column is watched, and the causes are not** — this
+        file's own rule, which an earlier draft of this phase broke and a review
+        caught. That draft named five gestures: a show, a window resize, the end
+        of a divider drag, the panel fold and the `Lines` toggle. It dropped two
+        more, and they are not exotic: `#files` is `flex: 0 0 auto` and `#lines`
+        has no width of its own, so **both are as wide as their contents**, and
+        `parts` rebuilds the panel on *every* status while `relines` rewrites
+        the gutter on every keystroke. A project gaining a file with a longer
+        name, or a document crossing from 99 lines to 100, moves `#text`'s left
+        edge with no gesture at all — and the figure would sit off its column
+        until something in the list of five happened.
+
+        Only three boxes decide where that column is and how wide it is:
+        `#files` and `#lines`, which are all that sit to its left, and `#text`
+        itself, whose own width the divider and the window set. Observing those
+        is structural where a list of gestures is a guess, and it is the same
+        answer the pane's own observer gives. **It cannot loop**: `#viewer` is
+        absolutely positioned and out of flow, so nothing this writes can resize
+        anything being observed.
       */
       function placeViewer() {
         if (viewer.hidden) return
         viewer.style.left = `${text.offsetLeft}px`
         viewer.style.width = `${text.offsetWidth}px`
+      }
+
+      const column = new ResizeObserver(placeViewer)
+      // By id rather than by the handles above: `#lines` is declared with the
+      // gutter, hundreds of lines below this, and reaching it early is the
+      // block-scoped-use-before-declaration the type check exists to catch.
+      for (const box of ['files', 'lines', 'text']) column.observe(document.getElementById(box))
+
+      /**
+       * Put a sentence in the sheet where the figure would have gone.
+       *
+       * **Three things reach here and only one of them composes its own
+       * words.** A refusal from `asset_bytes` arrives in Rust's, and this
+       * places it exactly as the status bar places a compile's; the `.pdf`
+       * line and the undecodable-figure line are the page's, on the ground
+       * that both are labels about a kind of file rather than statements about
+       * the document.
+       *
+       * **What none of them may do is reach `fail`.** That marks the compiled
+       * page stale, and a click that compiled nothing must not tell the reader
+       * their PDF is out of date — the rule the `.pdf` branch was written to
+       * obey, which the error path was quietly breaking.
+       *
+       * @param {string} sentence @param {string} path
+       */
+      function saySoInstead(sentence, path) {
+        if (viewing !== null) URL.revokeObjectURL(viewing)
+        viewing = null
+        const said = document.createElement('p')
+        said.className = 'said'
+        said.textContent = sentence
+        viewerPath.textContent = path
+        viewerSheet.replaceChildren(said)
+        viewer.hidden = false
+        placeViewer()
       }
 
       /** One of the three ways back to the text, and the one the other two call. */
@@ -1594,15 +1637,7 @@
         const extension = (path.split('.').pop() ?? '').toLowerCase()
 
         if (extension === 'pdf') {
-          const said = document.createElement('p')
-          said.className = 'said'
-          said.textContent = 'A PDF figure is not drawn here.'
-          if (viewing !== null) URL.revokeObjectURL(viewing)
-          viewing = null
-          viewerPath.textContent = path
-          viewerSheet.replaceChildren(said)
-          viewer.hidden = false
-          placeViewer()
+          saySoInstead('A PDF figure is not drawn here.', path)
           return
         }
 
@@ -1611,12 +1646,35 @@
           bytes = await invoke('asset_bytes', { path })
         } catch (problem) {
           // A refusal for a figure the reader has already left is not theirs to
-          // read, and the error bar is shared with the compile's own.
-          if (seq === viewSeq) fail(problem)
+          // read. One that is theirs goes in the sheet and not through `fail`,
+          // for `saySoInstead`'s reason.
+          if (seq === viewSeq) saySoInstead(String(problem), path)
           return
         }
 
         if (seq !== viewSeq) return
+
+        /*
+          **`.svgz` is gzip and an `<img>` will not unwrap one.** It is in
+          `md2pdf_core::IMAGE_EXTENSIONS`, so the panel lists one and the
+          pipeline typesets it perfectly well; a blob URL carries no
+          `Content-Encoding`, so handing the bytes over as they are drew a
+          permanently blank sheet. Unwrapping them here is three lines and keeps
+          a legal figure viewable, where the alternative was a second sentence
+          saying this app could not show a file it compiles. A failure falls
+          through to the image's own `onerror` below.
+        */
+        let data = bytes
+        if (extension === 'svgz') {
+          try {
+            data = await new Response(
+              new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))
+            ).arrayBuffer()
+          } catch {
+            data = bytes
+          }
+          if (seq !== viewSeq) return
+        }
 
         if (viewing !== null) URL.revokeObjectURL(viewing)
         const type =
@@ -1625,9 +1683,18 @@
             : extension === 'jpg'
               ? 'image/jpeg'
               : `image/${extension}`
-        viewing = URL.createObjectURL(new Blob([bytes], { type }))
+        viewing = URL.createObjectURL(new Blob([data], { type }))
 
         const picture = document.createElement('img')
+        /*
+          **A figure that will not decode says so rather than drawing nothing.**
+          Truncated, corrupt, or a kind this engine will not take: without this
+          the surface opened with the path in its bar over an empty sheet, and
+          stayed that way, which reads as the app having done nothing at all.
+        */
+        picture.onerror = () => {
+          if (seq === viewSeq) saySoInstead('This figure could not be drawn.', path)
+        }
         picture.src = viewing
         picture.alt = path
         // **The label is written here and not before the read**, or the bar
@@ -1641,7 +1708,6 @@
       }
 
       document.getElementById('close-viewer').addEventListener('click', hideAsset)
-      addEventListener('resize', placeViewer)
       // The reader arrives at a figure by three routes, so there are three ways
       // back: this key, the surface's own control, and asking for a markdown
       // row — which already means *put that file in the pane* and must not
@@ -3206,8 +3272,6 @@
         lines.hidden = !on
         relines()
         markLine()
-        // The gutter takes its width out of this row too.
-        placeViewer()
       })
 
       /*
@@ -3278,10 +3342,6 @@
           divider.removeEventListener('pointermove', move)
           divider.removeEventListener('pointerup', up)
           settle()
-          // The surface mirrors this column, and the drag is what moves it.
-          // At the end and not on every move: `placeViewer` reads layout, and
-          // this handler reads none per pointermove for that reason.
-          placeViewer()
         }
 
         divider.addEventListener('pointermove', move)

@@ -2,6 +2,61 @@
 
 Append-only. One heading per round, newest first.
 
+### Phase 5 — a code review after shipping — 2026-08-28 — five findings, four fixed and one recorded
+
+`/code-review` at `high` over `70860ba..HEAD`, run after the phase had shipped
+and after the race fix above. **Five findings, all confirmed against the code
+before acting on any of them**, four fixed here and one deliberately left.
+
+1. **The re-mirror enumeration was still wrong, and this is the third time this
+   file's rule has earned itself.** Round 1 caught two missing gestures and the
+   phase added them; the list was still a list. `#files` is `flex: 0 0 auto` and
+   `#lines` has no width of its own, so **both are as wide as their contents**,
+   and `parts` rebuilds the panel on every status while `relines` rewrites the
+   gutter on every keystroke — neither calls `placeViewer`. A project gaining a
+   longer filename, or a document crossing 99 lines, moved the text pane's left
+   edge with **no gesture at all** and stranded the figure off its column.
+   Measured: the panel grew 136 → 306 px and the gutter 28 → 43 px, both
+   through the real paths. Fixed by deleting the enumeration and observing the
+   three boxes that decide the column — `#files`, `#lines`, `#text` — which is
+   structural where a list of gestures is a guess, and which also makes the
+   surface follow the divider *during* a drag rather than at its end. 0
+   `ResizeObserver` loop errors over a 40-move drag and twelve toggles.
+2. **The error path marked the compiled page stale**, which is verbatim the rule
+   scope item 5 was written to obey and which the `.pdf` branch was routed
+   around to satisfy. The catch called `fail`, and `fail` adds `stale`. Fixed by
+   putting every sentence in the sheet instead: Rust's refusal placed as the
+   status bar places a compile's, the two page-written lines as labels about a
+   kind of file.
+3. **`.svgz` drew a permanently blank sheet, and any corrupt figure did too.**
+   It is in `md2pdf_core::IMAGE_EXTENSIONS`, so the panel lists one and the
+   pipeline typesets it, but it is gzip and a blob URL carries no
+   `Content-Encoding`. Fixed twice over: the bytes are gunzipped through
+   `DecompressionStream` before the blob is minted, so a legal figure is
+   actually viewable, and `img.onerror` now says so for everything that still
+   will not decode.
+4. **A symlink to a file inside the project is listed and then refused.**
+   `document::descend` pushes the *entry's* name after resolving its target, so
+   `cover.jpg -> figures/cover.jpg` is a row named `cover.jpg`; `asset_bytes`
+   then wants `relative` to answer that spelling back and gets
+   `figures/cover.jpg`. **Not fixed, and deliberately.** The rule is shared
+   verbatim with `Session::set_main` and `Session::set_edited`, so it predates
+   this phase for markdown rows and Phase 5 only makes it more visible; and the
+   repair — comparing the canonical target against the canonical root instead of
+   requiring the spelling to round-trip — is a change to a confinement rule,
+   which wants a decision rather than a drive-by. It **over**-refuses, so it is
+   a usability wart and not a hazard. It wants an OQ.
+5. **The session lock was held across `std::fs::read`**, stalling `status`,
+   `save`, the watch and the compile behind one reader looking at a picture.
+   Fixed by dropping the guard after the root is cloned out, which is what
+   cloning it out was for.
+
+**Phase 5's eight window clauses pass unchanged after all four fixes**, and so
+do the four race gestures from the entry above. That they pass is the point: not
+one of the five findings was reachable by that gate, and three of the five were
+about states it never observes — a column that moves with no gesture, a read
+that refuses, a figure that will not decode.
+
 ### Phase 5 — a defect found after shipping — 2026-08-28 — the surface had no sequence
 
 **Four gestures, one cause, none of them reached by the exit gate.** The read

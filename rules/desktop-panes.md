@@ -16,8 +16,9 @@ covers: >
   lists the project's files and the two states it keeps apart, the flat entries
   it is drawn from and the folders derived rather than sent, the fold the page
   holds, the two gestures on a row and the two marks it may carry, the surface
-  over the text pane and the sequence its read carries and the three ways back,
-  the disk half
+  over the text pane and the three boxes that place it, the sentence it shows
+  where a figure cannot be drawn, the sequence its read carries and the three
+  ways back, the disk half
   that is walked twice and the missing half that follows the text, the text the reader can
   select and the stream it is read off, the link filter and the destination a click resolves, the scaffolding the
   bundle does not carry and the app supplies, the gutter whose rows are as tall
@@ -26,7 +27,7 @@ covers: >
   pane that loses both when it empties, the check that reads this file and the
   two declarations it holds to each other, and the seven defects that check
   does not reach
-max_lines: 360
+max_lines: 380
 generated: 2026-08-28
 ---
 
@@ -247,6 +248,29 @@ which is what makes its top padding free — flexbox distributes free space over
 items' **outer** sizes, so a figure's `max-height: 100%` resolves against a
 content box that already excludes it. `box-sizing` is not what does that, and two
 drafts of `mpdf-010` Phase 5 said it was.
+
+**The surface is placed off the three boxes that decide its column, not off a
+list of gestures.** `placeViewer` mirrors `#text`'s `offsetLeft` and
+`offsetWidth`, and a `ResizeObserver` over `#files`, `#lines` and `#text` drives
+it: those two are all that sit to the text pane's left, and `#text`'s own width
+is what the divider and the window set. **An enumeration of gestures was tried
+and was wrong**, which is this file's rule earning itself a third time: `#files`
+is `flex: 0 0 auto` and `#lines` has no width of its own, so both are as wide as
+their contents, and `parts` rebuilds the panel on every status while `relines`
+rewrites the gutter on every keystroke — a project gaining a longer filename, or
+a document crossing 99 lines, moves that column with no gesture at all. The
+observer cannot loop: `#viewer` is absolutely positioned and out of flow, so
+nothing it writes resizes anything observed.
+
+**A figure that cannot be drawn says so in the sheet, and never through
+`fail`.** Three sentences land there: `document::asset_bytes`'s refusal, in
+Rust's own words and placed the way a compile's is; the `.pdf` line; and an
+undecodable figure's, both of those the page's own, as labels about a kind of
+file. `app/dist/index.html:fail` is refused for all three because it marks the
+compiled page stale, which a click that compiled nothing must not do. An
+`.svgz` is gunzipped before the blob is minted — it is in
+`md2pdf_core::IMAGE_EXTENSIONS` and a blob URL carries no `Content-Encoding`, so
+handed over as-is it drew a permanently blank sheet.
 
 **The read crosses IPC, so the surface carries a sequence.** `viewSeq` is
 `renderSeq`'s idea applied to a second asynchronous pass: every entry to

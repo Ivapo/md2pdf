@@ -278,13 +278,20 @@ fn asset_bytes(
     session: tauri::State<'_, Mutex<Session>>,
     path: String,
 ) -> Result<tauri::ipc::Response, String> {
-    let session = session.lock().expect("the session lock was poisoned");
-    let root = session
-        .preview()
-        .root()
-        .map(Path::to_path_buf)
-        .ok_or_else(|| "no document is open".to_string())?;
+    let root = {
+        let session = session.lock().expect("the session lock was poisoned");
+        session
+            .preview()
+            .root()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| "no document is open".to_string())?
+    };
 
+    // **The lock is dropped before the read**, which is what cloning the root
+    // out was for. `std::fs::read` on a figure over a slow volume is unbounded
+    // in a way nothing else this command does is, and holding the session
+    // across it stalls `status`, `save`, the watch and the compile behind one
+    // reader looking at a picture.
     document::asset_bytes(&root, &path).map(tauri::ipc::Response::new)
 }
 
