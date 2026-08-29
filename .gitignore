@@ -23,3 +23,13 @@
 
 # Notes kept beside the work rather than in it.
 /notes-ivan/
+
+# The scratch directory `app/harness/serve.mjs` copies a page into, one per
+# revision/document/mutation. Outside `app/dist/` deliberately: `generate_context!`
+# walks `frontendDist` recursively into the shipped binary.
+/app/.harness/
+
+# `app/package.json` pins the browser driver the harness runs on. The modules are
+# a `bun install` a contributor runs once and are never committed; `app/bun.lock`
+# is.
+node_modules/

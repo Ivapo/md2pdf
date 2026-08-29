@@ -1,0 +1,14 @@
+{
+  "name": "letur-harness",
+  "private": true,
+  "type": "module",
+  "description": "Not a build. `harness/` drives app/dist/index.html in a browser; typecheck.mjs checks it. Neither is part of `cargo tauri build`, which still needs no node toolchain — `withGlobalTauri` is what bought that and this does not spend it.",
+  "scripts": {
+    "checks": "bun harness/checks.mjs",
+    "serve": "bun harness/serve.mjs",
+    "typecheck": "bun typecheck.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

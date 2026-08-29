@@ -1,0 +1,319 @@
+/* Serves a *copy* of the desktop front end with `stub.mjs` in its head, so a
+   driver can open the real `app/dist/index.html` outside a window.
+
+     bun app/harness/serve.mjs [--rev <sha>] [--doc <path>] [--port <n>]
+                               [--mutate <name>] [--quiet]
+
+   `app/harness/checks.mjs` imports `serve()` below; the CLI is what an A/B is
+   run by hand from, two of them on two ports.
+
+   **It copies rather than edits, and that is a hard rule.**
+   `app/typecheck.mjs` dies unless `app/dist/index.html` holds exactly one
+   `<script type="module">` line and one `</script>` line, so a stub written into
+   the real file breaks the check this repository already runs in CI. `git status`
+   clean after a full run is `mpdf-003` Phase 12's exit gate, clause 4.
+
+   **The scratch directory is outside `app/dist/`.** `generate_context!` walks
+   `frontendDist` recursively into the shipped binary, so anything written under
+   `dist/` is embedded in the app. The precedent is `app/.mirror/`, which
+   `typecheck.mjs` writes for the same reason.                                */
+
+import { createServer } from 'node:http'
+import { spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, extname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const APP = dirname(HERE)
+const REPO = dirname(APP)
+const SCRATCH = join(APP, '.harness')
+
+const die = (why) => {
+  console.error(`serve: ${why}`)
+  process.exit(2)
+}
+
+/* ------------------------------------------------------------ the document */
+
+/* Which files the pipeline reads, as `app/src/document.rs:kind_of` decides it:
+   `.md`, the three bibliography spellings, and `md2pdf_core::IMAGE_EXTENSIONS`
+   re-exported from `core/src/emit.rs`. Kept as one table here rather than three
+   scattered tests so a new extension is one edit. */
+const IMAGES = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'svgz', 'pdf']
+const kindOf = (path) => {
+  const name = path.split('/').pop()
+  const at = name.lastIndexOf('.')
+  if (at < 0) return null
+  const extension = name.slice(at + 1)
+  if (extension.toLowerCase() === 'md') return 'markdown'
+  if (['bib', 'yml', 'yaml'].includes(extension.toLowerCase())) return 'bibliography'
+  if (IMAGES.includes(extension)) return 'image'
+  return null
+}
+
+/* **The default fixture's eleven rows are a committed literal, transcribed from
+   `tests/fixtures/panel-manifest.txt`, and that is not laziness.** One of them —
+   `sections/missing.md` — is a path the master names that the disk does not
+   hold, and `book.md` deliberately does not name it: Rust's `document.rs:listing`
+   is handed it. **No walk can produce that row.** The manifest is where the
+   eleven are pinned and where `mpdf-010` Phase 1's own gate reads them, so it is
+   the source here too. */
+const PANEL = 'tests/fixtures/panel'
+const PANEL_ENTRIES = [
+  { path: 'book.md', kind: 'markdown', missing: false },
+  { path: 'cover.jpg', kind: 'image', missing: false },
+  { path: 'other.md', kind: 'markdown', missing: false },
+  { path: 'plan.pdf', kind: 'image', missing: false },
+  { path: 'refs.bib', kind: 'bibliography', missing: false },
+  { path: 'refs.yml', kind: 'bibliography', missing: false },
+  { path: 'loose/orphan.md', kind: 'markdown', missing: false },
+  { path: 'parts/ch1/deep.md', kind: 'markdown', missing: false },
+  { path: 'sections/mark.svg', kind: 'image', missing: false },
+  { path: 'sections/missing.md', kind: 'markdown', missing: true },
+  { path: 'sections/text.md', kind: 'markdown', missing: false }
+]
+
+/* `mpdf-010` §2's order: within each directory, files byte-wise alphabetically
+   first, then subdirectories byte-wise alphabetically, each expanded where it
+   sits. Symlinks are not followed — `tests/fixtures/panel/outside` is a symlink
+   into a decoy directory, and a walk with no confinement would list it. */
+const walk = (root, at = '') => {
+  const here = join(root, at)
+  let names
+  try {
+    names = readdirSync(here, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const files = names
+    .filter((e) => e.isFile())
+    .map((e) => (at ? `${at}/${e.name}` : e.name))
+    .filter((path) => kindOf(path) !== null)
+    .sort()
+    .map((path) => ({ path, kind: kindOf(path), missing: false }))
+  const folders = names
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort()
+  return [...files, ...folders.flatMap((name) => walk(root, at ? `${at}/${name}` : name))]
+}
+
+/* **`--doc` takes a directory or a file**, which is not looseness but the app's
+   own project model: `mpdf-010`'s one level of climb resolves either into a root
+   and a document.
+
+   **The climb itself is deliberately not reimplemented here.**
+   `app/src/document.rs:project_root` answers "does a markdown file above name
+   this one" by reading text through `md2pdf_core::section_paths`, and a
+   JavaScript copy of that is exactly the drift a committed rig must not add.
+   Naming the *directory* is how you get the climb's answer; naming a file roots
+   at its own parent, which is `watch::root` unchanged and is every single-file
+   document. */
+const project = (doc) => {
+  const path = resolve(REPO, doc)
+  if (!existsSync(path)) die(`no such document: ${doc}`)
+
+  if (statSync(path).isDirectory()) {
+    const relative_ = relative(REPO, path)
+    const entries = relative_ === PANEL ? PANEL_ENTRIES : walk(path)
+    const main = entries.find((e) => e.kind === 'markdown' && !e.missing)
+    if (!main) die(`${doc} holds no markdown to compile`)
+    return { root: path, document: join(path, main.path), main: main.path, entries }
+  }
+
+  const root = dirname(path)
+  const main = path.slice(root.length + 1)
+  return { root, document: path, main, entries: [{ path: main, kind: 'markdown', missing: false }] }
+}
+
+/* ------------------------------------------------------------- the mutants */
+
+/* `mpdf-003` Phase 12's exit gate, clause 3: the suite is falsified before it is
+   trusted. Each of these is applied to the *copy*, and each is asserted to apply
+   exactly once — a mutation that silently matched nothing would make the clause
+   pass on a page nothing was done to.
+
+   The clause each one owns is declared in `checks.mjs`, beside the checks. */
+const MUTATIONS = {
+  /* Moves the footer past the module script, which is the one placement the
+     element-order check forbids. A `<script>` is `display: none`, so this
+     changes no geometry — it fails that check and nothing else. */
+  'footer-last': (page) => {
+    const footer = page.match(/\n( *)<footer>[\s\S]*?<\/footer>\n/)
+    if (!footer) die('the mutation footer-last found no <footer> block')
+    const without = page.replace(footer[0], '\n')
+    const close = '\n    </script>\n'
+    if (without.split(close).length !== 2) die('the mutation footer-last found no single </script>')
+    return without.replace(close, `${close}${footer[0].slice(1)}`)
+  },
+
+  /* **Both declarations, because dropping either alone changes nothing.** Each
+     independently zeroes `#edited`'s flex automatic minimum size, so they are
+     redundant with each other — measured at a 240px viewport with a
+     58-character name, identical in both engines. Phase 11's claim that
+     `min-width: 0` was load-bearing by itself is what that falsified. */
+  'flex-min': (page) => {
+    const rule = page.match(/\n( *)#edited \{\n[\s\S]*?\n\1\}\n/)
+    if (!rule) die('the mutation flex-min found no #edited rule')
+    const dropped = rule[0]
+      .replace(/^ *min-width: 0;\n/m, '')
+      .replace(/^ *overflow: hidden;\n/m, '')
+    if (dropped === rule[0]) die('the mutation flex-min dropped neither declaration')
+    return page.replace(rule[0], dropped)
+  },
+
+  /* Rewires the footer's cell to the file that compiles rather than the file
+     the pane is holding. The two are equal at every open, so this passes
+     everything until a row is clicked. */
+  'cell-main': (page) => {
+    const line = "editedCell.textContent = state.edited?.split('/').pop() ?? ''"
+    if (page.split(line).length !== 2) die('the mutation cell-main found no single cell line')
+    return page.replace(line, "editedCell.textContent = state.main?.split('/').pop() ?? ''")
+  }
+}
+
+/* ------------------------------------------------------------- the scratch */
+
+const git = (args) => {
+  const run = spawnSync('git', args, { cwd: REPO, maxBuffer: 1 << 28 })
+  if (run.status !== 0) die(`git ${args.join(' ')} — ${run.stderr}`)
+  return run.stdout
+}
+
+/** The page and the renderer beside it, from the working tree or from a named
+    revision. **`--rev` is what an A/B between two revisions needs**, and it is
+    the one thing this rig has historically been used for. */
+const takePage = (scratch, rev) => {
+  if (!rev) {
+    writeFileSync(join(scratch, 'index.html'), readFileSync(join(APP, 'dist', 'index.html')))
+    mkdirSync(join(scratch, 'pdfjs'), { recursive: true })
+    for (const name of readdirSync(join(APP, 'dist', 'pdfjs'))) {
+      writeFileSync(join(scratch, 'pdfjs', name), readFileSync(join(APP, 'dist', 'pdfjs', name)))
+    }
+    return readFileSync(join(scratch, 'index.html'), 'utf8')
+  }
+
+  const page = git(['show', `${rev}:app/dist/index.html`]).toString('utf8')
+  writeFileSync(join(scratch, 'index.html'), page)
+  mkdirSync(join(scratch, 'pdfjs'), { recursive: true })
+  const listed = git(['ls-tree', '-r', '--name-only', rev, '--', 'app/dist/pdfjs'])
+    .toString('utf8')
+    .split('\n')
+    .filter(Boolean)
+  if (listed.length === 0) die(`${rev} carries no app/dist/pdfjs — the page cannot render there`)
+  for (const path of listed) {
+    writeFileSync(join(scratch, 'pdfjs', path.split('/').pop()), git(['show', `${rev}:${path}`]))
+  }
+  return page
+}
+
+/* ---------------------------------------------------------------- the copy */
+
+const HEAD = '</head>'
+
+export async function serve({ rev = null, doc = PANEL, port = 0, mutate = null, quiet = false } = {}) {
+  if (mutate && !MUTATIONS[mutate]) die(`no such mutation: ${mutate} — ${Object.keys(MUTATIONS).join(', ')}`)
+
+  const slug = [rev ? rev.replace(/[^\w.^~-]/g, '_') : 'tree', doc.replace(/[^\w-]/g, '_'), mutate ?? 'clean'].join('-')
+  const scratch = join(SCRATCH, slug)
+  rmSync(scratch, { recursive: true, force: true })
+  mkdirSync(scratch, { recursive: true })
+
+  const here = project(doc)
+
+  /* **`-o` into the scratch directory, and the flag is not optional.**
+     `cli/src/main.rs:default_output` writes beside its input and `.gitignore`
+     covers PDFs under `/samples/` and nowhere else, so a compile without it leaves
+     an untracked PDF in `tests/fixtures/` and fails the gate's own "`git status` is
+     clean". The crate is `md2pdf-cli`; the binary it builds is `md2pdf`. */
+  const pdf = join(scratch, 'document.pdf')
+  const compile = spawnSync(
+    'cargo',
+    ['run', '--quiet', '-p', 'md2pdf-cli', '--', here.document, '-o', pdf],
+    { cwd: REPO, stdio: quiet ? ['ignore', 'ignore', 'pipe'] : 'inherit' }
+  )
+  if (compile.status !== 0) die(`the CLI would not compile ${here.document}\n${compile.stderr ?? ''}`)
+
+  let page = takePage(scratch, rev)
+  if (mutate) page = MUTATIONS[mutate](page)
+
+  /* **Into `<head>`, and the position is load-bearing.** The page reads
+     `window['__TAURI__']` at module top level, so the stub must run first — and
+     a `<script>` injected into `<body>` would sit between `</main>` and the
+     module script, changing the very element order the first check asserts.
+
+     The config is a classic inline script and so runs at parse time; the stub is
+     a module and so runs after parsing but before the page's own module, module
+     scripts executing in document order. */
+  if (page.split(HEAD).length !== 2) die('the page does not hold exactly one </head>')
+  const config = {
+    entries: here.entries,
+    main: here.main,
+    pdf: 'document.pdf',
+    text: readFileSync(here.document, 'utf8')
+  }
+  const inject =
+    `    <script>window.__HARNESS_CONFIG = ${JSON.stringify(config)}</script>\n` +
+    `    <script type="module" src="./stub.mjs"></script>\n  ${HEAD}`
+  writeFileSync(join(scratch, 'index.html'), page.replace(HEAD, inject))
+  writeFileSync(join(scratch, 'stub.mjs'), readFileSync(join(HERE, 'stub.mjs')))
+
+  const TYPES = {
+    '.html': 'text/html; charset=utf-8',
+    '.mjs': 'text/javascript; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.pdf': 'application/pdf',
+    '.svg': 'image/svg+xml',
+    '.jpg': 'image/jpeg',
+    '.png': 'image/png'
+  }
+
+  const server = createServer((request, answer) => {
+    const path = new URL(request.url, 'http://localhost').pathname
+    const file = join(scratch, path === '/' ? 'index.html' : path.replace(/^\/+/, ''))
+    // Nothing outside the scratch directory is served, however the URL is spelled.
+    if (!file.startsWith(scratch) || !existsSync(file) || statSync(file).isDirectory()) {
+      answer.writeHead(404).end('not here')
+      return
+    }
+    answer.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
+    answer.end(readFileSync(file))
+  })
+
+  await new Promise((ready) => server.listen(port, '127.0.0.1', ready))
+  const url = `http://127.0.0.1:${server.address().port}/`
+  if (!quiet) {
+    console.log(`serve: ${url}`)
+    console.log(`serve: ${relative(REPO, scratch)}${rev ? `  ·  ${rev}` : ''}${mutate ? `  ·  ${mutate}` : ''}`)
+    console.log(`serve: ${relative(REPO, here.document)}, ${here.entries.length} entries, main ${here.main}`)
+  }
+
+  return {
+    url,
+    scratch,
+    project: here,
+    close: () => new Promise((done) => server.close(done))
+  }
+}
+
+/* ----------------------------------------------------------------- the CLI */
+
+const flag = (name, fallback = null) => {
+  const at = process.argv.indexOf(`--${name}`)
+  return at < 0 ? fallback : process.argv[at + 1]
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+  const held = await serve({
+    rev: flag('rev'),
+    doc: flag('doc', PANEL),
+    port: Number(flag('port', 0)),
+    mutate: flag('mutate')
+  })
+  console.log('serve: ^C to stop')
+  process.on('SIGINT', async () => {
+    await held.close()
+    process.exit(0)
+  })
+}
