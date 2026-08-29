@@ -6,6 +6,9 @@ sources:
   - app/typecheck.mjs
   - app/src/document.rs
   - app/src/preview.rs
+  - app/harness/stub.mjs
+  - app/harness/serve.mjs
+  - app/harness/checks.mjs
 covers: >
   the desktop app's two panes: the one file the front end is, the text pane and
   the pages the app rasterises the artifact onto, the wrapper a page is and the
@@ -29,8 +32,10 @@ covers: >
   as their lines render, the follow
   that keeps the numbers against their lines, the caret's two marks and the
   pane that loses both when it empties, the check that reads this file and the
-  two declarations it holds to each other, and the seven defects that check
-  does not reach
+  two declarations it holds to each other, the harness that drives it in two
+  engines and the copy it drives rather than the file, the seven clauses it
+  asserts as properties and the three broken pages that falsify them, and the
+  seven defects neither reaches
 max_lines: 475
 generated: 2026-08-28
 ---
@@ -225,19 +230,22 @@ suite here.
 
 **What keeps the brand in the bar is `#edited`'s zero automatic minimum size**, and
 `min-width: 0` and `overflow: hidden` **each supply it independently** — so the pair is
-redundant with each other: dropping either alone changes nothing, and dropping both
-pushes the brand off the bar. `flex: none` on `#brand` was not shown to matter at any
-width tested. As the cell stands the footer holds one line and keeps the brand down to
-a 240px viewport. **The header has no equivalent rule**,
-and its behaviour is the contrast rather than a defect: it is `flex-wrap: nowrap`, so
-it never wraps *as a row* — its items' own text wraps inside them and the bar grows
-taller, below the 627px its seven visible children derive (555px, six 8px gaps and
-24px of padding). **That threshold and the heights under it are Chromium's**, and
-`rules/desktop-geometry.md` has why that matters: there the header is 47px above the
-width, 66px at 620 and 81px at 500, where the WKWebView this ships on reads 47 above
-and 79 below. The widths it has been measured at there — 445 and 677 — do not bracket
-627, so the derived figure is unconfirmed in the shipping engine. **What holds in both
-is the shape**: the header grows and the footer does not.
+redundant with each other: dropping either alone changes nothing, and dropping both pushes
+the brand off the bar — **measured**, at a 240px viewport with a 58-character name,
+identically in Chromium and WebKit, and held now by `app/harness/checks.mjs`: its width
+sweep, and the `flex-min` mutation that falsifies it. The literals are name-dependent and
+stay where they were taken, in `specs/desktop_app_spec.md` Phase 12. `flex: none` on
+`#brand` was not shown to matter at any width tested. As the cell stands the footer holds
+one line and keeps the brand down to a 240px viewport. **The header has no equivalent
+rule**, and its behaviour is the contrast rather than a defect: it is `flex-wrap: nowrap`,
+so it never wraps *as a row* — its items' own text wraps inside them and the bar grows
+taller, below the 627px its seven visible children derive (555px, six 8px gaps and 24px of
+padding). **That threshold and the heights under it are Chromium's**, and
+`rules/desktop-geometry.md` has why that matters: there the header is 47px above the width,
+66px at 620 and 81px at 500, where the WKWebView this ships on reads 47 above and 79 below.
+The widths it has been measured at there — 445 and 677 — do not bracket 627, so the derived
+figure is unconfirmed in the shipping engine. **What holds in both is the shape**: the
+header grows and the footer does not.
 
 **The three boxes sum to `innerHeight` exactly**, which is how the bar's cost is
 checked. `rules/desktop-geometry.md` has the reading that sum must be taken by, and
@@ -482,15 +490,27 @@ must carry, since an empty list puts no `Anchor` in the JSON at all. **Two
 declarations compared with each other**, rather than usage compared against a
 declaration. A field renamed on either side alone fails one of the two.
 
-**What none of it reaches is most of what has gone wrong in this file.** Of the
-eight defects it has produced, a type check catches **one** — a `destroy` that
-`PDFDocumentProxy` does not have, swallowed by optional chaining, and caught in
-review before it shipped. The seven it misses are `ResizeObserver` feedback
-through a box the callback resized, an `IntersectionObserver`'s delivery racing
-an animation frame, a forced pass dropped rather than re-armed, a stale
-`deliveryMs`, a settle timer cancelling the render that was about to set the
-fit, a counter advanced for a render that never drew, and an early return
-leaving a caret band on an empty pane. Every one is behaviour, and no type
-system sees any of them: `tests/gates/mpdf-009-phase5.js`, pasted into a
-console, is still the only thing that does. `specs/desktop_app_spec.md` OQ-10
-carries what is left.
+**`app/harness/` drives this page rather than reading it.** `serve.mjs` copies it into a
+gitignored scratch directory — never edits it, `typecheck.mjs` dying on a page with two module
+scripts — injects `stub.mjs` into the `<head>`, where it must run before the page reads
+`window['__TAURI__']` at module top level, and serves real compiled bytes for `current_pdf`.
+**The stub rejects what the app forbids as well as answering what it returns**, `setSize` in
+`core:default`'s own words — the half a stub that merely omits it never tests. `checks.mjs`
+asserts seven clauses in Playwright's Chromium and WebKit, **both of which must pass, every
+clause a property and none a metric literal**, and is falsified first against three broken copies
+of the page, each failing exactly the clause it owns.
+
+**What none of it reaches is most of what has gone wrong in this file.** Of the eight defects it
+has produced, a type check catches **one** — a `destroy` that `PDFDocumentProxy` does not have,
+swallowed by optional chaining, and caught in review before it shipped. The seven it misses are
+`ResizeObserver` feedback through a box the callback resized, an `IntersectionObserver`'s
+delivery racing an animation frame, a forced pass dropped rather than re-armed, a stale
+`deliveryMs`, a settle timer cancelling the render that was about to set the fit, a counter
+advanced for a render that never drew, and an early return leaving a caret band on an empty
+pane. Every one is behaviour, and **neither the type check nor the harness sees any of them** —
+the second half measured: the A/B that justified a browser reaching them, 0 `ResizeObserver`
+errors before `overflow-x: auto` and 21 after, was re-run through `serve.mjs --rev` against both
+revisions at `devicePixelRatio` 2 and a 520px pane, in both engines headless and headed, and
+answered 0 on all eight. `tests/gates/mpdf-009-phase5.js`, pasted into a real window's console,
+is still the only thing that has seen them, and `specs/desktop_app_spec.md` OQ-10 carries what
+is left.

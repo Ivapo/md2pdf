@@ -10,6 +10,7 @@ sources:
   - app/src/watch.rs
   - app/dist/index.html
   - app/tsconfig.json
+  - app/package.json
 covers: >
   the desktop app: the crate and its files, the window and its menu, the two
   titles an open sets, the commands and the signal between them, the file I/O the
@@ -25,8 +26,9 @@ covers: >
   state the loop writes and the four states it reports, the export and its two
   refusals and the file it names, the errors it puts on the page, the bundle and the document association that launches it,
   the vendored renderer the front end imports and what embedding it costs, the
-  declarations it is type-checked against and where they may not live, and
-  the configuration facts a build enforces
+  declarations it is type-checked against and where they may not live, the node
+  manifest the crate carries for its test rig and the build that reads neither,
+  and the configuration facts a build enforces
 max_lines: 605
 generated: 2026-08-28
 ---
@@ -83,7 +85,16 @@ subdirectory is embedded with no configuration at all, and `.mjs` is served as
 must not be under `dist/`**: placed there they would put 824 KB no runtime reads
 into the shipped binary. `app/tsconfig.json` and `app/typecheck.mjs` sit beside
 them and are read by nothing the app builds — what they are for is
-`rules/desktop-panes.md`. `capabilities/default.json` grants
+`rules/desktop-panes.md`. **`app/package.json` and `app/bun.lock` sit there too, and
+they are this crate's first node manifest**: they pin `playwright` 1.62.1 for
+`app/harness/`, and no build reads either. `withGlobalTauri`'s "one Cargo build, no
+node toolchain" is a claim about the *build* and is unchanged by them — a contributor
+who never drives the page installs nothing, and the browser binaries are a
+`playwright install` run once by one who does. They sit under `app/` rather than at
+the workspace root because the workspace is Cargo's and nothing outside this crate
+reads them; `node_modules/` and the scratch directory `app/.harness/` are gitignored,
+the second for the same reason `app/types/` is not under `dist/`.
+`capabilities/default.json` grants
 `core:default` to the window labelled `main`, plus **one entry per dialog** —
 `dialog:allow-open` and `dialog:allow-save`.
 
