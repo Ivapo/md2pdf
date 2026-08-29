@@ -1020,6 +1020,63 @@
         background: none;
         border-bottom: 0;
       }
+
+      /*
+        The bar along the foot of the window. `mpdf-003` Phase 11.
+
+        **It is here because the title belongs to the document.**
+        `app/src/main.rs:set_edited` ends in `window.set_title`, handed the
+        document's bare `file_name()`, so the product name is on screen only
+        until the first `⌘O` and the application is nameless for the rest of
+        the session. A status bar is where an application whose title is not its
+        own keeps its name.
+
+        **The left cell therefore duplicates that title, and that is a decision
+        rather than an oversight.** The title bar is native chrome outside the
+        content area, macOS dims it when the window is not frontmost, and it
+        sits above the header rather than at the pane's foot. This is a second,
+        quieter placement of the same string and claims nothing more — if that
+        is not worth 24px, the cell is the part to cut and not the bar.
+
+        **`min-width: 0` here and `flex: none` on the brand are load-bearing.**
+        Without them a long name pushes the brand out of the bar; with them the
+        footer holds one line and keeps `Letur` standing down to a 240px
+        viewport. **The header has no equivalent rule**, and its behaviour is
+        the contrast this bar is drawn against rather than a defect it fixes: it
+        is `flex-wrap: nowrap`, so it never wraps as a row — instead its items'
+        own text wraps inside them and the bar grows taller, below a width its
+        seven children derive, 555 + six 8px gaps + 24px of padding = 627px.
+        Shipped behaviour, and not this phase's to rewrite.
+
+        **Both cells are `--quiet`, chosen rather than defaulted to.** The file
+        name is a readout and the brand a signature, and at 10px on the chrome
+        one ink for the whole row read better than either emphasis.
+
+        `height: 23px` plus its own rule is the 24px this takes out of `main`;
+        the page sets no global `box-sizing`, so the border is not inside it.
+      */
+      footer {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 23px;
+        padding: 0 12px;
+        background: var(--chrome);
+        border-top: 1px solid var(--edge);
+        color: var(--quiet);
+        font-size: 10px;
+      }
+      #edited {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      #brand {
+        flex: none;
+        margin-left: auto;
+      }
     </style>
   </head>
   <body>
@@ -1131,6 +1188,39 @@
       ></div>
       </section>
     </main>
+
+    <!--
+      The foot of the window. **After `</main>` and before the script**, which
+      is a position and not a preference: `body`'s element children are
+      `HEADER, MAIN, FOOTER, SCRIPT`, so this is `main`'s next sibling and the
+      last element before the module — and not `body.lastElementChild`, which
+      is that script.
+
+      **The left cell is `Status::edited`, not `Status::main`** — the file being
+      typed in, which from the first click on a panel row is not the file that
+      compiles. **Nothing here marks that difference**, and it was considered:
+      the panel already draws it, marking one row `main` and lighting the edited
+      one, and a bar is not the place to invent a second vocabulary for a
+      distinction another pane already carries.
+
+      **A bare file name and not the root-relative path.** The path is the one
+      thing the window title cannot carry, so it was weighed here rather than
+      overlooked: under an ordinary ellipsis it reads `sections/notes-and-sou…`,
+      which eats the last segment — the one that identifies the file — and a
+      left ellipsis (`direction: rtl`) that keeps it was measured across seven
+      paths and then declined, for length. **The cost is recorded rather than
+      hidden: bare names collide.** A project holding `sections/notes.md` and
+      `drafts/notes.md` shows `notes.md` for either, which is the same hazard
+      `parts` below answers by carrying the whole path. Here it is tolerated.
+
+      `#brand` is a literal, and `app/src/preview.rs` holds it to
+      `tauri.conf.json`'s `productName` so it cannot drift from the bundle the
+      window ships in.
+    -->
+    <footer>
+      <span id="edited"></span>
+      <span id="brand">Letur</span>
+    </footer>
 
     <script type="module">
       /*
@@ -1274,6 +1364,9 @@
       const error = document.getElementById('error')
       const status = document.getElementById('status')
       const fitControl = /** @type {HTMLSelectElement} */ (document.getElementById('fit'))
+      // The footer's left cell. Named for the cell rather than for the field,
+      // because `panelRows` and `fileRow` already take an `edited` of their own.
+      const editedCell = document.getElementById('edited')
 
       /*
         The document the canvases were drawn from, held between renders, and
@@ -1552,6 +1645,14 @@
         message.hidden = state.state !== 'empty'
         text.disabled = state.state === 'empty'
         pages.classList.toggle('stale', state.error !== null && state.page)
+
+        // The foot of the window names the file the pane is holding, as a bare
+        // name. **Its own cell, and nothing is composed into the status**: the
+        // sentence above was worded in Rust so a test can check it, and a
+        // page-side value folded into it would put one inside the other. `?? ''`
+        // is the whole of the empty state — the cell collapses to nothing and
+        // the brand beside it stays.
+        editedCell.textContent = state.edited?.split('/').pop() ?? ''
 
         parts(state)
       }

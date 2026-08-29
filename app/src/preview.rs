@@ -2726,4 +2726,62 @@ mod tests {
         // every row would draw as the fallback.
         assert_eq!(sent["entries"][0]["kind"], "markdown");
     }
+
+    /// The footer's brand cell says exactly what the bundle is called.
+    ///
+    /// `mpdf-003` Phase 11 puts the product name along the foot of the window
+    /// because the title bar stops carrying it at the first open — `set_edited`
+    /// ends in `window.set_title`, handed the document's own file name. A name
+    /// that is on screen for the rest of the session is a name that has to be
+    /// right: `tauri.conf.json` is what the bundler reads and
+    /// `app/dist/index.html` is what the reader sees, and nothing else makes the
+    /// two agree.
+    ///
+    /// **This is the one string a later rename could falsify in silence.** Phase
+    /// 10 moved seven of them across five files and every other one is reachable
+    /// from a build or a test; the page is outside both. Phase 10's own text
+    /// says a brand cell must not name a product the bundle does not carry, and
+    /// this is what makes that mechanical rather than a promise.
+    ///
+    /// Two declarations compared against each other, as
+    /// `the_page_typedefs_name_exactly_the_fields_status_serializes` compares
+    /// two — and, as there, the extraction is asserted non-empty as well as
+    /// equal, so a marker that stopped matching fails loudly instead of
+    /// comparing two empty strings.
+    #[test]
+    fn the_brand_cell_says_exactly_the_bundles_product_name() {
+        const PAGE: &str = include_str!("../dist/index.html");
+        const BUNDLE: &str = include_str!("../tauri.conf.json");
+
+        // Plain string operations, and no HTML parser enters this crate for it:
+        // the id is a fixed literal, and the cell's text is what lies between
+        // the first `>` after it and the `<` that closes the element.
+        let at = PAGE
+            .find("id=\"brand\"")
+            .expect("the page declares no element with `id=\"brand\"`");
+        let rest = &PAGE[at..];
+        let open = rest
+            .find('>')
+            .expect("the `#brand` start tag is never closed");
+        let close = rest
+            .find('<')
+            .expect("the `#brand` element is never closed");
+        assert!(
+            close > open,
+            "the `#brand` start tag does not close before the element does"
+        );
+        let drawn = rest[open + 1..close].trim();
+
+        let bundle: serde_json::Value =
+            serde_json::from_str(BUNDLE).expect("a `tauri.conf.json` that will not parse");
+        let product = bundle["productName"]
+            .as_str()
+            .expect("`tauri.conf.json` names no `productName`");
+
+        assert!(!drawn.is_empty(), "the footer's brand cell draws nothing");
+        assert_eq!(
+            drawn, product,
+            "the footer's brand cell and the bundle's `productName` name different products"
+        );
+    }
 }
