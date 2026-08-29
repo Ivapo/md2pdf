@@ -2,6 +2,49 @@
 
 Append-only. One heading per round, newest first.
 
+### Phase 3 shipped — 2026-08-28 — the window gate, and three things the rounds did not measure
+
+`tests/gates/mpdf-010-phase3.js`, over `cp -R tests/fixtures/panel
+"$TMPDIR/mpdf-010-phase3"`, opening `<copy>/sections/text.md`: **five clauses,
+five passed, nothing failed.** `git status` clean before and after, and the two
+disk claims the script's own notes name checked by hand — the created file is
+0 bytes under `<copy>/sections/`, and `$TMPDIR/escape.md` does not exist.
+
+Three things measured here that no round had:
+
+1. **The panel over the copy is fourteen rows, not eleven.** The Rust
+   enumeration passes `sections/missing.md` in by hand; the live panel takes the
+   sections `book.md` actually names, so there is no marked-missing row — and
+   the page draws three folder headings the Rust listing has no entries for, one
+   of them `ch1/` at depth 1. Round 2 had reasoned about `outside` and was
+   right: `cp -R` implies `-P`, the link arrives broken under `$TMPDIR`, and
+   `kind_of("outside")` is `None`, so it contributes nothing either way.
+2. **The create's row lands where §2 says and nowhere near where it was
+   typed.** `discussion.md` sorts byte-wise before `mark.svg`, so it is the
+   first row under the `sections` heading; the clause asserts it positionally —
+   heading, row, `mark.svg` — rather than by presence, which is the assertion a
+   panel that reordered itself would still pass.
+3. **`revision` stood at 1 across the create**, which is what *does not
+   compile* means as an assertion, and `edited` stayed `book.md`, which is §2's
+   *"Phase 3 creates the file and stops"* — the new file does not go into the
+   pane. The drawn page was the same one page, not marked stale.
+
+**One implementation decision was taken past the phase's text and is recorded
+here** because it closes a hole the text did not see. The scope said *refuses a
+path that … names an existing file*; the natural reading is an `exists()` test
+before the write, and an `exists()` test **reports a dangling symlink absent**
+— so `std::fs::write` through one would land wherever the link points, outside
+the project the parent canonicalization exists to keep it in. `File::create_new`
+is what shipped instead: `O_EXCL` makes *already exists* the filesystem's own
+answer, refuses the dangling link, and makes gate clause 4's *"without
+truncating it"* a property rather than an assertion about statement order.
+
+**The confinement clauses were mutation-checked rather than trusted.** Breaking
+`document::landing` to return its input failed exactly the two clauses that
+assert it — and wrote `escape.md` into `tests/fixtures/panel-decoy/`, into
+`/tmp`, and into the scratch parent, which is the three files those clauses
+exist to prevent. Removed, and the suite green again on the real rule.
+
 ### Round 2 — Phase 3 only — 2026-08-28 — same reviewer, resumed with the author's changelog — **READY (converged)**
 
 All four blockers confirmed resolved **against the rewritten file**, and the
