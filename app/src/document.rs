@@ -917,6 +917,74 @@ pub fn create_file(root: &Path, path: &str) -> Result<(), String> {
     }
 }
 
+/// Move one file under `root` to the Trash, named by the panel.
+///
+/// **A third confinement question, and neither shipped rule serves it.**
+/// [`confined`] opens on `is_file`, so it refuses a `missing: true` row and a
+/// dangling symlink the walk lists; [`landing`] canonicalizes only the parent,
+/// so it accepts a `secret.png` that is a link out of the project — which
+/// `confined` refuses and
+/// [`tests::a_link_out_of_the_project_is_refused_however_it_is_spelled`] pins as
+/// a refusal for every other command. A delete wants both halves: **the name is
+/// under the root, and something is at it.** So [`landing`] answers the first,
+/// genuinely unchanged, and `symlink_metadata` the second — `is_file`'s question
+/// widened to *anything at that name*.
+///
+/// **It acts on the name and not the resolution**, which [`landing`]'s join
+/// decides and which settles the symlink row: a `cover.jpg` pointing at
+/// `figures/cover.jpg` trashes the link and leaves the figure. That is the
+/// opposite of [`confined`]'s reading for a *read*, and deliberately — a read
+/// wants the bytes the author meant, where a delete wants the row the author
+/// clicked, and the target of a link out of the project is not the project's to
+/// move. It is also what makes the widened existence test safe: a dangling link
+/// is a row the panel draws, and trashing it removes exactly that row.
+///
+/// **The call is a parameter, and that is deliberately not [`create_file`]'s
+/// answer.** That one writes with a plain `std::fs::File::create_new` because
+/// [`tests::scratch_dir`] can check the result and this file's rule already
+/// canonicalizes a real parent. Neither holds here: this call's whole effect is
+/// **outside the repository**, in the developer's own `~/.Trash`, which nothing
+/// cleans and *"the repository stays clean"* has no reach over. So the suite
+/// hands in a double and [`move_to_trash`] is what `crate::main` hands in.
+///
+/// **It is a function and not the command**, per this file's own header, for
+/// [`asset_bytes`]'s reason. `mpdf-010` Phase 4.
+pub fn trash_file(
+    root: &Path,
+    path: &str,
+    trash: impl FnOnce(&Path) -> Result<(), String>,
+) -> Result<(), String> {
+    let landed =
+        landing(root, path).ok_or_else(|| format!("{path} is outside this project"))?;
+
+    // `symlink_metadata` and not `exists`, which follows the link and reports a
+    // dangling one absent — and a dangling link is a row this panel draws, so
+    // reporting it absent would leave a row no gesture could remove.
+    if landed.symlink_metadata().is_err() {
+        return Err(format!("{path} is not there"));
+    }
+
+    trash(&landed)
+}
+
+/// The platform's own undo for a delete.
+///
+/// **The one function in this file no test in this repository calls**, and the
+/// reason [`trash_file`] takes it as a parameter rather than calling it: every
+/// clause of the gate would otherwise leave a file in whoever ran it.
+///
+/// `NSFileManager` is `trash` 5.2.6's own macOS implementation, reached
+/// directly. `mpdf-010` Phase 4 records the measurement behind that pick.
+pub fn move_to_trash(path: &Path) -> Result<(), String> {
+    let url = objc2_foundation::NSURL::fileURLWithPath(&objc2_foundation::NSString::from_str(
+        &path.to_string_lossy(),
+    ));
+
+    objc2_foundation::NSFileManager::defaultManager()
+        .trashItemAtURL_resultingItemURL_error(&url, None)
+        .map_err(|e| format!("cannot move {} to the Trash: {e}", path.display()))
+}
+
 /// The one file the store lives in, inside the directory the platform gives
 /// this app.
 ///
@@ -1109,6 +1177,7 @@ fn read_sections_with(
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
 
     /// [`render_with`] with the disk supplying every file and the pane holding
     /// the master, which is what every test below but the project's own means.
@@ -2153,6 +2222,177 @@ mod tests {
             assert!(
                 root.join(path).is_file(),
                 "{path} was accepted and not made"
+            );
+        }
+    }
+
+    // -- a file moved to the Trash ------------------------------------------
+    //
+    // `mpdf-010` Phase 4. **Every clause here runs against a double**, and
+    // nothing below puts a file in anybody's Trash: the call's whole effect is
+    // outside this repository, where [`scratch_dir`]'s "the repository stays
+    // clean" has no reach at all.
+    //
+    // **The double removes the file as well as recording the call.** Clauses 1
+    // and 3 each turn on the file being gone afterwards, and a double that only
+    // counted would pass both over an unchanged tree.
+    //
+    // Each clause says where it runs, per Phase 3's standard.
+
+    /// A [`trash_file`] call that records what it was asked to move and moves
+    /// it — to nowhere, which is what makes the clauses cheap.
+    fn recording() -> (impl FnOnce(&Path) -> Result<(), String>, Arc<Mutex<Vec<PathBuf>>>) {
+        let moved = Arc::new(Mutex::new(Vec::new()));
+        let taken = Arc::clone(&moved);
+
+        let double = move |path: &Path| {
+            taken.lock().unwrap().push(path.to_path_buf());
+            std::fs::remove_file(path).map_err(|e| format!("the double could not remove: {e}"))
+        };
+        (double, moved)
+    }
+
+    /// Clause 1. The file goes, exactly one call is made with the path
+    /// [`landing`] answers, and nothing else in the tree moved.
+    ///
+    /// It is [`a_create_puts_one_empty_file_in_the_project_and_nothing_else`]
+    /// run backwards, walking the root before and after rather than looking at
+    /// the one path the delete was given.
+    #[test]
+    fn a_trash_takes_the_file_it_was_given_and_nothing_else() {
+        let root = scratch_dir("trash-one");
+        std::fs::create_dir_all(root.join("sections")).unwrap();
+        std::fs::write(root.join("sections/note.md"), b"a section").unwrap();
+
+        let before = walk(&root);
+        let (double, moved) = recording();
+        trash_file(&root, "sections/note.md", double).unwrap();
+        let after = walk(&root);
+
+        assert_eq!(
+            *moved.lock().unwrap(),
+            [root.join("sections/note.md")],
+            "the call was not made once with the path `landing` answers"
+        );
+        let gone: Vec<&String> = before.iter().filter(|path| !after.contains(path)).collect();
+        assert_eq!(
+            gone,
+            [&"sections/note.md".to_string()],
+            "the trash took something other than the file it was asked for"
+        );
+        assert_eq!(
+            after.len(),
+            before.len() - 1,
+            "the tree gained a path the trash was not asked to touch"
+        );
+    }
+
+    /// Clause 2. Both spellings of *outside* are refused, over scratch.
+    ///
+    /// **The mirror of [`a_create_that_would_land_outside_the_project_is_refused_by_name`]
+    /// and not a copy.** That one requires the path to be *absent*, because for
+    /// a create an existing file is refused by the exists-rule first. For a
+    /// delete that inverts exactly: the file has to be **there**, or the
+    /// not-there rule refuses and the confinement rule never executes.
+    #[test]
+    fn a_trash_that_would_leave_the_project_is_refused_by_name() {
+        let above = scratch_dir("trash-escape");
+        let root = above.join("project");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(above.join("escape.md"), b"not the project's").unwrap();
+
+        for path in ["/tmp/escape.md", "../escape.md"] {
+            let landed = root.join(path);
+            std::fs::write(&landed, b"not the project's").unwrap();
+            assert!(
+                landed.exists(),
+                "{} has to be there, or the not-there rule refuses first",
+                landed.display()
+            );
+
+            let (double, moved) = recording();
+            assert_eq!(
+                trash_file(&root, path, double).err().as_deref(),
+                Some(format!("{path} is outside this project").as_str()),
+                "{path} was not refused as leaving the project"
+            );
+            assert!(
+                moved.lock().unwrap().is_empty(),
+                "a refused trash called the OS anyway for {path}"
+            );
+            assert!(
+                landed.exists(),
+                "a refused trash still took {}",
+                landed.display()
+            );
+        }
+    }
+
+    /// Clause 3. A link out of the project takes the **link** and leaves its
+    /// target.
+    ///
+    /// This is the clause that distinguishes this rule from [`confined`], which
+    /// refuses the same row —
+    /// [`a_link_out_of_the_project_is_refused_however_it_is_spelled`] pins that.
+    /// A read wants the bytes the author meant; a delete wants the row the
+    /// author clicked, and the target of a link out of the project is not the
+    /// project's to move.
+    #[test]
+    fn a_link_out_of_the_project_is_trashed_and_its_target_is_not() {
+        let outside = scratch_dir("trash-link-target");
+        let target = outside.join("secret.png");
+        std::fs::write(&target, b"not the project's").unwrap();
+
+        let root = scratch_dir("trash-link-root");
+        let link = root.join("secret.png");
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        assert_eq!(
+            confined(&root, "secret.png"),
+            None,
+            "the read rule must refuse this row, or the clause proves nothing"
+        );
+
+        let (double, moved) = recording();
+        trash_file(&root, "secret.png", double).unwrap();
+
+        assert_eq!(*moved.lock().unwrap(), [link.clone()], "the join was not the path moved");
+        assert!(
+            link.symlink_metadata().is_err(),
+            "the link is still there"
+        );
+        assert!(target.is_file(), "the trash followed the link and took the target");
+    }
+
+    /// Clause 4. Nothing at that name is refused, in a sentence of its own.
+    ///
+    /// **One sentence and not two.** [`merge`] marks a row missing *because*
+    /// [`files_under`] did not find it, so a `missing: true` path and a plain
+    /// absent one are the same `symlink_metadata` failure inside a function that
+    /// never sees `crate::preview::Preview`'s sections. Both inputs run all the
+    /// same, since what is pinned is that the panel's marked-missing row is not
+    /// a special case.
+    #[test]
+    fn a_trash_of_nothing_is_refused_and_the_marked_missing_row_is_no_special_case() {
+        let root = scratch_dir("trash-absent");
+        std::fs::create_dir_all(root.join("sections")).unwrap();
+
+        // The second is what a `missing: true` row spells: `book.md` names it
+        // and the disk does not hold it. The rule cannot tell them apart, and
+        // that is the claim.
+        for path in ["gone.md", "sections/missing.md"] {
+            let _ = std::fs::remove_file(root.join(path));
+
+            let (double, moved) = recording();
+            assert_eq!(
+                trash_file(&root, path, double).err().as_deref(),
+                Some(format!("{path} is not there").as_str()),
+                "{path} was not refused as absent"
+            );
+            assert!(
+                moved.lock().unwrap().is_empty(),
+                "a refused trash called the OS anyway for {path}"
             );
         }
     }

@@ -24,9 +24,26 @@ tauri-build = { version = "2.6.3", features = [] }
 # promoting it adds no crate to the tree. It still serves the test comparing the
 # front end's `Status` typedef to a serialized `Status`, which is what it was
 # here for.
+#
+# `objc2-foundation` arrived with `mpdf-010` Phase 4, when a delete became a move
+# to the Trash rather than an unlink. **The mitigating fact is `serde_json`'s
+# again**: it is already in `Cargo.lock` at this version by way of `tauri`, so
+# declaring it adds no crate to the tree. The `trash` crate was the alternative
+# and is the *same call* underneath — its macOS implementation is
+# `NSFileManager::trashItemAtURL_resultingItemURL_error` — for one more compiled
+# crate and 206 lines of listing and restore this app never calls. The cost is
+# stated rather than hidden: one more version this app pins itself rather than
+# inherits. No `target.'cfg(...)'` table, because this binary is macOS only by
+# construction and `src/main.rs` says so.
 [dependencies]
 md2pdf-core = { path = "../core" }
 notify = "8.2.0"
+objc2-foundation = { version = "0.3.2", features = [
+  "NSError",
+  "NSFileManager",
+  "NSString",
+  "NSURL",
+] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tauri = { version = "2.11.5", features = [] }
