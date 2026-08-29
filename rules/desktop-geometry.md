@@ -18,8 +18,9 @@ covers: >
   the pages the reader is near and the observer that reports them, the two terms
   a raster's freshness turns on, the one drawing pass and the rest it re-checks
   before every page, the release that zeroes a canvas and the two sweeps that
-  catch one, and the surface the pane publishes for its own gate
-max_lines: 340
+  catch one, the reading a box height is taken by and the engine its literals
+  belong to, and the surface the pane publishes for its own gate
+max_lines: 355
 generated: null
 ---
 
@@ -112,6 +113,26 @@ Fit-page is also the fit that reads `clientHeight`, and it never has the track, 
 the boundary it derives is never measured against a height a scrollbar has taken.
 The horizontal offset across a re-render is whatever element reuse preserves; the
 anchor stays *(page, vertical fraction)*.
+
+**A box height is read off `getBoundingClientRect().height` and never off
+`offsetHeight`**, and the difference is a correctness point rather than a style one.
+`offsetHeight` is an integer. The page's own three boxes — `header`, `main`, `footer`
+— sum to `innerHeight` exactly by rects, and by `offsetHeight` they overshoot it by
+one **at some viewports and not at others**: the header is 46.5px at the body's
+13px/1.5, which rounds to 47. Measured at two viewports rather than reasoned about: at a
+616px viewport the rects give 616 where the same three `offsetHeight`s give 617, and
+at 700px both give 700. A check written the obvious way therefore fails on correct
+code, intermittently, at window sizes its author did not try.
+
+**Those literals are the engine's and not the page's**, which is the second half of
+the rule and the one a reader is likelier to get wrong. Chromium reads the 46.5, and
+66px and 80.5px for a header whose items have wrapped at 620 and 500. The WKWebView
+this ships on reads 47 and 79 — whole numbers — and at the window measured its three
+`offsetHeight`s agreed with its rects, so the overshoot above did not appear there at
+all. **A clause keyed to a height literal is keyed to an engine.** Key it to the
+property instead — the sum is exact, the footer does not move, the header grows —
+which is what `tests/gates/mpdf-003-phase11.js` does, and why it reads the same on
+both.
 
 **A page is separated from the next by 16 CSS pixels, and the container adds
 nothing at its own sides.** The gap is the top margin on each page's

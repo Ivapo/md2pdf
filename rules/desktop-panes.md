@@ -227,12 +227,11 @@ it never wraps *as a row* — its items' own text wraps inside them and the bar 
 taller, below the 627px its seven visible children derive (555px, six 8px gaps and
 24px of padding). It is 47px above that width, 66px at 620 and 81px at 500.
 
-**The three boxes sum to `innerHeight` exactly, read off
-`getBoundingClientRect().height`.** Not `offsetHeight`: the header is 46.5px at
-13px/1.5, which rounds up, and a three-term `offsetHeight` sum overshoots by one at
-some viewports and not at others. The footer is a box in flow in the column the
-observer above watches and does not make it loop — measured across four widths and
-sixty per-frame width changes, zero of that error.
+**The three boxes sum to `innerHeight` exactly**, which is how the bar's cost is
+checked. `rules/desktop-geometry.md` has the reading that sum must be taken by, and
+why the obvious one is wrong. The footer is a box in flow in the column the observer
+above watches and does not make it loop — measured in both engines, four widths in
+the window and sixty per-frame changes in the harness, zero of that error in either.
 
 ## The panel
 
