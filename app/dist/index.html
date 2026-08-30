@@ -1134,7 +1134,32 @@
         align-items: center;
         gap: 8px;
       }
-      #theme {
+      /*
+        The bar's own view toggles, at the left because they work the leftmost
+        panes — the same reason `#toggle` is the header's first control. The
+        header's two are still shipped and untouched; this is the fit's
+        duplication again, one setting with two controls, and a press on either
+        copy moves both.
+
+        **Chromeless, because the bar is 23px and a `button` is not.** A button
+        brings a font, a padding, a border and a background of its own, and all
+        four come off — which `#theme` already did alone, so the three share
+        one rule rather than repeating it.
+
+        **On is ink and off is quiet, and both toggles are marked the same
+        way.** The header marks a folded panel with a turning chevron and a
+        pressed `Lines` with a filled background; neither survives at 10px in a
+        bar whose entire ink is one colour, and two view toggles standing side
+        by side would be worse for being marked by two different devices.
+      */
+      #views {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #theme,
+      #views button {
         flex: none;
         padding: 0;
         border: 0;
@@ -1144,8 +1169,60 @@
         line-height: 1;
         cursor: pointer;
       }
-      #theme:hover {
+      #theme:hover,
+      #views button:hover,
+      #views button[aria-expanded='true'],
+      #views button[aria-pressed='true'] {
         color: var(--ink);
+      }
+      /*
+        **`currentColor` and nothing else**, so the mark takes the ink the rule
+        above gives it and the on/off state is one declaration rather than four.
+        `display: block` because an inline `svg` sits on the text baseline and
+        the descender space under it would make the button taller than the mark
+        — which is the bar's height, and the only thing this footer costs
+        `main`.
+      */
+      #views button svg {
+        display: block;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1;
+        stroke-linecap: round;
+      }
+      /*
+        The bar's own copy of the fit. **A second control on one setting and
+        not a second setting**: both selects carry the same ten options,
+        `showFit` writes a chosen value to both, and either one's `change` runs
+        the one handler. Duplicated rather than moved while it is being looked
+        at — the header's copy is shipped behaviour and this pass does not
+        touch it.
+
+        **It must not change the bar's height**, which is the whole of what
+        this footer costs `main`. At the bar's 10px the header's `select` rule
+        — 3px of padding and a border — puts the box at the footer's full
+        23px, so both come off. What is left is the native arrow, which is the
+        part that says the text can be pressed.
+      */
+      #fit-footer {
+        padding: 0 2px;
+        border: 0;
+        background: none;
+        line-height: 1;
+        cursor: pointer;
+      }
+      #fit-footer:hover {
+        color: var(--ink);
+      }
+      /*
+        The bar's two rules. Each is outside the group it follows — the right
+        one outside `#controls`, so the auto margin still belongs to the group
+        — and each is decorative: the bar says the same without them, so both
+        are `aria-hidden` and both take the footer's own gap rather than a
+        margin of their own.
+      */
+      .sep {
+        flex: none;
       }
       #brand {
         flex: none;
@@ -1291,10 +1368,96 @@
       window ships in.
     -->
     <footer>
+      <!--
+        The header's `Files` and `Lines`, with their ARIA carried across rather
+        than invented: the panel fold is `aria-expanded` on a control that owns
+        `#files`, the gutter is `aria-pressed` on one that owns `#lines`.
+        **Both copies of a toggle carry the same state**, so a reader who folds
+        the panel from the header finds the bar's copy already saying so.
+
+        **Marks and not words, which is the bar's own vocabulary**: `#theme`
+        beside them is a glyph, and three text buttons in a 23px bar would read
+        as a second header rather than a status line. **A mark names nothing to
+        a screen reader**, so each carries `title` and `aria-label` both — the
+        rule `wearAppearance` wrote for the first mark this bar carried — and
+        the word each says is the header's own, because these are the same two
+        controls and not new ones.
+
+        **Drawn rather than borrowed.** No glyph in the font means *a panel*,
+        and the two that come closest — `▥` and `☰` — differ by their fill at
+        10px and would leave two toggles a reader has to look twice at. So: a
+        pane with a column down its left for the panel, and lines with their
+        numbers beside them for the gutter. Two shapes from different families,
+        which is what makes them one glance apart. **Every coordinate sits on a
+        half pixel** so a 1px stroke lands on the pixel rather than across two
+        of them, which is what a 12px icon at `devicePixelRatio` 1 needs. **That
+        is what set the gutter's rule spacing rather than the other way round**:
+        three rules spaced evenly about this box's own centre put the middle one
+        on `y=6`, a whole pixel, so the three moved to `1.5 / 5.5 / 9.5` — spaced
+        by 4, half a pixel high of centre, and crisp. A straddled rule is visible
+        at 1x; half a pixel of offset in a 12px mark is not.
+
+        `hidden` on the `Files` copy for the same reason the header's carries
+        it: with no document open there is no panel, so there is nothing to
+        fold.
+      -->
+      <span id="views">
+        <button
+          id="views-files"
+          type="button"
+          aria-expanded="true"
+          aria-controls="files"
+          title="Files"
+          aria-label="Files"
+          hidden
+        >
+          <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
+            <rect x="0.5" y="1.5" width="11" height="9" rx="1.5" />
+            <line x1="4.5" y1="1.5" x2="4.5" y2="10.5" />
+          </svg>
+        </button>
+        <button
+          id="views-lines"
+          type="button"
+          aria-pressed="false"
+          aria-controls="lines"
+          title="Lines"
+          aria-label="Lines"
+        >
+          <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
+            <line x1="0.5" y1="1.5" x2="2.5" y2="1.5" />
+            <line x1="4.5" y1="1.5" x2="11.5" y2="1.5" />
+            <line x1="0.5" y1="5.5" x2="2.5" y2="5.5" />
+            <line x1="4.5" y1="5.5" x2="11.5" y2="5.5" />
+            <line x1="0.5" y1="9.5" x2="2.5" y2="9.5" />
+            <line x1="4.5" y1="9.5" x2="11.5" y2="9.5" />
+          </svg>
+        </button>
+      </span>
+      <span id="sep-views" class="sep" aria-hidden="true">|</span>
       <span id="edited"></span>
       <span id="controls">
+        <!--
+          The header's ten options, transcribed. **The list is the cap** and it
+          is now written twice, which is the one thing this duplication costs:
+          the two must not drift. Nothing enforces that yet — while the shape is
+          being looked at, a copy is the cheapest way to see it.
+        -->
+        <select id="fit-footer" aria-label="How the page fits the pane">
+          <option value="width" selected>Fit width</option>
+          <option value="page">Fit page</option>
+          <option value="0.5">50%</option>
+          <option value="0.75">75%</option>
+          <option value="1">100%</option>
+          <option value="1.25">125%</option>
+          <option value="1.5">150%</option>
+          <option value="2">200%</option>
+          <option value="3">300%</option>
+          <option value="4">400%</option>
+        </select>
         <button id="theme" type="button"></button>
       </span>
+      <span id="sep-brand" class="sep" aria-hidden="true">|</span>
       <span id="brand">Letur</span>
     </footer>
 
@@ -1451,7 +1614,26 @@
       const divergenceText = document.getElementById('divergence-text')
       const error = document.getElementById('error')
       const status = document.getElementById('status')
-      const fitControl = /** @type {HTMLSelectElement} */ (document.getElementById('fit'))
+      /*
+        Every control that carries the fit. **Two selects, one setting**: the
+        header's and the footer's hold the same ten options, so a value chosen
+        on either has to show on both or the two disagree about a scale the
+        page holds once. `showFit` is the only writer, and the `change`
+        listener below is installed on each rather than duplicated.
+      */
+      const fitControls = /** @type {HTMLSelectElement[]} */ ([
+        document.getElementById('fit'),
+        document.getElementById('fit-footer')
+      ])
+
+      /**
+       * Show a fit on every control that carries it.
+       *
+       * @param {string} value
+       */
+      const showFit = (value) => {
+        for (const control of fitControls) control.value = value
+      }
       // The footer's left cell. Named for the cell rather than for the field,
       // because `panelRows` and `fileRow` already take an `edited` of their own.
       const editedCell = document.getElementById('edited')
@@ -1813,10 +1995,11 @@
         // The foot of the window names the file the pane is holding, as a bare
         // name. **Its own cell, and nothing is composed into the status**: the
         // sentence above was worded in Rust so a test can check it, and a
-        // page-side value folded into it would put one inside the other. `?? ''`
-        // is the whole of the empty state — the cell collapses to nothing and
-        // the brand beside it stays.
-        editedCell.textContent = state.edited?.split('/').pop() ?? ''
+        // page-side value folded into it would put one inside the other. The
+        // empty state is `namePaneFile`'s `?? ''` — the cell collapses to
+        // nothing and the brand beside it stays.
+        editedPath = state.edited ?? null
+        namePaneFile()
         wearAppearance(state.appearance)
 
         parts(state)
@@ -1843,7 +2026,14 @@
       */
       const files = document.getElementById('files')
       const list = document.getElementById('parts')
-      const toggle = document.getElementById('toggle')
+      /*
+        Every control that folds the panel — the header's and the bar's.
+        **Two controls, one setting**, the fit's arrangement again: `showFold`
+        is the only writer of the state onto them, `offerFold` the only writer
+        of whether they are there at all, and the `click` listener below is
+        installed on each rather than written twice.
+      */
+      const foldControls = [document.getElementById('toggle'), document.getElementById('views-files')]
 
       /*
         Folded or not, held in the page. **Decided there rather than in
@@ -1865,11 +2055,24 @@
       */
       let folded = false
 
-      toggle.addEventListener('click', () => {
-        folded = !folded
-        toggle.setAttribute('aria-expanded', String(!folded))
+      /** Show the fold on every control that carries it, and on the panel. */
+      function showFold() {
+        for (const control of foldControls) control.setAttribute('aria-expanded', String(!folded))
         files.classList.toggle('collapsed', folded)
-      })
+      }
+
+      /** Whether there is a panel to fold at all — no document, no control.
+          @param {boolean} can */
+      function offerFold(can) {
+        for (const control of foldControls) control.hidden = !can
+      }
+
+      for (const control of foldControls) {
+        control.addEventListener('click', () => {
+          folded = !folded
+          showFold()
+        })
+      }
 
       /*
         The panel's own gesture: name a file and the project gains it.
@@ -1954,7 +2157,7 @@
         // draws a panel, including one that names nothing — which is what lets
         // an author build a first section from inside the window.
         files.hidden = state.state === 'empty'
-        toggle.hidden = files.hidden
+        offerFold(!files.hidden)
         if (files.hidden) {
           list.replaceChildren()
           return
@@ -2035,6 +2238,39 @@
       let viewSeq = 0
 
       /*
+        **The path of the surface now over the text, or `null` while the text
+        is what the pane holds.** The bar's left cell names the file the pane is
+        holding, and until this it could only name `Status::edited` — so a
+        reader looking at `sections/mark.svg` read `book.md` down there, the
+        name of a file that had not been on screen since they clicked. Rust is
+        not asked and must not be: `edited` is the file being *typed in*, the
+        one a save writes and the one the window title takes, and a figure is
+        none of those. It is looked at and then left.
+
+        **Page state for the same reason `folded` is**: it decides nothing but
+        its own drawing, it dies with the surface, and `hideAsset` is the single
+        exit every one of the three ways back goes through.
+      */
+      /** @type {string | null} */
+      let figureInPane = null
+
+      /** The last `edited` Rust announced, held so the cell can be rewritten
+          when a figure opens or closes without waiting for a status.
+          @type {string | null} */
+      let editedPath = null
+
+      /*
+        Name what the pane is holding, as a bare name. **One writer, called from
+        three places** — the status, a figure opening, a figure closing — because
+        the two sources take turns and a cell written from two places shows
+        whichever wrote last rather than what is on screen.
+      */
+      function namePaneFile() {
+        const path = figureInPane ?? editedPath
+        editedCell.textContent = path?.split('/').pop() ?? ''
+      }
+
+      /*
         Keep the surface over the text pane's own column.
 
         **What decides that column is watched, and the causes are not** — this
@@ -2094,6 +2330,8 @@
         said.textContent = sentence
         viewerPath.textContent = path
         viewerSheet.replaceChildren(said)
+        figureInPane = path
+        namePaneFile()
         viewer.hidden = false
         placeViewer()
       }
@@ -2107,6 +2345,8 @@
         viewerSheet.replaceChildren()
         if (viewing !== null) URL.revokeObjectURL(viewing)
         viewing = null
+        figureInPane = null
+        namePaneFile()
       }
 
       /**
@@ -2197,6 +2437,8 @@
         // arrive, which is the third of the three gestures this guard fixes.
         viewerPath.textContent = path
         viewerSheet.replaceChildren(picture)
+        figureInPane = path
+        namePaneFile()
 
         viewer.hidden = false
         placeViewer()
@@ -3253,7 +3495,7 @@
       function clear() {
         hideAsset()
         files.hidden = true
-        toggle.hidden = true
+        offerFold(false)
         list.replaceChildren()
         // The field and its refusal go too, and that is the reason they sit
         // outside `#parts` read backwards: nothing else in this function
@@ -3296,7 +3538,7 @@
         */
         fitMode = 'width'
         fitScale = 1
-        fitControl.value = 'width'
+        showFit('width')
         tellFit()
         pane.scale = null
         drawnRevision = -1
@@ -3690,7 +3932,9 @@
       */
       const lines = document.getElementById('lines')
       const mirror = document.getElementById('mirror')
-      const numbers = document.getElementById('numbers')
+      /* Every control that shows the gutter, on the fold's arrangement: the
+         press is read off the control that was pressed and written to both. */
+      const lineControls = [document.getElementById('numbers'), document.getElementById('views-lines')]
 
       // What the gutter was last built for, so an event that changed neither
       // costs nothing.
@@ -3830,13 +4074,15 @@
       text.addEventListener('keyup', markLine)
       text.addEventListener('click', markLine)
 
-      numbers.addEventListener('click', () => {
-        const on = numbers.getAttribute('aria-pressed') !== 'true'
-        numbers.setAttribute('aria-pressed', String(on))
-        lines.hidden = !on
-        relines()
-        markLine()
-      })
+      for (const control of lineControls) {
+        control.addEventListener('click', () => {
+          const on = control.getAttribute('aria-pressed') !== 'true'
+          for (const other of lineControls) other.setAttribute('aria-pressed', String(on))
+          lines.hidden = !on
+          relines()
+          markLine()
+        })
+      }
 
       /*
         The fit changed. **The path is the width rest's, unmodified** — set
@@ -3859,19 +4105,24 @@
         an event with an end. `relines()` is not called with it: the gutter is
         measured against the text pane, and no width there moved.
       */
-      fitControl.addEventListener('change', () => {
-        const chosen = fitControl.value
-        if (chosen === 'width' || chosen === 'page') {
-          fitMode = chosen
-        } else {
-          fitMode = 'manual'
-          fitScale = Number(chosen)
-        }
-        tellFit()
+      for (const control of fitControls) {
+        control.addEventListener('change', () => {
+          const chosen = control.value
+          if (chosen === 'width' || chosen === 'page') {
+            fitMode = chosen
+          } else {
+            fitMode = 'manual'
+            fitScale = Number(chosen)
+          }
+          /* The other copy, which was not the one pressed. Before `tellFit`
+             only for reading order — neither writes what the other reads. */
+          showFit(chosen)
+          tellFit()
 
-        if (anchor === null) anchor = readAnchor()
-        rerender()
-      })
+          if (anchor === null) anchor = readAnchor()
+          rerender()
+        })
+      }
 
       /*
         Drag the divider. Nothing is done to the pane for the length of the
