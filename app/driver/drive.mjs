@@ -40,6 +40,18 @@
    objects `wearAppearance` writes through — reached by property lookup at call
    time, so an own property on the instance shadows the prototype and takes.
 
+   **It opens a document, and Phase 14's exclusion is named back rather than
+   quietly reversed.** That phase wrote that every converted clause was about the
+   window's own chrome, so `open_document` was out of its scope though the driver
+   could call it. Clause 4's subject is a control over a pane that does not exist
+   until a project is open, so that reason does not reach it: the command takes a
+   plain `path: String`, and there is no dialog to drive, no capability to add and
+   no change to the plugin's surface. **In place and not a copy** — nothing on the
+   open path writes: `app/src/preview.rs` holds two production writers, `export`
+   and `save`, and neither is reachable from an open, `projects.json` being
+   `set_main`'s. And it leaves nothing behind either: the two toggles clause 4
+   presses are page state, so `settings.json` stays the whole of what is restored.
+
    **What this does not reach.** The title bar's own pixels and the launch flash:
    W3C `Take Screenshot` is the viewport and not the OS window, and the session
    only exists after the window is up. Those stay in
@@ -79,11 +91,20 @@ const BASE = `http://127.0.0.1:${PORT}`
 
 const APPEARANCES = ['system', 'light', 'dark']
 
+/* The bar's two view toggles, in the order the footer carries them. */
+const MARKS = ['views-files', 'views-lines']
+
 /* The width clause 2 measures at. **An input and not a reading** — nothing below
    is keyed to it, and the driver converges on it by reading `innerWidth` back
    rather than by arithmetic, `window/rect` being physical pixels where
    `tauri.conf.json`'s `width` is logical. */
 const WIDTH = 600
+
+/* The document clause 4 opens, because a control over a pane needs the pane.
+   **Opened in place**, for the reason the header gives — nothing on this path
+   writes, so there is no copy to make and nothing under `tests/` for
+   `.gitignore` to cover. */
+const DOCUMENT = join(REPO, 'tests', 'fixtures', 'panel', 'book.md')
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -119,10 +140,14 @@ const note = (s) => console.log(`....  ${s}`)
    check that would pass on a page the scope forbids.
 
    Clause 1 does not assert the mark and clause 2 does not assert the attribute,
-   which is the sentence that buys these two their isolation. */
+   which is the sentence that buys those two their isolation. **Neither of them
+   asserts the view toggles at all**, which is what buys the third its own: one is
+   the appearance value reaching Rust, the other the appearance marks at a width
+   the driver set. */
 const OWNS = {
   'attribute-always-set': 1,
-  'third-mark': 2
+  'third-mark': 2,
+  'marks-unlit': 4
 }
 
 /* **Each mutation counts its own invocations**, which is `serve.mjs`'s rule that
@@ -192,6 +217,41 @@ const MUTATIONS = {
         return original.set.call(this, '◐')
       }
     })
+    return true
+  `,
+
+  /* Owns clause 4. **The rig's form of the harness's `marks-unlit`, and a
+     different mechanism rather than a different taste.** That one replaces the
+     stylesheet's mark rule in `app/harness/serve.mjs`; this page was walked into
+     the binary by `generate_context!`, so there is no sheet to edit and what is
+     left is the DOM — Phase 14's own mechanism at the instance level, an own
+     method shadowing `Element.prototype`'s by property lookup at call time, which
+     is how `showFold` and the gutter's handler both reach it.
+
+     **It swallows the state attribute and delegates everything else.** The ink
+     rule selects on `aria-expanded` for the panel's control and `aria-pressed`
+     for the gutter's, so a write that never lands leaves each mark painted as it
+     loaded: `#views-files` lit in both readings, `#views-lines` quiet in both.
+
+     **`hidden` is deliberately untouched**, which is what keeps this a mark
+     defect rather than a visibility one — `offerFold` writes the IDL property,
+     and the reflection that sets the attribute is internal and does not come back
+     through this method. So the buttons are still there to be pressed and still
+     press; only the ink stops moving.
+
+     It fails clause 4's inks alone. Clauses 1 and 2 assert the appearance, whose
+     writes go to `documentElement` and to `#theme`, and clause 3 builds its own
+     box out of nothing this touches. */
+  'marks-unlit': `
+    window.__mutation = { name: 'marks-unlit', count: 0 }
+    for (const [id, state] of [['views-files', 'aria-expanded'], ['views-lines', 'aria-pressed']]) {
+      const button = document.getElementById(id)
+      const original = Element.prototype.setAttribute
+      button.setAttribute = function (name, value) {
+        if (name !== state) return original.call(this, name, value)
+        window.__mutation.count++
+      }
+    }
     return true
   `
 }
@@ -327,6 +387,75 @@ const SET_APPEARANCE = `
   )
 `
 
+/** Everything clause 4 reads, in one round trip, and every field copied out by
+    name for `BAR`'s reason.
+
+    **The marks are measured against what they declare**, the `width` and `height`
+    attributes on each `svg`, so there is no metric literal here any more than in
+    clause 2 — the page moving to a 14px mark would move both sides of the
+    comparison, which is right: the claim is that the engine that ships draws them
+    at the size they ask for.
+
+    **`:hover` is read beside the ink and is not commentary.** A mark carries no
+    text, so its only visible difference between on and off is that colour, and
+    `#views button:hover` paints it with the ink `on` uses. In a real window the
+    pointer is wherever the person left it, which the harness answers by moving it
+    to 0,0 and this rig cannot: it reports, and the clause refuses to read.
+
+    **The footer's declared height comes off the stylesheet, not off
+    `getComputedStyle`.** That one resolves to the *used* height, so it grows with
+    the content and an equality against it would hold however tall the bar got.
+    The rule's own `height` is what Phase 11 wrote, and the border is beside it
+    because the page sets no global `box-sizing`, so the 1px rule is outside the
+    box. */
+const VIEWS = `
+  const seen = {}
+  for (const id of ['views-files', 'views-lines']) {
+    const button = document.getElementById(id)
+    const svg = button.querySelector('svg')
+    const box = svg.getBoundingClientRect()
+    seen[id] = {
+      shown: !button.hidden,
+      hovered: button.matches(':hover'),
+      ink: getComputedStyle(button).color,
+      width: box.width,
+      height: box.height,
+      saysWide: Number(svg.getAttribute('width')),
+      saysHigh: Number(svg.getAttribute('height'))
+    }
+  }
+
+  const footer = document.querySelector('footer')
+  let declared = null
+  for (const sheet of document.styleSheets) {
+    for (const rule of sheet.cssRules) {
+      if (rule.selectorText === 'footer' && rule.style.height) declared = parseFloat(rule.style.height)
+    }
+  }
+
+  return {
+    marks: seen,
+    footer: {
+      height: footer.getBoundingClientRect().height,
+      declared,
+      border: parseFloat(getComputedStyle(footer).borderTopWidth)
+    }
+  }
+`
+
+const OPEN_DOCUMENT = `
+  const done = arguments[arguments.length - 1]
+  window['__TAURI__'].core.invoke('open_document', { path: arguments[0] }).then(
+    () => done(true),
+    (problem) => done(null, String(problem))
+  )
+`
+
+const PRESS = `
+  document.getElementById(arguments[0]).click()
+  return true
+`
+
 /** Ask Rust for an appearance, wait for Rust to say it has it, let the page
     place it, and read the bar. The wait is on `status` rather than on the DOM
     deliberately: the DOM is what the clauses judge, so waiting on it would be
@@ -449,9 +578,12 @@ const marksAtAWidthTheDriverSet = async (held) => {
       be caught. The 2026-08-29 spike is why this is a clause and not a habit: its
       0 meant nothing until 242 caught errors made it a measurement.
 
-      **It runs last and tears itself down.** The loop is self-perpetuating by
-      construction, and one left firing would sit under every measurement taken
-      after it. */
+      **It tears itself down, which is what lets a clause follow it.** The loop
+      is self-perpetuating by construction, and one left firing would sit under
+      every measurement taken after it — so the observer is disconnected, the box
+      removed and the listener taken off before this returns. Clause 4 runs after
+      it for a reason of its own: it opens a document, and the panel and text pane
+      that appear are not what clauses 1 and 2 were written against. */
 const theInstrumentSeesALoop = async (held) => {
   await held.sync(`
     window.__loop = { errors: 0, callbacks: 0, spoken: [] }
@@ -509,6 +641,87 @@ const theInstrumentSeesALoop = async (held) => {
   )
 }
 
+/* 4. **The view marks in the engine that ships.** Two drawn marks, each 12px,
+      each lit when its pane is shown and quiet when it is not — and a drawn mark
+      is exactly the thing neither Playwright engine can answer for, which is
+      OQ-12's precedent: the shipping engine is asked about a mark, and the
+      machine that already drives it is what asks.
+
+      **The document is part of the clause and not a setup step.** `#views-files`
+      ships `hidden` and `parts` keeps it hidden while the state is `empty`, so
+      with nothing open its rect is 0x0 and it cannot be pressed into a second
+      ink. The clause as first drafted would have failed on correct code.
+
+      **The footer's height rides here rather than in a clause of its own.** It is
+      the whole of what this bar costs `main`, and the two things this phase put in
+      it — a 12px mark and a `select` — are exactly what would spend it. */
+const marksInTheEngineThatShips = async (held) => {
+  const opened = await held.async(OPEN_DOCUMENT, [DOCUMENT])
+  if (opened !== true) throw new Error(`open_document refused ${DOCUMENT}: ${opened}`)
+
+  /* Waited on the control rather than on a timer: the status crosses the bridge,
+     `report` places it and `parts` decides whether there is a panel to fold. */
+  let shown = false
+  for (let i = 0; i < 25 && !shown; i++) {
+    shown = await held.sync(`return !document.getElementById('views-files').hidden`)
+    if (!shown) await wait(200)
+  }
+  if (!shown) throw new Error(`${DOCUMENT} is open and #views-files is still hidden — there is nothing to press`)
+  note(`the driver opened ${DOCUMENT.replace(`${REPO}/`, '')}, and the bar offers the fold`)
+
+  /* Each toggle pressed once, and read on both sides of its own press. Nothing
+     here presses the header's copies — that the two agree is the harness's
+     clause, and a second reading of it would be a second clause no mutation
+     could tell apart from this one. */
+  const readings = [{ when: 'opened', ...(await held.sync(VIEWS)) }]
+  for (const id of MARKS) {
+    await held.sync(PRESS, [id])
+    await settled()
+    readings.push({ when: `after ${id}`, ...(await held.sync(VIEWS)) })
+  }
+
+  /* **The pointer is the vacuity control, and it is an instrument failure rather
+     than a failed clause.** Thrown and not `die`d, so the `finally` below still
+     puts `settings.json` back. */
+  const hovered = readings.flatMap((r) => MARKS.filter((id) => r.marks[id].hovered).map((id) => `${id} ${r.when}`))
+  if (hovered.length) {
+    throw new Error(
+      `the pointer is over ${hovered.join(', ')} — :hover paints a mark with the ink 'on' uses, ` +
+        'so the inks below would read alike whatever the toggles did. Move it off the window and run again'
+    )
+  }
+
+  const bar = readings[readings.length - 1].footer
+  if (bar.declared === null) throw new Error('no `footer` rule declares a height — the reading this clause takes is not in the sheet')
+
+  const off = (a, b) => Math.abs(a - b) > 0.5
+
+  /* Each mark's two inks: as the document opened, and after its own press. */
+  const inks = (id) => new Set([readings[0].marks[id].ink, readings[MARKS.indexOf(id) + 1].marks[id].ink])
+  const lit = MARKS.every((id) => inks(id).size === 2)
+  const sized = readings.every((r) =>
+    MARKS.every((id) => !off(r.marks[id].width, r.marks[id].saysWide) && !off(r.marks[id].height, r.marks[id].saysHigh))
+  )
+  const kept = readings.every((r) => !off(r.footer.height, r.footer.declared + r.footer.border))
+
+  for (const r of readings)
+    note(
+      `${r.when}: ` +
+        MARKS.map((id) => `${id} ${r.marks[id].width}x${r.marks[id].height} ${r.marks[id].ink}`).join(', ') +
+        `; the bar ${r.footer.height}`
+    )
+
+  ok(
+    4,
+    'the two marks are drawn at the size they declare, each in two inks, and the bar is the height it declares',
+    lit && sized && kept,
+    `${sized ? 'both marks at their declared' : 'MISDRAWN'} ` +
+      `${readings[0].marks[MARKS[0]].saysWide}x${readings[0].marks[MARKS[0]].saysHigh}; ` +
+      MARKS.map((id) => `${id} ${[...inks(id)].join(' / ')}`).join(', ') +
+      `; the bar ${kept ? 'kept' : 'DID NOT KEEP'} ${bar.declared} plus its ${bar.border} rule, read ${bar.height}`
+  )
+}
+
 /* ----------------------------------------------------------------- the run */
 
 const run = async ({ mutate }) => {
@@ -540,6 +753,7 @@ const run = async ({ mutate }) => {
     await valueReachesRustAndThePagePlacesIt(held)
     await marksAtAWidthTheDriverSet(held)
     await theInstrumentSeesALoop(held)
+    await marksInTheEngineThatShips(held)
 
     if (mutate) fired = (await held.sync('return window.__mutation')).count
   } catch (problem) {
