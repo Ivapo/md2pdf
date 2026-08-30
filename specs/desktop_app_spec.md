@@ -75,7 +75,7 @@ phases:
     by: null
   - name: "Phase 14 — the window gates run themselves"
     reviewed: 2026-08-29
-    shipped: null
+    shipped: 2026-08-29
     cut: null
     by: null
 
