@@ -1,43 +1,63 @@
-/* mpdf-003 Phase 13 exit gate — the window half. Paste into the Web Inspector
-   console of a `cargo tauri dev` window.
+/* mpdf-003 Phase 13 exit gate — the window half, as Phase 14 left it. Paste into
+   the Web Inspector console of a `cargo tauri dev` window.
 
-   The other three-quarters run without a person: `cargo test --workspace` at
-   338 passed / 0 failed / 2 ignored across nine binaries, `bun
-   app/harness/checks.mjs` and `--webkit` at ten clauses each, `--falsify` at
+   **Phase 14 took two of this gate's four clauses away, and this file is where
+   the two numberings are reconciled.** The spec's table names four; three are
+   left here and they are renumbered 1, 2, 3, because a gate that prints a gap
+   reads like something was lost. The map, once:
+
+     old 1, the plumbing and the placement  ->  `bun app/driver/drive.mjs` clause 1
+     old 1, the title bar                   ->  clause 1 HERE, with a boolean of its own
+     old 2, the marks and the brand         ->  `bun app/driver/drive.mjs` clause 2
+     old 3, the launch                      ->  clause 2 HERE
+     old 4, the errors since arming         ->  clause 3 HERE
+
+   Old clause 1 read `moved && placed`, which is *entirely* the half that moved,
+   so left alone it would have asserted nothing the driver had not already. What
+   is left of it is the eye's half, and it now has an answer of its own to be
+   recorded by.
+
+   The rest runs without a person: `cargo test --workspace` at 338 passed / 0
+   failed / 2 ignored across nine binaries, `bun app/driver/drive.mjs` and
+   `--falsify` at three clauses and two isolated mutations in the real window,
+   `bun app/harness/checks.mjs` and `--webkit` at ten clauses each, `--falsify` at
    six isolated mutations, and `bun app/typecheck.mjs`. **No Rust in this phase
    reaches the compile path**, so the PDF is byte-identical across it, and
-   `--paper` unmoved in all six system-by-state combinations is where the
-   harness pins that.
+   `--paper` unmoved in all six system-by-state combinations is where the harness
+   pins that.
 
-   WHAT ONLY A WINDOW CAN SAY, and it is three things:
+   WHAT ONLY A WINDOW CAN SAY, and after Phase 14 it is two things:
 
      * **the native title bar follows the choice.** `window.set_theme` is the
        whole reason this phase touches `app/src/main.rs`, and nothing in a
        browser has a title bar. From the page that call would reject —
        `core:default` is the window's getters and no setter — but the command
-       makes it from Rust, where capabilities do not apply.
-     * **`☀ ☾` render alike in WKWebView.** Measured 9.23 / 9.22px in this
-       window on 2026-08-29 and identical in Playwright's two engines, with the
-       brand not moving as they swap — but Phase 12's own note records that
-       neither of those is this one, which is why it is asked here.
-       `specs/desktop_app_spec.md` OQ-12 is what this answers. **`◐` is gone**:
-       the button has two positions, and the third value is the unset state
-       rather than a destination.
+       makes it from Rust, where capabilities do not apply. **W3C `Take
+       Screenshot` does not reach it either**: that is the viewport, not the OS
+       window, which is why the driver did not take this clause with the other
+       half of old clause 1.
      * **the launch does not flash the other palette.** That is a claim about a
-       frame, and only a relaunch can see it. **This clause failed on its first
-       run, on 2026-08-29, and the phase's named fallback was taken**: reading
-       the choice inside `setup` was not enough, because the runtime does not
-       merely build the configured window before that hook — it puts it on
-       screen, so `set_theme` arrived a frame late however early it was called.
+       frame, and only a relaunch can see it — the driver's session begins after
+       the window is already up. **This clause failed on its first run, on
+       2026-08-29, and the phase's named fallback was taken**: reading the choice
+       inside `setup` was not enough, because the runtime does not merely build
+       the configured window before that hook — it puts it on screen, so
+       `set_theme` arrived a frame late however early it was called.
        `tauri.conf.json` now carries `"visible": false` and `setup` calls
        `show()` after `set_theme`. **So a failure here now means something else**
        — that the store was not read, or that `show` did not run — rather than
        an ordering nobody had tested.
 
-   ONE PRECONDITION, and it is the third clause's alone: **the system must be
-   set to Light** in System Settings → Appearance. Clause 3 stores `dark` and
+   **`☀ ☾` rendering alike in WKWebView is no longer asked here**, having moved
+   whole to the driver, which measures them at a width it sets. What has no
+   machine form and stays is the *legibility* prompt: whether either is a tofu
+   box is a thing only an eye answers, and `chrome()` below asks it as a note
+   rather than a clause.
+
+   ONE PRECONDITION, and it is the launch clause's alone: **the system must be
+   set to Light** in System Settings → Appearance. Clause 2 stores `dark` and
    relaunches, and a dark system would make the two agree — a flash that could
-   not happen is not a flash that did not. Clauses 1 and 2 do not care.
+   not happen is not a flash that did not. Clause 1 does not care.
 
    NO SETUP STEP, and no document need be opened: every clause here is about the
    window's own chrome. **This gate writes one file**, `settings.json` in the
@@ -47,33 +67,36 @@
    last call in the order below, and `report()` reminds you.
 
    ORDER:
-     __gate.forget()           <- once, at the start: clears any earlier transcript
-     await __gate.arm()        <- installs the listeners, reads the state
-     await __gate.chrome()     <- clauses 1, 2  (title bar, and the three marks)
-     await __gate.flash()      <- stores dark, then tells you to quit
+     __gate.forget()          <- once, at the start: clears any earlier transcript
+     await __gate.arm()       <- installs the listeners, reads the state
+     await __gate.chrome()    <- walks the three states so you can watch the title bar
+     __gate.titleFollowed()   <- clause 1 — or __gate.titleDidNot('<state>') if it did not
+     await __gate.flash()     <- stores dark, then tells you to quit
      ... quit Letur (Cmd-Q), then `cargo tauri dev` again, then RE-PASTE this ...
-     await __gate.arm()        <- again, in the NEW window: it has no listeners yet
-     await __gate.noFlash()    <- clauses 3, 4 — or __gate.flashed() if it did
-     await __gate.restore()    <- puts the appearance back
-     __gate.report()           <- the whole run, both windows
+     await __gate.arm()       <- again, in the NEW window: it has no listeners yet
+     await __gate.noFlash()   <- clauses 2, 3 — or __gate.flashed() if it did
+     await __gate.restore()   <- puts the appearance back
+     __gate.report()          <- the whole run, both windows
 
    **The transcript is kept in `localStorage` and not in a closure**, because
-   clause 3 needs a relaunch and a closure does not survive one. That is a defect
+   clause 2 needs a relaunch and a closure does not survive one. That is a defect
    this gate had on its first run, on 2026-08-29: it reported the launch half
    alone and the two clauses before the quit were gone with the window. `forget()`
    is the only thing that clears it, so re-pasting never loses a run — and
    `arm()` is called in **both** windows, because its error listeners live in the
-   page too and clause 4 in a window that was never armed passes by counting
+   page too and clause 3 in a window that was never armed passes by counting
    nothing.
 
-   **Clause 1 and clause 3 are judged by eye, and they say so rather than
+   **Every clause left here is judged by eye, and they say so rather than
    pretending otherwise.** A title bar's own rendering is not readable from the
    content area, and a flash is a frame. What the gate does instead is remove
    every other reason for a wrong answer: it drives the real command through the
    real bridge, it probes `getCurrentWindow().theme()` by *calling* it rather
    than by `typeof` — which is the mistake that cost Phase 11's gate two runs —
    and it reports what Rust says beside what you say, so a disagreement between
-   the two is itself visible.
+   the two is itself visible. **What Rust says is a note here and not a clause**,
+   because the driver asserts it; a second assertion of it would be two gates
+   claiming one reading.
 
    Paste this into the build before this phase and the banner never prints: the
    lookups below run at paste time and `#theme` is not in that page at all,
@@ -81,8 +104,6 @@
 
 ;(() => {
   const themeButton = document.getElementById('theme')
-  const brand = document.getElementById('brand')
-  const footer = document.querySelector('footer')
   const { invoke } = window['__TAURI__'].core
   const { getCurrentWindow } = window['__TAURI__'].window
 
@@ -96,9 +117,11 @@
      walk.** `set_theme` moves the app-wide appearance, so `prefers-color-scheme`
      answers differently at each step: a `system` reading taken while the system
      was light, judged later against a media query the walk has since put in
-     dark, fails correct code. That is what it did on the run of 2026-08-29 —
-     the page had `☀`, `null` and a light window theme, all three right, and
-     this said MISPLACED. */
+     dark, is wrong about correct code. That is what it did on the run of
+     2026-08-29 — the page had `☀`, `null` and a light window theme, all three
+     right, and this said MISPLACED. It is a note now rather than a clause, and
+     the hazard is the same either way: a note nobody can trust is worse than no
+     note. */
   const inEffect = (a) =>
     a === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : a
 
@@ -119,7 +142,7 @@
      console entry at a time, and `__gate.report()` gives the whole run back as
      one entry.
 
-     **It is kept in `localStorage`, which is what survives the relaunch clause 3
+     **It is kept in `localStorage`, which is what survives the relaunch clause 2
      needs.** The origin is `tauri://localhost` and does not move across a quit.
      Both accessors are guarded: a gate that threw here would take the run with
      it, and the run is the thing being reported. */
@@ -177,13 +200,6 @@
     fail = 0
     return answer
   }
-
-  /* **`getBoundingClientRect()` and not `offsetWidth`**, for the reason
-     `tests/gates/mpdf-003-phase11.js` states at length: a 10px glyph is a
-     fraction of a pixel wide and `offsetWidth` rounds it, which is exactly the
-     difference this clause is looking for. */
-  const wide = (el) => el.getBoundingClientRect().width
-  const left = (el) => el.getBoundingClientRect().left
 
   /** What Rust says the window is wearing, if it will say. */
   const asked = async () => {
@@ -303,11 +319,12 @@
       return found
     },
 
-    /* Clauses 1 and 2. One pass over the three states, reading everything each
-       of them can be read for, so the title bar and the marks are one walk of
-       the cycle rather than two. */
+    /* The walk clause 1 needs, and **no clause of its own**. It drives the three
+       states so there is something to look at, and reports what Rust and the page
+       did beside it — but the driver asserts both of those, so here they are
+       notes. What this ends with is a question, and the answer is the clause. */
     async chrome() {
-      heading('the three states — the title bar, and the marks')
+      heading('the three states — watch the title bar')
 
       const seen = []
       for (const appearance of APPEARANCES) {
@@ -317,20 +334,15 @@
           // Sampled here, with the reading, for the reason `inEffect` states.
           effective: inEffect(appearance),
           mark: themeButton.textContent,
-          title: themeButton.title,
           label: themeButton.getAttribute('aria-label'),
           attribute: document.documentElement.getAttribute('data-theme'),
-          width: wide(themeButton),
-          brand: left(brand),
           theme: await windowTheme(),
           said: (await asked()).held
         })
+        const last = seen[seen.length - 1]
         note(
-          `${appearance}: mark ${JSON.stringify(seen[seen.length - 1].mark)} ` +
-            `at ${seen[seen.length - 1].width.toFixed(2)}px, ` +
-            `attribute ${seen[seen.length - 1].attribute}, ` +
-            `window theme ${seen[seen.length - 1].theme}, ` +
-            `status says ${seen[seen.length - 1].said}`
+          `${appearance}: mark ${JSON.stringify(last.mark)}, ` +
+            `attribute ${last.attribute}, window theme ${last.theme}, status says ${last.said}`
         )
         ask(
           `LOOK AT THE TITLE BAR NOW — is it ${
@@ -340,75 +352,82 @@
         await wait(1500)
       }
 
-      /* **What Rust reports is a precondition of the eye clause, not the clause
-         itself.** If the value did not even move, the title bar was never asked
-         to; saying so here keeps a "no" from being read as `set_theme` failing
-         when it was `set_appearance` that did. */
+      /* **A note, because `bun app/driver/drive.mjs` clause 1 asserts exactly
+         this.** It is still printed, and it still earns its place: if the value
+         did not move at all, the title bar was never asked to, and a "no" above
+         would be `set_appearance` failing rather than `set_theme`. */
       const moved = seen.every((s) => s.said === s.appearance)
       const misplaced = seen.filter(
-        (s) =>
-          s.mark !== MARK[s.effective] ||
-          s.attribute !== (s.appearance === 'system' ? null : s.appearance) ||
-          s.title !== s.label ||
-          !/appearance/i.test(s.label || '')
+        (s) => s.mark !== MARK[s.effective] || s.attribute !== (s.appearance === 'system' ? null : s.appearance)
       )
-      const placed = misplaced.length === 0
-
-      ok(
-        1,
-        'the choice reached Rust and the window in all three states — YOUR EYES DECIDE the title bar',
-        moved && placed,
-        `values ${moved ? 'moved' : 'DID NOT MOVE'}, page ${placed ? 'placed' : 'MISPLACED'}; ` +
-          `window theme read ${seen.map((s) => `${s.appearance}→${s.theme}`).join(', ')}` +
-          (misplaced.length
-            ? `; MISPLACED: ${misplaced
-                .map(
-                  (s) =>
-                    `${s.appearance} showed ${JSON.stringify(s.mark)} attr ${s.attribute} ` +
-                    `label ${JSON.stringify(s.label)}, wanted ${JSON.stringify(MARK[s.effective])} attr ` +
-                    `${s.appearance === 'system' ? 'null' : s.appearance}`
-                )
-                .join(' | ')}`
-            : '') +
-          '. If the title bar did NOT follow above, mark this FAIL in your notes and say which state.'
+      note(
+        `values ${moved ? 'moved' : 'DID NOT MOVE'}, page ${misplaced.length === 0 ? 'placed' : 'MISPLACED'} — ` +
+          'the driver is what asserts this; a disagreement here means run it and read the reason'
+      )
+      ask(
+        'ALSO LOOK at the two marks the walk just showed: are both legible at this size, and ' +
+          'does each read as what it means? If either is a tofu box, a colour emoji or ' +
+          'unreadable, that is OQ-12 re-opened and the answer is "inline SVG". ' +
+          'The driver measures their widths; it cannot read them.'
       )
 
-      /* Clause 2. The widths against each other, and against the brand. **No
-         literal**: Playwright's two engines both said 9.23 / 9.22, but that is a
-         reading from elsewhere and this clause is about here, so what it asserts
-         is that the marks agree with one another and that the bar does not move
-         as they swap.
-
-         **All three readings, not the two distinct marks**, and deliberately:
-         the unset state must show the same glyph at the same width as whichever
-         of the two it is in effect, so a page that gave `system` a mark of its
-         own would widen the spread here. */
-      const widths = seen.map((s) => s.width)
-      const spread = Math.max(...widths) - Math.min(...widths)
-      const brands = new Set(seen.map((s) => s.brand.toFixed(2)))
-      const marks = new Set(seen.map((s) => s.mark))
-      const drawn = widths.every((w) => w > 4 && w < 20)
-
-      ok(
-        2,
-        'the marks render alike in WKWebView, and the brand does not move as they swap',
-        spread < 1 && brands.size === 1 && drawn && marks.size === 2,
-        `widths ${widths.map((w) => w.toFixed(2)).join(' / ')} — spread ${spread.toFixed(2)}px; ` +
-          `${marks.size} distinct marks ${JSON.stringify([...marks])}; brand at ${[...brands].join(', ')}. ` +
-          'ALSO LOOK: are both legible at this size, and does each read as what it means? ' +
-          'If either is a tofu box, a colour emoji or unreadable, that is OQ-12 answered "inline SVG".'
-      )
-
-      note(`${noise} uncaught so far, ${loops} of them ResizeObserver`)
       console.log(
-        '%cnow run%c  __gate.flash()',
+        '%cnow say which you saw:%c\n' +
+          '    __gate.titleFollowed()        the title bar followed in all three states\n' +
+          "    __gate.titleDidNot('system')  it did not — name the state it failed in",
         'font-weight:bold;color:#1a73e8',
         'color:inherit'
       )
-      return tally('chrome')
+      return 'answer with __gate.titleFollowed() or __gate.titleDidNot(state)'
     },
 
-    /* Clause 3, first half: leave the window in the state the relaunch has to
+    /* **A boolean argument was a mistake once and is not made twice.** On
+       2026-08-29 the operator reported "no flash" in words and passed `false`
+       both times, so the launch clause grew two named calls; clause 1 is now
+       answered the same way, and this refuses. */
+    title() {
+      console.log(
+        '%crefused%c  — say which you saw, in words:\n' +
+          '    __gate.titleFollowed()        it followed in all three states\n' +
+          "    __gate.titleDidNot('light')   it did not — name the state",
+        'font-weight:bold;color:#c5221f',
+        'color:inherit'
+      )
+      return 'use __gate.titleFollowed() or __gate.titleDidNot(state)'
+    },
+
+    /** Clause 1: the title bar followed. Run after `chrome()`. */
+    titleFollowed() {
+      return this._title(true, null)
+    },
+
+    /** Clause 1: it did not, in the state you name. Run after `chrome()`. */
+    titleDidNot(state) {
+      return this._title(false, state ?? 'a state you did not name')
+    },
+
+    _title(followed, where) {
+      heading('the title bar — your eyes')
+
+      ok(
+        1,
+        'the native title bar followed the choice in all three states — YOUR EYES DECIDE',
+        followed === true,
+        followed === true
+          ? 'watched through system, light and dark, and it followed each'
+          : `IT DID NOT FOLLOW in ${where}. The driver's clause 1 says whether the value ` +
+            'reached Rust at all; if that passes and this fails, `set_theme` is the half at fault'
+      )
+
+      console.log(
+        '%cnow run%c  await __gate.flash()',
+        'font-weight:bold;color:#1a73e8',
+        'color:inherit'
+      )
+      return tally('the title bar')
+    },
+
+    /* Clause 2, first half: leave the window in the state the relaunch has to
        start from, and say what to do. */
     async flash() {
       heading('the launch — what to do next')
@@ -450,12 +469,12 @@
       return 'use __gate.noFlash() or __gate.flashed()'
     },
 
-    /** Clause 3, second half: it came up right. Run in the RELAUNCHED window. */
+    /** Clause 2, second half: it came up right. Run in the RELAUNCHED window. */
     noFlash() {
       return this._landed(true)
     },
 
-    /** Clause 3, second half: it flashed. Run in the RELAUNCHED window. */
+    /** Clause 2, second half: it flashed. Run in the RELAUNCHED window. */
     flashed() {
       return this._landed(false)
     },
@@ -475,7 +494,7 @@
       const remembered = state.held === 'dark' && attribute === 'dark'
 
       ok(
-        3,
+        2,
         'a stored dark is worn from the first frame, with no flash of the other palette',
         remembered && clean === true,
         remembered
@@ -491,9 +510,14 @@
       /* **Since this window was armed**, which is narrower than "through any of
          it" and is said so rather than implied: the listeners live in the page,
          so they cannot see a throw that happened before the paste. Errors at
-         launch are in the console above regardless. */
+         launch are in the console above regardless.
+
+         **It is not deleted along with the clauses that moved**, and that is
+         deliberate: it guards the half of this gate that is still run by hand,
+         and removing it would re-open by hand exactly the defect it was given
+         its `armed` guard for — a clause passing by counting nothing. */
       ok(
-        4,
+        3,
         'no error reached the console since this window was armed',
         armed && noise === 0,
         armed
@@ -522,10 +546,11 @@
   }
 
   console.log(
-    `%c__gate ready%c  —  set System Settings → Appearance to LIGHT first (clause 3 needs it).\n` +
+    `%c__gate ready%c  —  set System Settings → Appearance to LIGHT first (clause 2 needs it).\n` +
       `${transcript.length} lines already kept${transcript.length ? ' — __gate.forget() to start over' : ''}.\n` +
+      'Two of the four clauses this gate had are now `bun app/driver/drive.mjs`; three are here.\n' +
       'FIRST WINDOW:  __gate.forget() → await __gate.arm() → await __gate.chrome() →\n' +
-      '               await __gate.flash()\n' +
+      '               __gate.titleFollowed() (or .titleDidNot(state)) → await __gate.flash()\n' +
       'THEN quit (⌘Q), `cargo tauri dev` again, re-paste, and in the NEW WINDOW:\n' +
       '               await __gate.arm() → await __gate.noFlash() (or .flashed()) →\n' +
       '               await __gate.restore() → __gate.report()',
