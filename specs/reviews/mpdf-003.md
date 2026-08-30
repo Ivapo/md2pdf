@@ -2,6 +2,93 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 8 — Phase 15 only — 2026-08-30 — the same reviewer, resumed — **READY (converged)**
+
+Zero blocking. **The restore claim the author asked it to falsify held**, and it was
+checked rather than accepted: `document::write_override` is the only writer of
+`projects.json` and has one production call site, `app/src/preview.rs:792` inside
+`Session::set_main`; `Session::open` only *reads* the override. So a driver clause that
+opens a document and presses two page-state toggles leaves nothing behind the rig's
+existing `settings.json` save-and-restore does not already put back.
+
+**The tab-order drop was verified rather than waved through.** The reviewer confirmed the
+construction argument against the file — no `tabindex` anywhere, no CSS `order:` anywhere
+— and declined to make it a check, on the ground that a clause asserting it would assert
+the absence of two declarations the file never makes. It agreed the disposition belongs to
+OQ-11.
+
+Both non-blocking notes were folded in, and the first resolved better than proposed. It
+asked for the driver's fixture-copy destination to be named, since `.gitignore` covers
+`/app/.harness/` and nothing under `tests/`. **The answer is that no copy is needed**:
+`app/src/preview.rs` holds exactly two production writers, `export` and `save`, neither
+reachable from an open, so the driver opens `tests/fixtures/panel/book.md` in place. That
+turned an unadjudicated `.gitignore` line into a recorded "none needed". The second note —
+that the driver's third mutation was named but not mechanised — is folded in as an
+instance-level `setAttribute` patch on Phase 14's own mechanism.
+
+### Round 7 — Phase 15 only — 2026-08-30 — the same reviewer, resumed — **NOT READY**
+
+Two blocking, **both introduced by the author's round-6 fix** — the pattern §3 warns
+about, arriving in the round that was meant to close the loop.
+
+**Clause 6 could not pass in the window the driver actually has.** Moving the mark
+readings into `app/driver/drive.mjs` overlooked that `#views-files` ships `hidden` and
+`parts` keeps it hidden while `state` is `empty`: its rect is 0×0 and it cannot be pressed
+into a second ink. The driver invokes only `status` and `set_appearance`, and **Phase 14
+excluded opening a document in terms** — "`open_document` is **not** in this scope though
+the driver could call it." Resolved by scoping the open and naming the reversal: Phase
+14's exclusion is reasoned on every converted clause being about window chrome that exists
+with no document, and that reason does not reach a control over a pane that does not exist
+until a project is open. `open_document` takes a plain `path: String`, so no dialog, no
+capability.
+
+**Clause 8's git-clean list went stale in the same renumber that created it** — "clauses
+3, 4 and 7" was right while the driver was clause 7, and clause 7 had become a person
+looking at a window with no run to make. Now 3, 4 and 6.
+
+Two non-blocking, both accepted: the ids paragraph cited a tab-order reading that went out
+with the pasteable gate (resolved by dropping the reading and **recording it as a drop**),
+and the close-out counted four touched files against a scope of five.
+
+### Round 6 — Phase 15 only — 2026-08-30 — fresh reviewer, repo access — **NOT READY**
+
+**Round 0** (this episode, one appended phase): it produces **no** observable — the PDF is
+byte-identical, no Rust reaching the compile path — and the phase argues that explicitly
+on two grounds it keeps apart. The placement half is a convenience argued as one; the
+other half is a defect fix on shipped behaviour, the bar having gone on naming a markdown
+file that had not been in the pane since a click. A status bar that says something false
+about what is on screen is worth fixing alone. **Proceed.**
+
+Two blocking.
+
+**The separator breaks Phase 13's shipped harness clause 9, and nothing scoped the
+repair** — and Phase 13 had *predicted* it: "the exact equality depends on `#controls`
+holding one flush, unpadded child", "would want measuring from `#controls`' own right edge
+instead". This phase puts a second child inside the group *and* a cell outside it, so both
+halves land. The reviewer also found the trap in the obvious repair: measuring
+`#controls`.right → `#sep-brand`.left alone reads one bar-gap under **both** layouts, so
+`controls-auto-margin` would stop owning anything and gate clause 4 would fail. Resolved
+as a two-gap re-key, with the trap stated.
+
+**Exit gate clause 7 was keyed to a clause count the driver does not print** — "both
+clauses" against a rig that calls `ok()` three times; two is its *mutation* count.
+
+Eight non-blocking, all accepted. Two changed something real. **The half-pixel rule was
+stated of a mark that did not obey it** — the gutter's middle rule sat on `y=6` — and the
+**code was changed rather than the claim softened**: the three rules moved to
+`1.5 / 5.5 / 9.5`, and the spec now records that the crispness rule set the spacing rather
+than the reverse. And **clause 6 handed a person readings Phase 14 built a machine to
+take**, against Phase 14's own finding that four of five failures in the last hand-run
+window gate were the instrument; the measurable readings moved into the driver,
+`tests/gates/mpdf-003-phase15.js` was never written, and one question a machine cannot
+answer stayed with a person. That acceptance also cost the phase a claim the reviewer had
+verified as true — the preamble no longer says the whole scope exists, the driver clause
+being unbuilt — and it put a *rendering-in-the-shipping-engine* claim in a rig whose rule
+sorts only page from window, which the close-out now gives a slot rather than leaving the
+rule to disagree with the gate.
+
+Rejections: none. Every finding was accepted.
+
 ### Round 5 — Phase 14 only — 2026-08-29 — the same reviewer, resumed — **READY (converged)**
 
 Zero blocking. The round-4 blocker is resolved and **the reviewer preferred the author's

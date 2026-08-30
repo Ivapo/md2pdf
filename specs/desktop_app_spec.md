@@ -5,7 +5,7 @@ note: >
   A macOS desktop app that shows the PDF while you write: a Tauri window wraps
   the same core crate, watches the document and its images, and re-renders.
 status: accepted
-last_updated: 2026-08-29
+last_updated: 2026-08-30
 
 phases:
   - name: "Phase 1 — the window, and one compile on screen"
@@ -76,6 +76,11 @@ phases:
   - name: "Phase 14 — the window gates run themselves"
     reviewed: 2026-08-29
     shipped: 2026-08-29
+    cut: null
+    by: null
+  - name: "Phase 15 — the bar gains controls and names what the pane holds"
+    reviewed: 2026-08-30
+    shipped: null
     cut: null
     by: null
 
@@ -3598,6 +3603,395 @@ by a machine, and it is worth building for that alone.
   **OQ-10's 2026-08-29 note takes a one-clause correction**: it says this rig "would
   automate most of `tests/gates/mpdf-003-phase13.js`", where the answer is **two of its
   four clauses** — the note is otherwise untouched. One push.
+
+### Phase 15 — the bar gains controls and names what the pane holds
+
+*Produces the observable: **no**, and the argument is Phase 11's, inherited rather
+than restated.* No Rust reaches the compile path — no Rust reaches anything — so
+the PDF is byte-identical across the phase and clause 1 is the check. **What it
+buys is two things, and the phase is careful to keep them apart.** The first is
+placement: the controls that decide what the window *shows* — the panel, the
+gutter, the fit — become reachable at the foot of the window as well as its head,
+which is a convenience and is argued for as one. The second is not a convenience.
+**The bar was saying something false.** From the moment a reader clicks an image
+row, the pane holds a figure and the cell goes on naming the markdown file that
+has not been on screen since the click. That half of the phase is a defect fix on
+shipped behaviour, and it would be worth building alone.
+
+Appended 2026-08-30, per §6.1 step 2: the desktop app's chrome is this spec's
+subject and its footer has been since Phase 11. **Strictly after Phase 11**, whose
+bar this extends and one of whose decisions it widens; **after Phase 12**, whose
+harness carries clauses 3 to 5 and one of whose shipped clauses this phase must
+re-key; **after Phase 13**, whose `#controls` group and `#theme` these controls
+stand beside and whose mark vocabulary they either follow or deliberately do not;
+and **after Phase 14**, whose driver carries clause 6. **The harness does not
+carry every clause below** — the draft's preamble said it did, and round 1 caught
+it against a gate two of whose clauses are the driver's.
+
+**It was prototyped before it was written, and the review round it faces is
+therefore a different one.** That is the order UI work takes in this project — a
+shape is argued about better on screen than on paper — and it means round 0 is
+not *is this the right thing to build* but **is this the right thing to keep**.
+The measurements quoted below are readings taken off that prototype, not
+predictions. **What exists is the page and the harness — clauses 1 to 5 and 8 —
+uncommitted; the driver clause that round 1 moved into clause 6 is not built.**
+Which half is measured and which is expected is the whole value of saying this at
+all.
+
+- **Scope:** **`app/dist/index.html`**; three files of the harness —
+  **`app/harness/checks.mjs`**, **`app/harness/serve.mjs`** and
+  **`app/harness/stub.mjs`**; and **`app/driver/drive.mjs`**, for clause 6.
+
+  **No Rust, no new command, no capability, no dependency**, and that is a fact
+  rather than a preference — though **not for the reason the draft gave, which
+  round 1 falsified**. It is not that these controls read values off
+  `app/src/preview.rs:Status`: the fold, the gutter and the fit are **page-local
+  state and ride nothing**, which is `folded`'s own argument extended to two more
+  settings. The reason is narrower and it holds. The one value the cell needs that
+  Rust owns — `edited` — has ridden `Status` since `mpdf-010` Phase 2; the one
+  command the figure half depends on — `app/src/main.rs:asset_bytes` — has shipped
+  since `mpdf-010` Phase 5; and everything else this phase decides is decided in
+  the page.
+
+  **The controls are duplicated and not moved, and that is the decision the rest
+  of the phase hangs off.** The header keeps `#toggle`, `#numbers` and `#fit`
+  exactly as they ship. A move is the larger decision — it changes where a reader
+  who has used this app looks — and it is not the one being taken here; a second
+  placement can be withdrawn in a line where a move cannot. **The cost is stated
+  rather than hidden: the fit's ten options are now written twice, and nothing
+  enforces that the two lists match.** `rules/desktop-geometry.md` records that
+  the option list *is* the cap, so a copy that drifts is a cap stated twice and
+  therefore stated once wrongly. **This phase does not fix that**, and naming it
+  here is what stops it being smuggled past as an oversight.
+
+  **The bar's element children, in order, with their ids.** Stated exactly for
+  Phase 11's reason — a clause keyed to an arrangement the spec never gives is one
+  an implementer can satisfy two ways, and Phase 13's clause 9 and clause 6's
+  geometry are both keyed to this one:
+
+  `#views` (holding `#views-files`, then `#views-lines`), `#sep-views`,
+  `#edited`, `#controls` (holding `#fit-footer`, then the shipped `#theme`),
+  `#sep-brand`, `#brand`.
+
+  **Four cells and two rules**, and two of those placements are load-bearing
+  rather than aesthetic: the fit select goes **inside** `#controls`, because the
+  auto margin that right-aligns the group is the group's; each `.sep` goes
+  **outside** the group it follows, for the same reason. `#brand` stays the
+  footer's last element child, which Phase 13's clause asserts and this phase does
+  not disturb.
+
+  **Tab order follows from that list and is not separately checked, which is a
+  drop and is recorded as one.** The draft's pasteable gate read it; nothing reads
+  it now. Nothing here sets `order` or `tabindex`, so DOM order is both the visual
+  order and the focus order by construction — and what a bare mark costs a
+  keyboard or a screen reader is OQ-11's question, not a clause this phase can
+  close.
+
+  **One setting, two controls, one writer — the shape all three duplications
+  take.** The fit gets `fitControls` and `showFit`; the panel fold gets
+  `foldControls`, `showFold` and `offerFold`; the gutter gets `lineControls`. In
+  each, the `change` or `click` listener is **installed on each control rather
+  than written twice**, the new value is read off *the control that was pressed*,
+  and every writer writes both. **Neither copy is the original**, which is why the
+  header's control is not made to drive the footer's: a bar that could only
+  receive would leave a reader who folded the panel from the header looking at a
+  footer that disagreed with it.
+
+  **The two view toggles are drawn marks; the appearance toggle stays a glyph.
+  That is not an inconsistency and the rule behind it is stated so it does not
+  read as one.** OQ-12 resolved on 2026-08-29, in the window, that the appearance
+  marks are glyphs — `☀ ☾` measured 9.23 and 9.22px in WKWebView, matching both
+  Playwright engines to the digit. Nothing here disturbs that. **The rule is: a
+  mark a glyph names is a glyph; a mark no glyph names is drawn.** No glyph in the
+  font means *a panel*, and the two that come closest — `▥` and `☰` — differ only
+  by their fill at 10px, which would leave two toggles a reader has to look twice
+  at. So a pane with a column down its left, and lines with their numbers beside
+  them: two shapes from different families, which is what makes them one glance
+  apart. **Every coordinate sits on a half pixel** so a 1px stroke lands on a
+  pixel rather than across two, which is what a 12px icon at `devicePixelRatio` 1
+  needs; `currentColor` and nothing else, so the state below is one declaration.
+  **That rule set the gutter mark's spacing rather than the other way round**, and
+  round 1 caught the draft claiming it of a mark that did not obey it: three rules
+  spaced evenly about a 12-box's centre put the middle one on `y=6`, a whole
+  pixel, so the three are `1.5 / 5.5 / 9.5` — spaced by 4, half a pixel high of
+  centre, and crisp. A straddled rule is visible at 1x; half a pixel of offset in
+  a 12px mark is not.
+
+  **On is `--ink` and off is `--quiet`, for both toggles, and neither of the
+  header's two devices is carried across.** The header turns a chevron for the
+  fold and fills a background for the gutter. Neither survives at 10px in a bar
+  whose entire ink is one colour, and **two view toggles standing side by side
+  would be worse for being marked by two different devices** than by one that
+  suits neither perfectly.
+
+  **A bare mark names nothing to a screen reader**, so each carries `title` and
+  `aria-label` both — `wearAppearance`'s rule, written for the first mark this bar
+  ever carried — and **the word each says is the header's own**, `Files` and
+  `Lines`, because these are the same two controls and not new ones.
+
+  **The left cell names what the pane is holding, which widens Phase 11's rule and
+  does not replace it.** Phase 11 chose `Status::edited` over `Status::main` and
+  that contrast is untouched: `main` is what compiles, `edited` is what `⌘S`
+  writes. What Phase 11 did not contemplate is a third thing the pane can hold. A
+  click on an image row calls `showAsset`, which puts a surface over the text and
+  **never moves `edited` — and must not**: `edited` is the file being typed in,
+  the one a save writes and the one `app/src/main.rs:set_edited` hands to
+  `window.set_title`, and a figure is none of those. It is looked at and then
+  left. So the page holds `figureInPane` beside the viewer's own state and
+  `namePaneFile` is the **single writer of the cell**, called from three places —
+  the status, a figure opening, a figure closing. Two sources taking turns written
+  from two places shows whichever wrote last rather than what is on screen.
+  **Page state, for `folded`'s reason**: it decides nothing but its own drawing,
+  nothing else reads it, and `hideAsset` is the one exit all three ways back go
+  through.
+
+  **Both surfaces count as held, including the one that draws nothing.** A `.pdf`
+  row gets a sentence rather than a picture — `saySoInstead`, shipped in
+  `mpdf-010` Phase 5 — and the pane is holding that file's surface just as much,
+  so the cell names it. **Phase 11's own sentence "the bar names the file you are
+  typing in" is what this makes false**, and the close-out below says what happens
+  to it.
+
+  **The instrument defect this uncovered, and why it rides this phase rather than
+  its own.** `app/harness/stub.mjs` threw unconditionally on `asset_bytes`, with a
+  comment saying nothing in the checks clicked an image row. That stopped being
+  true, and **a refusal reaches the same surface through `saySoInstead`** — so
+  every image row in the rig landed on a sentence and **the drawn-figure path had
+  never been exercised by anything**. Measured, not reasoned about: the mutation
+  written to falsify the new cell clause was run against the prototype and
+  falsified nothing, which is how this was found rather than by reading. So
+  `serve.mjs` copies the project's images into the scratch tree — **copied and not
+  served from the source tree**, for that server's one rule that nothing outside
+  the scratch directory is served however the URL is spelled — and the stub answers
+  them on `current_pdf`'s **exact route**: Rust returns a `tauri::ipc::Response`
+  for both, so both arrive as bytes and the page blobs them, and a stub answering
+  in another shape would be checking a page that does not ship. **It is in this
+  phase because the cell clause cannot be gated without it**, and a phase that
+  shipped an ungated claim in order to keep its scope tidy would have the
+  priorities backwards.
+
+  **And one shipped mutation is re-keyed rather than left alone.** `serve.mjs`'s
+  `cell-main` string-replaces the exact line `namePaneFile` removes —
+  `editedCell.textContent = state.edited?.split('/').pop() ?? ''` — so against
+  this phase it would `die` rather than mutate, and gate clause 4 would fail on a
+  rig that refused to start rather than on a clause. It is re-pointed at
+  `editedPath = state.edited ?? null`, which keeps its meaning exactly: the cell
+  wired to the file that compiles rather than to the file being edited. **Four
+  mutation edits in `serve.mjs`, not three.**
+
+  **The rules break a shipped clause, and re-keying it is this phase's work.**
+  Each `.sep` is `aria-hidden`; the bar says the same without them. **Phase 13's
+  harness clause 9 fails on correct code the moment `#sep-brand` exists**, and
+  Phase 13 predicted it in terms: the clause reads `#brand`'s left minus
+  `#theme`'s right against the footer's own `column-gap`, records that "**the
+  exact equality depends on `#controls` holding one flush, unpadded child**", and
+  says a later cell "would want measuring from `#controls`' own right edge
+  instead". This phase puts a second child *inside* the group and a cell *outside*
+  it, so both halves of that prediction land at once. The draft said only that the
+  placement "keeps that clause measurable at all", which reads as *unaffected*;
+  round 1 was right that an implementer would have to rediscover the rest.
+
+  **The repair crosses two gaps, and the one-gap version is a trap worth naming.**
+  Clause 9 is re-keyed to `#controls`.right → `#sep-brand`.left **and**
+  `#sep-brand`.right → `#brand`.left, each equal to the bar's own `column-gap`,
+  still read off the stylesheet rather than written as a number and still taken at
+  the sweep's widest width. **Measuring only the first falsifies nothing.** Under
+  the `controls-auto-margin` mutation the free space opens between the separator
+  and the brand, so the group-to-separator gap reads one bar-gap under *both*
+  layouts and the mutation that owns clause 9 would own nothing. The second
+  reading is what keeps gate clause 4 true, and it is the reading the two layouts
+  actually differ in.
+
+  **Deliberately not in this phase, named so they are not smuggled in.** The status
+  line stays in the header. The header is not narrowed and no control is removed
+  from it. No page number, no caret line or column, no word count. The two option
+  lists are not deduplicated. **`notes-ivan/letur_footer.md`'s "deliberately NOT in
+  v1" list is overtaken in part by this phase and not in whole**, and the close-out
+  says so rather than leaving a working note that argues with the code.
+
+- **Exit gate:**
+
+  1. `cargo test --workspace` passes with **every count unchanged** — this phase
+     adds no Rust test because it adds no Rust. **The PDF does not move**, and the
+     honest reason is that no Rust reaches the compile path rather than that a test
+     would catch it, which is Phase 11's clause 1 verbatim and true here for the
+     stronger reason.
+  2. `bun app/typecheck.mjs` exits 0 — Phase 9's check, run over a file this phase
+     edits in three places.
+  3. `bun app/harness/checks.mjs` and `bun app/harness/checks.mjs --webkit` each
+     print **twelve clauses, twelve passed**, up from ten — **clause 9 re-keyed to
+     the two gaps above**, which is a change to a shipped clause and not an
+     addition, and the reason this clause says "twelve passed" rather than "the
+     ten still pass and two more". The two added:
+     **clause 10**, that the two copies of each view toggle are one setting — each
+     toggle pressed *from both bars*, and after every press both controls and the
+     box each works read as agreeing; **clause 11**, that the cell names the figure
+     the pane is holding and the edited file again when it is left.
+  4. `bun app/harness/checks.mjs --falsify` reports **nine mutations, each
+     isolating exactly the clause it owns**, up from six. The three added:
+     `views-one-way`, a bar copy that places its own state and does not follow the
+     header's; `marks-unlit`, marks that paint the same in both states; and
+     `figure-unnamed`, the shipped behaviour this phase changed, restored.
+     **`views-one-way` and `marks-unlit` both own clause 10 and neither is
+     redundant** — the first reaches the sync and the second the mark, and clause
+     10 asserts both because with the words gone the *only* visible difference
+     between on and off is a colour. A stylesheet that lost that rule would leave
+     two identical icons while every ARIA reading, and the pane itself, still
+     agreed.
+  5. **The two vacuity controls are part of the gate and not commentary**, both
+     written because the corresponding clause had already passed vacuously once.
+     Clause 11 asserts the sheet holds an `<img>`, not merely that the surface is
+     up: a refused read reaches the same surface and names the same file. Clause 10
+     reads each mark's ink **with the pointer moved off the control**: a click
+     leaves it where it landed, `:hover` paints the mark with the same ink `on`
+     does, and without the move the off state read as ink in three of four presses.
+  6. **The marks in the engine that ships, read by the machine that already drives
+     it.** `bun app/driver/drive.mjs` prints **four clauses, four passed** — up
+     from the three it prints today — the added one reading, in the real
+     WKWebView: both marks' rects at their declared 12px; each toggle's two
+     computed inks differing, with the pointer nowhere near either; and the
+     footer's own height unchanged from Phase 11's. **`--falsify` reports three
+     mutations, each isolating the clause it owns**, up from two. **The added one
+     is that rig's form of `marks-unlit`, and its mechanism is named rather than
+     left to the implementer** — Phase 14 argued at length that it must be, a CSS
+     string replacement being impossible in a rig whose page `generate_context!`
+     walked into the binary. It is an instance-level DOM patch on Phase 14's own
+     mechanism: an own `setAttribute` on each `#views-*` button that swallows the
+     state attribute, shadowing the prototype method by property lookup at call
+     time and counting its own invocations, as that rig requires of every mutation.
+     **It isolates because neither existing clause asserts the view toggles** — one
+     is the appearance value reaching Rust, the other the appearance marks at a
+     width the driver set. The rig's three existing clauses
+     must still pass: one of them reads `#brand`'s own rect, which this phase
+     moves by putting a separator to its left, and its claim is that the brand
+     does not move *as the marks swap* rather than that it sits anywhere in
+     particular — **and "should be unaffected" is not a reading**, which is what
+     this clause turns into one.
+
+     **The draft made this a pasteable window gate for a person, and round 1 was
+     right to push back.** Every reading in it is a `getBoundingClientRect` or a
+     `getComputedStyle` that Phase 14 built a machine to take, and Phase 14's own
+     argument is that four of five failures in the last hand-run window gate were
+     the instrument, each costing a manual window run. **OQ-12's precedent settles
+     that the shipping engine must be asked about a mark — not who asks it.**
+     `tests/gates/mpdf-003-phase15.js` is therefore not written.
+
+     **The driver has to open a document for this clause, and that reverses an
+     exclusion Phase 14 named — so this phase names it back.** `#views-files`
+     ships `hidden` and `parts` keeps it hidden while `state` is `empty`, so with
+     no document open its rect is 0×0 and it cannot be pressed into a second ink:
+     the clause as first written would have failed on correct code, which round 2
+     caught. Phase 14 wrote that "no document is opened: every converted clause is
+     about the window's own chrome, which is why `open_document` is **not** in this
+     scope though the driver could call it" — **and that reason does not reach
+     this clause**, whose subject is a control over a pane that does not exist
+     until a project is open. So the driver invokes `app/src/main.rs:open_document`
+     directly, on `tests/fixtures/panel/book.md`: it takes a plain `path: String`,
+     so there is no dialog to drive, no capability to add and no change to the
+     plugin's surface.
+
+     **In place, and not a copy — which is what keeps `.gitignore` out of this
+     phase.** The draft said "a copy of `tests/fixtures/panel`", and round 3 was
+     right that a destination left unstated under `tests/` is the one choice
+     clause 8 would fail on, `.gitignore` covering `/app/.harness/` and nothing
+     there. The better answer is that no copy is needed: **nothing on the open path
+     writes.** `app/src/preview.rs` holds exactly two production writers — `export`,
+     to a path the author chose, and `save`, to the edited file — and neither is
+     reachable from an open; `projects.json` is `set_main`'s, below.
+     `app/harness/serve.mjs` copies for a reason that does not apply here, it
+     running the CLI whose `default_output` would leave a PDF beside its input,
+     where the app compiles to bytes in memory. **`.gitignore`: none needed**,
+     adjudicated rather than omitted, in the idiom Phase 12 and Phase 14 each used.
+
+     **It leaves nothing behind that the rig does not already put back**, which is
+     the property Phase 14 was built on and this must not spend. The two toggles
+     this clause presses are page state — `folded` and `lines.hidden`, neither of
+     them in Rust — and the one thing an open project can persist,
+     `document::store_file`'s `projects.json`, is written by `set_main`, which this
+     clause never calls. The driver's existing save-and-restore of `settings.json`
+     stays the whole of what it must restore.
+
+     **It is a rendering claim about the shipping engine, which is a third thing**,
+     and `rules/desktop-panes.md`'s two-way rule — a claim about the page is the
+     harness's, a claim about the window is the driver's — does not have a slot for
+     it today. The close-out gives it one rather than letting the rule quietly
+     disagree with the gate.
+  7. **The one reading left to a person, and it is one question**, asked once with
+     that window open: do the two marks read as different things at a glance? A
+     machine can say the inks differ and the rects match; it cannot say a pane and
+     a gutter are told apart by a reader who is not looking for the difference,
+     which is the entire argument for drawing them rather than reaching for `▥`
+     and `☰`. No script, because there is nothing to print.
+  8. `git status` is clean after a full run of **clauses 3, 4 and 6** — Phase 12's
+     exit gate clause 4, which the harness's new scratch writes must not break, and
+     which now has to cover the driver rather than the harness alone: clause 6
+     launches `target/debug/letur`, writes and restores `settings.json`, and opens
+     a document under `tests/fixtures/`. **Clause 7 is not in this list and cannot
+     be** — it is a person looking at a window, with no run to make. The draft said
+     "3, 4 and 7", which was right while the driver was clause 7 and became wrong in
+     the same round that renumbered it.
+
+- **Close-out:** **`rules/desktop-panes.md`** — it declares all **five** touched
+  files among its `sources:` already, `app/driver/drive.mjs` included, and owns the footer, the harness and the figure
+  viewer alike. Three of its `covers:` phrases become wrong and are corrected
+  rather than appended to: *"the bar along the foot and the three cells it
+  carries"* (**four** cells and two rules — counted as the rule counts them, the
+  footer's own element children, which round 1 re-derived against the draft's
+  five), *"the file it names and the one it does not"* (a figure is now a third
+  thing it names), and *"the ten clauses it asserts as properties and the six
+  broken pages that falsify them"* (twelve and nine).
+
+  **Its `## The footer` body carries the claim clause 9 rests on** — that what
+  separates the two layouts is "the group's distance to the brand, which must
+  equal the footer's own `gap`" — and that becomes false with a separator between
+  them. It is corrected to the two gaps, in the same pass and for the same reason
+  the clause is: a rule that still described the one-gap reading would send the
+  next person to write the mutation-blind version of it. **And `## What checks it`
+  gains the slot clause 6 needs**: the two-way rule sorts a claim about the page
+  from a claim about the window, and a claim about how the *shipping engine
+  renders* is neither — it is the driver's because only the driver reaches that
+  engine, not because it is about the window.
+  **Its cap must move and the phase says so rather than discovering it**: it stands
+  at **543/545**, two lines of headroom against a phase that adds a duplication
+  rule, a mark vocabulary, a cell rule and two harness routes. Budget **+45**, in
+  the idiom `mpdf-010` Phase 4's close-out used; the commit says the real figure.
+  **`rules/desktop-geometry.md`** — 338/355. *"The control is a `<select id="fit">`
+  in the header"* is now false and is a **claim rather than a citation**, so it is
+  corrected in place: two selects, one in each bar, one setting, and the option
+  list still the cap. Roughly line-neutral. **`rules/desktop.md`: expected none** —
+  it owns the window and the menu — **to be verified by grep at close-out rather
+  than asserted here**, since it declares `app/dist/index.html` among its sources
+  and stands at 645/650. **`README.md`**: the sentence Phase 11 put in
+  `## The desktop app` — *"The bar along the foot of the window names that file"* —
+  is amended to say it names what the pane is holding, a figure included, and one
+  sentence records that the bar now carries the view and fit controls too.
+  **`CLAUDE.md`: none needed.**
+
+  **Phase 11 takes a dated `CORRECTED` note in place**, per §6.1's third bullet,
+  against one sentence and not the paragraph: *"The bar names the file you are
+  typing in."* That is a decision statement rather than a citation — nothing else
+  in the corpus answers it — and it is false from the moment a figure goes up. The
+  neighbouring *"The cell is `Status::edited`, not `Status::main`"* is untouched
+  and stays true: the contrast it draws is exactly the one this phase keeps.
+
+  **OQ-11 takes a dated note.** It asks what the footer's *first* interactive
+  control costs a screen reader; the bar now carries **four**, two of which have no
+  text at all and are named only by `title` and `aria-label`. The question is not
+  answered by this phase and is sharper for it.
+
+  **`notes-ivan/letur_footer.md` is reconciled or retired.** Its "Deliberately NOT
+  in v1" list names the fit select and the status line as staying in the header.
+  **Neither sentence is false and round 1 was right to correct the draft's claim
+  that one was**: the fit select *does* stay in the header, this phase duplicating
+  rather than moving it. What is overtaken is the implication that it is only
+  there. The status line's entry is untouched and still true. A working note that
+  a reader would take for a live constraint is worse than no note.
+
+  **Commit plan.** One push, six commits: the bar's controls, markup and CSS; the
+  cell that names what the pane holds; the harness learning to serve a figure's
+  bytes; the harness's two new clauses, its re-keyed clause 9 and its four
+  mutation edits; the driver's fourth clause and its third mutation; and the spec,
+  rules and README reconciliation above.
 
 <!--
 The review record is a sibling file, not a section: it lives at
