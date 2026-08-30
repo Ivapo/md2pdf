@@ -2,6 +2,81 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 15 — Phase 18 only — 2026-08-30 — the same reviewer, resumed — **READY (converged)**
+
+Zero blocking. Both blockers confirmed resolved, and the observable line judged **not
+over-corrected**: it claims a *yes* through an existing case rather than inventing a fifth,
+still does not claim the outside file is read by a compile in the ordinary case, and leaves
+the no-row/not-watched asymmetry where it was.
+
+**It went past what it was asked on the fallback** and enumerated every reader of
+`Status::edited` on both sides rather than trusting the two the author named. Page: exactly
+two functional readers, and nothing round-trips the value back to Rust — `invoke('set_edited')`
+takes a row's own path, never `state.edited`. Rust: `edited_relative` has two callers, and
+**the author named only one**. The second is `Session::trash`'s `held`, which compares against
+a root-relative row path, so an absolute value answers `holding = false` — identical to today's
+`None` and correct, the pane's outside file having no row to trash. Benign, and now named in
+the phase. The two shipped tests asserting `status().edited` are both on in-root files, and the
+rigs feed their own status, so `checks.mjs` clause 5's `cell === last(status.edited)` is
+satisfied by an absolute path and clause 4's "unchanged" survives.
+
+`save_file` losing its `root` was checked tree-wide: one call site, no test callers, `main.rs`
+naming it only in prose.
+
+Four non-blocking findings, all folded: `main.rs:save_as_path`'s doc asserts "`Status` carrying
+root-relative spellings only", which the fallback falsifies — a second sentence in a comment
+already in scope; `rules/desktop.md` carries the same falsified invariant, *"`Preview::status`
+spells it with `document::spell` exactly as the row is spelled"*; **every outside destination in
+gate clauses 1 to 3 needs a name of its own**, since they write into the shared
+`letur-test-<pid>/` parent and cargo runs them in parallel — the shape of the flake Phase 17
+fixed one of in `counted()`; and `Session::trash`'s `held` deserved the clause it now has.
+
+### Round 14 — Phase 18 only — 2026-08-30 — fresh reviewer with repo access — **NOT READY**
+
+**Round 0.** The phase reverses a decision Phase 17 shipped the same day, at the author's
+instruction, and the reversal is right: a `Save as…` that cannot save where the author points
+it is not the gesture that name denotes. What the round-0 answer got wrong was the observable,
+which is blocker 1.
+
+Two blocking findings.
+
+**Blocker 1 — the headline claim was false in the default case, and the evidence cited was
+inverted.** The phase claimed to produce no observable because a file outside the root "is named
+by no master, watched by nothing and read by no compile". True of the *destination*, and beside
+the point: Phase 17's fourth case is about what the pane **stops standing in for**, and an
+outside path is by construction a name the master does not name. Pane on a named file, buffer
+dirty, saved outside → `edited` leaves → `render_project`'s closure stops substituting → the
+section reverts to its on-disk text → **the page moves**, which
+`a_save_as_off_a_dirty_named_file_moves_the_page` already pins. **The phase offered `Pane::Away`
+as proof of safety when `Pane::Away` is precisely the state meaning the buffer stands in for
+nothing the compile reads.** Gate clause 2 restricted itself to a clean buffer — the one
+condition excluding the falsifying case — so an implementer building exactly to the gate would
+have shipped an untested wrong headline. Now *yes*, through Phase 17's fourth case at a new
+destination, with clause 2 split into a clean test and a dirty one.
+
+**Blocker 2 — the stated asymmetry was incomplete, and the missing item was user-visible.**
+`Preview::edited_relative` is `document::spell(root, edited)` and `spell` is a bare
+`strip_prefix`, **guaranteed `None`** outside the root. `Status::edited` would go null, the page
+would take `state.edited ?? null`, and the footer's left cell — whose job is to name what the
+pane is holding — would blank while a document is open and the pane held it, an empty state the
+page reserves for no document at all. The phase named two consequences and called the list
+stated rather than discovered; this was a third. **Fixed rather than documented**:
+`edited_relative` falls back to the absolute path, and the page needs no change because it
+already renders the cell as `path?.split('/').pop()`.
+
+Five non-blocking, all accepted: "read by no compile" is false through symlinks — softened, and
+recorded as a spelling this phase adds rather than an effect, since it was already reachable
+under Phase 17 by naming the link's in-root path; `Preview::save_as`'s forced loss of its `root`
+binding; `save_file`'s new contract, the target becoming `path` as given so a relative path
+would resolve against the process CWD; the `rules/desktop.md` close-out being an **addition**
+rather than a correction, `save_file` appearing nowhere in that file because Phase 17's promised
+writer never landed, plus that file's pre-existing "sixteenth command" `covers:` debt; and
+`main.rs:save_as_path`'s dead justification.
+
+**The §6.1 mechanism was raised and is recorded rather than left arguable**: step 1 plausibly
+matches, and is not taken, because Phase 17's Save-as is not removed and cutting it would read
+as never built — §1.1's false report. A phase plus step 1's third bullet is the combination.
+
 ### Round 13 — Phase 17 only — 2026-08-30 — the same reviewer, resumed — **READY (converged)**
 
 Zero blocking. **All three of round 12's blockers confirmed resolved against the code

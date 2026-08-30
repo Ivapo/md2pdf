@@ -93,6 +93,11 @@ phases:
     shipped: 2026-08-30
     cut: null
     by: null
+  - name: "Phase 18 — Save as saves anywhere"
+    reviewed: 2026-08-30
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -4690,6 +4695,179 @@ work, so round 0 has more to do than usual and the scope says where to point it.
   **Commit plan.** One push. The writer and its refusal; the two commands, the menu and
   the accelerators; the page's button and its names; the harness clause and its mutation;
   then the rules, the README and the reconciliation.
+
+### Phase 18 — Save as saves anywhere
+
+*Produces the observable: **yes**, and it is Phase 17's fourth case at a destination this
+phase newly permits rather than a fifth case of its own.* Pane on a file the master
+names, buffer dirty, saved to a folder outside the project: `edited` leaves that file,
+`document::render_project`'s closure stops substituting the buffer for it, the section
+reverts to its own on-disk text and **the page moves**. That is exactly the mechanism
+`app/src/preview.rs:a_save_as_off_a_dirty_named_file_moves_the_page` already pins; only
+the destination is new.
+
+**The first draft of this phase claimed the opposite and cited the wrong evidence.** It
+argued from the *destination* — a file outside the root is named by no master, watched by
+nothing, read by no compile — which is true and beside the point, because case 4 is about
+what the pane **stops standing in for**, and an outside path is by construction a name the
+master does not name. It offered `Pane::Away` as proof of safety when `Pane::Away` is
+precisely the state that means *the buffer stands in for nothing the compile reads*. Gate
+clause 2 below is split in two because of it: a clean buffer is byte-identical, a dirty one
+moves, and the clean-only wording of the first draft excluded the very case that falsified
+its headline.
+
+Appended 2026-08-30, per §6.1 step 2. **It reverses a decision Phase 17 shipped the same
+day**, so that phase's scope statement — *"`Save as…` writes inside the project, and the
+project does not move"* — takes a dated `CORRECTED` note pointing here. **The mechanism is
+recorded rather than left arguable**: step 1 ("removes or contradicts shipped work → never
+a phase") plausibly matches, and it is not taken, because Phase 17's Save-as is not
+removed — cutting it would read as never built, which §1.1 calls the false report. A phase
+plus step 1's third bullet is the combination, and this sentence is here so a later round
+does not reopen it.
+
+**The reversal is the author's, and why the original decision was wrong is worth recording
+rather than smoothing over.** Phase 17 justified the confinement as a decision about the
+project: `Open…` is how you go elsewhere. **That argument was retrofitted.** What drove it
+was that `app/src/document.rs:landing` already existed and reusing it was free, and that a
+root which never moves is a root nobody has to think about. A review round confirmed the
+reasoning without challenging the premise, because the premise was presented as settled —
+the failure mode §7.1's clean-room framing exists to catch, and did not catch here because
+the author framed it out of scope. **A `Save as…` that cannot save where the author points
+it is not the gesture that name denotes in any application they have used.**
+
+- **Scope:** **`app/src/document.rs`** — `save_file` stops asking `landing`;
+  **`app/src/preview.rs`** — one call site, one fallback, and the tests keyed to the
+  refusal; **`app/src/main.rs`** — one doc comment; **`README.md`** and two `rules/` files.
+  **The page does not change**, and clause 4 says so.
+
+  **What goes is one call and one refusal.** `save_file` keeps `kind_of`, keeps
+  `std::fs::write`, keeps handing back the path it wrote, and stops requiring the result
+  under the root. **`landing` keeps its other two callers** — `create_file` and
+  `trash_file` — so it returns to two rather than being retired. **`save_file`'s `root`
+  parameter goes with the call**, nothing else in the function reading it: `kind_of` takes
+  a `&str` and `landed` was `landing`'s only product. **Its contract changes and is stated
+  rather than left implicit**: the target becomes `path` as given, so a caller passing a
+  relative path would resolve it against the process working directory and not the
+  project. No live caller does — the dialog always answers absolute — but the function is
+  `pub`, and this is the sentence that stops the next caller getting it wrong.
+
+  **`Preview::save_as` loses its `root` binding with it**, and that is a forced call-site
+  edit rather than a discovery: the `let root = self.root.clone().ok_or(…)?` exists only to
+  feed `save_file`, so it goes, and with it that method's "no document is open" guard on
+  the root. Harmless — the `self.edited.is_none()` guard remains and `open_at` sets root
+  and edited together — and named here so an implementer does not reinstate it.
+
+  **The window keeps compiling the project it had, and that is a decision this phase takes
+  rather than inherits.** The alternative — re-rooting to the saved file, which most
+  editors do — is **rejected** for Phase 17's own reason applied to a different question: a
+  Save-as that silently changed which document compiles would change what the window shows
+  without saying so, and this app already has a gesture meaning *open that other thing*. So
+  `main` does not move, `Preview::root` does not move, and the pane holds a file outside
+  the project it is compiling.
+
+  **The bar must still name what the pane is holding, and without a fallback it stops.**
+  `Preview::edited_relative` is `document::spell(root, edited)`, and `spell` is a bare
+  `strip_prefix` — **guaranteed `None`** for a file outside the root. `Status::edited` would
+  go null, the page's `editedPath = state.edited ?? null` would take the empty branch, and
+  the footer's left cell would blank *while a document is open and the pane holds it* —
+  an empty state that page's own comment reserves for no document at all. **So
+  `edited_relative` falls back to the absolute path** when `spell` declines. The page needs
+  no change: it already renders the cell as `path?.split('/').pop()`, so an absolute path
+  shows the bare name, which is what the cell has always shown. `panelRows` compares the
+  same value against its rows and matches none, which is correct — there is no row.
+  **`edited_relative` has a second reader, named because its comparison depends silently
+  on the spelling**: `Session::trash`'s `held` tests it against a root-relative row path,
+  so an absolute value answers `holding = false` — identical to today's `None`, and
+  correct, the pane's outside file having no row to trash.
+
+  **The rest of the asymmetry is accepted and not mitigated.** A file saved outside the
+  root has **no row in the panel** — `document::files_under` walks the root — and **is not
+  watched**, `Session::arm` starting the watcher there, so an external edit will not redraw
+  and the pane will not learn it moved underneath. The mitigation for both is re-rooting,
+  which the paragraph above rejects.
+
+  **`Session::save_as`'s three duties are unchanged and one now does less.** It still
+  compiles, still announces, still rebuilds the tree by hand — the rebuild simply finds
+  nothing new when the file landed outside, which is correct rather than a no-op to remove:
+  the same call is what lists the file when it landed inside, and branching on where it
+  landed would be two paths where the walk is one.
+
+  **One absolute claim is softened rather than kept.** "Read by no compile" is false
+  through symlinks: `landing` canonicalized only the parent, and `std::fs::write` and
+  `std::fs::read` both follow links, so an in-root symlink to an outside target is written
+  and read outside the root. **That was already reachable under Phase 17** by naming the
+  link's in-root path, so this phase adds a spelling and not an effect — but the wording
+  has to stop claiming otherwise.
+
+  **Deliberately not in this phase.** No re-rooting. No watching a file outside the root.
+  No second panel section for files elsewhere. `kind_of` stays, so a `.txt` is still
+  refused, for Phase 17's reason which the panel's filter still gives.
+
+- **Exit gate:**
+
+  1. `cargo test --workspace` passes. **The refusal test is inverted, not deleted** —
+     `a_save_as_outside_the_project_is_refused` becomes a test that the write succeeds,
+     that the pane holds the outside file, and that `Preview::main` and `Preview::root` are
+     **unmoved**, which is this phase's own decision and the half a deletion would leave
+     unasserted. That assertion is about re-rooting and not about the PDF: Phase 17's
+     warning that main-and-root-unchanged holds even where the page moved is why clause 2
+     carries the observable and this one does not.
+  2. **Two tests and not one, because the headline turns on the starting buffer.** From a
+     **clean** buffer, a Save-as landing outside the root leaves the PDF byte-identical.
+     From a **dirty** buffer, with the pane on a file the master names, the same save
+     **moves** the PDF — Phase 17's fourth case, now reachable outside the project, and the
+     case the first draft's clean-only wording excluded.
+  3. A test that the outside file gets **no row** in `Preview::tree`, and one that
+     `Status::edited` **still names it** — non-null, ending in the file's own name — which
+     is the fallback above asserted rather than described.
+     **Every outside destination in clauses 1 to 3 takes a name of its own.** They write
+     into the shared `letur-test-<pid>/` parent `scratch_dir` sits under, cargo runs them in
+     parallel, and a reused `escape.md` with a `remove_file` beside it would race a sibling
+     — the shape of the flake Phase 17 fixed one of in `counted()`, and not one to
+     reintroduce a phase later.
+  4. `bun app/typecheck.mjs` exits 0; `bun app/harness/checks.mjs` and `--webkit` each
+     print thirteen clauses, thirteen passed; `--falsify` reports ten mutations each
+     isolating its clause in both engines. **All unchanged, and measured against the page
+     as it lands** — an in-flight change gives the refusal bar a lifecycle, and this phase
+     makes that bar rarer without removing it.
+  5. `bun app/driver/drive.mjs` and `--falsify` pass, unchanged.
+  6. **The reading left to a person**: `⇧⌘S`, navigate out of the project, save — the file
+     is written where you put it, the pane and the title bar hold it, **the bar still names
+     it**, and the page still shows the project you were compiling.
+  7. `git status` clean after a full run of clauses 4 and 5.
+
+- **Close-out:** **`rules/desktop-project.md`** — `landing` returns to two callers, and the
+  sentence Phase 17's close-out corrected to three is corrected again, which is what a rule
+  that tracks the code costs when a decision is reversed in a day.
+
+  **`rules/desktop.md`** — **an addition and not a correction, and the first draft had this
+  backwards.** `save_file` appears nowhere in that file: Phase 17's promised "second writer
+  of a path the author did name in a dialog" never landed in its file-I/O paragraph, so
+  there is no sentence to correct. The writer is added, already unconfined. **Its `covers:`
+  still says "the sixteenth command" where the body says eighteen** — pre-existing debt
+  from Phase 17, fixed in the same pass since §8.1 makes `covers` the regeneration target.
+
+  **`app/src/main.rs:save_as_path`'s doc comment, two sentences and not one.** It says a
+  panel with no default would open outside the project "where `save_file`'s confinement
+  would make refusal the *normal* first outcome" — that justification dies here; and it
+  asserts `Status` carries "root-relative spellings only", which the fallback falsifies.
+  The command is still right, a Save-as defaulting to the current file's folder everywhere,
+  so both sentences are corrected and the code is not.
+
+  **`rules/desktop.md` carries the same falsified invariant**: *"`Preview::status` spells
+  it with `document::spell` exactly as the row is spelled"* is no longer true of a pane
+  outside the root, and it is corrected beside the writer this phase adds.
+
+  **`README.md`** — *"It saves **inside the project** — a name outside it is refused,
+  because opening a document somewhere else is what `Open…` is for"* is false and is
+  rewritten, including the asymmetry: a file saved outside the project is not listed and is
+  not watched.
+
+  **Phase 17 takes a dated `CORRECTED` note** against its scope statement, per §6.1's third
+  bullet.
+
+  **Commit plan.** One push, two commits: the writer, the fallback and the tests; then the
+  rules, the README, the doc comment and the note.
 
 <!--
 The review record is a sibling file, not a section: it lives at

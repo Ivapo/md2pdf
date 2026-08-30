@@ -2048,6 +2048,7 @@
           ? `${state.state} · ${state.time}`
           : state.state
 
+        refusing = false
         error.textContent = state.error ?? ''
         error.hidden = state.error === null
         error.classList.toggle('alone', !state.page)
@@ -3535,19 +3536,35 @@
       }
 
       /*
-        A refusal that is not a compile status: an open that would not read, or
-        an export the pane cannot serve. It reaches the page in Rust's own
-        words, in the bar the compile error uses, and the next compile's status
-        replaces it.
+        A refusal that is not a compile status: an open that would not read, an
+        export the pane cannot serve, a save the writer would not make. It
+        reaches the page in Rust's own words, in the bar the compile error uses,
+        and the next compile's status replaces it.
+
+        **`refusing` is what makes that last clause true, and without it the
+        sentence was a claim rather than a description.** A refusal changes no
+        state in Rust, so it causes no render, so `report` — the only other
+        writer of this bar — never runs and the words sit there until the author
+        happens to type. That was invisible while the only refusals were an
+        unreadable open and an unservable export, both rare; a save that can be
+        refused made it the ordinary case. The flag is cleared by `report`,
+        which owns the bar whenever it runs, and by the first keystroke after,
+        which is the earliest moment the author has moved on.
 
         The last good page survives it, here as everywhere. An author mid-edit
         passes through broken states constantly — a half-typed table, a fence
         not yet closed — and blanking the pane on each one would lose their
         place.
       */
+      // Whether the bar is holding a refusal rather than a compile error. Only
+      // a refusal is cleared by a keystroke: a compile error is the truth about
+      // the document until the next compile says otherwise.
+      let refusing = false
+
       function fail(problem) {
         error.textContent = String(problem)
         error.hidden = false
+        refusing = true
 
         const drawing = !pages.hidden
         error.classList.toggle('alone', !drawing)
@@ -4235,6 +4252,15 @@
       // debounce. A debounce in this page would be logic reachable only by
       // typing at the window, and no test could hold it.
       text.addEventListener('input', () => {
+        // The author has moved on, so a refusal stops being the news. Guarded
+        // on `refusing` so a compile error is not blanked for the 300 ms until
+        // the typing debounce puts it back.
+        if (refusing) {
+          refusing = false
+          error.hidden = true
+          error.textContent = ''
+          pages.classList.remove('stale')
+        }
         invoke('edit', { text: text.value })
         relines()
       })
