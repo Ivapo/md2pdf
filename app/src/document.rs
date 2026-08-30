@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use md2pdf_core::Asset;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// One heading, and the page its typeset form landed on.
 ///
@@ -984,8 +984,8 @@ pub fn move_to_trash(path: &Path) -> Result<(), String> {
         .map_err(|e| format!("cannot move {} to the Trash: {e}", path.display()))
 }
 
-/// The one file the store lives in, inside the directory the platform gives
-/// this app.
+/// The file the store lives in, inside the directory the platform gives this
+/// app. [`settings_file`] is its sibling and the only other one.
 ///
 /// **Not a dotfile in the author's own folder**, and that was refused for two
 /// reasons either of which is sufficient: it is the manifest
@@ -1045,6 +1045,72 @@ pub fn write_override(store: &Path, root: &Path, main: &str) -> Result<(), Strin
 /// A root as the store keys it: the path the filesystem really spells.
 fn key(root: &Path) -> String {
     crate::watch::resolve(root).to_string_lossy().into_owned()
+}
+
+/// The second file this app writes, beside [`store_file`] and in the same
+/// directory: what the author asked for that is not about a folder.
+///
+/// **A second file and not a second key in the first, and the reason is
+/// checkable rather than aesthetic.** [`Store`] is a `BTreeMap<String, String>`
+/// keyed by canonical root and [`read_store`] swallows a parse failure, so
+/// reshaping `projects.json` into an object with a member beside the mains
+/// would make every file already on disk malformed — and malformed means
+/// forgotten. Every author's remembered main would be dropped, silently, by the
+/// upgrade that added a toggle to the footer.
+pub fn settings_file(support: &Path) -> PathBuf {
+    support.join("settings.json")
+}
+
+/// What this app remembers that is not about one folder.
+///
+/// One member today. It is a struct rather than a bare value so a second
+/// preference is a field and not a second file, which is the shape
+/// `projects.json` cannot have and this one can: `serde` fills a missing member
+/// from `Default`, so an older file stays readable rather than becoming
+/// malformed.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct Settings {
+    #[serde(default)]
+    appearance: crate::preview::Appearance,
+}
+
+/// The palette the author chose, or [`crate::preview::Appearance::System`].
+///
+/// **[`read_store`]'s rule, inherited whole: a missing, unreadable or malformed
+/// settings file is `System` and never an error in the window.** Following the
+/// system is what this app did before there was a choice, so the failure state
+/// and the default state are the same state, and nothing about a truncated file
+/// in Application Support should reach a window that is trying to open a
+/// document.
+pub fn read_appearance(settings: &Path) -> crate::preview::Appearance {
+    std::fs::read_to_string(settings)
+        .ok()
+        .and_then(|text| serde_json::from_str::<Settings>(&text).ok())
+        .unwrap_or_default()
+        .appearance
+}
+
+/// Remember the palette the author chose.
+///
+/// **A failed write is reported**, where a failed read is not, for
+/// [`write_override`]'s reason: the author has just pressed the control.
+///
+/// It writes this file and reads nothing else, so `projects.json` is not opened,
+/// not rewritten and not at risk from a phase about a colour.
+pub fn write_appearance(
+    settings: &Path,
+    appearance: crate::preview::Appearance,
+) -> Result<(), String> {
+    let text = serde_json::to_string_pretty(&Settings { appearance })
+        .map_err(|e| format!("cannot write {}: {e}", settings.display()))?;
+
+    if let Some(parent) = settings.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
+    }
+    std::fs::write(settings, text).map_err(|e| format!("cannot write {}: {e}", settings.display()))
 }
 
 /// Read every file the document names, from beside the document.
@@ -1774,6 +1840,115 @@ mod tests {
             None,
             "a truncated store is nothing remembered, and never an error"
         );
+    }
+
+    // -- the second file, and what it must not touch -----------------------
+    //
+    // `mpdf-003` Phase 13. The appearance is global where the store's one fact
+    // is per-root, so it is a second file rather than a second key — and the
+    // third test below is what makes that a decision rather than a preference.
+
+    /// All three appearances round-trip through `settings.json`.
+    #[test]
+    fn the_settings_file_remembers_each_of_the_three_appearances() {
+        let dir = scratch_dir("settings-round-trip");
+        let settings = settings_file(&dir);
+
+        assert_eq!(
+            read_appearance(&settings),
+            crate::preview::Appearance::System,
+            "a settings file that is not there yet"
+        );
+
+        for appearance in [
+            crate::preview::Appearance::Light,
+            crate::preview::Appearance::Dark,
+            crate::preview::Appearance::System,
+        ] {
+            write_appearance(&settings, appearance).unwrap();
+            assert_eq!(
+                read_appearance(&settings),
+                appearance,
+                "the settings file did not give back what it was written"
+            );
+        }
+    }
+
+    /// A missing, a truncated and a malformed settings file each read as
+    /// `System`, and none of the three is an error.
+    ///
+    /// **The failure state and the default state are the same state**, which is
+    /// the whole of why this can be swallowed: following the system is what the
+    /// app does anyway, so a broken file in Application Support costs the
+    /// author their choice and never their document. `read_appearance` returns
+    /// no `Result`, so "none is an error" is a fact about its signature that
+    /// this test states rather than proves — what it proves is the value.
+    #[test]
+    fn a_settings_file_that_will_not_read_is_the_system_and_not_an_error() {
+        let dir = scratch_dir("settings-forgiven");
+        let settings = settings_file(&dir);
+        let system = crate::preview::Appearance::System;
+
+        assert_eq!(read_appearance(&settings), system, "no file at all");
+
+        write_appearance(&settings, crate::preview::Appearance::Dark).unwrap();
+        let whole = std::fs::read_to_string(&settings).unwrap();
+        assert_eq!(
+            read_appearance(&settings),
+            crate::preview::Appearance::Dark,
+            "the file this case truncates must first read as something else"
+        );
+
+        std::fs::write(&settings, &whole[..whole.len() / 2]).unwrap();
+        assert_eq!(read_appearance(&settings), system, "a truncated file");
+
+        std::fs::write(&settings, "{\"appearance\": \"chartreuse\"}").unwrap();
+        assert_eq!(read_appearance(&settings), system, "a value serde refuses");
+
+        std::fs::write(&settings, "not json at all").unwrap();
+        assert_eq!(read_appearance(&settings), system, "not JSON");
+
+        std::fs::write(&settings, "{}").unwrap();
+        assert_eq!(
+            read_appearance(&settings),
+            system,
+            "an object with no member"
+        );
+    }
+
+    /// Writing the appearance leaves `projects.json` **byte-identical**.
+    ///
+    /// **This is the second-file decision's own check.** Had the appearance
+    /// gone in beside the mains, every `projects.json` already on disk would
+    /// have become malformed — and [`read_store`] reads malformed as nothing
+    /// remembered, so the upgrade would have dropped every author's remembered
+    /// main in silence. The clause is worded against the bytes and not against
+    /// the reads, because a rewrite that happened to round-trip would still be
+    /// this app touching a file it has no business in.
+    #[test]
+    fn writing_the_appearance_does_not_touch_the_store() {
+        let dir = scratch_dir("settings-beside-store");
+        let store = store_file(&dir);
+        let settings = settings_file(&dir);
+        let root = fixture("panel");
+
+        write_override(&store, &root, "book.md").unwrap();
+        let before = std::fs::read(&store).unwrap();
+
+        write_appearance(&settings, crate::preview::Appearance::Dark).unwrap();
+        write_appearance(&settings, crate::preview::Appearance::Light).unwrap();
+
+        assert_eq!(
+            std::fs::read(&store).unwrap(),
+            before,
+            "writing an appearance rewrote projects.json"
+        );
+        assert_eq!(
+            read_override(&store, &root).as_deref(),
+            Some("book.md"),
+            "the remembered main did not survive an appearance being written"
+        );
+        assert_ne!(store, settings, "the two files must not be one file");
     }
 
     /// The path arithmetic the panel's union needs: a master that does not sit

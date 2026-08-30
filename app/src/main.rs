@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 
-use preview::{Session, Status};
+use preview::{Appearance, Session, Status};
 
 /// The label of the one window, which `tauri.conf.json` names too.
 const MAIN: &str = "main";
@@ -101,9 +101,30 @@ fn main() {
             // the app remembers nothing, which is the same state a first launch
             // is in.
             let support = app.path().app_data_dir().unwrap_or_default();
+
+            // **The third thing it cannot decide for itself is which palette to
+            // wear.** It is read here, in the same hook that resolves the store
+            // and from the file beside it, and worn before anything else runs —
+            // so the choice is on screen from the first frame rather than
+            // arriving with the page's first `refresh`.
+            //
+            // **The window already exists by now**: the runtime builds every
+            // `tauri.conf.json` window before it calls this hook, which is what
+            // lets `get_webview_window` reach one here at all. So the property
+            // is not an ordering against window creation — it is that the read,
+            // the `set_theme` and the manage all happen inside this one `Ready`
+            // callback.
+            let settings = document::settings_file(&support);
+            let appearance = document::read_appearance(&settings);
+            if let Some(window) = app.get_webview_window(MAIN) {
+                let _ = window.set_theme(theme(appearance));
+            }
+
             let handle = app.handle().clone();
             app.manage(Mutex::new(Session::new(
                 document::store_file(&support),
+                settings,
+                appearance,
                 move || {
                     let _ = handle.emit(RENDERED, ());
                 },
@@ -124,6 +145,7 @@ fn main() {
             save,
             current_pdf,
             status,
+            set_appearance,
             export_path,
             export,
             pending_open
@@ -447,13 +469,61 @@ fn current_pdf(session: tauri::State<'_, Mutex<Session>>) -> Result<tauri::ipc::
 /// This is a second command beside [`current_pdf`] rather than a wider return
 /// from it, and both answer the same payload-less `rendered` signal: the bytes
 /// cross as a raw `tauri::ipc::Response` and a status does not.
+///
+/// **It asks the session and not the preview**, one of them knowing a field the
+/// other does not. This line is outside every test in this repository, by the
+/// division this file records for itself: `preview::Session::status` is where
+/// the composition is checked, and the window gate is where the call site is.
 #[tauri::command]
 fn status(session: tauri::State<'_, Mutex<Session>>) -> Status {
     session
         .lock()
         .expect("the session lock was poisoned")
-        .preview()
         .status()
+}
+
+/// Which palette the window wears, as the footer's toggle asks for it.
+///
+/// **Two halves, and the split is what the phase is for.**
+/// [`preview::Session::set_appearance`] writes the settings file, moves the
+/// value and announces it through `rendered` — all three, because the announce
+/// is the page's only route to the footer's mark. Then the native title bar
+/// follows, which nothing in the content area can do and which is why this
+/// command exists at all rather than the page keeping the preference itself.
+///
+/// **From the page `set_theme` would reject** — `capabilities/default.json`
+/// grants `core:default`, which is the window's getters and no setter — but
+/// **from Rust capabilities do not apply**, which is the route
+/// [`set_edited`]'s `set_title` already takes. No capability is added for this.
+#[tauri::command]
+fn set_appearance(
+    window: tauri::Window,
+    session: tauri::State<'_, Mutex<Session>>,
+    appearance: Appearance,
+) -> Result<(), String> {
+    session
+        .lock()
+        .expect("the session lock was poisoned")
+        .set_appearance(appearance)?;
+
+    window
+        .set_theme(theme(appearance))
+        .map_err(|e| e.to_string())
+}
+
+/// An [`Appearance`] as Tauri spells it.
+///
+/// `tauri::Theme` is `Light | Dark` and the option is the third state:
+/// **`None` is *follow the system***, which maps onto
+/// [`Appearance::System`] exactly and is why the three states need no fourth
+/// call. It lives here rather than beside the enum so that `preview.rs` — which
+/// the tests are written against — never imports `tauri`.
+fn theme(appearance: Appearance) -> Option<tauri::Theme> {
+    match appearance {
+        Appearance::System => None,
+        Appearance::Light => Some(tauri::Theme::Light),
+        Appearance::Dark => Some(tauri::Theme::Dark),
+    }
 }
 
 /// Where the Save-a-copy dialog should open, or why it should not open.

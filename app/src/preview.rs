@@ -16,7 +16,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::document;
 use crate::watch::{self, Change, Changed, Watch};
@@ -39,6 +39,30 @@ pub enum State {
     /// The last compile failed with no page to keep — the open that never
     /// compiled.
     Failed,
+}
+
+/// Which palette the window wears, as the author asked for it.
+///
+/// **Three states, and [`Appearance::System`] is one of them rather than the
+/// absence of the other two.** Following the system is what this app did before
+/// there was a choice, and a control that could not get back to it would be a
+/// regression on a machine that switches at sunset.
+///
+/// It is spelled the way [`State`] is, so the page reads one convention off the
+/// status and not two. **Nothing about the document is here**: the page Typst
+/// compiles is white in either palette, which is why `--paper` does not move,
+/// and `specs/desktop_app_spec.md` §1.1 draws that line.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Appearance {
+    /// Follow `prefers-color-scheme`, which is what the page does with no
+    /// `data-theme` attribute on it at all.
+    #[default]
+    System,
+    /// Light, whatever the system says.
+    Light,
+    /// Dark, whatever the system says.
+    Dark,
 }
 
 /// What an external change to the open document did.
@@ -185,6 +209,17 @@ pub struct Status {
     /// row is clicked, and the panel draws a mark for each. Equal to `main`
     /// exactly while the pane holds the file that compiles.
     pub edited: Option<String>,
+    /// Which palette the window is wearing.
+    ///
+    /// **It is not about the last compile, and it rides here anyway** — as
+    /// [`Status::entries`], [`Status::main`] and [`Status::edited`] do, and for
+    /// their reason: the status is already fetched on the path that draws, so a
+    /// field the footer places needs no command of its own to arrive on.
+    ///
+    /// **[`Preview`] does not know it.** Only [`Session::status`] fills this
+    /// with the value the author chose; [`Preview::status`] fills
+    /// [`Appearance::System`] and says so where it does it.
+    pub appearance: Appearance,
 }
 
 /// The pane's state, as Rust holds it.
@@ -328,6 +363,12 @@ impl Preview {
             entries: self.entries(),
             main: self.main.clone(),
             edited: self.edited_relative(),
+            // **A `Preview` does not know the appearance**, which is held on
+            // `Session` beside the store because it is global and this struct
+            // is per-document — `Session::open_at` rebuilds it whole, so a
+            // preference kept here would go back to `System` on every `⌘O`.
+            // `Session::status` is what fills this with the author's choice.
+            appearance: Appearance::System,
         }
     }
 
@@ -546,14 +587,35 @@ impl Preview {
 pub struct Session {
     state: Arc<Mutex<Preview>>,
     on_render: Arc<dyn Fn() + Send + Sync>,
-    /// The one file this app writes outside the author's own folders: which
-    /// root is remembered as compiling which file.
+    /// The first of the two files this app writes outside the author's own
+    /// folders: which root is remembered as compiling which file.
     ///
     /// **It is a parameter and not a call to the platform**, so a test hands in
     /// a scratch directory and the rule that reads it stays on the testable
     /// side of the window. `crate::main` resolves the real one from Tauri's own
     /// path resolver, which is the authority on the bundle identifier.
     store: PathBuf,
+    /// The second of the two files this app writes outside the author's own
+    /// folders: which palette the window wears.
+    ///
+    /// **A second file and not a second key in the first**, and the reason is
+    /// checkable rather than aesthetic: `projects.json` deserializes as a
+    /// `BTreeMap<String, String>` and `crate::document::read_store` swallows a
+    /// parse failure, so reshaping that file around a `theme` member would make
+    /// every existing one malformed — and malformed means forgotten. Every
+    /// author's remembered main would be dropped by the upgrade.
+    ///
+    /// It is a parameter for [`Session::store`]'s reason, and the same test
+    /// hands in the same scratch directory.
+    settings: PathBuf,
+    /// The palette the author chose, read from [`Session::settings`] at launch.
+    ///
+    /// **It is here and not on [`Preview`]** because it is global and a
+    /// `Preview` is one document's: [`Session::open_at`] rebuilds that struct
+    /// from `Preview::default()`, so a preference kept there would reset on
+    /// every open, after which the footer's mark flips and the settings file
+    /// disagrees with the running window.
+    appearance: Appearance,
     watch: Option<Watch>,
     typing: Option<mpsc::Sender<()>>,
 }
@@ -564,11 +626,18 @@ impl Session {
     /// The callback carries no payload. The window's copy of it emits an event
     /// and the page then asks for the bytes, because handing them through the
     /// event would serialize them as a JSON array of numbers, one per byte.
-    pub fn new(store: PathBuf, on_render: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn new(
+        store: PathBuf,
+        settings: PathBuf,
+        appearance: Appearance,
+        on_render: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
         Self {
             state: Arc::new(Mutex::new(Preview::default())),
             on_render: Arc::new(on_render),
             store,
+            settings,
+            appearance,
             watch: None,
             typing: None,
         }
@@ -577,6 +646,49 @@ impl Session {
     /// What the pane is showing. Phase 3's export reads the same values.
     pub fn preview(&self) -> std::sync::MutexGuard<'_, Preview> {
         self.state.lock().expect("the preview lock was poisoned")
+    }
+
+    /// Everything the window says, from the two places that know it.
+    ///
+    /// **The composition is here rather than in [`Preview::status`], and the
+    /// split is the point**: eleven of the twelve fields are the last compile's
+    /// and one is the author's, held for a document's lifetime rather than for
+    /// a compile's. [`Preview::status`] keeps its signature because some
+    /// thirty-five call sites read it, nearly all of them tests.
+    ///
+    /// `crate::main::status` calls **this** and not `preview().status()`, which
+    /// is the one line no test in this crate reaches.
+    pub fn status(&self) -> Status {
+        Status {
+            appearance: self.appearance,
+            ..self.preview().status()
+        }
+    }
+
+    /// Wear a palette, remember it, and say so.
+    ///
+    /// **All three, and here rather than in a command**, because
+    /// [`Session::on_render`] is private to this module: a command that
+    /// announced from `crate::main` would have to emit the signal itself and
+    /// duplicate the one path this app has. The loose reading — a command that
+    /// wrote the file and never announced — has a failure mode nothing would
+    /// catch: the title bar right, the file right, and the footer's mark stale
+    /// until the next compile.
+    ///
+    /// It announces through the compile signal for the reason
+    /// [`Session::set_edited`] does, compiling nothing either: the page's
+    /// `refresh` guards on the revision, so nothing recompiles and nothing
+    /// redraws. A second signal for one field would be a second path doing the
+    /// job of the one that exists.
+    ///
+    /// **The write is reported where a read is not**: the author has just asked
+    /// for it, which is the rule `crate::document::write_override` already
+    /// follows.
+    pub fn set_appearance(&mut self, appearance: Appearance) -> Result<(), String> {
+        document::write_appearance(&self.settings, appearance)?;
+        self.appearance = appearance;
+        (self.on_render)();
+        Ok(())
     }
 
     /// Open what the author picked: find the project it sits in, read the file
@@ -1021,12 +1133,24 @@ mod tests {
     }
 
     /// The same, with the store named, for the cases that put something in it.
+    ///
+    /// **The settings file is derived rather than passed**, and it is derived
+    /// the way the real app derives it: beside the store, in the same
+    /// directory. So a case that wants to read what an appearance wrote spells
+    /// `document::settings_file` over the same scratch directory and gets the
+    /// same path, and the twelve call sites of this helper do not move.
     fn counted_with(store: PathBuf) -> (Session, Arc<AtomicUsize>) {
+        let support = store.parent().map(Path::to_path_buf).unwrap_or_default();
         let compiles = Arc::new(AtomicUsize::new(0));
         let counter = Arc::clone(&compiles);
-        let session = Session::new(store, move || {
-            counter.fetch_add(1, Ordering::SeqCst);
-        });
+        let session = Session::new(
+            store,
+            document::settings_file(&support),
+            Appearance::System,
+            move || {
+                counter.fetch_add(1, Ordering::SeqCst);
+            },
+        );
         (session, compiles)
     }
 
@@ -2617,7 +2741,7 @@ mod tests {
     ///
     /// **This is the narrow edge `specs/desktop_app_spec.md` OQ-10 names.**
     /// `invoke` answers with an untyped value and `app/dist/index.html` reads
-    /// eleven fields off it by name, so a field renamed here and not there breaks
+    /// twelve fields off it by name, so a field renamed here and not there breaks
     /// the window silently, at runtime, with no console anyone reads. The type
     /// check over that file (`app/typecheck.mjs`) makes the typedef bind on the
     /// page's side; this makes it bind on Rust's. **Two declarations compared
@@ -2628,10 +2752,12 @@ mod tests {
     ///
     /// **The count moved from ten to eleven in `mpdf-010` Phase 2**, which
     /// added `edited` beside `main` so the panel can mark the row the pane is
-    /// holding. Phase 1 left it at ten by coincidence — it removed `sections`
-    /// and `master` and added `entries` and `main` — and said so here, in a
-    /// note this phase's own scope is the authority for rewriting. A literal
-    /// that has now moved once is still not a thing to "fix" to silence a
+    /// holding, and **from eleven to twelve in `mpdf-003` Phase 13**, which
+    /// added `appearance` so the footer's toggle places what Rust decided.
+    /// Phase 1 left it at ten by coincidence — it removed `sections` and
+    /// `master` and added `entries` and `main` — and said so here, in a note
+    /// each later phase's own scope is the authority for rewriting. A literal
+    /// that has now moved twice is still not a thing to "fix" to silence a
     /// failure: a failure here is about a field.
     #[test]
     fn the_page_typedefs_name_exactly_the_fields_status_serializes() {
@@ -2653,6 +2779,7 @@ mod tests {
             }],
             main: Some("report.md".to_string()),
             edited: Some("sections/method.md".to_string()),
+            appearance: Appearance::Dark,
         };
         let sent = serde_json::to_value(&status).expect("a `Status` that will not serialize");
 
@@ -2669,7 +2796,7 @@ mod tests {
         // marker that stopped matching should fail loudly rather than pass.
         assert_eq!(
             declared.len(),
-            11,
+            12,
             "the page's `Status` typedef declares {} properties: {:?}",
             declared.len(),
             declared
@@ -2725,6 +2852,73 @@ mod tests {
         // switches on. A `rename_all` dropped here would send `"Markdown"` and
         // every row would draw as the fallback.
         assert_eq!(sent["entries"][0]["kind"], "markdown");
+    }
+
+    /// A `Session` told an appearance reports it; a bare `Preview` reports
+    /// `System`.
+    ///
+    /// **The seam this reaches is the two-place composition, and it is silent
+    /// when it is wrong.** `Preview::status` deliberately fills
+    /// `Appearance::System` and only `Session::status` corrects it, so a
+    /// composition that dropped the override would report `System` for ever
+    /// while everything else went on working: `set_theme` flips the native
+    /// appearance directly, so the title bar and the palette would follow the
+    /// author's choice and only the footer's own mark would stall. The harness
+    /// stubs Rust entirely and would read as passing.
+    ///
+    /// **Both halves are load-bearing.** Without the second, an implementation
+    /// that guessed a value in `Preview::status` instead of filling `System`
+    /// would pass; without the first, one that never overrode would.
+    ///
+    /// What it does **not** reach is the call site — whether
+    /// `crate::main::status` was moved onto `Session::status` at all is outside
+    /// every test in this repository, by the division `main.rs` records for
+    /// itself, and the window gate is where that line gets eyes.
+    #[test]
+    fn the_session_carries_the_appearance_and_a_bare_preview_does_not() {
+        let (mut session, compiles) = counted();
+
+        assert_eq!(
+            Preview::default().status().appearance,
+            Appearance::System,
+            "a `Preview` knows no appearance and must say so"
+        );
+        assert_eq!(
+            session.status().appearance,
+            Appearance::System,
+            "a session nobody has told follows the system"
+        );
+
+        for appearance in [Appearance::Dark, Appearance::Light, Appearance::System] {
+            session.set_appearance(appearance).unwrap();
+            assert_eq!(
+                session.status().appearance,
+                appearance,
+                "the session did not report the appearance it was told"
+            );
+            assert_eq!(
+                session.preview().status().appearance,
+                Appearance::System,
+                "the preview answered an appearance it cannot know"
+            );
+        }
+
+        // It announces, and that is the whole of how the footer's mark moves:
+        // `set_appearance` compiles nothing, so this counts announcements and
+        // not compiles.
+        assert_eq!(
+            compiles.load(Ordering::SeqCst),
+            3,
+            "each appearance must announce exactly once"
+        );
+
+        // And the eleven fields that are the last compile's are still the
+        // preview's own, so the override is one field and not a second status.
+        let empty = Preview::default().status();
+        let told = session.status();
+        assert_eq!(told.state, empty.state);
+        assert_eq!(told.revision, empty.revision);
+        assert_eq!(told.entries, empty.entries);
     }
 
     /// The footer's brand cell says exactly what the bundle is called.

@@ -29,8 +29,28 @@
         */
         --paper: #fff;
       }
+      /*
+        **Four blocks where there were two, and the dark palette is written
+        twice.** The duplication is the pattern rather than an oversight: a
+        media query's condition cannot be shared with an attribute selector, and
+        a toggle has to win in *both* directions — under a dark system
+        `data-theme="light"` opts out, under a light one `data-theme="dark"`
+        opts in. **No attribute at all is the third state**, and it is the
+        behaviour this file had before there was a choice, unchanged; which is
+        why `system` removes the attribute rather than setting a third value.
+
+        **`color-scheme` follows all three ways and is not decoration.** It is
+        what paints the `#fit` select, its native arrow and the scrollbars —
+        measured against the case a naive implementation gets wrong, a dark
+        page on a light system, where without it the select alone stays light.
+
+        `--paper` is in none of them, for the reason its own comment above
+        gives. `specs/desktop_app_spec.md` Phase 13 pins it unmoved in all six
+        system-by-state combinations, and that is what keeps §1.1's narrowing
+        honest: this app themes its own chrome and nothing about the document.
+      */
       @media (prefers-color-scheme: dark) {
-        :root {
+        :root:not([data-theme='light']) {
           --ground: #1c1f27;
           --chrome: #262a34;
           --edge: #363b47;
@@ -39,6 +59,19 @@
           --alarm: #e08573;
           --band: #242833;
         }
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --ground: #1c1f27;
+        --chrome: #262a34;
+        --edge: #363b47;
+        --ink: #e6e6e2;
+        --quiet: #9aa1ae;
+        --alarm: #e08573;
+        --band: #242833;
+      }
+      :root[data-theme='light'] {
+        color-scheme: light;
       }
 
       html,
@@ -1078,9 +1111,44 @@
         white-space: nowrap;
         text-overflow: ellipsis;
       }
-      #brand {
+      /*
+        **The auto margin is the icon group's and the brand comes last**, which
+        is the shape `notes-ivan/letur_footer.md` names: readouts left, a group
+        of small icon buttons right, product name last. Left on `#brand` the
+        toggle would sit outside the group's own right edge — and
+        `app/harness/checks.mjs` measures the group's distance to the brand
+        against this bar's own `gap`, at the sweep's widest width, because that
+        is the reading the two layouts differ in. `#brand`'s own rect does not
+        differ: an auto margin absorbs exactly the free space in total, so a
+        last child with no right margin cannot move.
+
+        **The button must not change the bar's height**, which is the whole of
+        what this footer costs `main`. A `button` brings a font, a padding, a
+        border and a background of its own, so all four come off and the line
+        height is pinned to the bar's.
+      */
+      #controls {
         flex: none;
         margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #theme {
+        flex: none;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        line-height: 1;
+        cursor: pointer;
+      }
+      #theme:hover {
+        color: var(--ink);
+      }
+      #brand {
+        flex: none;
       }
     </style>
   </head>
@@ -1224,6 +1292,9 @@
     -->
     <footer>
       <span id="edited"></span>
+      <span id="controls">
+        <button id="theme" type="button"></button>
+      </span>
       <span id="brand">Letur</span>
     </footer>
 
@@ -1251,7 +1322,7 @@
         `app/tsconfig.json` for why its settings are what they are.
 
         **`Status`, `Anchor` and `Entry` are the point, and they are the three
-        that can lie.** `invoke` returns an untyped value and this page reads eleven
+        that can lie.** `invoke` returns an untyped value and this page reads twelve
         fields off it by name, so a field renamed in Rust would break the window
         silently at runtime. `app/src/preview.rs`'s own test compares the
         `@property` lists below against a serialized `Status` — two declarations
@@ -1276,6 +1347,18 @@
        * @property {Entry[]} entries
        * @property {string | null} main
        * @property {string | null} edited
+       * @property {Appearance} appearance
+       */
+
+      /**
+       * Which palette the window wears: `app/src/preview.rs:Appearance`.
+       *
+       * Three states, and `system` is one of them rather than the absence of
+       * the other two — it is what this app did before there was a choice, and
+       * a control that could not get back to it would be a regression on a
+       * machine that switches at sunset.
+       *
+       * @typedef {'system' | 'light' | 'dark'} Appearance
        */
 
       /**
@@ -1372,6 +1455,58 @@
       // The footer's left cell. Named for the cell rather than for the field,
       // because `panelRows` and `fileRow` already take an `edited` of their own.
       const editedCell = document.getElementById('edited')
+
+      /*
+        The footer's own control, and the first thing in the bar a person can
+        press. **The page places the appearance and never decides it**: the
+        value comes off `Status` and the click goes to Rust, which is where it
+        can be remembered across a launch and where `window.set_theme` has to be
+        called anyway so the native title bar does not stay light while the
+        content goes dark.
+
+        So the attribute moves when Rust answers, not when the button is
+        pressed. `app/harness/checks.mjs` owns that as a clause of its own.
+
+        The marks are chosen and not defended — `specs/desktop_app_spec.md`
+        OQ-12 is what will force that, and its answer may be three small inline
+        paths instead.
+      */
+      const themeButton = /** @type {HTMLButtonElement} */ (document.getElementById('theme'))
+      /** @type {Appearance[]} */
+      const APPEARANCES = ['system', 'light', 'dark']
+      const APPEARANCE_MARK = { system: '◐', light: '☀', dark: '☾' }
+      const APPEARANCE_SAYS = {
+        system: 'Appearance: following the system',
+        light: 'Appearance: light',
+        dark: 'Appearance: dark'
+      }
+      /** The appearance last placed, which is the one the next click cycles off.
+          @type {Appearance} */
+      let worn = 'system'
+
+      /**
+       * Wear an appearance: the attribute the palette is keyed to, and the
+       * cell's own mark.
+       *
+       * **`system` removes the attribute rather than setting a third value**,
+       * so the two guarded blocks in the stylesheet are all it takes and the
+       * third state is the page as it was before there was a choice.
+       *
+       * A bare glyph names nothing to a screen reader, and this is the first
+       * interactive control the bar has carried — so it carries `title` and
+       * `aria-label` both. `specs/desktop_app_spec.md` OQ-11 has what that
+       * still leaves open, which is the landmark rather than the control.
+       *
+       * @param {Appearance} next
+       */
+      function wearAppearance(next) {
+        worn = next
+        if (next === 'system') document.documentElement.removeAttribute('data-theme')
+        else document.documentElement.setAttribute('data-theme', next)
+        themeButton.textContent = APPEARANCE_MARK[next]
+        themeButton.title = APPEARANCE_SAYS[next]
+        themeButton.setAttribute('aria-label', APPEARANCE_SAYS[next])
+      }
 
       /*
         The document the canvases were drawn from, held between renders, and
@@ -1658,6 +1793,7 @@
         // is the whole of the empty state — the cell collapses to nothing and
         // the brand beside it stays.
         editedCell.textContent = state.edited?.split('/').pop() ?? ''
+        wearAppearance(state.appearance)
 
         parts(state)
       }
@@ -3759,6 +3895,16 @@
         invoke('edit', { text: text.value })
         relines()
       })
+
+      // **The click asks and does not act.** It names the next of the three and
+      // stops there; `set_appearance` writes the file, moves the native title
+      // bar and announces, and the announce is what brings the value back
+      // through `refresh` to `report` above.
+      themeButton.addEventListener('click', () =>
+        invoke('set_appearance', {
+          appearance: APPEARANCES[(APPEARANCES.indexOf(worn) + 1) % APPEARANCES.length]
+        }).catch(fail)
+      )
 
       document.getElementById('discard').addEventListener('click', discardEdits)
       document.getElementById('open').addEventListener('click', openDocument)
