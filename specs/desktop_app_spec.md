@@ -950,6 +950,64 @@ list to one item.
   > `--mutate`, so the forked path and the single-mutation path are one path and
   > its exit code already means *isolated*.
 
+  > **NARROWED 2026-08-29, by a spike, and one candidate answer is now dead: the
+  > driver is not the difference.** The note above says the difference from the
+  > original is the driver, and that *"why Playwright does not report them is
+  > unestablished, and nothing here claims it."* It is established now, in the
+  > direction that closes a road rather than opens one.
+  >
+  > **The A/B was re-run in the real WKWebView**, driven unattended for the first
+  > time in this project's history: `tauri-plugin-wdio-webdriver` 1.3.0, an
+  > in-process W3C WebDriver server under `#[cfg(debug_assertions)]`, reached over
+  > plain HTTP with no client library at all. The session reports
+  > `browserName: webkit, browserVersion: 605.1.15, platformName: macos` — the
+  > engine that ships, not Playwright's. By Phase 12's own method, at
+  > `devicePixelRatio` 2 with `#pages` at 521 over the 71-page
+  > `tests/fixtures/long.md`, `e6c9602`'s own gate pasted in and `long()`
+  > completing 13 passed / 3 failed on both revisions: **0 `ResizeObserver` errors
+  > on `e6c9602^` and 0 on `e6c9602`.** The same answer Playwright gave in all
+  > eight of its cells.
+  >
+  > **The rig was falsified before the 0 was believed**, which is the clause that
+  > makes it mean anything. A deliberate loop — a `ResizeObserver` callback that
+  > resizes the box it observes — injected into the same window through the same
+  > session produced **242 caught errors**, every one
+  > `ResizeObserver loop completed with undelivered notifications.`, with a plain
+  > `throw` beside it as a positive control on the listener. **WKWebView does
+  > report this class as a window `error` event and this rig does catch it**, so
+  > the 0 is a measurement rather than a blind instrument.
+  >
+  > **Two further stimuli, because the driver's discreteness was the obvious next
+  > suspect and it is not the answer either.** On the guilty revision: a
+  > 240-frame divider drag at animation-frame cadence, the pane sweeping 462→522
+  > across 21 distinct widths — **0**; and 40 rapid `setWindowRect` calls, the
+  > OS's own resize path — **0**.
+  >
+  > **What is left is narrower and better posed.** Whatever produced the original
+  > 21, it is not the webview, not the continuity of an in-page drag, and not
+  > rapid real window resizing. The original was a *human*, on a trackpad,
+  > dragging a *real window frame*, against that day's build and that day's OS.
+  > The cheapest remaining probe is a person repeating that gesture on the guilty
+  > build — which the spike has already built and left recoverable.
+  >
+  > **So this question keeps its behaviour half, and loses its most likely
+  > answer.** A phase committing a real-engine driver should *not* be written for
+  > OQ-10's sake: the prize it would have been for is measured and absent. The rig
+  > remains worth having for a different and smaller reason — it is the only thing
+  > that has driven this app's real engine unattended, and it would automate most
+  > of `tests/gates/mpdf-003-phase13.js` — but that is a capability phase, not an
+  > answer to this.
+  >
+  > Recorded with it, because it is a defect in someone else's documentation that
+  > this project would otherwise inherit: **`[target.'cfg(debug_assertions)'.dependencies]`,
+  > which WebdriverIO's setup page prescribes, does not gate anything.** Cargo says
+  > so — *"not supported for selecting dependencies and will not work as
+  > expected"* — so the crate is linked into a release build and only the
+  > `init()` call is `#[cfg]`'d out. A phase would need a cargo feature. The log,
+  > the diff and the three rig scripts are in the gitignored
+  > `notes-ivan/real_window_driver.md`; the wiring is on branch
+  > `spike/real-window-driver`.
+
 - **OQ-11** — what does the footer's first interactive control cost a screen reader?
   Raised 2026-08-29 by Phase 13, whose toggle is the first thing in the bar a person
   can press. *(design call)* `<footer>` is a `contentinfo` landmark and carries no
