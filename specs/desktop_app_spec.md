@@ -73,6 +73,11 @@ phases:
     shipped: 2026-08-29
     cut: null
     by: null
+  - name: "Phase 14 — the window gates run themselves"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -3318,6 +3323,151 @@ Phase 11 named it as the thing to do before a toggle could be a phase.
   toggle in that bar belongs in the same paragraph. **`CLAUDE.md`: none needed.**
   **§1.1's amendment lands with this phase's spec commit**, above, not with its
   implementation. One push.
+
+
+### Phase 14 — the window gates run themselves
+
+*Produces the observable: **no**, and the argument is the one Phase 9 and Phase 12
+both made and this phase inherits.* Nothing it adds reaches the compile path; the
+PDF is byte-identical across it, and clause 1 is the check. What it buys is not a
+capability of the app but the **cost of finding out whether the app works** — which
+is a thing this document can now put a number on rather than assert.
+
+**The number, and it is the whole argument.** `tests/gates/mpdf-003-phase13.js` was
+run in the window three times on 2026-08-29 and reported **five failures. Four were
+the instrument.** Its transcript lived in a closure, so a relaunch took half the run
+with it; clause 4 counted errors in a window `arm()` had never run in and passed by
+counting nothing; `restore()` read a live value after the walk that had moved it;
+and clause 1 judged a `system` reading against a media query the walk had since put
+in dark, failing correct code. The phase's own code was wrong **once**, at the launch
+frame. **Each of those four cost a manual window run**, which is the most expensive
+thing this project spends.
+
+**And all eight gates hand-roll the same ledger** — `transcript`, `ok`, `note`,
+`tally`, the two error listeners — across some 3,700 lines, never tested, and three
+of those four defects were in that shape rather than in the clauses it carries.
+
+Appended 2026-08-29, per §6.1 step 2: what checks this app is this spec's own subject
+and has been since Phase 9. **Strictly after Phase 12**, whose browser harness this
+sits beside rather than replaces, **and after Phase 13**, whose gate is the first one
+it drives and the source of the measurement above.
+
+**It is not the phase OQ-10 wanted, and that is stated so the two are not confused.**
+The 2026-08-29 spike killed the hypothesis that a real-engine driver reaches the seven
+behaviour defects: the A/B answers 0 and 0 in WKWebView, with the rig falsified
+against a deliberate loop it caught 242 of. **This phase claims nothing about those
+seven.** It claims that the *measurable* clauses of a window gate should be measured
+by a machine, and it is worth building for that alone.
+
+- **Scope:**
+
+  **The server, and how it is kept out of a shipped app —
+  `app/Cargo.toml`, `app/build.rs`, `app/src/main.rs`, `app/capabilities/`.**
+  `tauri-plugin-wdio-webdriver` 1.3.0 is an in-process W3C WebDriver server on
+  `127.0.0.1:4445`. It is an **optional dependency behind a cargo feature named
+  `driven`**, and `#[cfg(feature = "driven")]` gates its `init()`.
+
+  **Not `[target.'cfg(debug_assertions)'.dependencies]`, which is what WebdriverIO's
+  own setup page prescribes and which does not work.** Cargo says so outright —
+  *"Found `debug_assertions` in `target.'cfg(...)'.dependencies`. This value is not
+  supported for selecting dependencies and will not work as expected"* — so under the
+  documented incantation the crate is compiled and linked into a release build and
+  only the `init()` call is gated. The distinction is checkable and clause 2 checks it.
+
+  **The capability is the hard half, and the route is measured rather than proposed.**
+  `tauri-build` globs `capabilities/`, and a permission naming an uncompiled plugin is
+  a **build error** — `Permission wdio-webdriver:default not found` — so the entry
+  cannot simply sit in `default.json`. `add_capability` exists but is behind tauri's
+  own `dynamic-acl` feature, which would gate `tauri`'s features too. **So `build.rs`
+  writes `capabilities/driven.json` when `CARGO_FEATURE_DRIVEN` is set and removes it
+  when it is not**, which keeps one source of truth and needs no second config file.
+  All four states were built and run during drafting: without the feature the crate is
+  absent from `cargo tree`, the capability file is gone and nothing answers on 4445;
+  with it, all three are there.
+
+  **The driver — `app/driver/drive.mjs`, and it is a second rig rather than a change
+  to the first.** `app/harness/` stubs Rust and drives the page in Playwright; this
+  drives the shipped binary and the real WKWebView, and the two answer different
+  questions. It speaks plain HTTP to the endpoint — **no npm client**, the spike having
+  established that `@wdio/tauri-service` buys nothing this needs — and gives a gate:
+  a session, `execute/sync`, `window/rect`, and `invoke('open_document', {path})` so a
+  document opens with no dialog.
+
+  **What it can do that the page cannot, and this is why it is worth a phase rather
+  than a script**: `setWindowRect` is in the session's capabilities, so **the driver
+  resizes the window**, which `core:default` refuses the page and which
+  `tests/gates/mpdf-003-phase11.js` therefore asks a human to do by dragging. Every
+  width sweep in `tests/gates/` is that gesture.
+
+  **The ledger moves into the driver, which is what fixes three of the four defects
+  above by construction.** The transcript lives in a node process, so a relaunch cannot
+  take it; arming is the driver's own act, so an unarmed window is not a state a clause
+  can silently pass in; and an answer is a measurement rather than a boolean an
+  operator types, so there is no `landed(false)` to get backwards. **The fourth — a
+  live value read after the walk that moved it — is not fixed by construction** and is
+  named here so it is not assumed away: it is a discipline, and clause 4 is what holds
+  it.
+
+  **What this phase converts, and it is one gate.** `tests/gates/mpdf-003-phase13.js`:
+  clause 1's plumbing half (the three values reach Rust and the page places each) and
+  clause 2 (the marks' widths and the brand's rect in WKWebView) become driver clauses.
+  **The other seven gates are not rewritten** — that is a later phase, and doing it here
+  would be a 3,700-line diff whose gate is "it still passes", which is no gate at all.
+
+  **Not in this phase, named so they are not smuggled in.** **The title bar's own
+  pixels and the launch flash stay with a person**: W3C `Take Screenshot` is the
+  viewport, not the OS window, and the driver's session begins after the window is up.
+  Phase 13's gate keeps those two clauses and loses the other two. No replacement of
+  `app/harness/`, no claim about OQ-10's seven, no rewrite of the other gates, and **no
+  new capability in `default.json`** — `driven.json` is a second file for the same
+  reason `settings.json` was.
+
+- **Exit gate:**
+
+  1. `cargo test --workspace` passes at **338 passed, 0 failed and 2 ignored across
+     nine binaries** — unchanged, because no test moves. A phase about the instrument
+     must not move the thing it measures.
+  2. **The feature is off by default and provably so, in three ways rather than one**,
+     because this is the clause that keeps a WebDriver server out of a shipped app:
+     `cargo tree -p letur -e normal` names `tauri-plugin-wdio-webdriver` **zero** times
+     and `--features driven` names it **once**; `app/capabilities/driven.json` does not
+     exist after a plain build and does after a driven one; and the plain binary,
+     launched, **answers nothing on 4445** while the driven one answers
+     `{"ready":true}`. All three, because the first alone would pass on the documented
+     `cfg(debug_assertions)` form that this phase exists partly to avoid.
+  3. **The driver runs Phase 13's two converted clauses unattended and they pass**, in
+     a `--features driven` build, with no human in the loop and the app launched and
+     killed by the driver itself.
+  4. **The driver is falsified before it is trusted, as `checks.mjs` was, and one of
+     its mutations is of a kind that suite has no equivalent for.** Two broken pages,
+     each failing exactly the clause that owns it — the mark wired to the value rather
+     than to what is in effect, and the click rewired to place instead of invoke. **And
+     a third check that is not a mutation at all: the instrument must prove it can see
+     what it reports the absence of.** A deliberate `ResizeObserver` loop injected
+     through the same session must be **caught**, and a run in which it is not caught
+     fails, whatever the clauses say. The spike is why this clause exists: its 0 meant
+     nothing until 242 caught errors made it a measurement.
+  5. `bun app/typecheck.mjs` exits 0, `bun app/harness/checks.mjs` and `--webkit` still
+     print ten clauses each, `--falsify` still isolates six — **the browser harness is
+     untouched and must be shown to be** — and **`git status` is clean after a full
+     run**, `build.rs` writing `driven.json` into a directory git tracks. Either that
+     file is committed and removed by the plain build, which dirties the tree, or it is
+     `.gitignore`d; **the phase takes the second and says so**, because a build that
+     edits tracked files is worse than a line in `.gitignore`.
+
+- **Close-out:** **`rules/desktop.md`** — the feature, the plugin, the second
+  capability file and why it is written rather than checked in; the cargo-rejects-the-
+  documented-form fact, which is the kind a later reader will otherwise rediscover.
+  Its cap stands at 611/635 and this needs perhaps fifteen lines, so it will move again
+  and the commit says which. **`rules/desktop-panes.md`** — `## What checks it, and what
+  that does not reach` gains the second rig and, more importantly, **the sentence that
+  says what each of the two is for**, since a reader with two harnesses and no rule
+  distinguishing them will use the wrong one. **`rules/desktop-geometry.md`: none
+  needed.** **`README.md`: none needed** — this is dev infrastructure and Phase 12's
+  harness took no line there either. **`CLAUDE.md`: none needed.** **`.gitignore`** gains
+  `app/capabilities/driven.json`, per clause 5. **OQ-10 takes no new note**: the spike's
+  is already there and this phase deliberately claims nothing about its behaviour half.
+  One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
