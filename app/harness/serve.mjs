@@ -163,6 +163,29 @@ const MUTATIONS = {
     return page.replace(rule[0], dropped)
   },
 
+  /* **A pinned header whose children have left it.** `flex-wrap: wrap` and one
+     child too wide for the line, and the header still reads its own 28: a flex
+     container with an explicit `height` does not grow when its line wraps, its
+     content overflows instead. That is exactly what the height half of clause 3
+     cannot see and the second half is there for — measured in the shipping
+     WKWebView, `#status` 34px below the bar's own bottom edge and the wide child
+     14px, where the unmutated header has no child outside it at all.
+
+     Two edits, because either alone is inert: the wrap without a wide child has
+     nothing to wrap, and the wide child without the wrap makes one long line. */
+  'header-wraps': (page) => {
+    const rule = page.match(/\n( *)header \{\n[\s\S]*?\n\1\}\n/)
+    if (!rule) die('the mutation header-wraps found no header rule')
+    const wrapped = rule[0].replace(/^( *)display: flex;\n/m, '$1display: flex;\n$1flex-wrap: wrap;\n')
+    if (wrapped === rule[0]) die('the mutation header-wraps found no display: flex to wrap')
+
+    const status = '      <span id="status"></span>\n'
+    if (page.split(status).length !== 2) die('the mutation header-wraps found no single #status')
+    return page
+      .replace(rule[0], wrapped)
+      .replace(status, '      <span id="wide" style="flex: none; width: 900px; height: 14px"></span>\n' + status)
+  },
+
   /* Rewires the footer's cell to the file that compiles rather than the file
      the pane is holding. The two are equal at every open, so this passes
      everything until a row is clicked. */
@@ -196,25 +219,12 @@ const MUTATIONS = {
     )
   },
 
-  /* Puts the auto margin back where Phase 11 had it. **This changes nothing
-     about `#brand`'s own rect** — an auto margin absorbs exactly the free space
-     in total, so a last child with no right margin cannot move, which is what
-     falsified this mutation's first draft. What moves is the group. */
-  /* The bar's copy of a view toggle places its own state and does not follow
-     the header's — the exact defect a duplicated control invites, and the one a
-     check reading only the control it pressed would never see. `Files` is
-     enough to falsify the clause; the `Lines` pair is the same shape. */
-  'views-one-way': (page) => {
-    const line = "for (const control of foldControls) control.setAttribute('aria-expanded', String(!folded))"
-    if (page.split(line).length !== 2) die('the mutation views-one-way found no single fold writer')
-    return page.replace(line, "foldControls[0].setAttribute('aria-expanded', String(!folded))")
-  },
-
   /* The bar's marks paint the same in both states — on and off alike — which
      is the failure an icon invites and a word does not: every ARIA reading
      still agrees, the pane still follows, and a reader cannot see which way
-     either toggle is set. It is the second half of clause 10, and the half
-     `views-one-way` cannot reach. */
+     either toggle is set. **It owns clause 10 alone**, since the header gave
+     its worded copies up and `views-one-way` — the sync between two controls
+     that can no longer disagree — went with them. */
   'marks-unlit': (page) => {
     const block =
       "      #views button:hover,\n" +
@@ -234,6 +244,10 @@ const MUTATIONS = {
     return page.replace(block, '        viewer.hidden = false\n')
   },
 
+  /* Puts the auto margin back where Phase 11 had it. **This changes nothing
+     about `#brand`'s own rect** — an auto margin absorbs exactly the free space
+     in total, so a last child with no right margin cannot move, which is what
+     falsified this mutation's first draft. What moves is the group. */
   'controls-auto-margin': (page) => {
     const controls = page.match(/\n( *)#controls \{\n[\s\S]*?\n\1\}\n/)
     const brand = page.match(/\n( *)#brand \{\n[\s\S]*?\n\1\}\n/)

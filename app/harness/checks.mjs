@@ -48,15 +48,22 @@ const flag = (name, fallback = null) => {
 
 /* Which clause each mutation owns. A mutation that fails a second clause is a
    check measuring something it does not claim to; a mutation that fails none is a
-   check that would pass on a page the scope forbids. */
+   check that would pass on a page the scope forbids.
+
+   **Two mutations may own one clause without either being redundant**, and
+   clause 3 is where that stands: `flex-min` reaches the footer's half — the
+   brand pushed out of a bar that holds one line — and `header-wraps` reaches
+   the header's, a pinned box whose children have left it. `views-one-way` was
+   the other such pair and was withdrawn when the header gave its copies up:
+   it reached the sync between a toggle's two copies, and there is one copy. */
 const OWNS = {
   'footer-last': 1,
   'flex-min': 3,
+  'header-wraps': 3,
   'cell-main': 5,
   'theme-dark-attr': 7,
   'theme-click-direct': 8,
   'controls-auto-margin': 9,
-  'views-one-way': 10,
   'marks-unlit': 10,
   'figure-unnamed': 11
 }
@@ -160,8 +167,11 @@ const elementOrder = async (browser, url) => {
 }
 
 /* 2 and 3 share one sweep. **They are still two clauses**: the sum is what the
-   bar costs the column, the brand is what keeps it in the bar, and the
-   `flex-min` mutation moves the second without moving the first. */
+   two bars cost the column, and clause 3 is what each bar holds while the
+   window narrows — the header the box it declares, the footer its height and
+   its brand. `flex-min` moves the second without moving the first, and
+   `header-wraps` moves the header's half of the second without moving either
+   of the others. */
 const sweep = async (browser, url) => {
   if (LONG_NAME.length < 58) throw new Error(`the sweep's name is ${LONG_NAME.length} characters, wanted 58`)
 
@@ -186,18 +196,51 @@ const sweep = async (browser, url) => {
     await settle(page)
     readings.push(
       await page.evaluate(() => {
-        /* `getBoundingClientRect().height` and never `offsetHeight`: the header
-           is fractional, so `offsetHeight` rounds it and a three-term sum
-           overshoots `innerHeight` at some widths and not at others. */
+        /* `getBoundingClientRect().height` and never `offsetHeight`: the
+           header was fractional when this was written and `offsetHeight` rounds
+           it, so a three-term sum overshoots `innerHeight` at some widths and
+           not at others. `rules/desktop-geometry.md` has which engine's numbers
+           those were. */
         const rect = (sel) => document.querySelector(sel).getBoundingClientRect()
         const header = rect('header')
         const main = rect('main')
         const footer = rect('footer')
         const brand = rect('#brand')
+
+        /* **The header's own rule, off the CSSOM, and never `getComputedStyle`
+           — and the reason is not the driver's reason.** There, on the footer,
+           that call resolves to the *used* height and would grow with the
+           content, holding however tall the bar got. Here the header's height
+           is pinned, so it never grows: `getComputedStyle` returns `27px` under
+           the mutation too, and the reading would not be wrong, it would be
+           **vacuous** — and it would go on being vacuous on the day someone
+           drops the `height` declaration. The sheet fails loudly instead. Last
+           match wins, the harness serving a stub stylesheet of its own. */
+        let declared = null
+        for (const sheet of document.styleSheets) {
+          for (const rule of sheet.cssRules) {
+            if (rule.selectorText === 'header' && rule.style.height) declared = parseFloat(rule.style.height)
+          }
+        }
+
+        const bar = document.querySelector('header')
         return {
           width: innerWidth,
           innerHeight,
           header: header.height,
+          declared,
+          /* The border is beside the declared height because the page sets no
+             global `box-sizing`, so the 1px rule is outside the box — which is
+             how `app/driver/drive.mjs` reads the footer's. */
+          border: parseFloat(getComputedStyle(bar).borderBottomWidth),
+          /* **The half a pin can lie about.** A flex container with an explicit
+             `height` does not grow when its line wraps — its content overflows
+             — so a clause reading only the height would hold on a page whose
+             children had left the bar. */
+          outside: [...bar.children].filter((child) => {
+            const box = child.getBoundingClientRect()
+            return box.top < header.top - 0.5 || box.bottom > header.bottom + 0.5
+          }).length,
           main: main.height,
           footer: footer.height,
           sum: header.height + main.height + footer.height,
@@ -212,7 +255,8 @@ const sweep = async (browser, url) => {
   await page.close()
 
   const said = (r) =>
-    `${r.width}px | header ${r.header} | footer ${r.footer} | sum ${r.sum} against ${r.innerHeight} | ` +
+    `${r.width}px | header ${r.header} against ${r.declared} + ${r.border}, ${r.outside} children outside | ` +
+    `footer ${r.footer} | sum ${r.sum} against ${r.innerHeight} | ` +
     `brand ${r.brand || '(empty)'} ${r.inside ? 'in the bar' : 'OUTSIDE the bar'}`
   for (const r of readings) note(said(r))
 
@@ -223,21 +267,28 @@ const sweep = async (browser, url) => {
     readings.filter((r) => r.sum !== r.innerHeight).map(said).join('   ') || 'exact at every width'
   )
 
-  /* The positive control is inside this clause rather than beside it: a sweep in
-     which the header never grew was never narrow, and a brand that survived it
-     has survived nothing. The header's own threshold is not encoded — that it
-     grows below it is the property. */
+  /* **The positive control for this sweep is `flex-min`**, and naming it is
+     what stops the clause proving the viewport ever narrowed by nothing. That
+     mutation bites only at 240px with the 58-character name, so a run in which
+     it isolates is a run that reached a narrow viewport with a full cell. It
+     used to be `grew` — the header wrapping below its own threshold — and that
+     control went when the header stopped wrapping at all. */
   const widest = readings[0]
-  const narrowest = readings[readings.length - 1]
-  const grew = narrowest.header > widest.header
+  if (readings.some((r) => r.declared === null))
+    throw new Error('no `header` rule declares a height — the reading this clause takes is not in the sheet')
+
+  const off = (a, b) => Math.abs(a - b) > 0.5
+  const pinned = readings.every((r) => !off(r.header, r.declared + r.border))
+  const held = readings.every((r) => r.outside === 0)
   const height = readings.every((r) => r.footer === widest.footer)
   const kept = readings.every((r) => r.brand === 'Letur' && r.inside)
 
   ok(
     3,
-    'the footer keeps its height and its brand across a sweep to 240px, with a 58-character name',
-    grew && height && kept && readings.every((r) => r.cell === LONG_NAME),
-    `the header grew ${widest.header} to ${narrowest.header}: ${grew}; ` +
+    'the header is the box its own rule declares and holds every child inside it, and the footer keeps its height and its brand across a sweep to 240px with a 58-character name',
+    pinned && held && height && kept && readings.every((r) => r.cell === LONG_NAME),
+    `the header was ${widest.declared} + ${widest.border} everywhere: ${pinned}; ` +
+      `no child outside it: ${held}; ` +
       `the footer held ${widest.footer}: ${height}; the brand stayed in the bar: ${kept}; ` +
       `the cell held the long name: ${readings.every((r) => r.cell === LONG_NAME)}`
   )
@@ -411,9 +462,9 @@ const panelDrawsTheEntries = async (browser, url) => {
 /* 7. **Six readings, and the point is the two that a one-scheme suite would
       miss.** The palette has to win in *both* directions: `dark` chosen under a
       light system and `light` chosen under a dark one. The tokens are one half
-      and `color-scheme` the other — it is what paints the `#fit` select, its
-      arrow and the scrollbars, so a page whose tokens said dark while it said
-      light would put a light scrollbar on a dark pane.
+      and `color-scheme` the other — it is what paints the `#fit-footer` select,
+      its arrow and the scrollbars, so a page whose tokens said dark while it
+      said light would put a light scrollbar on a dark pane.
 
       **And `--paper` is unchanged in all six**, which is the clause that keeps
       `specs/desktop_app_spec.md` §1.1's narrowing honest: this app themes its
@@ -655,33 +706,27 @@ const groupSitsBesideTheBrand = async (browser, url) => {
   return errors
 }
 
-/* 10. **One setting behind two controls, asserted from both ends.** The bar's
-       `Files` and `Lines` duplicate the header's, and a duplicate is only worth
-       having if it cannot disagree — so each toggle is pressed from the header
-       and from the bar in turn, and after each press *both* controls and the
-       pane they work are read. A copy that placed its own state and never
-       followed the other would pass a one-ended check and fail a reader.
+/* 10. **Each toggle works the pane it names, and its mark says which state it
+       is in.** This clause used to assert one setting behind *two* controls,
+       the bar's `Files` and `Lines` duplicating the header's, and it was
+       re-keyed when the header gave its copies up: a copy that cannot disagree
+       cannot exist, and `views-one-way` — the mutation that reached that
+       disagreement — was withdrawn with it.
 
-       **The pane is read too, and not just the two attributes.** Two controls
-       that agreed with each other while the panel stayed open would satisfy
-       every ARIA reading and be the defect this exists to catch. */
-const viewsAreOneSetting = async (browser, url) => {
+       **The pane is read and not just the attribute.** A control that placed
+       its own state while the panel stayed open would satisfy every ARIA
+       reading and be the defect this exists to catch. */
+const viewsWorkTheirPanes = async (browser, url) => {
   const page = await opened(browser, url)
 
   const read = () =>
     page.evaluate(() => ({
-      files: [
-        document.getElementById('toggle').getAttribute('aria-expanded'),
-        document.getElementById('views-files').getAttribute('aria-expanded')
-      ],
-      lines: [
-        document.getElementById('numbers').getAttribute('aria-pressed'),
-        document.getElementById('views-lines').getAttribute('aria-pressed')
-      ],
+      files: document.getElementById('views-files').getAttribute('aria-expanded'),
+      lines: document.getElementById('views-lines').getAttribute('aria-pressed'),
       panel: !document.getElementById('files').classList.contains('collapsed'),
       gutter: !document.getElementById('lines').hidden,
-      /* **The ink each mark is wearing**, because the bar's copies are marks
-         and a mark says nothing a word does not. Since they carry no text, the
+      /* **The ink each mark is wearing**, because these two are marks and a
+         mark says nothing a word does not. Since they carry no text, the
          *only* visible difference between on and off is this colour — so a
          stylesheet that lost the rule would leave two identical icons and every
          ARIA reading above would still pass. Which value it is is not the
@@ -692,15 +737,17 @@ const viewsAreOneSetting = async (browser, url) => {
       }
     }))
 
-  /* Each press is named by where it came from, and the four cover both
-     directions of both toggles: a copy that only *sent* would pass two of
-     these and fail the other two. */
+  /* **Still four presses, and that is what the header's two rows became rather
+     than what is left when they go.** Each toggle is pressed twice, once each
+     way, because a single press would leave its mark in one ink — and *each
+     mark's two inks* is the half of this clause `marks-unlit` owns and the
+     requirement that determined this rewrite. */
   const pressed = []
-  for (const [from, selector, which] of [
-    ['the bar', '#views-files', 'files'],
-    ['the header', '#toggle', 'files'],
-    ['the bar', '#views-lines', 'lines'],
-    ['the header', '#numbers', 'lines']
+  for (const [selector, which] of [
+    ['#views-files', 'files'],
+    ['#views-lines', 'lines'],
+    ['#views-files', 'files'],
+    ['#views-lines', 'lines']
   ]) {
     const before = await read()
     await page.click(selector)
@@ -712,20 +759,20 @@ const viewsAreOneSetting = async (browser, url) => {
     await page.mouse.move(0, 0)
     await settle(page)
     const after = await read()
-    pressed.push({ from, which, before, after })
+    pressed.push({ press: pressed.length + 1, which, before, after })
   }
 
   const errors = await drainErrors(page)
   await page.close()
 
-  /* Both controls say the same thing, and the pane says what they say. `Files`
-     is expanded-when-open, `Lines` pressed-when-shown, so each is compared
-     against the box it works rather than against a literal. */
+  /* The control says what the pane says, and the pane moved. `Files` is
+     expanded-when-open, `Lines` pressed-when-shown, so each is compared against
+     the box it works rather than against a literal. */
   const wrong = pressed.filter((p) => {
-    const [head, foot] = p.which === 'files' ? p.after.files : p.after.lines
+    const said = p.which === 'files' ? p.after.files : p.after.lines
     const box = p.which === 'files' ? p.after.panel : p.after.gutter
     const moved = String(p.which === 'files' ? p.before.panel : p.before.gutter) !== String(box)
-    return head !== foot || head !== String(box) || !moved
+    return said !== String(box) || !moved
   })
 
   /* The four presses put each toggle in both states, so each mark's two inks
@@ -735,18 +782,18 @@ const viewsAreOneSetting = async (browser, url) => {
 
   for (const p of pressed)
     note(
-      `${p.which} from ${p.from}: header ${p.after[p.which][0]} bar ${p.after[p.which][1]}, ` +
+      `press ${p.press}, ${p.which}: the control ${p.after[p.which]}, ` +
         `the pane ${p.which === 'files' ? p.after.panel : p.after.gutter}, the mark ${p.after.ink[p.which]}`
     )
 
   ok(
     10,
-    'the two copies of each view toggle are one setting, and the bar\'s marks show which state they are in',
+    'each view toggle works the pane it names, and its mark shows which state it is in',
     wrong.length === 0 && marked,
     wrong.length || !marked
-      ? `${wrong.map((p) => `${p.which} from ${p.from}: ${JSON.stringify(p.after)}`).join('; ')}` +
+      ? `${wrong.map((p) => `press ${p.press}, ${p.which}: ${JSON.stringify(p.after)}`).join('; ')}` +
         `${marked ? '' : ` — the marks: files ${[...inks('files')].join(' / ')}, lines ${[...inks('lines')].join(' / ')}`}`
-      : 'four presses, both controls and the pane agreeing after every one, each mark two inks'
+      : 'four presses, the control and the pane agreeing after every one, each mark two inks'
   )
   return errors
 }
@@ -838,7 +885,7 @@ const run = async ({ engine, headed, rev, doc, mutate }) => {
       paletteTurnsBothWays,
       cellPlacesAndDoesNotDecide,
       groupSitsBesideTheBrand,
-      viewsAreOneSetting,
+      viewsWorkTheirPanes,
       cellNamesTheFigure
     ]) {
       gather(await check(browser, held.url))
