@@ -1004,9 +1004,10 @@ list to one item.
   > so — *"not supported for selecting dependencies and will not work as
   > expected"* — so the crate is linked into a release build and only the
   > `init()` call is `#[cfg]`'d out. A phase would need a cargo feature. The log,
-  > the diff and the three rig scripts are in the gitignored
-  > `notes-ivan/real_window_driver.md`; the wiring is on branch
-  > `spike/real-window-driver`.
+  > the wiring as a diff, and the three rig scripts are in the gitignored
+  > `notes-ivan/real_window_driver.md` and beside it. **The spike branch was
+  > deleted the same day and this pointer corrected with it** — it held nothing
+  > the diff does not.
 
 - **OQ-11** — what does the footer's first interactive control cost a screen reader?
   Raised 2026-08-29 by Phase 13, whose toggle is the first thing in the bar a person
