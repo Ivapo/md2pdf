@@ -83,6 +83,11 @@ phases:
     shipped: 2026-08-30
     cut: null
     by: null
+  - name: "Phase 16 — the header sheds what the footer carries"
+    reviewed: 2026-08-30
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -4022,6 +4027,338 @@ disk and have to work out why.
   bytes; the harness's two new clauses, its re-keyed clause 9 and its four
   mutation edits; the driver's fourth clause and its third mutation; and the spec,
   rules and README reconciliation above.
+
+### Phase 16 — the header sheds what the footer carries
+
+*Produces the observable: **no**, and the argument is Phase 11's, inherited rather
+than restated.* No Rust at all, so the PDF is byte-identical across the phase and
+clause 1 is the check. **What it buys is that the window says each thing once.**
+Phase 15 put the fold, the gutter and the fit at the foot beside the file name and
+the appearance, and left the header's copies standing while the shape was looked at.
+It has been looked at. The header keeps the two actions that write the document the
+author is editing and gives up everything that decides what the window shows.
+
+Appended 2026-08-30, per §6.1 step 2: the desktop app's chrome is this spec's
+subject. **Strictly after Phase 15**, which anticipated this in terms — *"a second
+placement can be withdrawn in a line where a move cannot"* — and this is that line.
+**It is one commit rather than one line, and the difference is measured**: two shipped
+harness clauses are keyed to the duplication, and one of them throws rather than fails
+when the header's copies go.
+
+**It was prototyped before it was written**, which is the order UI work takes here, so
+round 0 is *is this the right thing to keep* rather than *is this the right thing to
+build*. Every number below is a reading off that prototype in the shipping WKWebView,
+not a prediction.
+
+- **Scope:** **`app/dist/index.html`** — the header's markup, its CSS and the three
+  arrays that named its copies; and **`app/harness/checks.mjs`** with
+  **`app/harness/serve.mjs`**, for the two clauses this breaks and the **two** mutation
+  edits that follow — one withdrawn and one added.
+
+  **No Rust, no command, no capability, no dependency, and no menu change.**
+  `app/src/main.rs:export` and its `Save a Copy…` item keep their place and their
+  `Shift+CmdOrCtrl+S` exactly as they ship — **only the header's button for it goes**,
+  and saying so is what keeps this phase from being read as the save model changing.
+  That belongs to the save-model phase, which *deliberately not in this phase* below
+  names without a number and says why.
+
+  **The header's element children, in order, with their ids**, for Phase 11's reason —
+  a clause keyed to an arrangement the spec never gives is one an implementer can
+  satisfy two ways:
+
+  `#open`, `#save`, `#status`.
+
+  **Nothing reads that order, and that is a drop recorded as one**, in the idiom Phase
+  15 used for tab order. Clause 1 asserts `body`'s children, not the header's; the
+  footer's list is held by clause 9 and the driver's clause 4, and the header's has no
+  equivalent. The same is true of the 12px shared left column and the 22px button:
+  **the only thing that reads the header's geometry is clause 6, and clause 6 is a
+  person.** A gate for it would be worth having and is not in this scope.
+
+  **Withdrawn from the header: four children and not three.** `#toggle`, `#numbers` and
+  `#fit` go, each leaving `#views-files`, `#views-lines` and `#fit-footer` as the one
+  copy — **and `#export` goes with them**, which is a different case and is counted
+  separately below rather than folded in silently.
+
+  **Which copy survives is the decision, and the rule it follows is new: the footer sets
+  and the header acts.** The fold, the gutter and the fit are *settings* — a reader
+  leaves them where they like them and stops noticing them — and the 24px bar that
+  already carries the file name and the appearance is where a setting belongs. Open and
+  Save are actions, and an action wants the bar the eye starts at.
+
+  **`#export` is neither, and the rule does not stretch to cover it — so it is argued
+  on its own.** *Save a Copy…* writes to disk like the other two, so "the header acts"
+  would keep it; what separates it is **what** it writes. Open and Save act on the
+  document the author is editing — the file in the pane, the one `⌘S` writes and the
+  title bar names. The export writes a **derived artifact** to a path the author picks
+  once, and a reader who wants it knows to look in `File`. **Its command, its menu item
+  and its `Shift+CmdOrCtrl+S` are all untouched** — only the header's button goes, so
+  nothing becomes unreachable and no accelerator moves.
+
+  **The two marks are drawn, which is Phase 15's own rule applied rather than a taste
+  restated**: a mark a glyph names is a glyph, a mark no glyph names is drawn. No glyph
+  in the font means *open a folder* or *write this out*. So a folder for `#open`, and
+  for `#save` the floppy — **two internal shapes and not three**, measured: the body
+  with its cut corner and the label block, the shutter dropped, because at 14px the
+  shutter and the label leave three pixels between them and the mark reads as busy
+  before it reads as a floppy. **14px and not the footer's 12**: a 28px bar, and these
+  are the window's two primary actions rather than two toggles beside a file name.
+  `currentColor`, a 1px stroke, and **every coordinate on a half pixel** — the folder's
+  tab apex included, which the prototype first put on a whole one — the footer's
+  vocabulary unchanged, because two bars drawing marks two ways would be worse than
+  either way alone.
+
+  **Each mark carries `title` and `aria-label` both**, saying `Open…` and `Save`, which
+  is `wearAppearance`'s rule and the same one the footer's two marks follow: a bare mark
+  names nothing to a screen reader. **`Save` and not `Save as…`** — the prototype was
+  labelled for the deferred save model's behaviour and has been corrected, because a
+  button that says what it will do next release is the one defect this phase's own
+  deferral invites.
+
+  **The hover ground is the affordance, and it is needed here where the footer does not
+  need it.** The footer's marks are toggles: they carry their state in their ink, so a
+  reader who presses one is told it took. These two are actions with no state to carry,
+  and a bare mark on a bar says nothing about being pressable — so the ground comes up
+  on hover, `var(--edge)` at a 3px radius with the ink going from `--quiet` to `--ink`.
+  **`--edge` and not a new token**: it is `--chrome`'s contrast neighbour in both
+  palettes — darker in light, lighter in dark — so one declaration wins both ways, which
+  is the property the four token blocks were built to give.
+
+  **28px, which is 27 and the bar's own 1px rule**, down from 47. The buttons are 22px
+  — a 14px mark and 4px of padding — so the bar carries 2.5px of air above and below
+  them. **24px was tried and is not taken**: it would put the mark at 12px and the two
+  bars at one weight, and the header would stop reading as the bar you act from.
+
+  **The padding is 8px on the left and 12px on the right, and the asymmetry is
+  deliberate.** A 4px-padded button at 8px puts its ink at 12px, which is exactly where
+  the footer's own marks start, so the two bars share a left column; and 12px on the
+  right puts the status line's end where `#brand` ends. A symmetric 12px would break
+  both alignments to save one number.
+
+  **`#status` keeps its element, its four states and its writer** — `empty`, `current`,
+  `stale` and `failed`, composed in Rust and placed by `report`, exactly as they ship.
+  Phase 15 said the status line stays in the header and it stays. **What does change is
+  its size, and calling that "untouched" would be wrong**: the bar's `font-size: 11px`
+  is inherited, so the line drops from the body's 13px. That is the only change to it,
+  and it is a change.
+
+  **Two shipped clauses fail on correct code, and re-keying them is this phase's work.**
+  Both were run against the prototype rather than reasoned about:
+
+  **Clause 3 fails**, reading *"the header grew 28 to 28: false"*. It asserts that the
+  header wraps taller below the 627px its seven visible children derive — three
+  children do not wrap at any width. **The property that replaces it is not simply the
+  opposite one, and the naive opposite is a trap this phase walked into once already.**
+
+  A clause reading only *the header holds one height across the sweep* is **unfalsifiable
+  here**, and that was measured rather than argued: the header's height is **pinned**,
+  `height: 27px` on its own rule, and a flex container with an explicit height does not
+  grow when its line wraps — **its content overflows instead**. A `flex-wrap: wrap` and a
+  900px child read `28 / 28 / 28 / 28 / 28` across the whole sweep, identical to the
+  unmutated page. **Switching the pin to `min-height` to make that mutation bite is the
+  other trap**: it would make the clause's truth contingent on `#status`'s text never
+  wrapping, which is a promise about a string Rust composes.
+
+  **So the pin stays and the clause asserts what a pin can hide.** In two halves, both
+  at every sweep width: the header's rect is **the height its own rule declares** plus
+  its own border — read off the CSSOM, as `app/driver/drive.mjs`'s clause 4 reads the
+  footer's, and **never off `getComputedStyle`** — **and every one of its element
+  children sits inside that rect**. **The reason to refuse `getComputedStyle` is not
+  the footer's reason, and the difference is worth carrying**: there it resolves to the
+  *used* height and would grow with the content, holding however tall the bar got. Here
+  the pin means it never grows — it returns `27px` under the mutation too — so it would
+  not be wrong, it would be **vacuous**, and it would go on being vacuous on the day
+  someone drops the `height` declaration. The CSSOM read fails loudly instead. The second half is the one a pin can lie about, and it is what
+  makes `height` a claim rather than a way of hiding an overflow.
+
+  **`header-wraps` is added and it bites, measured in the shipping WKWebView**: with
+  `flex-wrap: wrap` on the header and one child wide enough to need it, the header still
+  reads 28 — and `#status` sits **34px below the bar's own bottom edge**, the wide child
+  14px below it, where the unmutated header has **no child outside it at all**. It owns
+  clause 3's new half and reaches nothing else.
+
+  **The sweep keeps a positive control, and this phase says which one it is** — `grew`
+  was documented in `checks.mjs` as exactly that, *"a sweep in which the header never
+  grew was never narrow, and a brand that survived it has survived nothing"*, and a
+  re-key that dropped it silently would leave the clause proving the viewport ever
+  narrowed by nothing. **The control is `flex-min`**, which bites only at 240px with the
+  58-character name: a run in which it isolates is a run that reached a narrow viewport
+  with a full cell. That comment is rewritten in the same pass rather than left
+  asserting a control that is gone.
+
+  **Clause 10 throws** in `app/harness/checks.mjs:viewsAreOneSetting`, `#toggle` being
+  null. *"The two copies of
+  each view toggle are one setting"* has no subject once there is one copy. **It is
+  re-keyed rather than withdrawn**: what is left worth asserting is that each footer
+  toggle works the pane it names and that its mark shows which state it is in, which is
+  the half of the old clause that survives one control. **`views-one-way` is withdrawn**
+  — a copy that cannot disagree cannot exist — and `marks-unlit` goes on owning the
+  clause alone, which is the arrangement Phase 15's own note said the two were only
+  jointly necessary for.
+
+  **Deliberately not in this phase, named so they are not smuggled in.** The save model
+  — `Save as…`, a writer that takes a name, `Shift+CmdOrCtrl+S` moving, and the PDF
+  landing beside the master — is **a phase not yet appended**, and is deliberately
+  referred to that way rather than by a number: `phases[]` holds no such entry, and a
+  forward reference to "Phase 17" would resolve to nothing for the reader who went
+  looking. The header's second button stays plain `Save` until that phase exists, rather
+  than being labelled for behaviour it does not have.
+  The status line stays. The panel, the gutter and the footer are untouched. No page
+  number, no caret line or column, no word count.
+
+- **Exit gate:**
+
+  1. `cargo test --workspace` passes with **every count unchanged** — 338 passed, 0
+     failed, 2 ignored. This phase adds no Rust because it touches none, and the PDF
+     does not move for that reason rather than because a test would catch it.
+  2. `bun app/typecheck.mjs` exits 0 — Phase 9's check, over a file this phase edits in
+     the header's markup, the header's CSS, `fitControls`, `foldControls`,
+     `lineControls` and the `#export` click listener, and which also leaves `#toggle`'s
+     and `#numbers`' own CSS rules orphaned and **three comments naming a control that
+     is gone**: the `#toggle` reference in the footer's `#views` comment, and the
+     `color-scheme` note in this file and its twin in
+     `app/harness/checks.mjs:paletteTurnsBothWays`, both reading *"what paints the
+     `#fit` select, its native arrow and the scrollbars"* — **all of it in the same
+     pass**, since a rule selecting nothing and a comment naming a removed control are
+     what the next reader trips over. `color-scheme` still paints a select and the
+     scrollbars; the select it paints is `#fit-footer`.
+  3. `bun app/harness/checks.mjs` and `bun app/harness/checks.mjs --webkit` each print
+     **twelve clauses, twelve passed** — the count unchanged, **clause 3 and clause 10
+     both re-keyed**, which is a change to two shipped clauses and not an addition.
+     **Clause 3** keeps its footer half whole and replaces its header half with the two
+     readings above: the header's rect equals its declared height plus its border, and no
+     element child of the header falls outside that rect, both at all five sweep widths.
+     **Clause 10** keeps every reading it takes of the footer's two toggles — the pane
+     each works, and each mark's two inks with the pointer moved off — and drops only the
+     header half of each comparison. **What it drops is not an array but a literal**: the
+     four-tuple press list it walks names `#toggle` and `#numbers` beside the footer's
+     two, and the two header rows go. The requirement that survives and determines the
+     rewrite is *each mark's two inks*, which `marks-unlit` is what enforces.
+  4. `bun app/harness/checks.mjs --falsify` reports **nine mutations, each isolating
+     exactly the clause it owns** — the count unchanged, `views-one-way` withdrawn and
+     `header-wraps` added. **A withdrawal and an addition that cancel are still two
+     decisions**, and the gate says both rather than reporting a count that did not move.
+     `header-wraps` owns clause 3 and `marks-unlit` owns clause 10 alone; **that
+     `marks-unlit` now stands where two mutations stood is the point of the withdrawal
+     and not a loss**, Phase 15 having argued the pair was jointly necessary only while
+     there were two copies to disagree.
+  5. `bun app/driver/drive.mjs` prints **four clauses, four passed**, and `--falsify`
+     **three mutations, each isolating the clause it owns** — both **unchanged**, and
+     that is an assertion rather than an omission: it was run against the prototype and
+     passed untouched, its clauses being about the footer's marks and the appearance.
+     A phase that edited the header and did not say what the second rig did would leave
+     the next person to find out.
+  6. **The one reading left to a person**, asked once with that window open, and it is
+     two questions because the marks and the affordance are two claims: do the folder
+     and the floppy read as *open* and *save* without a second look — and does the
+     ground coming up under the pointer say *button*? No script, because there is
+     nothing to print.
+  7. `git status` is clean after a full run of **clauses 3, 4 and 5** — Phase 12's exit
+     gate clause 4, carried forward, and clause 6 is not in the list for Phase 15's
+     reason: a person looking at a window makes no run.
+
+- **Close-out:** **`rules/desktop-panes.md`** — three corrections, all to prose written
+  the day before by Phase 15, which is what a rule that tracks the code costs and is
+  not a sign either phase was wrong. *"Three of the bar's settings are the header's,
+  duplicated rather than moved"* becomes one setting each, in one bar. The sentence that
+  the header's two devices — a turning chevron, a filled background — are not carried
+  across **stays true and is left**; **its own neighbour does not and is corrected**:
+  *"the word each says is the header's own: `Files` and `Lines`, the same two controls
+  and not new ones"* has no header control left for the word to belong to, and the words
+  are now simply the marks' own. **`The
+  header has no equivalent rule`** and the paragraph deriving 627px and the heights at
+  620 and 500 describe a header that no longer wraps and are corrected, not appended
+  to. The `covers:` phrase for the harness's clauses keeps its counts — twelve and nine
+  — and the phrase naming the three duplicated settings goes. **The header gains a
+  paragraph of its own**: it has never had one, the file having been about the panes
+  and the bar, and a header of two drawn marks and a rule about which bar carries what
+  now wants naming — **and it gains a `covers:` phrase aimed at it**, not merely the
+  removal of the one naming three duplicated settings: §8.1 makes `covers` the
+  regeneration target, so a paragraph nothing points at is exactly the gap that section
+  exists to close. Cap: 611/615, so it moves; budget **+20**, and the commit says the
+  real figure.
+
+  **`rules/desktop-geometry.md`** — *"The control is a `<select>` in each bar"* is
+  false again and is corrected to one, in the footer; the sentence added yesterday about
+  the list being written twice goes with it, the hazard having gone.
+
+  **Its rect-versus-`offsetHeight` rule needs more than a literal swap, and the phase
+  says so rather than discovering it.** That rule's argument stands on the header being
+  *fractional* — *"the header is 46.5px at the body's 13px/1.5, which rounds to 47 … at a
+  616px viewport the rects give 616 where the same three `offsetHeight`s give 617"*. With
+  the header pinned at an integer 28 and the footer at 24, **that overshoot cannot occur
+  in this page any more**, so the reading survives as the measurement that established
+  the rule rather than as a live instance, and the correction says which it is. The rule
+  itself — take box heights off `getBoundingClientRect`, not `offsetHeight` — is
+  unaffected and stays. **And the engine is named**: this phase's "down from 47" is the
+  WKWebView figure, where the same rule records 46.5 in Chromium, which is exactly the
+  distinction that file exists to keep. **342/355, and this is more than line-neutral,
+  so it gets a budget rather than 13 lines of hope**: **+15**, the cap moving to 370 in
+  this phase's own commit, which says the real figure.
+
+  **`rules/desktop.md`: one sentence, not none** — the first draft said "expected none"
+  and that was wrong. It owns the window and the menu, and this phase changes neither;
+  but it carries *"a menu item and the button beside it run one code path and not two"*
+  about the `File` submenu, and `Save a Copy…` stops having a button beside it. The
+  sentence is corrected to say which items still have one and which is now the menu's
+  alone. **The rest is still verified by grep at close-out rather than asserted here**,
+  since it declares `app/dist/index.html` among its sources and stands at 645/650.
+
+  **`README.md` — four sentences and not one, and they are named because the first
+  draft of this close-out asserted a scope smaller than the damage.** §6's close-out
+  hook makes user-facing documentation part of *done*, and a README telling a reader to
+  press two header controls that no longer exist is the failure that hook exists to
+  stop. Found by grep rather than by memory:
+  *"…so you need not go back to the header for them"* — the tail of the sentence Phase 15
+  added, which becomes that the bar carries them, full stop;
+  *"`Lines` in the header numbers the pane and marks the line your cursor is on"*;
+  *"`Files` in the header folds the list away and brings it back"* — each re-pointed at
+  the mark in the bar that now does it; and one new sentence saying the header is Open
+  and Save. **Verified by grep at close-out** — `grep -n 'header' README.md`, and **the
+  narrower `'in the header'` is not the method**: it misses the first of the four, whose
+  tail reads *back to the header*. The wide grep returns six hits, of which
+  *"The header says where the page stands"* stays true — `#status` stays — and two are
+  table-header prose in the markdown reference.
+
+  **Phase 15 takes a dated `CORRECTED` note in place**, per §6.1's third bullet, against
+  one sentence: *"The controls are duplicated and not moved, and that is the decision
+  the rest of the phase hangs off."* Duplicated was the decision then and the phase said
+  what would end it; this is that ending, and the rest of Phase 15 — the footer's
+  controls, the cell, the marks — stands exactly as it shipped.
+
+  **`specs/pdf_renderer_spec.md` takes one too, and it is another spec's**, which is why
+  it is argued rather than assumed. Its shipped sentence *"The control is a `<select
+  id="fit">` in the header, beside `Lines`"* sends a reader to a bar that no longer has
+  either. **This is not §6.1 step 1's supersede**: `mpdf-009`'s phase delivered the fit,
+  its ten options and the cap that is its own last option, and every one of those
+  stands — what changed is which bar it is in. A stale *decision statement* gets the
+  dated note; the work is untouched.
+
+  **OQ-11 takes a dated note.** It asks what the footer's interactive controls cost a
+  screen reader; the **header** now carries two controls with no text either, named only
+  by `title` and `aria-label`, and the window's bare marks have gone from two to four
+  while its worded buttons have gone from five to none. The question is unanswered and
+  wider.
+
+  **`specs/pdf_renderer_spec.md`'s `last_updated` is bumped in the same pass**, which §6
+  requires of every revision and a dated note is one. **Its Phase 3 gate clause 6 —
+  *"Every control in the header is toggled … the `Sections` panel and `Lines`"* — is
+  left as it stands, deliberately**: a gate is the record of what was run when that phase
+  shipped, and rewriting it would make the record claim a run that never happened. The
+  dated note above it is what tells a reader the header has since changed.
+
+  **`notes-ivan/letur_footer.md` is reconciled again**, and Phase 15 is the reason it is
+  named rather than forgotten: that phase made reconciling this note an explicit
+  close-out item, on the argument that *"a working note that a reader would take for a
+  live constraint is worse than no note"*. Its "Deliberately NOT in v1" list says the fit
+  select stays in the header, and Phase 15's own note at the top affirms it. Both are now
+  false: the fit is in the footer alone.
+
+  **`CLAUDE.md`: none needed.**
+
+  **Commit plan.** One push, three commits: the header's markup and CSS; the harness's
+  two re-keyed clauses and its two mutation edits; and the rules, README and spec
+  reconciliation above.
 
 <!--
 The review record is a sibling file, not a section: it lives at

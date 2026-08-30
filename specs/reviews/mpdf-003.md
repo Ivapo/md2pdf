@@ -2,6 +2,109 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 10 — Phase 16 only — 2026-08-30 — the same reviewer, resumed — **READY (converged)**
+
+Zero blocking. **Both blockers confirmed resolved by measurement rather than by reading
+the changelog**, which is what it was asked to do. It applied `header-wraps` to the
+working-tree page and read both halves of the re-keyed clause 3 at all five sweep widths
+**in both engines**: rect 28 and declared+border 28 everywhere; **no child outside the
+header unmutated, two outside it mutated** — `#status` 35px below the bar and the wide
+child 14.5px, against the 34/14 this phase recorded off WKWebView with a different status
+string. Same fact, and the phase's numbers are the ones it was written from.
+
+**It went past what it was asked and checked the mutation cannot leak**, which is the
+reading that makes `header-wraps` isolate rather than merely bite: clause 2's sum stays
+exact at all five widths in both engines; clause 9's two gaps read 8.00/8.00 with
+`#brand` unmoved at 888 and the footer's own width unchanged — the document overflows to
+`scrollWidth` 908, which costs no height and moves no footer geometry; and **clauses 5
+and 11 click through in-page `element.click()` rather than a hit-tested `page.click`**,
+so a 900px overflow cannot intercept them. Only clause 10 uses `page.click`, on footer
+selectors.
+
+**The README enumeration was confirmed complete** — `grep -n 'header' README.md` returns
+six hits in the desktop-app section, of which the three quoted plus the tail of the fourth
+are the stale ones; *"The header says where the page stands"* stays true because `#status`
+stays, and two are table-header prose in the markdown reference.
+
+Six non-blocking findings, **all accepted and folded before this record was written**,
+none touching scope or gate: the stated grep was narrower than the enumeration it
+justified (`'in the header'` misses the sentence whose tail reads *back to the header*, so
+the method is the wide `'header'`); "Phase 17" still appeared by number twice while the
+phase claimed to avoid the number; the comment sweep named one stale `#fit` comment of
+three, the other two being `app/dist/index.html`'s `color-scheme` note and its twin in
+`app/harness/checks.mjs:paletteTurnsBothWays`; **the `getComputedStyle` rationale was
+inherited rather than measured** — under the pin it returns `27px` under the mutation too,
+so refusing it is about vacuity and not about growth, and the phase now says which;
+`rules/desktop-geometry.md` had no line budget against a correction the phase itself calls
+more than line-neutral, and now has **+15** to 370; and gate clause 3 described "the array
+it iterated" where `viewsAreOneSetting` walks a four-tuple literal, not an array.
+
+### Round 9 — Phase 16 only — 2026-08-30 — fresh reviewer with repo access — **NOT READY**
+
+**Round 0 — is this the right thing to build at all?** It produces no observable: no Rust,
+the PDF byte-identical, and the phase argues that explicitly by inheriting Phase 11's
+argument rather than assuming it. It is the right thing to *keep* — Phase 15 created the
+duplication provisionally and named the withdrawal condition in advance (*"a second
+placement can be withdrawn in a line where a move cannot"*), and the shape was looked at
+in the shipping window, by the person who asked for it, before it was written.
+
+Two blocking findings, both caught by running rather than reading.
+
+**Blocker 1 — the `header-wraps` mutation as drafted was inert, so gate clause 4 could not
+pass on a correct build.** The reviewer applied it exactly as worded — `flex-wrap: wrap`
+on the header, one 900px child — and measured **28 / 28 / 28 / 28 / 28**, identical to the
+unmutated page: **a flex container with an explicit `height` does not grow when its line
+wraps, its content overflows instead.** Its proposed fix was `min-height`, which does make
+the header go to 64px. **Rejected**, and the rejection is the substance of the repair: a
+`min-height` header makes the re-keyed clause 3's truth contingent on `#status`'s text
+never wrapping, which is a promise about a string Rust composes. **The third route was
+taken instead — the pin stays and the clause asserts what a pin can hide**: the header's
+rect equals its own rule's declared height plus its border, read off the CSSOM, *and*
+every element child sits inside that rect. `header-wraps` bites on the second half, and it
+was measured in the shipping window before it was written down (`#status` 34px below the
+bar, the wide child 14px, zero children outside unmutated). **The inert reading is kept in
+the phase as the trap it is**, because the next person to re-key a clause about a pinned
+box will reach for the same dead mutation.
+
+**Blocker 2 — the README reconciliation asserted a scope smaller than the damage.** It
+named one sentence; the phase falsifies four, the other three being *"`Lines` in the
+header numbers the pane…"*, *"`Files` in the header folds the list away…"* and the tail
+*"…so you need not go back to the header for them"*. Executed literally the close-out would
+have shipped a README instructing the reader to press two header controls that no longer
+exist, which is precisely what §6's close-out hook exists to stop. All four are now named
+by quotation and the grep is stated as the method.
+
+**Nine non-blocking findings, all accepted except one deferral.** Accepted: the organizing
+rule (*"the two things that touch the disk"*) did not derive the phase, since `#export`
+writes to disk too — rewritten to Open and Save acting on **the document being edited**
+where the export writes a **derived artifact**, with `#export` counted as a fourth
+withdrawn child and argued on its own; `rules/desktop.md` was not "expected none", it
+carries *"a menu item and the button beside it run one code path and not two"*; `#status`
+has **four** states and its 11px is a real change described as none; the re-keyed clause 3
+silently dropped the positive control `grew` was documented as, which `flex-min` now
+carries explicitly; `checks.mjs:705` was a **line-number citation**, banned by §5, now
+`checks.mjs:viewsAreOneSetting`; the header's element order, its 12px shared column and
+its 22px button are read by nothing in either rig, recorded as a drop in Phase 15's idiom;
+a fourth `rules/desktop-panes.md` sentence goes stale and the new header paragraph needed a
+`covers:` phrase aimed at it per §8.1; `rules/desktop-geometry.md`'s rect-versus-
+`offsetHeight` rule loses the fractional-header instance its argument stands on, which is
+more than the literal swap the draft called it; and the prototype itself contradicted the
+phase in two places — the folder tab apex sat at a whole pixel against an absolute
+half-pixel claim, and the button was labelled `Save as…`, the deferred behaviour — **both
+fixed in the code rather than in the prose**.
+
+**One deferral, recorded as a rejection with its reason.** `specs/pdf_renderer_spec.md`'s
+Phase 3 gate clause 6 — *"Every control in the header is toggled … the `Sections` panel and
+`Lines`"* — is **left as it stands**. A gate is the record of what was run when that phase
+shipped; rewriting it would make the record claim a run that never happened. The dated
+`CORRECTED` note above it carries the change.
+
+**The §6.1 call the author flagged as most arguable was confirmed**: a dated note on
+`specs/pdf_renderer_spec.md` rather than `supersedes`. `mpdf-009` Phase 3 shipped the fit
+modes, the ten options, the cap-as-last-option and `window.__pane.fit`, every one of which
+still ships — a `supersedes` would set `cut` on a phase that was built and is in use,
+which §1.1 calls the false report. Only the placement statement is stale.
+
 ### Round 8 — Phase 15 only — 2026-08-30 — the same reviewer, resumed — **READY (converged)**
 
 Zero blocking. **The restore claim the author asked it to falsify held**, and it was
