@@ -112,12 +112,30 @@ fn main() {
             // `tauri.conf.json` window before it calls this hook, which is what
             // lets `get_webview_window` reach one here at all. So the property
             // is not an ordering against window creation — it is that the read,
-            // the `set_theme` and the manage all happen inside this one `Ready`
+            // the `set_theme` and the show all happen inside this one `Ready`
             // callback.
+            //
+            // **And one `Ready` callback was not enough, which is measured
+            // rather than reasoned about.** `specs/desktop_app_spec.md` Phase
+            // 13's window gate was run on 2026-08-29 with a stored `dark` on a
+            // light system and reported a flash: the runtime does not merely
+            // *build* the configured window before this hook, it puts it on
+            // screen, so `set_theme` arrives a frame late however early in
+            // `setup` it is called. So `tauri.conf.json` carries
+            // `"visible": false` and the window is shown here instead — the
+            // fallback that phase named in advance, taken because the clause
+            // that tests it failed.
+            //
+            // **`show` is what makes the window appear at all now**, so nothing
+            // between the config and this line may return early, and the focus
+            // is restored with it: a window created hidden does not take it by
+            // being shown, and the app's own launch used to have it.
             let settings = document::settings_file(&support);
             let appearance = document::read_appearance(&settings);
             if let Some(window) = app.get_webview_window(MAIN) {
                 let _ = window.set_theme(theme(appearance));
+                let _ = window.show();
+                let _ = window.set_focus();
             }
 
             let handle = app.handle().clone();

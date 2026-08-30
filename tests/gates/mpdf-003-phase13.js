@@ -21,10 +21,16 @@
        brand not moving as they swap — but Phase 12's own note records that
        neither engine is this one. `specs/desktop_app_spec.md` OQ-12 is what
        this answers, and its answer may be three small inline paths instead.
-     * **the launch does not flash the other palette.** The choice is read and
-       worn inside the one `Ready` callback, `setup`, rather than arriving with
-       the page's first `refresh()`. That is a claim about a frame, and only a
-       relaunch can see it.
+     * **the launch does not flash the other palette.** That is a claim about a
+       frame, and only a relaunch can see it. **This clause failed on its first
+       run, on 2026-08-29, and the phase's named fallback was taken**: reading
+       the choice inside `setup` was not enough, because the runtime does not
+       merely build the configured window before that hook — it puts it on
+       screen, so `set_theme` arrived a frame late however early it was called.
+       `tauri.conf.json` now carries `"visible": false` and `setup` calls
+       `show()` after `set_theme`. **So a failure here now means something else**
+       — that the store was not read, or that `show` did not run — rather than
+       an ordering nobody had tested.
 
    ONE PRECONDITION, and it is the third clause's alone: **the system must be
    set to Light** in System Settings → Appearance. Clause 3 stores `dark` and
@@ -39,13 +45,24 @@
    last call in the order below, and `report()` reminds you.
 
    ORDER:
-     __gate.arm()              <- installs the listeners, reads the state
+     __gate.forget()           <- once, at the start: clears any earlier transcript
+     await __gate.arm()        <- installs the listeners, reads the state
      await __gate.chrome()     <- clauses 1, 2  (title bar, and the three marks)
-     __gate.flash()            <- prints what to do, then quit and relaunch
-     ... quit Letur (Cmd-Q), then `cargo tauri dev` again, then re-paste ...
-     __gate.landed(true|false) <- clause 3, your eyes on the first frame
-     __gate.restore()          <- puts the appearance back
-     __gate.report()
+     await __gate.flash()      <- stores dark, then tells you to quit
+     ... quit Letur (Cmd-Q), then `cargo tauri dev` again, then RE-PASTE this ...
+     await __gate.arm()        <- again, in the NEW window: it has no listeners yet
+     await __gate.landed(true|false) <- clauses 3, 4; your eyes on the first frame
+     await __gate.restore()    <- puts the appearance back
+     __gate.report()           <- the whole run, both windows
+
+   **The transcript is kept in `localStorage` and not in a closure**, because
+   clause 3 needs a relaunch and a closure does not survive one. That is a defect
+   this gate had on its first run, on 2026-08-29: it reported the launch half
+   alone and the two clauses before the quit were gone with the window. `forget()`
+   is the only thing that clears it, so re-pasting never loses a run — and
+   `arm()` is called in **both** windows, because its error listeners live in the
+   page too and clause 4 in a window that was never armed passes by counting
+   nothing.
 
    **Clause 1 and clause 3 are judged by eye, and they say so rather than
    pretending otherwise.** A title bar's own rendering is not readable from the
@@ -72,6 +89,7 @@
 
   let noise = 0
   let loops = 0
+  let armed = false
   const spoken = []
   const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -84,13 +102,33 @@
   let fail = 0
   /* Every line is kept as well as logged: Safari's Web Inspector copies one
      console entry at a time, and `__gate.report()` gives the whole run back as
-     one entry. */
-  const transcript = []
+     one entry.
+
+     **It is kept in `localStorage`, which is what survives the relaunch clause 3
+     needs.** The origin is `tauri://localhost` and does not move across a quit.
+     Both accessors are guarded: a gate that threw here would take the run with
+     it, and the run is the thing being reported. */
+  const KEEP = 'mpdf-003-phase13-gate'
+  const transcript = (() => {
+    try {
+      return JSON.parse(localStorage.getItem(KEEP) ?? '[]')
+    } catch {
+      return []
+    }
+  })()
+  const keep = () => {
+    try {
+      localStorage.setItem(KEEP, JSON.stringify(transcript))
+    } catch {
+      /* A gate that cannot persist still runs; only `report()` is narrower. */
+    }
+  }
   const ok = (n, name, good, detail) => {
     good ? pass++ : fail++
     transcript.push(
       `${good ? 'PASS' : 'FAIL'}  ${String(n).padStart(2)}. ${name}${detail ? '  —  ' + detail : ''}`
     )
+    keep()
     console.log(
       `%c${good ? 'PASS' : 'FAIL'}%c  ${String(n).padStart(2)}. ${name}${detail ? '  —  ' + detail : ''}`,
       `font-weight:bold;color:${good ? '#137333' : '#c5221f'}`,
@@ -99,18 +137,22 @@
   }
   const note = (s) => {
     transcript.push(`····  ${s}`)
+    keep()
     console.log(`%c····%c  ${s}`, 'color:#888', 'color:#888')
   }
   const heading = (s) => {
     transcript.push('', `== ${s}`)
+    keep()
     console.log(`%c\n${s}\n`, 'font-weight:bold')
   }
   const ask = (s) => {
     transcript.push(`????  ${s}`)
+    keep()
     console.log(`%c????%c  ${s}`, 'font-weight:bold;color:#1a73e8', 'color:inherit')
   }
   const tally = (what) => {
     transcript.push(`${what}: ${pass} passed, ${fail} failed`)
+    keep()
     console.log(
       `%c${what}: ${pass} passed, ${fail} failed`,
       `font-weight:bold;color:${fail ? '#c5221f' : '#137333'}`
@@ -158,9 +200,29 @@
   let found = null
 
   window.__gate = {
+    /** The whole run, both windows, and its own tally derived from the lines
+        rather than from a counter the relaunch reset. */
     report() {
-      console.log(`mpdf-003 Phase 13 gate\n${transcript.join('\n')}`)
-      return `${transcript.length} lines — and run __gate.restore() if you have not`
+      const passed = transcript.filter((l) => l.startsWith('PASS')).length
+      const failed = transcript.filter((l) => l.startsWith('FAIL')).length
+      console.log(
+        `mpdf-003 Phase 13 gate\n${transcript.join('\n')}\n\n` +
+          `WHOLE RUN: ${passed} passed, ${failed} failed`
+      )
+      return `${passed} passed, ${failed} failed — run __gate.restore() if you have not`
+    },
+
+    /** Clear the kept transcript. The only thing that does, so a re-paste after
+        the relaunch adds to the run rather than starting a new one. */
+    forget() {
+      transcript.length = 0
+      keep()
+      console.log(
+        '%cforgotten%c  — now run: await __gate.arm()',
+        'font-weight:bold;color:#1a73e8',
+        'color:inherit'
+      )
+      return 'cleared'
     },
 
     async arm() {
@@ -169,6 +231,7 @@
       spoken.length = 0
       pass = 0
       fail = 0
+      armed = true
 
       // **Named and not merely counted.** A run reporting "3 uncaught" and
       // nothing else sends the next round looking for something it cannot see.
@@ -295,9 +358,11 @@
           '  3. Run `cargo tauri dev` again and WATCH THE WINDOW AS IT APPEARS.\n' +
           '     The question is whether it comes up dark, or comes up light and\n' +
           '     turns dark a frame or two later.\n' +
-          '  4. Re-paste this gate into the new window, then call\n' +
-          '     __gate.landed(true) if it came up dark with no flash of light,\n' +
-          '     __gate.landed(false) if you saw the light palette first.',
+          '  4. Re-paste this gate into the new window, then:\n' +
+          '       await __gate.arm()        (the new window has no listeners yet)\n' +
+          '       await __gate.landed(true)   if it came up dark with no flash of light\n' +
+          '       await __gate.landed(false)  if you saw the light palette first\n' +
+          '     The transcript from THIS window survives the quit and report() has it all.',
         'font-weight:bold;color:#1a73e8',
         'color:inherit'
       )
@@ -325,19 +390,27 @@
         remembered && clean === true,
         remembered
           ? clean === true
-            ? 'remembered across the quit, and you saw no flash'
-            : 'remembered, but YOU SAW A FLASH — the named fallback is "visible": false in ' +
-              'tauri.conf.json plus a show() after set_theme, and that grows this phase\'s scope'
+            ? 'remembered across the quit, and worn from the first visible frame'
+            : 'remembered, but YOU STILL SAW A FLASH — the "visible": false fallback is ' +
+              'already in tauri.conf.json and setup already shows the window after set_theme, ' +
+              'so this is a NEW finding rather than the one that fallback answers'
           : `NOT REMEMBERED: came up ${JSON.stringify(state.held)} — settings.json was not read, ` +
             'so the flash question was never asked'
       )
 
+      /* **Since this window was armed**, which is narrower than "through any of
+         it" and is said so rather than implied: the listeners live in the page,
+         so they cannot see a throw that happened before the paste. Errors at
+         launch are in the console above regardless. */
       ok(
         4,
-        'no error reached the console through any of it',
-        noise === 0,
-        `${noise} uncaught, ${loops} of them ResizeObserver` +
-          `${spoken.length ? ' — ' + spoken.join(' | ') : ''}`
+        'no error reached the console since this window was armed',
+        armed && noise === 0,
+        armed
+          ? `${noise} uncaught, ${loops} of them ResizeObserver` +
+            `${spoken.length ? ' — ' + spoken.join(' | ') : ''}`
+          : 'THIS WINDOW WAS NEVER ARMED — run await __gate.arm() first, or this clause ' +
+            'passes by counting nothing, which is what it did on the run of 2026-08-29'
       )
 
       note('run __gate.restore() to put the appearance back, then __gate.report().')
@@ -354,10 +427,13 @@
   }
 
   console.log(
-    '%c__gate ready%c  —  set System Settings → Appearance to LIGHT first (clause 3 needs it).\n' +
-      'Then: await __gate.arm() → await __gate.chrome() → await __gate.flash() →\n' +
-      '  quit, relaunch, re-paste →  await __gate.landed(true|false) →\n' +
-      '  await __gate.restore() → __gate.report().',
+    `%c__gate ready%c  —  set System Settings → Appearance to LIGHT first (clause 3 needs it).\n` +
+      `${transcript.length} lines already kept${transcript.length ? ' — __gate.forget() to start over' : ''}.\n` +
+      'FIRST WINDOW:  __gate.forget() → await __gate.arm() → await __gate.chrome() →\n' +
+      '               await __gate.flash()\n' +
+      'THEN quit (⌘Q), `cargo tauri dev` again, re-paste, and in the NEW WINDOW:\n' +
+      '               await __gate.arm() → await __gate.landed(true|false) →\n' +
+      '               await __gate.restore() → __gate.report()',
     'font-weight:bold;color:#1a73e8',
     'color:inherit'
   )

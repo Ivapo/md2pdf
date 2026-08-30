@@ -12,7 +12,8 @@
         "label": "main",
         "title": "Letur",
         "width": 900,
-        "height": 1100
+        "height": 1100,
+        "visible": false
       }
     ]
   },

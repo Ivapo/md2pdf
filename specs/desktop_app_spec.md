@@ -3116,6 +3116,30 @@ Phase 11 named it as the thing to do before a toggle could be a phase.
        system: the choice is applied inside the one `Ready` callback, per the scope
        above, and this is where that claim is tested rather than asserted.
 
+  > **RUN 2026-08-29, and clause 5's third case failed.** The stored `dark` was
+  > remembered — the window came up wearing it, `data-theme` and the window's own
+  > `theme()` both reading dark, so `settings.json` and `set_theme` were right —
+  > **and the palette flashed anyway.** The scope's own claim above is what was
+  > wrong: the runtime does not merely *build* the configured window before
+  > `setup`, it **puts it on screen**, so `set_theme` arrives a frame late however
+  > early in that hook it is called. One `Ready` callback is not enough and the
+  > correction round 1 made was incomplete rather than mistaken.
+  >
+  > **The named fallback was taken, exactly as named**: `"visible": false` in
+  > `tauri.conf.json` plus a `show()` after `set_theme`. The scope said that
+  > "is a config change this scope would then have to grow to include", and this
+  > note is that growth, recorded rather than absorbed. **One line the fallback
+  > did not name is in with it**: `set_focus()` beside the `show()`, because a
+  > window created hidden does not take focus by being shown and the app's launch
+  > had it before.
+  >
+  > **Two defects in the gate itself were found by the same run and fixed with
+  > it**, and neither is about the phase: its transcript lived in a closure, which
+  > a relaunch does not survive, so the run reported its launch half alone — it is
+  > kept in `localStorage` now; and clause 4 counted errors in a window `arm()`
+  > had never run in, so it passed by counting nothing — it now fails unarmed and
+  > says so.
+
 - **Close-out:** **`rules/desktop-panes.md` — and its `max_lines` must be raised,
   which is stated here rather than discovered.** It stands at **475/475**, with no
   room at all, and this phase changes `## The footer` (a third cell, its own rule),

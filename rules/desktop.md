@@ -31,8 +31,9 @@ covers: >
   the vendored renderer the front end imports and what embedding it costs, the
   declarations it is type-checked against and where they may not live, the node
   manifest the crate carries for its test rig and the build that reads neither,
-  and the configuration facts a build enforces
-max_lines: 620
+  the window that is built hidden and shown a hook later, and the configuration
+  facts a build enforces
+max_lines: 635
 generated: 2026-08-28
 ---
 
@@ -112,6 +113,15 @@ manifest says, and answers `window.set_size not allowed. Permissions associated 
 this command: core:window:allow-set-size`. So which of them are reachable is a question
 to settle by calling one, never by `typeof` — which cost `tests/gates/mpdf-003-phase11.js`
 two runs.
+
+**A third configuration fact costs a frame rather than a build.** The `main`
+window is declared `"visible": false` and `setup` shows it, after `set_theme` and
+with `set_focus` beside it. **The runtime does not merely build the configured
+window before that hook — it puts it on screen**, so an appearance applied there
+arrives a frame late and a stored `dark` on a light system flashes; measured in
+the window on 2026-08-29, which is what `specs/desktop_app_spec.md` Phase 13's
+own note records. So `show` is now what makes the window appear at all, and
+nothing between the config and that line may return early.
 
 Two configuration facts cost a build each. **`icons/icon.png` is required** —
 without it `generate_context!` panics with "failed to open icon" — and **it must
