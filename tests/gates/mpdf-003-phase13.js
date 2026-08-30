@@ -53,7 +53,7 @@
      await __gate.flash()      <- stores dark, then tells you to quit
      ... quit Letur (Cmd-Q), then `cargo tauri dev` again, then RE-PASTE this ...
      await __gate.arm()        <- again, in the NEW window: it has no listeners yet
-     await __gate.landed(true|false) <- clauses 3, 4; your eyes on the first frame
+     await __gate.noFlash()    <- clauses 3, 4 — or __gate.flashed() if it did
      await __gate.restore()    <- puts the appearance back
      __gate.report()           <- the whole run, both windows
 
@@ -90,7 +90,15 @@
   const MARK = { light: '☀', dark: '☾' }
   /* What the *page* should be showing for a given value, which for the unset
      state is whatever the machine is giving. Read the same way the page reads
-     it, so a disagreement is the page's and not this gate's arithmetic. */
+     it, so a disagreement is the page's and not this gate's arithmetic.
+
+     **It must be sampled beside the reading it judges and never after the
+     walk.** `set_theme` moves the app-wide appearance, so `prefers-color-scheme`
+     answers differently at each step: a `system` reading taken while the system
+     was light, judged later against a media query the walk has since put in
+     dark, fails correct code. That is what it did on the run of 2026-08-29 —
+     the page had `☀`, `null` and a light window theme, all three right, and
+     this said MISPLACED. */
   const inEffect = (a) =>
     a === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : a
 
@@ -306,6 +314,8 @@
         await wear(appearance)
         seen.push({
           appearance,
+          // Sampled here, with the reading, for the reason `inEffect` states.
+          effective: inEffect(appearance),
           mark: themeButton.textContent,
           title: themeButton.title,
           label: themeButton.getAttribute('aria-label'),
@@ -335,21 +345,32 @@
          to; saying so here keeps a "no" from being read as `set_theme` failing
          when it was `set_appearance` that did. */
       const moved = seen.every((s) => s.said === s.appearance)
-      const placed = seen.every(
+      const misplaced = seen.filter(
         (s) =>
-          s.mark === MARK[inEffect(s.appearance)] &&
-          s.attribute === (s.appearance === 'system' ? null : s.appearance) &&
-          s.title === s.label &&
-          /appearance/i.test(s.label || '')
+          s.mark !== MARK[s.effective] ||
+          s.attribute !== (s.appearance === 'system' ? null : s.appearance) ||
+          s.title !== s.label ||
+          !/appearance/i.test(s.label || '')
       )
+      const placed = misplaced.length === 0
 
       ok(
         1,
         'the choice reached Rust and the window in all three states — YOUR EYES DECIDE the title bar',
         moved && placed,
         `values ${moved ? 'moved' : 'DID NOT MOVE'}, page ${placed ? 'placed' : 'MISPLACED'}; ` +
-          `window theme read ${seen.map((s) => `${s.appearance}→${s.theme}`).join(', ')}. ` +
-          'If the title bar did NOT follow above, mark this FAIL in your notes and say which state.'
+          `window theme read ${seen.map((s) => `${s.appearance}→${s.theme}`).join(', ')}` +
+          (misplaced.length
+            ? `; MISPLACED: ${misplaced
+                .map(
+                  (s) =>
+                    `${s.appearance} showed ${JSON.stringify(s.mark)} attr ${s.attribute} ` +
+                    `label ${JSON.stringify(s.label)}, wanted ${JSON.stringify(MARK[s.effective])} attr ` +
+                    `${s.appearance === 'system' ? 'null' : s.appearance}`
+                )
+                .join(' | ')}`
+            : '') +
+          '. If the title bar did NOT follow above, mark this FAIL in your notes and say which state.'
       )
 
       /* Clause 2. The widths against each other, and against the brand. **No
@@ -402,18 +423,44 @@
           '     The question is whether it comes up dark, or comes up light and\n' +
           '     turns dark a frame or two later.\n' +
           '  4. Re-paste this gate into the new window, then:\n' +
-          '       await __gate.arm()        (the new window has no listeners yet)\n' +
-          '       await __gate.landed(true)   if it came up dark with no flash of light\n' +
-          '       await __gate.landed(false)  if you saw the light palette first\n' +
+          '       await __gate.arm()       (the new window has no listeners yet)\n' +
+          '       await __gate.noFlash()   if it came up dark, with no flash of light\n' +
+          '       await __gate.flashed()   if you saw the light palette first\n' +
+          '     Say which you saw in words — there is no true/false to get backwards.\n' +
           '     The transcript from THIS window survives the quit and report() has it all.',
         'font-weight:bold;color:#1a73e8',
         'color:inherit'
       )
-      return 'quit and relaunch, then __gate.landed(true|false)'
+      return 'quit and relaunch, then __gate.noFlash() or __gate.flashed()'
     },
 
-    /* Clause 3, second half. Run in the RELAUNCHED window. */
-    async landed(clean) {
+    /* **`landed` took a boolean and that was a mistake**, made twice on
+       2026-08-29: the operator reported "no flash" in words and passed `false`
+       both times, which is the answer a gate should make impossible to give by
+       accident rather than one it should record. The two named calls below say
+       what they mean at the call site and this one now refuses. */
+    landed() {
+      console.log(
+        '%crefused%c  — say which you saw, in words:\n' +
+          '    await __gate.noFlash()   the window came up dark, with no flash of light\n' +
+          '    await __gate.flashed()   you saw the light palette first',
+        'font-weight:bold;color:#c5221f',
+        'color:inherit'
+      )
+      return 'use __gate.noFlash() or __gate.flashed()'
+    },
+
+    /** Clause 3, second half: it came up right. Run in the RELAUNCHED window. */
+    noFlash() {
+      return this._landed(true)
+    },
+
+    /** Clause 3, second half: it flashed. Run in the RELAUNCHED window. */
+    flashed() {
+      return this._landed(false)
+    },
+
+    async _landed(clean) {
       heading('the launch — the first frame')
 
       const state = await asked()
@@ -480,7 +527,7 @@
       'FIRST WINDOW:  __gate.forget() → await __gate.arm() → await __gate.chrome() →\n' +
       '               await __gate.flash()\n' +
       'THEN quit (⌘Q), `cargo tauri dev` again, re-paste, and in the NEW WINDOW:\n' +
-      '               await __gate.arm() → await __gate.landed(true|false) →\n' +
+      '               await __gate.arm() → await __gate.noFlash() (or .flashed()) →\n' +
       '               await __gate.restore() → __gate.report()',
     'font-weight:bold;color:#1a73e8',
     'color:inherit'

@@ -3170,6 +3170,21 @@ Phase 11 named it as the thing to do before a toggle could be a phase.
   > note: `restore()` put the appearance back to what the *relaunched* window
   > found, which is the value `flash()` had just stored, so a run ended by
   > pinning `dark` rather than where it started.
+  >
+  > **Two more gate defects, from the third run, and both are the same mistake in
+  > different clothes — a live value read at the wrong moment.** Clause 1's
+  > check called `inEffect('system')` *after* its own walk, by which time
+  > `set_theme` had put the app in dark, so a `system` reading correctly showing
+  > `☀` under a light machine was judged against `☾` and reported MISPLACED on
+  > correct code; the effective appearance is sampled beside each reading now, and
+  > the failure names what it wanted. And **`landed` took a boolean**, which the
+  > operator passed as `false` twice while reporting "no flash" in words — an
+  > answer a gate should make impossible to give by accident rather than one it
+  > should record. It is `noFlash()` and `flashed()` now, and `landed` refuses.
+  >
+  > **Four of the five failures this gate has reported were its own**, which is
+  > worth recording where the next window gate can see it: the phase's code was
+  > wrong once, at the launch frame, and the instrument was wrong four times.
 
   > **NARROWED 2026-08-29, by the author, on seeing it in the window: the button
   > has two positions and not three.** It gives light or dark, and `system` is no
