@@ -21,7 +21,10 @@ covers: >
   its own, the panel's status fields and the union built where no disk is
   read, the watch loop and its fourth answer and the two debounces it runs on,
   the three values the state holds where it held one and the two of them that
-  are now two files, the buffer that compiles and the closure it rides, the rule
+  are now two files, the second file beside the store and the one thing in it that
+  is not about a folder, the sixteenth command and the two halves it is, the second
+  setter called where capabilities do not apply, the field composed in two places
+  and the seam that holds them, the buffer that compiles and the closure it rides, the rule
   an external change runs and the second occasion its one field carries, the
   state the loop writes and the four states it reports, the export and its two
   refusals and the file it names, the errors it puts on the page, the bundle and the document association that launches it,
@@ -29,7 +32,7 @@ covers: >
   declarations it is type-checked against and where they may not live, the node
   manifest the crate carries for its test rig and the build that reads neither,
   and the configuration facts a build enforces
-max_lines: 605
+max_lines: 620
 generated: 2026-08-28
 ---
 
@@ -101,8 +104,9 @@ the second for the same reason `app/types/` is not under `dist/`.
 **What that withholds is worth stating beside what it carries.** `core:window:default`
 is the window's *getters* — `allow-scale-factor`, `allow-inner-size`, `allow-title`,
 the `is-*` family — and **no setter**, so nothing in the page can resize, move or
-retitle the window. The retitling this app does is `main.rs`'s own `set_title`, from
-Rust, where capabilities do not apply. **A setter called from the page is a function
+retitle the window. The two setters this app calls — `set_title` and
+`set_appearance`'s `set_theme` — are `main.rs`'s own, from Rust, where capabilities
+do not apply, and neither added one. **A setter called from the page is a function
 that exists and rejects at the IPC**: `setSize` is on `getCurrentWindow()` whatever the
 manifest says, and answers `window.set_size not allowed. Permissions associated with
 this command: core:window:allow-set-size`. So which of them are reachable is a question
@@ -123,7 +127,7 @@ capability added for either. `app/gen/` is generated and is not committed.
 
 `app/src/main.rs` holds only what needs a window. `main` registers the dialog
 plugin, builds the menu, manages one `Mutex<Session>` and one
-`app/src/main.rs:Pending`, registers fifteen commands, and — since the bundle —
+`app/src/main.rs:Pending`, registers sixteen commands, and — since the bundle —
 **builds the app rather than running it**, so that it can hand `App::run` a
 callback and see the run events a `.run(generate_context!())` never surfaces.
 
@@ -156,7 +160,14 @@ numbers, one per byte. Its `Err` is a state and not a fault: a stale pane keeps
 its bytes and gets the message instead.
 
 `app/src/main.rs:status` answers the same signal, **a second command rather than
-a wider return**, because the bytes cross raw and a status does not.
+a wider return**, because the bytes cross raw and a status does not. It asks
+`Session::status`, not `preview()`, the first knowing a field the second cannot, and
+**that one line is outside every test here** by the division this section's last
+paragraph records. `app/src/main.rs:set_appearance` is the sixteenth and is two
+halves: `Session::set_appearance` writes, moves and announces, then `set_theme`
+follows with the native title bar — the half no browser sees, and the reason this is a
+command at all. **The loose reading fails silently**: writing the file and never
+announcing leaves the bar's own mark stale until the next compile.
 `app/src/main.rs:document_text` answers it too, and only when the status says the
 buffer was replaced from disk. `app/src/main.rs:export_path` and
 `app/src/main.rs:export` are the two halves of Save a Copy.
@@ -169,8 +180,8 @@ therefore cross the IPC boundary and the debounce is Rust's**, which is what put
 the interval on the testable side of the window: a debounce in the page would be
 logic reachable only by typing at one.
 
-Fourteen of the fifteen commands are wrappers over a plain function.
-`app/src/main.rs:pending_open` is the fifteenth and is not: it reads no session
+Fifteen of the sixteen commands are wrappers over a plain function.
+`app/src/main.rs:pending_open` is the odd one and is not: it reads no session
 and **takes** a slot the run event filled, which the section on the bundle below
 explains. `app/src/main.rs:trash_file` is the newest of the fourteen and the
 split is load-bearing rather than tidy: this file has no test module, the crate
@@ -473,9 +484,16 @@ the write.
 
 ## The session
 
-`app/src/preview.rs:Session` is that state plus the two loops and the store's
-path — **a parameter and not a call to the platform**, so a test hands in a
-scratch file and `main.rs` resolves the real one where the `AppHandle` is.
+`app/src/preview.rs:Session` is that state plus the two loops, the paths of the **two**
+files this app writes outside the author's own folders — both out of one
+`app_data_dir()`, and `rules/desktop-project.md` has why they are two — and the
+appearance one of them holds. Each path is **a parameter and not a call to the
+platform**, so a test hands in a scratch file and `main.rs` resolves the real ones
+where the `AppHandle` is. **The appearance is here and not on `Preview`**, which
+`open_at` rebuilds whole and would reset it on every open; so `Status` is composed in
+two places, `Preview::status` filling `System` where `Session::status` corrects it, and
+`preview.rs:the_session_carries_the_appearance_and_a_bare_preview_does_not` holds that
+seam — a mis-wired composition being otherwise silent.
 `Session::open` finds the project the opened file sits in and **reads the store
 first**, or it is a thing written and never used; an override naming a file the
 disk no longer holds falls through to discovery rather than opening nothing. It

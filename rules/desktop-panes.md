@@ -16,8 +16,10 @@ covers: >
   redraw that moves the reader and the three causes that decide where to, the
   anchor path that opens on the author's own page and the one file it is
   filtered to, the status the page places and never composes, the bar along the
-  foot and the two cells it carries, the file it names and the one it does not,
-  the panel that
+  foot and the three cells it carries, the file it names and the one it does not,
+  the appearance the author chooses and the four token blocks that wear it, the
+  one value in the bar the page asks for rather than decides, the auto margin
+  that moved and the reading that can tell it moved, the panel that
   lists the project's files and the two states it keeps apart, the flat entries
   it is drawn from and the folders derived rather than sent, the fold the page
   holds, the three gestures on a row and the two marks it may carry, the two
@@ -33,10 +35,11 @@ covers: >
   that keeps the numbers against their lines, the caret's two marks and the
   pane that loses both when it empties, the check that reads this file and the
   two declarations it holds to each other, the harness that drives it in two
-  engines and the copy it drives rather than the file, the seven clauses it
-  asserts as properties and the three broken pages that falsify them, and the
+  engines and the copy it drives rather than the file, the boundary it records
+  because the DOM cannot show one, the ten clauses it
+  asserts as properties and the six broken pages that falsify them, and the
   seven defects neither reaches
-max_lines: 475
+max_lines: 530
 generated: 2026-08-28
 ---
 
@@ -198,7 +201,8 @@ wrote.
 ## The footer
 
 A bar along the foot of the window: 23px and its own 1px rule, so 24px taken out of
-`main`. Two cells, `#edited` on the left and `#brand` on the right. It is `main`'s
+`main`. Three cells: `#edited` on the left, `#controls` holding one button, and
+`#brand` last. It is `main`'s
 next element sibling and the last element before the module script — **not `body`'s
 last element child**, and those are two facts rather than one restated. By the file
 `body` ends `FOOTER, SCRIPT`; **at runtime it ends `FOOTER, SCRIPT, CANVAS`**, `pdf.js`
@@ -227,6 +231,43 @@ either, which is the hazard the panel answers by carrying the whole path.
 `tauri.conf.json`'s `productName` by `include_str!` on both. **It is the one name in
 this app a rename could leave wrong in silence**, the page being outside every other
 suite here.
+
+**Between them, `#controls` holds `#theme`: the appearance the author chose, and the
+bar's first interactive control.** Three states — `system`, `light`, `dark`, marked
+`◐ ☀ ☾` — cycling in that order. **The page places and never decides**: the value is
+`Status::appearance`, `report` wears it beside the cell it writes, and the click's
+only act is `invoke('set_appearance')`, so the attribute moves when Rust answers and
+not when the button is pressed. `checks.mjs` owns that as a clause, and the
+`theme-click-direct` mutation — the click rewired to set `data-theme` itself — is
+what makes it a claim rather than a hope, since nothing read off the DOM alone can
+tell the two apart. The button carries `title` and `aria-label`, which is more than
+the bar had; `<footer>` is still an unlabelled `contentinfo` landmark, and
+`specs/desktop_app_spec.md` OQ-11 carries that. The marks are chosen and not
+defended — OQ-12 carries whether they should be inline SVG instead.
+
+**The palette is four token blocks where it was two, and the dark values are written
+twice.** The duplication is the pattern: a media query's condition cannot be shared
+with an attribute selector, so winning in *both* directions takes both —
+`:root:not([data-theme='light'])` inside `@media (prefers-color-scheme: dark)` to opt
+out, and `:root[data-theme='dark']` to opt in. **No attribute at all is the third
+state** and it is the page's own earlier behaviour unchanged, which is why `system`
+removes the attribute rather than setting a third value. `color-scheme` follows all
+three ways and is not decoration: it paints the `#fit` select, its native arrow and
+the scrollbars. **`--paper` is in none of them** — the page Typst compiles is white in
+either palette — and `checks.mjs` pins it unmoved in all six system-by-state
+readings, which is what keeps `specs/desktop_app_spec.md` §1.1's narrowing honest:
+this app themes its own chrome and nothing about the document.
+
+**The auto margin is `#controls`' and the brand comes last.** It moved off `#brand`
+in Phase 13 so the shape is readouts left, icon group right, product name last; left
+where it was, the toggle would have sat outside the group's own right edge. **`#brand`'s
+own rect cannot tell the two layouts apart** — an auto margin absorbs exactly the free
+space in total, so a last child with no right margin does not move, which falsified
+the first draft of the clause meant to catch this. What separates them is the group's
+distance to the brand, which must equal the footer's own `gap`, **and only at a wide
+viewport**: at 240px a 58-character name has filled `#edited` and left no free space
+to absorb, so both layouts read the gap. The button takes its font, padding, border
+and background off and pins `line-height: 1`, so the bar's height does not move.
 
 **What keeps the brand in the bar is `#edited`'s zero automatic minimum size**, and
 `min-width: 0` and `overflow: hidden` **each supply it independently** — so the pair is
@@ -482,7 +523,7 @@ the top of its script, the DOM subtypes `getElementById` cannot know, `doc` and
 fields `pdf.js` tolerates the absence of at runtime.
 
 **The page and `Status` are held to each other from both sides.** The typedef
-block declares `Status`'s ten fields and `Anchor`'s two; the type check binds
+block declares `Status`'s twelve fields and `Anchor`'s two; the type check binds
 the page's reads to those, and `app/src/preview.rs`'s
 `the_page_typedefs_name_exactly_the_fields_status_serializes` compares the same
 `@property` lists against a serialized `Status` carrying one `Anchor` — which it
@@ -495,10 +536,16 @@ gitignored scratch directory — never edits it, `typecheck.mjs` dying on a page
 scripts — injects `stub.mjs` into the `<head>`, where it must run before the page reads
 `window['__TAURI__']` at module top level, and serves real compiled bytes for `current_pdf`.
 **The stub rejects what the app forbids as well as answering what it returns**, `setSize` in
-`core:default`'s own words — the half a stub that merely omits it never tests. `checks.mjs`
-asserts seven clauses in Playwright's Chromium and WebKit, **both of which must pass, every
-clause a property and none a metric literal**, and is falsified first against three broken copies
-of the page, each failing exactly the clause it owns.
+`core:default`'s own words — the half a stub that merely omits it never tests. It also keeps
+**a log of every command the page sends**, because a page that did a thing itself and a page
+that asked Rust to are indistinguishable from the DOM. `checks.mjs`
+asserts ten clauses in Playwright's Chromium and WebKit, **both of which must pass, every
+clause a property and none a metric literal**, and is falsified first against six broken copies
+of the page, each failing exactly the clause it owns. The error clause stays last and its
+number moves as clauses are added, being the only one that accumulates across the others.
+**One clause drives two colour schemes**, `light` being written down as the default rather
+than inherited from Playwright, because the palette has to win in both directions and a
+suite run in one of them would miss half of it.
 
 **What none of it reaches is most of what has gone wrong in this file.** Of the eight defects it
 has produced, a type check catches **one** — a `destroy` that `PDFDocumentProxy` does not have,

@@ -16,9 +16,10 @@ covers: >
   confinement the walk and the commands now share, the one a write obeys
   differently and the third a delete asks, the two further questions a create
   asks and the empty file it stops at, the row a delete acts on by name and the
-  panel it refreshes itself, and the one
-  fact this app remembers about a folder and where it refuses to keep it
-max_lines: 150
+  panel it refreshes itself, the one
+  fact this app remembers about a folder and where it refuses to keep it, and the
+  second file beside it for the fact that is about no folder at all
+max_lines: 165
 generated: 2026-08-28
 ---
 
@@ -155,9 +156,9 @@ already in the asset list, so deleting one answers `Change::Asset` and never the
 inconsistency**: a created file is in no asset list, so the watch gets that one
 right.
 
-`app/src/document.rs:store_file` names the one file this app writes outside the
-author's own folders — `projects.json` under the directory Tauri's resolver gives
-`dev.letur.desktop` — and `read_override`/`write_override` keep one main per
+`app/src/document.rs:store_file` names the first of the two files this app writes
+outside the author's own folders — `projects.json` under the directory Tauri's
+resolver gives `dev.letur.desktop` — and `read_override`/`write_override` keep one main per
 canonical root in it, a `BTreeMap` so two writes of one map are two identical
 files. **A missing, unreadable or malformed store is nothing remembered and never
 an error in the window**; a failed *write* is reported, the author having just
@@ -166,4 +167,16 @@ twice over: it is the manifest `specs/desktop_app_spec.md` §1.1 parks arriving 
 another name, and it writes into a directory that may be under version control.
 **The choice does not travel with the files**, and a folder moved to another
 machine is discovered again.
+
+`app/src/document.rs:settings_file` names the second, `settings.json`, in the same
+directory, and `read_appearance`/`write_appearance` mirror the three above — the
+same forgiving read, the same reported write. **It holds what is about no folder at
+all**, the appearance the window wears, so it is keyed by nothing. **A second file
+and not a member of the first**, and the reason is checkable rather than aesthetic:
+`Store` is a `BTreeMap<String, String>` and `read_store` swallows a parse failure,
+so an object with a member beside the mains would make every `projects.json`
+already on disk malformed — and malformed means forgotten. Every author's
+remembered main would have been dropped, silently, by the upgrade that put a toggle
+in the footer, and `document.rs:writing_the_appearance_does_not_touch_the_store` is
+what holds that as bytes rather than as intent.
 
