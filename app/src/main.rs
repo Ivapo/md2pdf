@@ -75,8 +75,21 @@ const OPENED: &str = "opened";
 struct Pending(Mutex<Option<PathBuf>>);
 
 fn main() {
-    let app = tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
+    // **The chain is broken here and nowhere else, and it is broken for one
+    // reason:** an attribute cannot be applied to a method call, so the one
+    // `#[cfg]`'d plugin needs a binding to hang off. Everything below runs
+    // unbroken from `builder` to `build`, as it did before `driven` existed.
+    //
+    // `tauri-plugin-wdio-webdriver` starts a WebDriver server on 4445 and is
+    // what `app/driver/drive.mjs` speaks to. Off by default: `app/Cargo.toml`
+    // makes the dependency optional and this is the only `init()` of it, so a
+    // plain build neither links the crate nor opens the port.
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+
+    #[cfg(feature = "driven")]
+    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
+
+    let app = builder
         .manage(Pending::default())
         .setup(|app| {
             app.set_menu(menu(app.handle())?)?;
