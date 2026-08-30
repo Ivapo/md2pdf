@@ -70,7 +70,7 @@ phases:
     by: null
   - name: "Phase 13 — the appearance the author chooses"
     reviewed: 2026-08-29
-    shipped: null
+    shipped: 2026-08-29
     cut: null
     by: null
 
@@ -3185,6 +3185,16 @@ Phase 11 named it as the thing to do before a toggle could be a phase.
   > **Four of the five failures this gate has reported were its own**, which is
   > worth recording where the next window gate can see it: the phase's code was
   > wrong once, at the launch frame, and the instrument was wrong four times.
+  >
+  > **PASSED 2026-08-29, all four clauses, across three window runs.** The title
+  > bar followed all three values with the page placing each correctly — `system`
+  > showing `☀`, `null` and a light window theme under a light machine, `light`
+  > and `dark` their own; the marks measured 9.23 / 9.23 / 9.22px with two
+  > distinct glyphs and `#brand` unmoved at 862.98; the relaunch came up dark from
+  > the first frame with no flash, on a light machine with `dark` stored; and no
+  > error reached the console in any armed window. **Clause 3's pass is the
+  > operator's eyes and is recorded as that** — a frame is not readable from the
+  > content area, and the gate says so where it asks.
 
   > **NARROWED 2026-08-29, by the author, on seeing it in the window: the button
   > has two positions and not three.** It gives light or dark, and `system` is no
