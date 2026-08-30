@@ -1247,11 +1247,16 @@
         color: var(--ink);
       }
       /*
-        The bar's two rules. Each is outside the group it follows — the right
-        one outside `#controls`, so the auto margin still belongs to the group
-        — and each is decorative: the bar says the same without them, so both
-        are `aria-hidden` and both take the footer's own gap rather than a
-        margin of their own.
+        The bar's one rule, and the class is kept plural-shaped because the
+        placement rule is what matters rather than the count: it sits *outside*
+        `#controls`, so the auto margin still belongs to the group. It is
+        decorative — the bar says the same without it — so it is `aria-hidden`
+        and takes the footer's own gap rather than a margin of its own.
+
+        **A second rule stood between `#views` and `#edited` and was withdrawn**,
+        the bar's own 8px gap being enough to part a pair of marks from a file
+        name. It was read by nothing: `aria-hidden`, no clause, neither rig.
+        `#sep-brand` is the one clause 9 measures two gaps across, and it stays.
       */
       .sep {
         flex: none;
@@ -1461,7 +1466,6 @@
           </svg>
         </button>
       </span>
-      <span id="sep-views" class="sep" aria-hidden="true">|</span>
       <span id="edited"></span>
       <span id="controls">
         <!--

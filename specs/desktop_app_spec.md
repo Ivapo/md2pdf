@@ -3745,6 +3745,18 @@ disk and have to work out why.
   footer's last element child, which Phase 13's clause asserts and this phase does
   not disturb.
 
+  > **CORRECTED 2026-08-30.** The element list and the count above are kept as
+  > they were written and the bar now carries **four cells and one rule**:
+  > `#sep-views`, between `#views` and `#edited`, was withdrawn at the window —
+  > the bar's own 8px gap parts two marks from a file name without it. **The
+  > placement rule this paragraph states is what survives and it is unchanged**:
+  > `.sep` still goes outside the group it follows, `#sep-brand` still being
+  > outside `#controls` so the auto margin stays the group's. Nothing was keyed to
+  > the withdrawn one — `aria-hidden`, no harness clause, no driver clause, no
+  > gate — where `#sep-brand` is the one clause 9 measures its two gaps across, so
+  > this is a code change with a dated note and not a phase, per §6.1 step 0 and
+  > its third bullet.
+
   **Tab order follows from that list and is not separately checked, which is a
   drop and is recorded as one.** The draft's pasteable gate read it; nothing reads
   it now. Nothing here sets `order` or `tabindex`, so DOM order is both the visual

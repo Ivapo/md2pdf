@@ -243,13 +243,16 @@ header's element order, its 12px shared left column or its 22px button** — cla
 ## The footer
 
 A bar along the foot of the window: 23px and its own 1px rule, so 24px taken out of
-`main`. **Four cells and two rules**, counted as this file counts them — the
+`main`. **Four cells and one rule**, counted as this file counts them — the
 footer's own element children, in order: `#views` (holding `#views-files`, then
-`#views-lines`), `#sep-views`, `#edited`, `#controls` (holding `#fit-footer`, then
-`#theme`), `#sep-brand`, `#brand`. **Two of those placements are load-bearing rather
+`#views-lines`), `#edited`, `#controls` (holding `#fit-footer`, then `#theme`),
+`#sep-brand`, `#brand`. **Two of those placements are load-bearing rather
 than aesthetic**: the fit select sits *inside* `#controls`, because the auto margin
-that right-aligns the group is the group's, and each `.sep` sits *outside* the group
-it follows, for the same reason. It is `main`'s
+that right-aligns the group is the group's, and `.sep` sits *outside* the group
+it follows, for the same reason. **A second rule stood between `#views` and
+`#edited` and was withdrawn**, the bar's own gap being enough to part two marks
+from a file name; it was `aria-hidden` and read by no clause and neither rig,
+where `#sep-brand` is what clause 9 measures two gaps across. It is `main`'s
 next element sibling and the last element before the module script — **not `body`'s
 last element child**, and those are two facts rather than one restated. By the file
 `body` ends `FOOTER, SCRIPT`; **at runtime it ends `FOOTER, SCRIPT, CANVAS`**, `pdf.js`

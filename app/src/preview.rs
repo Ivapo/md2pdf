@@ -1216,8 +1216,20 @@ mod tests {
     /// Its store is a scratch file this process owns, so a test never reads or
     /// writes the store the installed app keeps — and a case that wants an
     /// override writes one into it and says so.
+    /// **A store directory per session, and the counter is load-bearing.**
+    /// Every caller shared one `scratch_dir("store-of-the-session")` until
+    /// `mpdf-003` Phase 17 added eight more of them, and [`scratch_dir`]
+    /// `remove_dir_all`s before it creates: two tests reaching it at once left
+    /// one of them between `create_dir_all` and `canonicalize` with its
+    /// directory deleted under it, which is a `NotFound` on a line that reads
+    /// like an assertion about symlinks. The race was always there; the eighth
+    /// caller is what made it show. Distinct names cost nothing and remove it.
     fn counted() -> (Session, Arc<AtomicUsize>) {
-        counted_with(document::store_file(&scratch_dir("store-of-the-session")))
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, Ordering::SeqCst);
+        counted_with(document::store_file(&scratch_dir(&format!(
+            "store-of-the-session-{n}"
+        ))))
     }
 
     /// The same, with the store named, for the cases that put something in it.
