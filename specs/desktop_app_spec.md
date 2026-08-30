@@ -999,9 +999,10 @@ list to one item.
   > answer.** A phase committing a real-engine driver should *not* be written for
   > OQ-10's sake: the prize it would have been for is measured and absent. The rig
   > remains worth having for a different and smaller reason — it is the only thing
-  > that has driven this app's real engine unattended, and it would automate most
-  > of `tests/gates/mpdf-003-phase13.js` — but that is a capability phase, not an
-  > answer to this.
+  > that has driven this app's real engine unattended, and it would automate **two
+  > of the four clauses** of `tests/gates/mpdf-003-phase13.js` — but that is a
+  > capability phase, not an answer to this. *(The clause count is corrected from
+  > "most of" by Phase 14's round 1, which counted them.)*
   >
   > Recorded with it, because it is a defect in someone else's documentation that
   > this project would otherwise inherit: **`[target.'cfg(debug_assertions)'.dependencies]`,
@@ -3344,8 +3345,8 @@ frame. **Each of those four cost a manual window run**, which is the most expens
 thing this project spends.
 
 **And all eight gates hand-roll the same ledger** — `transcript`, `ok`, `note`,
-`tally`, the two error listeners — across some 3,700 lines, never tested, and three
-of those four defects were in that shape rather than in the clauses it carries.
+`tally`, the two error listeners — across 3,721 lines, never tested, and three of
+those four defects were in that shape rather than in the clauses it carries.
 
 Appended 2026-08-29, per §6.1 step 2: what checks this app is this spec's own subject
 and has been since Phase 9. **Strictly after Phase 12**, whose browser harness this
@@ -3361,11 +3362,20 @@ by a machine, and it is worth building for that alone.
 
 - **Scope:**
 
-  **The server, and how it is kept out of a shipped app —
-  `app/Cargo.toml`, `app/build.rs`, `app/src/main.rs`, `app/capabilities/`.**
-  `tauri-plugin-wdio-webdriver` 1.3.0 is an in-process W3C WebDriver server on
-  `127.0.0.1:4445`. It is an **optional dependency behind a cargo feature named
-  `driven`**, and `#[cfg(feature = "driven")]` gates its `init()`.
+  **The server, and how it is kept out of a shipped app — `app/Cargo.toml` and
+  `app/src/main.rs`, and nothing else.** `tauri-plugin-wdio-webdriver` 1.3.0 is an
+  in-process W3C WebDriver server on `127.0.0.1:4445`. It is an **optional dependency
+  behind a cargo feature named `driven`**, and `#[cfg(feature = "driven")]` gates its
+  `init()`. Two files.
+
+  **The `main.rs` edit is a restructure and not a line, which is worth saying because
+  "add a `#[cfg]`" sounds like one.** An attribute cannot be applied to a method call
+  inside a builder chain, and this one runs unbroken from `tauri::Builder::default()`
+  through `.setup(…)` and `.invoke_handler(…)` to `.build(generate_context!())`. The
+  plugin is registered by breaking that chain at the top —
+  `let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());` then a
+  `#[cfg(feature = "driven")]` rebinding, then the rest — which is the same shape
+  Phase 13 already introduced there for `set_theme`.
 
   **Not `[target.'cfg(debug_assertions)'.dependencies]`, which is what WebdriverIO's
   own setup page prescribes and which does not work.** Cargo says so outright —
@@ -3374,100 +3384,196 @@ by a machine, and it is worth building for that alone.
   documented incantation the crate is compiled and linked into a release build and
   only the `init()` call is gated. The distinction is checkable and clause 2 checks it.
 
-  **The capability is the hard half, and the route is measured rather than proposed.**
-  `tauri-build` globs `capabilities/`, and a permission naming an uncompiled plugin is
-  a **build error** — `Permission wdio-webdriver:default not found` — so the entry
-  cannot simply sit in `default.json`. `add_capability` exists but is behind tauri's
-  own `dynamic-acl` feature, which would gate `tauri`'s features too. **So `build.rs`
-  writes `capabilities/driven.json` when `CARGO_FEATURE_DRIVEN` is set and removes it
-  when it is not**, which keeps one source of truth and needs no second config file.
-  All four states were built and run during drafting: without the feature the crate is
-  absent from `cargo tree`, the capability file is gone and nothing answers on 4445;
-  with it, all three are there.
+  **No capability is added, and the reason is measured rather than assumed — round 1
+  is what found it.** The draft carried a `build.rs` that generated a `driven.json`
+  capability under `CARGO_FEATURE_DRIVEN`, plus a `.gitignore` line, on the strength of
+  a build error that is real: naming `wdio-webdriver:default` in a capability while the
+  plugin is not a dependency fails the build with *"Permission wdio-webdriver:default
+  not found"*, `tauri-build` globbing `capabilities/**/*`. **What the draft never
+  checked is whether the permission is needed at all, and it is not.** The plugin
+  declares `COMMANDS: &[]` and its `permissions/default.toml` is `permissions = []`: it
+  exposes **no Tauri IPC command**, every automation going over its own HTTP server. A
+  `--features driven` build carrying **no capability entry anywhere** was built and
+  driven during this round — `/status` ready, a session created, `execute/sync`
+  returning the page's own values, and `window/rect` moving the window. **So the
+  generator, the second capability file and the `.gitignore` line are all cut**, and
+  what remains of the finding is a sentence in `rules/desktop.md` warning the next
+  reader off the entry that looks required and is not.
 
   **The driver — `app/driver/drive.mjs`, and it is a second rig rather than a change
   to the first.** `app/harness/` stubs Rust and drives the page in Playwright; this
   drives the shipped binary and the real WKWebView, and the two answer different
-  questions. It speaks plain HTTP to the endpoint — **no npm client**, the spike having
-  established that `@wdio/tauri-service` buys nothing this needs — and gives a gate:
-  a session, `execute/sync`, `window/rect`, and `invoke('open_document', {path})` so a
-  document opens with no dialog.
+  questions. Run as **`bun app/driver/drive.mjs [--falsify]`**, printing `PASS`/`FAIL`
+  per numbered clause and a count, exactly as `checks.mjs` does, so a second person has
+  a stated output to reproduce.
 
-  **What it can do that the page cannot, and this is why it is worth a phase rather
-  than a script**: `setWindowRect` is in the session's capabilities, so **the driver
-  resizes the window**, which `core:default` refuses the page and which
-  `tests/gates/mpdf-003-phase11.js` therefore asks a human to do by dragging. Every
-  width sweep in `tests/gates/` is that gesture.
+  It speaks plain HTTP to the endpoint — **no npm client**, the spike having
+  established that `@wdio/tauri-service` buys nothing this needs — over
+  `/session`, `/session/<id>/execute/sync`, `/session/<id>/execute/async` and
+  `/session/<id>/window/rect`. **Both execute routes, because `invoke` returns a
+  promise** and the synchronous one cannot await it.
 
-  **The ledger moves into the driver, which is what fixes three of the four defects
-  above by construction.** The transcript lives in a node process, so a relaunch cannot
-  take it; arming is the driver's own act, so an unarmed window is not a state a clause
-  can silently pass in; and an answer is a measurement rather than a boolean an
-  operator types, so there is no `landed(false)` to get backwards. **The fourth — a
-  live value read after the walk that moved it — is not fixed by construction** and is
-  named here so it is not assumed away: it is a discipline, and clause 4 is what holds
-  it.
+  **It launches `target/debug/letur` directly and kills it, and not through the Tauri
+  CLI.** `app/Cargo.toml`'s own comment records that `cargo tauri dev` rewrites the
+  crate's feature lists on every run, which would dirty the tree clause 5 requires
+  clean — in the same file this phase is adding a dependency to. **And it restores what
+  it moved**: the driver writes the app's stored appearance and must put it back, that
+  being one of the four instrument defects this phase is built on.
 
-  **What this phase converts, and it is one gate.** `tests/gates/mpdf-003-phase13.js`:
-  clause 1's plumbing half (the three values reach Rust and the page places each) and
-  clause 2 (the marks' widths and the brand's rect in WKWebView) become driver clauses.
-  **The other seven gates are not rewritten** — that is a later phase, and doing it here
-  would be a 3,700-line diff whose gate is "it still passes", which is no gate at all.
+  **What this phase converts, stated clause by clause because the draft's "keeps those
+  two and loses the other two" did not resolve against a gate that has four.**
+  `tests/gates/mpdf-003-phase13.js`:
+
+  | gate clause | after this phase |
+  |---|---|
+  | 1 — the choice reaches Rust, the page places it, **and the title bar follows** | **splits.** The plumbing and the placement become driver clause D1. The title bar stays with a person, and **gets a boolean of its own**: today clause 1 reads `moved && placed`, which is *entirely* the half being converted, so left alone the surviving clause would assert nothing the driver had not already. |
+  | 2 — the marks render alike, the brand does not move | **moves whole**, as driver clause D2. The "are both legible, is either a tofu box" prompt stays in the manual gate as a note, having no machine form. |
+  | 3 — the launch does not flash | **stays.** The session begins after the window is up. |
+  | 4 — no error since this window was armed | **stays, and is not deleted.** It guards the manual relaunch half, and removing it would re-open by hand exactly the defect — a clause passing by counting nothing — that this phase cites as costing a window run. |
+
+  **The driver's three clauses.**
+
+  - **D1 — the value reaches Rust and the page places it.** All three appearances
+    through `invoke('set_appearance')`, asserting `Status::appearance` comes back, that
+    `data-theme` is the value or absent for `system`, and that `title` and `aria-label`
+    agree and name an appearance. **It does not assert the mark**, which is D2's, so
+    that the two mutations below can each fail exactly one clause.
+  - **D2 — the marks, measured at a width the driver set.** Exactly two distinct
+    glyphs across the three states, their widths within a pixel of each other, and
+    `#brand`'s rect unmoved as they swap — **taken after `window/rect` has moved the
+    window**, so that `setWindowRect` is *exercised and verified* rather than shipped
+    structurally present and behaviourally untested. That call is the stated reason this
+    is a phase rather than a script — the page cannot resize its own window,
+    `core:default` granting getters and no setter — and a gate that never made it would
+    be claiming the thing it did not check. **`window/rect` is in physical pixels while
+    `tauri.conf.json`'s `width` is logical**: 700 gives `innerWidth` 350 at
+    `devicePixelRatio` 2, measured, so the driver converges by reading back rather than
+    by arithmetic.
+  - **D3 — the instrument can see what it reports the absence of.** A deliberate
+    `ResizeObserver` loop injected through the session must be **caught**. The spike is
+    why this is a clause rather than a habit: its 0 meant nothing until 242 caught
+    errors made it a measurement. **It runs last and tears itself down** — the observer
+    disconnected and its node removed — because the loop is self-perpetuating by
+    construction and one left firing would sit under every measurement taken after it.
+
+  **The falsification, and how a broken page is made when the page is inside the
+  binary.** `generate_context!` walks `frontendDist` into the executable, so there is no
+  served copy to mutate the way `app/harness/serve.mjs` builds one, and rebuilding per
+  mutation would cost a compile each. **So a mutation is injected into the live session** — and the *mechanism* is named
+  here rather than left to the implementer, because **the obvious one does not work and
+  round 2 caught the draft claiming it.**
+
+  **Not by replacing the page's function.** `app/dist/index.html` has exactly one
+  `<script type="module">`, `wearAppearance` is a declaration inside it, and the only
+  binding the page publishes to global scope in four thousand lines is
+  `window['__pane']`. `execute/sync` evaluates a classic script in the page's *global*
+  context, which cannot rebind a module-local name: `window.wearAppearance = …` makes a
+  global the module never calls, while `report` and the `matchMedia` listener go on
+  resolving to the original.
+
+  **So a mutation replaces a DOM method or accessor on one of the two objects
+  `wearAppearance` writes through** — `document.documentElement` and the `#theme`
+  button — which are reachable from global scope precisely because they are the DOM and
+  not the module, and which that function reaches **by property lookup at call time**,
+  so an own property installed on either instance shadows the prototype and takes.
+
+  **Each mutation counts its own invocations**, which is what `serve.mjs:die`'s rule
+  becomes here: a mutation whose counter is zero when its clause runs has falsified
+  nothing and the run fails, exactly as a string replacement that matched nothing does
+  there. **The counter is a page global read back through `execute/sync`, and it is
+  reset when the mutation is installed** — one mutation is live per run, and D1 and D2
+  each walk the three states, so a counter shared across them would be read after a walk
+  that is not the clause's own. Two mutations, each owning one clause:
+
+  - `attribute-always-set` — `documentElement.removeAttribute` patched to ignore
+    `data-theme`, so the attribute stays behind in the `system` state. Fails **D1**
+    alone: `data-theme="system"` matches neither `:root[data-theme='dark']` nor
+    `:root[data-theme='light']` and does match the media query's
+    `:not([data-theme='light'])`, so it is palette-identical to the attribute being
+    absent and D2's glyphs, widths and brand rect do not move.
+  - `third-mark` — the button's `textContent` setter patched, through an
+    instance-level `Object.defineProperty`, to write a third glyph while `data-theme` is
+    absent. **It must delegate to the original setter and actually put the glyph in the
+    DOM**, not merely report one: D2 measures with `getBoundingClientRect`, and an
+    accessor that lies about what it wrote changes no rendered width and would falsify
+    nothing. Fails **D2**'s "exactly two distinct glyphs" alone: `title` and
+    `aria-label` are written on their own lines from `APPEARANCE_SAYS` and are
+    untouched, and D1 does not assert the mark, which is the sentence that buys this
+    isolation.
+
+  **What no clause holds, said rather than assigned.** The fourth instrument defect —
+  a live value read after the walk that moved it — **is not fixed by construction and
+  no clause below catches it.** Falsification catches a mutation that *passes*; that
+  defect made a correct page *fail*, which is the opposite direction. Moving the ledger
+  into a node process fixes the other three by construction — the transcript cannot be
+  lost to a relaunch, arming is the driver's own act rather than an operator's, and an
+  answer is a measurement rather than a boolean typed by hand. The fourth is held by
+  review and by nothing else, and the draft's claim that clause 4 held it was wrong.
 
   **Not in this phase, named so they are not smuggled in.** **The title bar's own
   pixels and the launch flash stay with a person**: W3C `Take Screenshot` is the
-  viewport, not the OS window, and the driver's session begins after the window is up.
-  Phase 13's gate keeps those two clauses and loses the other two. No replacement of
-  `app/harness/`, no claim about OQ-10's seven, no rewrite of the other gates, and **no
-  new capability in `default.json`** — `driven.json` is a second file for the same
-  reason `settings.json` was.
+  viewport, not the OS window, and the session begins after the window is up. No
+  replacement of `app/harness/`, no claim about OQ-10's seven, and **no rewrite of the
+  other seven gates** — that is a later phase, and doing it here would be a
+  3,721-line diff whose gate is "it still passes", which is no gate at all. No document
+  is opened: every converted clause is about the window's own chrome, which is why
+  `open_document` is **not** in this scope though the driver could call it.
 
 - **Exit gate:**
 
   1. `cargo test --workspace` passes at **338 passed, 0 failed and 2 ignored across
      nine binaries** — unchanged, because no test moves. A phase about the instrument
      must not move the thing it measures.
-  2. **The feature is off by default and provably so, in three ways rather than one**,
-     because this is the clause that keeps a WebDriver server out of a shipped app:
+  2. **The feature is off by default and provably so, in two ways** — because this is
+     the clause that keeps a WebDriver server out of a shipped app, and because **one
+     way is not enough while a third was cut for being vacuous**:
      `cargo tree -p letur -e normal` names `tauri-plugin-wdio-webdriver` **zero** times
-     and `--features driven` names it **once**; `app/capabilities/driven.json` does not
-     exist after a plain build and does after a driven one; and the plain binary,
-     launched, **answers nothing on 4445** while the driven one answers
-     `{"ready":true}`. All three, because the first alone would pass on the documented
-     `cfg(debug_assertions)` form that this phase exists partly to avoid.
-  3. **The driver runs Phase 13's two converted clauses unattended and they pass**, in
-     a `--features driven` build, with no human in the loop and the app launched and
-     killed by the driver itself.
-  4. **The driver is falsified before it is trusted, as `checks.mjs` was, and one of
-     its mutations is of a kind that suite has no equivalent for.** Two broken pages,
-     each failing exactly the clause that owns it — the mark wired to the value rather
-     than to what is in effect, and the click rewired to place instead of invoke. **And
-     a third check that is not a mutation at all: the instrument must prove it can see
-     what it reports the absence of.** A deliberate `ResizeObserver` loop injected
-     through the same session must be **caught**, and a run in which it is not caught
-     fails, whatever the clauses say. The spike is why this clause exists: its 0 meant
-     nothing until 242 caught errors made it a measurement.
+     and `--features driven` names it **once**; and the plain binary, launched, **answers
+     nothing on 4445** while the driven one answers
+     `{"value":{"ready":true,"message":"tauri-plugin-webdriver is ready"}}` — the whole
+     envelope, and **`ready` is `false` until a webview window exists**, so the driver
+     waits for `true` rather than for a 200.
+
+     **The cut leg was "a `--release` build succeeds with the crate absent", and round 2
+     was right that it discriminates nothing**: that is equally true under
+     `[target.'cfg(debug_assertions)'.dependencies]`, which builds and links in release
+     and is the very form this clause exists to rule out. A leg that passes on the thing
+     being ruled out is not a third check, and counting it would have made this clause
+     read stronger than it is.
+  3. **`bun app/driver/drive.mjs` exits 0, printing three clauses**, in a
+     `--features driven` build, with no human in the loop and the app launched and
+     killed by the driver itself — and **`settings.json`'s appearance is what it was
+     before the run**.
+  4. **`bun app/driver/drive.mjs --falsify` exits 0**, its two session-injected
+     mutations each failing **exactly** the clause that owns it and no other, each
+     asserting its override took. **D3 is not a mutation and is not optional**: a run in
+     which the deliberate loop is *not* caught fails, whatever the other clauses say.
   5. `bun app/typecheck.mjs` exits 0, `bun app/harness/checks.mjs` and `--webkit` still
      print ten clauses each, `--falsify` still isolates six — **the browser harness is
      untouched and must be shown to be** — and **`git status` is clean after a full
-     run**, `build.rs` writing `driven.json` into a directory git tracks. Either that
-     file is committed and removed by the plain build, which dirties the tree, or it is
-     `.gitignore`d; **the phase takes the second and says so**, because a build that
-     edits tracked files is worse than a line in `.gitignore`.
+     run**, which this phase makes easy by generating no file: the capability machinery
+     that would have needed a `.gitignore` line is cut.
 
-- **Close-out:** **`rules/desktop.md`** — the feature, the plugin, the second
-  capability file and why it is written rather than checked in; the cargo-rejects-the-
-  documented-form fact, which is the kind a later reader will otherwise rediscover.
-  Its cap stands at 611/635 and this needs perhaps fifteen lines, so it will move again
-  and the commit says which. **`rules/desktop-panes.md`** — `## What checks it, and what
-  that does not reach` gains the second rig and, more importantly, **the sentence that
-  says what each of the two is for**, since a reader with two harnesses and no rule
-  distinguishing them will use the wrong one. **`rules/desktop-geometry.md`: none
-  needed.** **`README.md`: none needed** — this is dev infrastructure and Phase 12's
-  harness took no line there either. **`CLAUDE.md`: none needed.** **`.gitignore`** gains
-  `app/capabilities/driven.json`, per clause 5. **OQ-10 takes no new note**: the spike's
-  is already there and this phase deliberately claims nothing about its behaviour half.
-  One push.
+- **Close-out:** **`rules/desktop.md`** — the feature and the plugin; **why no
+  capability**, which is the sentence that stops the next reader adding the entry that
+  looks required, fails the build if the plugin is absent, and grants nothing when it is
+  present; the cargo-rejects-the-documented-form fact; and `window/rect` being physical
+  where the config is logical. It stands at **620/635** by `spec-lint`'s own body count —
+  the draft said 611, which was wrong and reversed this paragraph's reasoning — so
+  fifteen lines lands it exactly on the cap and **the cap moves**; the commit says by how
+  much. **`rules/desktop-panes.md`** — `## What checks it, and what that does not reach`
+  gains the second rig and, more importantly, **the sentence that says what each of the
+  two is for**, since a reader with two harnesses and no rule distinguishing them will
+  use the wrong one. **Both rules' `sources:` gain `app/driver/drive.mjs`**, which
+  round 2 caught and which Phase 12's close-out had to do for `app/harness/*` for the
+  same reason: a claim made from a file the rule does not declare is regenerated away by
+  the next `/sync-rules`, per §8.1. **`rules/desktop-geometry.md`: none needed.**
+  **`README.md`: none
+  needed** — dev infrastructure, and Phase 12's harness took no line there either.
+  **`CLAUDE.md`: none needed. `.gitignore`: none needed**, per the cut above.
+  **OQ-10's 2026-08-29 note takes a one-clause correction**: it says this rig "would
+  automate most of `tests/gates/mpdf-003-phase13.js`", where the answer is **two of its
+  four clauses** — the note is otherwise untouched. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

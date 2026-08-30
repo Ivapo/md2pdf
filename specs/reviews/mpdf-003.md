@@ -2,6 +2,124 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 14 only — 2026-08-29 — the same reviewer, resumed — **NOT READY (cap reached, escalated)**
+
+**The round reviewed a file that did not carry the fix, and the fault was the author's
+tooling rather than the reviewer's reading.** The round-2 changelog described five edits;
+only one had landed. The author's replacement script is all-or-nothing — one pattern in a
+batch failed to match, it exited before writing, and the author fixed that one pattern and
+re-ran it alone without re-applying the other four. The round caught this decisively and
+cheaply, by diffing against `18b4df7`: 139/85 at round 2 and 143/85 now, `+4/-0`, so
+nothing that was to be replaced had been. **A changelog is the author's claim about the
+fix; the fix is what shipped**, and this is the round that earned that rule.
+
+So round 3 verified nothing about the content and the round-2 blocker stands formally
+unresolved. **Per §7.6 the loop caps here and escalates**, and the escalation is recorded
+as what it is: not a disagreement between author and reviewer, but a round spent on a
+mistake.
+
+The reviewer's advisory, given on the fix *as described* rather than as written, is folded
+in: the DOM-interception mechanism is buildable — `document.documentElement` and
+`getElementById('theme')` are global-scope-reachable instances that `wearAppearance`
+reaches by property lookup at call time, so an own property shadows the prototype and
+takes — with two details the summary had left out. **`third-mark` must delegate to the
+original setter and actually write the glyph**, because D2 measures with
+`getBoundingClientRect` and an accessor that lies about what it wrote changes no rendered
+width and would falsify nothing. And **the counter wants a stated home and lifetime**: a
+page global read back through `execute/sync`, reset when the mutation is installed, one
+mutation live per run. Both are now in the phase, and all five round-3 edits were verified
+present by grep before this entry was written.
+
+### Round 2 — Phase 14 only — 2026-08-29 — the same reviewer, resumed — **NOT READY**
+
+All three round-1 blockers resolved and verified in the files; **one new blocker, and it
+was created by the author's own fix for the second** — the pattern §3 of the loop warns
+about, arriving exactly one round later.
+
+The round re-derived the isolation the author claimed rather than accepting it, and in
+both directions: `attribute-always-set` fails D1 and leaves D2 standing **because
+`data-theme="system"` is palette-identical to the attribute being absent** — it matches
+neither attribute selector and does match the media query's `:not([data-theme='light'])` —
+so the glyphs, their widths and `#brand`'s rect do not move; and `third-mark` fails D2
+alone because `title`/`aria-label` come from `APPEARANCE_SAYS` on a separate line from the
+glyph. That argument is now written into the phase, the author not having stated it as
+precisely.
+
+**The new blocker: "the page's own function replaced through `execute/sync`" is impossible
+against this page.** `app/dist/index.html` has exactly one `<script type="module">`,
+`wearAppearance` is a declaration inside it, and `window['__pane']` is the only binding the
+page publishes in four thousand lines; `execute/sync` evaluates a classic script in the
+global context and cannot rebind a module-local name. Resolved by naming the mechanism
+instead of leaving it to an implementer — a mutation patches a DOM method or accessor on
+one of the two objects that function writes through, those being reachable *because* they
+are the DOM and not the module.
+
+Four non-blocking, all accepted. **The sharpest was cut rather than reworded**: exit gate
+clause 2's middle leg, "a `--release` build succeeds with the crate absent", is equally
+true under `[target.'cfg(debug_assertions)'.dependencies]` — the very form the clause
+exists to rule out — so a leg that passes on the thing being ruled out is not a check, and
+counting it made the clause read stronger than it was. Also folded: both rules' `sources:`
+must gain `app/driver/drive.mjs` or `/sync-rules` regenerates the claims away, per §8.1 and
+Phase 12's own precedent; "two files, four lines" understates a `main.rs` edit that has to
+break the builder chain; and D3's self-perpetuating loop must run last and tear itself down
+or it sits under every later measurement.
+
+### Round 1 — Phase 14 only — 2026-08-29 — fresh reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode — one appended phase):** the phase produces no observable and says
+so in its first line, arguing it on Phase 9's and Phase 12's grounds, with clause 1 pinning
+that no test moves. It is the right thing to build on measured rather than asserted
+evidence: Phase 13's window gate reported five failures across three runs and **four were
+the instrument**, each costing a manual window run. **One caveat recorded rather than waved
+past:** it is infrastructure appended in the same session that motivated it, and the sample
+is one gate. The episode proceeded.
+
+The reviewer re-derived every number and nearly all held: 338/0/2 across nine binaries by
+running the suite, ten `ok(` sites in `checks.mjs`, six keys in both `OWNS` and
+`MUTATIONS`, 3,721 lines across the eight gates all carrying the same five-part ledger, and
+each of the phase's claims about the toolchain — that `tauri-build` globs
+`capabilities/**/*`, that a permission naming an uncompiled plugin fails the build, that
+`[target.'cfg(debug_assertions)'.dependencies]` gates nothing and cargo says so, that
+`setWindowRect` is offered where the page is refused `set_size`.
+
+Verdict: `NOT READY` — three blocking, twelve non-blocking. The author accepted all
+fifteen, rejected none, deferred none.
+
+Blocker 1: **a mutation that owned no clause the phase converts.** Both converted clauses
+drive through `invoke('set_appearance')` and never press `#theme`, so "the click rewired to
+place instead of invoke" would have failed nothing. Resolved by re-scoping D1 off the mark
+so D2 owns it, and by two new mutations that each have an owner.
+
+Blocker 2: **how a broken page is produced was unspecified, and the obvious mechanism does
+not exist here.** `generate_context!` compiles `frontendDist` into the binary, so there is
+no served copy to mutate as `serve.mjs` builds one. Resolved by injecting through the
+session — and that fix is what round 2 then found impossible as first written.
+
+Blocker 3: **"keeps those two clauses and loses the other two" did not resolve against a
+gate with four.** One reading deleted the error counter from a run that stays manual.
+Resolved with a table stating the fate of each of the four, and a note that clause 1's
+surviving manual half needs a boolean of its own, today's being entirely the converted half.
+
+**The most valuable finding was non-blocking and removed a third of the phase.** The
+capability machinery — a `build.rs` generating a `driven.json`, plus a `.gitignore` line —
+rested on a build error that is real, but the round observed that the plugin declares
+`COMMANDS: &[]` and `permissions = []` and therefore exposes no IPC at all. The author
+verified it by building: a `--features driven` binary with **no capability entry anywhere**
+serves `/status`, creates a session, runs `execute/sync` and moves the window through
+`window/rect`. The generator, the second capability file and the `.gitignore` line were all
+cut. **A reviewer asking whether the hard part was *necessary* rather than whether it was
+*correct*.**
+
+Also caught: the close-out's cap literal was 611 where `spec-lint` says **620/635**, which
+reversed the paragraph's own reasoning about whether the cap must move; the `/status`
+quote was a fragment of its envelope and `ready` is `false` until a webview exists;
+`setWindowRect` was the phase's headline claim and no clause exercised it; and the claim
+that exit-gate clause 4 held the live-value-read discipline was backwards — falsification
+catches a mutation that *passes*, where that defect made correct code *fail*. The phase now
+says that class is held by nothing.
+
+Rejections: none.
+
 ### Round 3 — Phase 13 only — 2026-08-29 — the same reviewer, resumed — **READY (converged)**
 
 Scoped to confirming round 2's four folds, and it confirmed them against the files. **The
