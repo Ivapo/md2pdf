@@ -68,6 +68,11 @@ phases:
     shipped: 2026-08-29
     cut: null
     by: null
+  - name: "Phase 13 — the appearance the author chooses"
+    reviewed: 2026-08-29
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -179,6 +184,25 @@ core crate. It is not a rewrite."
   > opens one project at a time, through the dialog or a Finder association,
   > exactly as it opened one document. Printing, export options, theming,
   > collaboration and anything agentic are untouched.
+
+  > **CORRECTED 2026-08-29, by Phase 13.** The bullet above and the note above it
+  > are both kept as written, and one word in each is no longer true: **theming is
+  > in scope, to the extent of one choice.** The window carries a three-state
+  > appearance — follow the system, light, dark — chosen from the footer bar and
+  > remembered across a launch.
+  >
+  > **The word is narrowed rather than struck**, and the narrowing is the point.
+  > What "theming" parked, and what stays parked, is the author choosing *colours*:
+  > no palette editor, no accent colour, no user stylesheet, and **nothing about
+  > the document**. `--paper` is white in every appearance because the page Typst
+  > compiles is white, which `app/dist/index.html`'s own comment has argued since
+  > `mpdf-009` Phase 5. What this un-parks is the app's own chrome following a preference the
+  > operating system already has a switch for.
+  >
+  > **Phase 11 is why this note exists at all.** It refused to smuggle the toggle
+  > in — *"§1.1 parks theming … Adding one amends that bullet before it is a
+  > phase"* — and this is that amendment, arriving with the phase rather than
+  > inside it.
 
 ## 2. Design
 
@@ -925,6 +949,23 @@ list to one item.
   > process per cell; `--falsify` does it by re-entering `checks.mjs` with
   > `--mutate`, so the forked path and the single-mutation path are one path and
   > its exit code already means *isolated*.
+
+- **OQ-11** — what does the footer's first interactive control cost a screen reader?
+  Raised 2026-08-29 by Phase 13, whose toggle is the first thing in the bar a person
+  can press. *(design call)* `<footer>` is a `contentinfo` landmark and carries no
+  label; the toggle carries `title` and `aria-label`, which is more than the bar had
+  and less than a labelled landmark. **It is deliberately not folded into `mpdf-009`
+  OQ-3**, which asks what a *canvas* costs a screen reader — `getStructTree`, Typst
+  tagging — and is a question about the preview rather than about the chrome. Blocks
+  nothing; it wants a pass over the window's landmarks rather than one control.
+
+- **OQ-12** — should the appearance marks be glyphs or inline SVG? Raised 2026-08-29 by
+  Phase 13. *(design call)* `◐ ☀ ☾` measured stable and legible at 10px — 9.23, 9.23 and
+  9.22px, identical in Playwright's Chromium and WebKit, with the brand not moving as
+  they swap — **but Phase 12's own note records that neither engine is the window**, so
+  what WKWebView does with them at 10px is unmeasured until Phase 13's own gate runs. If
+  they render badly there, inline SVG is the answer and it costs the page three small
+  paths. Blocks nothing; the gate's window clause is what will answer it.
 
 ## 4. Implementation phases
 
@@ -2830,6 +2871,282 @@ phase is the thing to cut rather than to shrink.
   correction in `rules/desktop-panes.md`'s `## The footer`, and the dated `CORRECTED`
   note on Phase 11, per §6.1's first further rule. **OQ-10** takes a further dated note recording what shipped and
   what is still open. One push.
+
+### Phase 13 — the appearance the author chooses
+
+*Produces the observable: **no**, and the argument is that no line this phase adds
+reaches the compile path.* The PDF is byte-identical across it and clause 1 is the
+check — **`--paper` does not move, in any of the three states**, because the page
+Typst compiles is white in either palette and `app/dist/index.html`'s own comment
+has said so since `mpdf-009` Phase 5 (`9755682`) — **not since this spec's Phase 1**,
+which is a slip round 1 caught; what Phase 1 wrote is the `:root` and
+`@media (prefers-color-scheme: dark)` pair the restructure below rewrites. **What it buys is one choice**, and the phase is careful
+not to claim a second: the window follows the system today and there is no way to
+say otherwise, which is wrong for the author who writes at night on a machine set
+to light, or reads a page on a bright desk with the system set to dark.
+
+**It is a smaller page change than it looks and a larger Rust one.** The prototype
+(`notes-ivan/letur_theme_toggle.md`, 2026-08-29, driven through `app/harness/`)
+settled the whole page half: one restructure of the token block, one cell, one line
+in `report`. What it could not reach is the half that decides whether the feature is
+right — where the preference lives, and whether the **native title bar** follows it.
+
+Appended 2026-08-29, per §6.1 step 2: the desktop app's chrome is this spec's
+subject and its footer has been since Phase 11. **Strictly after Phase 11**, which
+built the bar this cell sits in, **and after Phase 12**, whose harness is what the
+page half was prototyped against and what clause 2 runs.
+
+**§1.1's parked bullet is amended by this phase, and that is a precondition rather
+than a consequence.** The amendment is above, dated, per §6.1's first further rule;
+Phase 11 named it as the thing to do before a toggle could be a phase.
+
+- **Scope:**
+
+  **Where the preference lives — `app/src/document.rs`.** A **second file**,
+  `settings.json`, beside `projects.json` under the directory Tauri's resolver
+  gives `dev.letur.desktop`, with `settings_file`, `read_appearance` and
+  `write_appearance` mirroring the three `store_file`/`read_override`/`write_override`
+  already there. **A second file and not a second key, and the reason is checkable
+  rather than aesthetic**: `projects.json` deserializes as
+  `BTreeMap<String, String>` keyed by canonical root, and `document.rs:read_store`
+  is `serde_json::from_str(&text).ok().unwrap_or_default()` — so reshaping that file
+  into an object with a `theme` member beside the mains would make **every existing
+  file malformed, and malformed means forgotten**. Every author's remembered main
+  would be silently dropped by the upgrade. The existing rule survives unchanged and
+  is inherited here: **a missing, unreadable or malformed settings file is
+  `System` and never an error in the window**; a failed *write* is reported, the
+  author having just asked for it.
+
+  **The value — `app/src/preview.rs`.** `enum Appearance { System, Light, Dark }`,
+  `#[serde(rename_all = "lowercase")]` as `State` is, carried on
+  **`Status::appearance`**. **It rides the status rather than taking a command of its
+  own, and the precedent is `mpdf-010`'s own**: `entries`, `main` and `edited` are not
+  about the last compile either, and ride it because the status is already fetched on
+  the path that draws. The page's `@typedef` block gains the field, so
+  `preview.rs:the_page_typedefs_name_exactly_the_fields_status_serializes` holds the
+  two declarations to each other exactly as it does the other eleven — **and that
+  test's `declared.len() == 11` becomes 12**, which is the phase editing a literal the
+  test's own doc comment warns against editing, done deliberately and named here so it
+  is not done quietly. The same count is spelled in prose twice more, in that doc
+  comment and in `app/dist/index.html`'s typedef preamble.
+
+  **It is held on `Session`, beside `store`, and NOT on `Preview` — which is a
+  correction round 1 made against the code.** `Session::open_at` rebuilds the preview
+  whole: `*preview = Preview { root, main, edited, tree, ..Preview::default() }`, and
+  both `Session::open` and `Session::set_main` route through it. A global preference on
+  that struct would therefore reset to `System` on every `⌘O`, after which the footer
+  glyph flips, the cycle position is lost and `settings.json` disagrees with the running
+  window. `Preview` is per-document state and this is not.
+
+  **So the `Status` is composed in two places, and the shape is given rather than left
+  to the implementer.** `Preview::status()` keeps its signature — it has some thirty-five
+  call sites, nearly all tests, and changing it would be a large diff for one field —
+  and fills `appearance: Appearance::System`, with a comment saying a `Preview` does not
+  know the appearance and `Session::status` is what fills it. A new
+  **`Session::status()`** returns `Status { appearance: self.appearance, ..self.preview().status() }`,
+  and `app/src/main.rs:status` calls that instead of reaching through `preview()`. One
+  line each, and no test churn.
+
+  **`Session::set_appearance` is where the write and the announce live**, for a reason
+  the code forces: `on_render` is private to `preview.rs`, so a command that announced
+  from `main.rs` would have to emit `RENDERED` itself and duplicate the one path this
+  app already has. It takes the new value, writes the settings file, moves the field,
+  and calls `(self.on_render)()`. **`Session` gains `settings: PathBuf` beside `store`**,
+  handed in from `app/src/main.rs`'s `.setup(…)` closure exactly as `store` is, and for
+  the same stated reason —
+  so a test can pass a scratch path.
+
+  **The command and the title bar — `app/src/main.rs`.** `set_appearance` **calls
+  `Session::set_appearance`** — which is what writes the settings file, moves the field
+  and announces, per the paragraph above — **and then** calls **`window.set_theme`**
+  (`tauri` 2.11.5, `src/window/mod.rs`, `Window::set_theme`), whose `Option<Theme>`
+  maps onto the three states exactly: `None` is *follow the system*. **From the page that call would
+  reject** — `core:default` grants the window getters and no setter, which
+  `rules/desktop.md` records and which cost `tests/gates/mpdf-003-phase11.js` two
+  runs — **but from Rust capabilities do not apply**, which is the route
+  `app/src/main.rs:set_edited` already takes to retitle the window. **No capability is added by this phase.**
+  Without the call the native title bar stays light while the content goes dark, and
+  that is the half no browser can show.
+
+  **The split is stated because the looser reading has a failure mode nothing would
+  catch**: a command that wrote the file itself and never announced would leave the
+  title bar right, the settings file right, and the footer mark stale until the next
+  compile.
+
+  It **announces through `RENDERED`**, and that is a decision with a precedent
+  rather than a shortcut: `set_edited` compiles nothing and announces the same way
+  (`app/src/preview.rs:set_edited` calls `(self.on_render)()` before it re-arms the
+  watch), `refresh` guards on
+  `state.revision === drawnRevision` so nothing recompiles or redraws, and a second
+  signal for one field would be a second path doing the job of the one this app
+  already has.
+
+  **At launch it is read in the same `setup` that resolves the store**, so the choice
+  is on screen from the first frame rather than applied by the page's first `refresh()`.
+  **The wording "before the window is shown" was corrected in round 1 and is not what
+  Tauri does**: the runtime builds every `tauri.conf.json` window before it calls the
+  user's `setup` hook — which is what lets `get_webview_window` reach it there at all —
+  so the no-flash property comes from the whole of it happening inside one `Ready`
+  callback, not from ordering against window creation. Clause 5 tests the observable, so
+  nothing here is unimplementable; **if it fails, the named fallback is
+  `"visible": false` in `tauri.conf.json` plus a `show()` after `set_theme`**, and that
+  is a config change this scope would then have to grow to include.
+
+  **The page — `app/dist/index.html`.** Four blocks where there are two: the
+  unguarded light `:root`, the media query guarded `:root:not([data-theme='light'])`,
+  `:root[data-theme='dark']`, and `:root[data-theme='light']`. **The dark palette is
+  written twice and the duplication is the pattern**, a media query's condition not
+  being shareable with an attribute selector; a toggle must win in *both* directions.
+  **`color-scheme` follows all three ways and is not decoration** — it is what paints
+  the `#fit` select, its native arrow and the scrollbars, measured in the prototype
+  against the case a naive implementation gets wrong. **`system` removes the
+  attribute rather than setting a third value**, so the absence is today's behaviour
+  unchanged.
+
+  **The cycle and the marks, stated here rather than left inside a check.** The order
+  is **system → light → dark → system**, and the marks are `◐` system, `☀` light, `☾`
+  dark. They measured stable and legible at 10px in both engines — 9.23, 9.23 and 9.22
+  px, and the brand does not move as they swap — but **they are chosen, not defended**,
+  and OQ-12 carries whether they should be inline SVG.
+
+  The footer gains `#controls` — `margin-left: auto` **moving off `#brand` onto it**,
+  so the shape is `notes-ivan/letur_footer.md`'s model: readouts left, icon group
+  right, product name last — holding one `<button id="theme">`. `report` places
+  `state.appearance` in the cell as it places `state.edited`, and the click
+  `invoke`s `set_appearance`. **The page places and never decides**: the attribute
+  moves when Rust answers, not when the button is pressed.
+
+  **The harness — `app/harness/stub.mjs`, `serve.mjs` and `checks.mjs`.**
+  `serve.mjs` is named because it is where the broken copies are built: `checks.mjs`
+  holds only `OWNS`, the mutation-to-clause table, and `serve.mjs:MUTATIONS` holds the
+  three string replacements themselves. The stub answers
+  `set_appearance`, carries `appearance` in its `Status`, and **gains an invoke log
+  on `window.__harness`** so a check can assert the click reached Rust rather than
+  the DOM. `checks.mjs` gains three clauses and three mutations, below. **This is the
+  first phase to treat `app/harness/` as a source it changes**, which is what
+  Phase 12 was built to allow.
+
+  **Not in this phase, named so they are not smuggled in.** No palette editor, no
+  accent colour, no user stylesheet, and **nothing about the document** — the §1.1
+  amendment above draws that line and this phase does not cross it. The glyphs are
+  chosen but **not defended**, and **OQ-12 is what will force that** rather than a
+  sentence here. No further footer cells.
+  **The a11y question the bar's first interactive control raises takes an OQ of its
+  own, OQ-11** — round 1 was right that `mpdf-009` OQ-3 is the wrong home, that one
+  asking what a *canvas* costs a screen reader rather than what an unlabelled
+  `contentinfo` landmark with a control in it does. The button carries `title` and
+  `aria-label`, which is more than the bar had; the landmark is what stays open.
+
+- **Exit gate:**
+
+  1. `cargo test --workspace` passes at **338 passed, 0 failed and 2 ignored across
+     nine binaries** — **the 334 still passing**, so the PDF does not move, plus four
+     named here. **"Still passing" and not "untouched"**: the typedef test's own
+     `declared.len()` literal moves from 11 to 12 in this phase, deliberately and per
+     the scope above, and a clause read as forbidding that would forbid the field.
+     The three: the three appearances round-trip through `settings.json`; a missing,
+     truncated and malformed settings file each read as `System` and none is an
+     error; and **writing the appearance leaves `projects.json` byte-identical**,
+     which is the second-file decision's own check and the one that would have caught
+     the upgrade dropping every remembered main. **And a fourth, which round 2 asked
+     for and which covers the seam round 1's own fix opened**: a `Session` told an
+     appearance reports it and a bare `Preview` reports `System`. `Preview::status()`
+     deliberately fills `System` and only `Session::status()` corrects it, so a
+     mis-wired composition is silent — the harness stubs Rust entirely, and clause 5
+     would still read as passing, `set_theme` flipping the native appearance directly
+     so the title bar and the palette follow while only the footer's mark stalls.
+     **What that test reaches is the composition and not the call site**: whether
+     `app/src/main.rs:status` was actually moved onto `Session::status` is outside every
+     test in this repository, by the division `main.rs` itself records — the same reason
+     `document::move_to_trash` is documented as the one function no test here calls — so
+     clause 5's window pass is where that one line gets eyes.
+  2. `bun app/harness/checks.mjs` exits 0 and `--webkit` exits 0, **each printing ten
+     clauses** where Phase 12 printed seven. The three new ones:
+     - **the palette turns both ways.** Driven under a light system *and* a dark one:
+       each of the three states gives the tokens and the `color-scheme` it should,
+       `data-theme='dark'` winning under a light system and `data-theme='light'`
+       under a dark one — and **`--paper` is unchanged in all six**, which is the
+       clause that keeps §1.1's narrowing honest.
+     - **the cell places what Rust says and decides nothing.** Setting `appearance`
+       on the stub with no click moves the attribute; a click invokes
+       `set_appearance` with the next of the three in cycle order and moves the
+       attribute only once the stub has answered.
+     - **the icon group sits beside the brand.** The distance from `#theme`'s right
+       edge to `#brand`'s left edge is the footer's **own computed `column-gap`**, read
+       off the stylesheet rather than written as a number — **taken at the sweep's
+       widest width**, and the width is part of the clause rather than an incidental.
+       **The exact equality depends on `#controls` holding one flush, unpadded child**,
+       which "holding one `<button id="theme">`" and "no further footer cells" above are
+       what scope in; a later cell in that group would break the equality rather than
+       the property, and would want measuring from `#controls`' own right edge instead.
+       `#brand` is still the footer's last element child, and its rect does not move as
+       the state cycles.
+
+       **Both halves of that are measured, and the first draft of this clause was
+       wrong.** Round 1 falsified it: keyed to `#brand`'s rect alone, it fails nothing,
+       because an auto margin absorbs exactly the free space in total and a last child
+       with no right margin cannot move — `#brand.left` reads 862.98 at 900px and 202.98
+       at 240px under **both** layouts, in Chromium and WebKit alike. What moves is the
+       group. And the width matters for the same reason: at 900px the gap reads 8 against
+       the mutation's 536.3 in Chromium and 535.7 in WebKit, but **at 240px both read 8**,
+       the 58-character name having filled `#edited` and left no free space for an auto
+       margin to absorb. A clause taken only at the narrow end would falsify nothing
+       twice over.
+  3. **The suite is falsified before it is trusted**, as Phase 12's was. Three more
+     deliberately broken copies, each failing exactly the clause that owns it, in
+     both engines: `:root[data-theme='dark']` dropped — fails the palette clause
+     alone, the override no longer winning under a light system; the click rewired to
+     set `data-theme` directly instead of invoking — fails the places-not-decides
+     clause alone; `margin-left: auto` moved back onto `#brand` — fails the
+     group-beside-the-brand clause alone, and only when that clause is read at the wide
+     end, per the measurement above. **`bun app/harness/checks.mjs --falsify` still exits 0 with six
+     mutations**, Phase 12's three included.
+  4. `bun app/typecheck.mjs` exits 0 — the page's new JS is inside the checked
+     script — and **`git status` is clean after a full run**.
+  5. **A window clause a person runs, because two things are not reachable from a
+     browser and one is not reachable from Playwright's WebKit.** A pasteable
+     `tests/gates/mpdf-003-phase13.js`, per the standing pattern:
+     - **the native title bar follows the choice.** `set_theme` is the whole reason
+       this phase touches `app/src/main.rs`, and nothing in a browser can see a title
+       bar.
+     - **`☀ ☾ ◐` render alike in WKWebView.** They measured identical to the digit in
+       Playwright's Chromium and WebKit — 9.23 / 9.22 / 9.23 — but Phase 12's own note
+       records that neither engine is the window.
+     - **the launch does not flash the other palette.** A stored `dark` on a light
+       system: the choice is applied inside the one `Ready` callback, per the scope
+       above, and this is where that claim is tested rather than asserted.
+
+- **Close-out:** **`rules/desktop-panes.md` — and its `max_lines` must be raised,
+  which is stated here rather than discovered.** It stands at **475/475**, with no
+  room at all, and this phase changes `## The footer` (a third cell, its own rule),
+  `## What checks it, and what that does not reach` (ten clauses, six mutations) and
+  `covers:`. **One sentence
+  there is already wrong and is corrected in passing**: it says the typedef block
+  declares "`Status`'s ten fields", where the block and the struct both carry
+  eleven today and twelve after this phase — found while grounding this draft, and
+  named here so a round does not read it as this phase's own arithmetic. A cap that forces a
+  true claim out is not doing its job; the phase raises it deliberately, in the same
+  commit, or reclaims the lines and says which. **`rules/desktop.md`** (596/605, nine
+  lines): the new command, `set_theme` from Rust where capabilities do not apply, and
+  the second file in Application Support. **`rules/desktop-project.md`** (145/150,
+  five lines): its `covers:` ends "*the one fact this app remembers about a folder and
+  where it refuses to keep it*" — there is now a second fact, and it is **not** about
+  a folder, so that clause is wrong rather than merely incomplete.
+  **`rules/desktop-geometry.md`: none needed** — the property-not-literal rule is
+  unchanged and the phase adds no geometry. **Two doc comments in the code go with the
+  phase rather than with the rules**: `app/src/preview.rs:Session`'s `store` field says
+  it names "the one file this app writes outside the author's own folders", which
+  `settings.json` makes false, and the typedef test's own doc comment spells the field
+  count in prose. **Both `desktop-panes.md`'s and
+  `desktop.md`'s `sources:` already carry the files their new claims are made from**
+  — `app/harness/*` and `app/dist/index.html` in one, `app/src/main.rs` in the other
+  — but `desktop-project.md` declares only `document.rs` and `preview.rs`, which does
+  cover `settings_file`, so nothing is added there. **`README.md`: one sentence**, and
+  unlike Phase 12 this one is user-facing — `## The desktop app` already describes the
+  footer bar ("**The bar along the foot of the window names that file**"), so a
+  toggle in that bar belongs in the same paragraph. **`CLAUDE.md`: none needed.**
+  **§1.1's amendment lands with this phase's spec commit**, above, not with its
+  implementation. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

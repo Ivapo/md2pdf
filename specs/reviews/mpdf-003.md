@@ -2,6 +2,123 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 13 only — 2026-08-29 — the same reviewer, resumed — **READY (converged)**
+
+Scoped to confirming round 2's four folds, and it confirmed them against the files. **The
+arithmetic was re-derived rather than accepted**: 334 + 4 = 338, the baseline itself having
+been re-run in round 1 as 90+0+24+24+180+1+3+12+0 = 334 passed, 0 failed, 2 ignored across
+nine binaries. **And the fourth test was checked for whether it bites rather than merely
+sits nearby** — the round compiled a mimic of the two-place composition and ran the clause
+as worded against three mis-wirings: the override omitted, the override taken from a
+constant, and `Preview::status()` guessing a value instead of filling `System`. All three
+fail it; the correct composition passes. Both halves of the wording are load-bearing.
+
+No contradiction from the folds, including the one the author flagged: the `Session`
+paragraph and the `main.rs` paragraph describe one call chain from two sides and each
+defers to the other, with no double write, no double announce, and no third place claiming
+the announce.
+
+One limit was stated plainly rather than raised as a finding, and it is now in the phase:
+**the fourth test reaches the composition and not the call site.** Whether
+`app/src/main.rs:status` was actually moved onto `Session::status` is outside every test in
+this repository, by the division `main.rs` records for itself — the same reason
+`document::move_to_trash` is documented as the one function no test here calls. Clause 5's
+window pass is where that line gets eyes.
+
+### Round 2 — Phase 13 only — 2026-08-29 — the same reviewer, resumed — **READY**
+
+Both blockers resolved, verified in the files rather than from the changelog, and **both
+fixes were checked by construction rather than by reading**. For blocker 1 the round
+compiled a standalone mimic — a non-`Default` `Status`, a `MutexGuard`-returning
+`preview()`, and `Session::status()` as `Status { appearance: self.appearance,
+..self.preview().status() }` — and confirmed functional record update needs only a base
+expression of the same type, that the guard temporary lives to the end of the statement,
+and that reading `self.appearance` beside `self.preview()` is two shared borrows. It also
+established that `app/src/main.rs:456` is the **only** `.status()` call outside
+`preview.rs`'s test module, so the author's "some thirty-five call sites, nearly all tests"
+is exact, and that `Session::new` has exactly two call sites, so `settings: PathBuf` is a
+two-line change.
+
+For blocker 2 the round reproduced the author's measurements to the hundredth and then
+tested isolation directly: the new group-beside-the-brand clause still reads 8 at 900px
+under `flex-min` (which moves `#brand.left` to 334.69/335.28 at 240px, Phase 12 clause 3's
+ground and not this one's), is untouched by `footer-last` and by `cell-main` measured both
+with and without the 58-character name, and the new mutation leaves footer height at 24 and
+`#brand` inside the bar at 900/500/240 in both engines — so it collides neither upward nor
+downward.
+
+Four non-blocking, all accepted. **The sharpest is one round 1's own fix created**, which is
+the pattern §3 of the loop warns about arriving a round later: moving the appearance onto
+`Session` made `Preview::status()` deliberately report `System` with only `Session::status()`
+correcting it, and **nothing in the gate covered that seam** — the three named tests
+exercise the store, the harness stubs Rust entirely, and clause 5 would still have read as
+passing, `set_theme` flipping the native appearance directly so the title bar and the
+palette follow while only the footer's mark stalls. A fourth test closes it and clause 1
+moves 337 → 338. Also folded: clause 5 still carried the "before the window is shown"
+wording the scope two paragraphs above now corrects; the `main.rs` paragraph still assigned
+the write and the move to the command, whose loose reading is a command that writes the file
+itself and never announces; and the new clause's exact equality depends on `#controls`
+holding one flush, unpadded child, which is now named in the clause.
+
+### Round 1 — Phase 13 only — 2026-08-29 — fresh reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode — one appended phase):** the phase produces no observable and says
+so in its first line, arguing it — no line it adds reaches the compile path, and the gate
+pins `--paper` unchanged in all three states so the byte-identity is checkable rather than
+asserted. It is the right thing to build on the record's own evidence: the author named the
+toggle as the next footer cell in the working note, Phase 11 named it again, and this
+document's own round 0 for Phase 1 already accepted that its value is convenience rather
+than capability. **One caveat recorded rather than waved past:** §1.1's parking of theming
+was re-affirmed on 2026-08-28 and is narrowed on 2026-08-29, which is fast; the narrowing is
+only honest because the gate pins `--paper`. The episode proceeded.
+
+The reviewer re-derived every number the phase is keyed to and all but one class held: the
+334/0/2-across-nine-binaries baseline by running the suite, the harness's seven clauses and
+three mutations by running it, the rule caps 475/475, 596/605 and 145/150 against
+`spec-lint`'s own body count, the eleven `@property` lines, and `Window::set_theme`'s
+existence with `Theme = Light | Dark` and `set_ns_theme(None)` following the system. It also
+confirmed empirically in both engines that the four-block CSS gives the right tokens **and**
+the right `color-scheme` in all six system×state combinations with `--paper` unmoved.
+
+Verdict: `NOT READY` — two blocking findings, eight non-blocking. The author accepted all
+ten, rejected none, deferred none.
+
+Blocker 1: **the value's stated home is wiped on every Open.** The phase held the appearance
+on `Preview`, but `Session::open_at` does `*preview = Preview { root, main, edited, tree,
+..Preview::default() }`, and both `Session::open` and `Session::set_main` route through it —
+so a global preference there returns to `System` on the next `⌘O`, after which the footer
+glyph flips, the cycle position is lost and `settings.json` disagrees with the running
+window. **No clause of the gate opened a document after setting the appearance**, so nothing
+would have caught it. Resolved by holding it on `Session` beside `store`, with a two-place
+`Status` composition chosen over changing `Preview::status()`'s signature because that has
+~35 call sites; the same move resolved two non-blocking integration gaps, the settings path
+and the private `on_render`.
+
+Blocker 2: **gate clause 3's third mutation fails no clause.** "`margin-left: auto` moved
+back onto `#brand`" was keyed to `#brand`'s rect not moving — but an auto margin absorbs
+exactly the free space in total, so a last child with no right margin cannot move:
+`#brand.left` reads 862.98 at 900px and 202.98 at 240px under **both** layouts, in Chromium
+and WebKit alike. Resolved by re-measuring rather than re-reasoning, and **the re-measurement
+found a second trap**: the property that does separate them — the group's distance to the
+brand against the footer's own computed `column-gap` — separates them at 900px (8 against
+536.3 Chromium / 535.7 WebKit) and **not at 240px, where both read 8**, the 58-character name
+having filled `#edited` and left no free space to absorb. The width is now part of the clause
+rather than of the prose around it, which is the same correction round 2 of Phase 12 made.
+
+Non-blocking, all accepted: Tauri builds the config's windows *before* the `setup` hook runs,
+so "read before the window is shown" was wrong and the no-flash property comes from one
+`Ready` callback, with `"visible": false` plus `show()` named as the fallback; `serve.mjs`
+was missing from the scope's file list though it holds the mutations; the typedef test's
+`declared.len() == 11` literal must move to 12 and gate clause 1 read as forbidding it;
+`--paper` dates from `mpdf-009` Phase 5 (`9755682`) and not this spec's Phase 1, in two
+places including inside the dated §1.1 note; the cycle order and glyph mapping were decided
+inside a check rather than in the scope; the a11y deferral was routed to `mpdf-009` OQ-3,
+which asks what a *canvas* costs a screen reader rather than what a `contentinfo` landmark
+does, and the glyph question had no owner at all — **OQ-11 and OQ-12** now carry them; and
+`Session::store`'s doc comment stops being true.
+
+Rejections: none.
+
 ### Round 3 — Phase 12 only — 2026-08-29 — the same reviewer, resumed — **READY (converged)**
 
 The blocker was confirmed resolved **by measurement rather than by reading**: serving the
