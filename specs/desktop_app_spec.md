@@ -88,6 +88,11 @@ phases:
     shipped: 2026-08-30
     cut: null
     by: null
+  - name: "Phase 17 — Save as, and the mark that says so"
+    reviewed: 2026-08-30
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -4376,6 +4381,295 @@ not a prediction.
   **Commit plan.** One push, three commits: the header's markup and CSS; the harness's
   two re-keyed clauses and its two mutation edits; and the rules, README and spec
   reconciliation above.
+
+### Phase 17 — Save as, and the mark that says so
+
+*Produces the observable: **yes**, in four cases, and the fourth is the point.* A Save-as
+lands a markdown file inside the project, and `app/src/document.rs:render_project` reads
+**every** path except `edited` off the disk — its `read` closure substitutes the pane's
+buffer for that one file and calls `std::fs::read` for the rest. So a Save-as onto the
+master, onto a section or figure the master names, or onto a path the master names that
+does **not exist yet**, changes what the next compile produces. The third case already
+ships as a test —
+`app/src/preview.rs:a_section_that_does_not_exist_yet_is_watched_and_then_compiles` takes
+the pane from no PDF at all to a PDF the moment such a file appears — and this phase
+inherits that behaviour rather than inventing it.
+
+**There is a fourth case, it is the default configuration, and it is named here rather
+than left to be found.** The three above are about what the write *lands on*; this one is
+about what the pane *stops standing in for*. `render_project` substitutes the buffer for
+`edited` **only**, so the moment a Save-as moves `edited` away from a file the master
+names, that file goes back to its own on-disk text in the next compile. Pane holding the
+master with unsaved edits, Save-as under a new name, and **the page changes** — the
+author's text is now in the new file and the master is what it always was on disk.
+**This is correct rather than a defect**, and the phase says which: the page stops
+standing in for a file the pane no longer holds, which is the only honest thing it can
+show. **It is a state this app has never been in**, because `Session::set_edited` cannot
+produce it — `refused_while_dirty` blocks exactly that, which is what the dirty refusal
+is *for* — and this phase deliberately bypasses that guard. Gate clause 1 asserts it
+rather than asserting it away.
+
+**The first draft of this phase claimed the opposite**, that confinement kept it off the
+observable; confinement bounds *where a file lands*, not *what a compile reads*, and gate
+clause 1 is keyed to the difference.
+
+Appended 2026-08-30, per §6.1 step 2: the desktop app's chrome, its menu and its file I/O
+are this spec's subject, and `mpdf-010` owns the project rather than the save.
+**Strictly after Phase 16**, which named this in terms — *"the save model … is a phase not
+yet appended"* — and deliberately withheld the label so a button would not say what it
+would do next release. This is that release.
+
+**It is asked for rather than prototyped**, which inverts this repo's usual order for UI
+work, so round 0 has more to do than usual and the scope says where to point it.
+
+- **Scope:** **`app/src/document.rs`** — the writer, beside `create_file` and
+  `trash_file`; **`app/src/preview.rs`** — one `Preview` method and one `Session` method;
+  **`app/src/main.rs`** — two commands and the menu; **`app/dist/index.html`** — the
+  header's second button, its handler and its two names; **`app/harness/`** — one clause
+  and one mutation.
+
+  **No new capability and no new dependency**: `app/capabilities/default.json` already
+  carries `dialog:allow-save` for the export, and this is its second caller.
+
+  **The writer goes in `document.rs`, not `preview.rs`, and that is forced rather than
+  chosen.** `app/src/document.rs:landing` is private, and it is the confinement rule a
+  write needs — canonicalize the parent, which exists, join the final component, require
+  the result under the resolved root. `create_file` and `trash_file` are its **two**
+  existing callers, so this is its **third**, and the file's own pattern is that the
+  confined filesystem operations live beside each other. Widening `landing`'s visibility
+  to call it from `preview.rs` would buy nothing and split the pattern.
+
+  **A path outside the root is refused, in `create_file`'s words and not
+  `trash_file`'s** — *"{path} would land outside this project"*, which is the one written
+  for a write. **The project does not move.** Opening a document elsewhere is what
+  `Open…` is for, and a Save-as that silently re-rooted the window would change which
+  file compiles without saying so. **This is a decision about the project, not about the
+  PDF** — the preamble above says why those are different.
+
+  **It overwrites, and the native panel's own replace confirmation is the guard.** This
+  is deliberately *not* `create_file`'s rule: that one uses `File::create_new` so
+  *already exists* is the filesystem's answer, which is right for a `+` gesture that
+  invents a name and wrong for a Save-as, whose whole purpose is sometimes to replace.
+  `NSSavePanel` asks before it returns a path that exists, so the confirmation exists and
+  is the platform's — the same argument `specs/file_panel_spec.md` records for the Trash
+  being the platform's undo. **Nor does it refuse the main**, which is where it parts from
+  `Session::trash`'s explicit refusal: deleting the file that compiles leaves the project
+  with nothing to compile, where writing the pane over it leaves a project that compiles
+  the pane. Both refusals are named here so neither is read as forgotten.
+
+  **`create_file`'s third rule is adopted, and it is a third decision rather than an
+  oversight.** `document::kind_of` is that command's first gate — markdown or a
+  bibliography, `.md`, `.bib`, `.yml`, `.yaml` — and a Save-as takes it **unchanged**,
+  refused in `create_file`'s own words, *"a new file is a .md, .bib, .yml or .yaml"*
+  wording included. **One sentence and one rule**: it reads slightly off for a save, and
+  it is reused intact anyway so that nobody quietly reworks one caller's copy and drifts
+  the two apart. The reason is the panel and not symmetry:
+  `document::files_under` filters every row through `kind_of`, so a Save-as to `notes.txt`
+  would write a file the panel can never list while the pane holds it, `Status::edited`
+  would name a path with no row, and **no gesture in the window could get back to it**.
+  `specs/file_panel_spec.md` §1.2 opens *"Four kinds of file are listed and nothing
+  else"*, and a save that made a fifth would be this app's only way to strand its own
+  author. **The dialog carries the matching `filters`**, the export already passing one,
+  so the refusal is the floor rather than the first thing a reader meets.
+
+  **The pane then holds the new file, and it takes one method rather than two calls.**
+  `Session::set_edited` **cannot** be composed with `Preview::save` to get there:
+  `set_edited` calls `refused_while_dirty(SWITCHING)` and, when the buffer is dirty,
+  **sets a divergence and returns `Ok(())`** — a silent success where the pane keeps the
+  old file. Save-as is precisely the gesture made with unsaved work, so composing the two
+  would fail exactly when it is used. **So `Preview::save_as` writes the bytes, moves
+  `saved` to the buffer as `Preview::save` does — which is what makes the buffer clean and
+  what makes this write's own filesystem event take `External::Unchanged` — and only then
+  moves `edited` and re-arms.** `main` does not follow: the file that compiles and the
+  file that is edited are two, per `mpdf-010` Phase 2, and a Save-as of a section is not a
+  claim about which master compiles. **The writer in `document.rs` hands back the landed
+  path**, where `create_file` returns `Result<(), String>`, because `Preview::save_as`
+  needs the path it actually wrote in order to set `edited` to it.
+
+  **The `Session` half has three duties the watch will not do for it, and naming them is
+  this phase's least obvious work.** `Session::trash` is the precedent, and its own comment
+  records that the watch cannot be relied on here. **It must recompile**, because the
+  preamble's four cases are exactly changes to what the next compile reads and the write's
+  own event will not cause one: once `edited` has moved, `watch::classify` answers on first
+  match and that match is `Change::Edited`, whose `reload()` answers `External::Unchanged`
+  — the buffer and the file agree, `save_as` having just made them agree — so `on_change`
+  sets `announce = false` and compiles nothing. **It must rebuild the tree by hand**,
+  `preview.tree = document::files_under(&root)`, exactly as `trash` does, because that same
+  first match means the event never reaches `Change::Tree`: the newly saved file would
+  otherwise have **no row in the panel**, or have one only depending on where the debounce
+  fell relative to the move, which is worse. **And it must announce**, `(self.on_render)()`,
+  which is what carries the new `Status` to the footer cell and the marked row. Built to
+  "moves `edited` and re-arms" alone, a Save-as leaves a stale page, an unlisted file, and a
+  cell and a title bar that update only by luck.
+
+  **The command retitles the window, which is a fourth writer of the title and not a
+  free ride.** `Session::set_edited` does **not** set the title — `app/src/main.rs`'s
+  `open_document`, `set_main` and `set_edited` commands each call `window.set_title`
+  themselves, and `set_appearance`'s own comment names that route. The new command joins
+  them.
+
+  **The panel needs somewhere to open, and that is a second command.** `Status` carries
+  root-relative spellings only, so the page cannot build an absolute path — which is
+  exactly why the export has `Preview::export_path` and a command of its own. **The
+  Save-as panel opens on the edited file's own directory and its own name**, which is what
+  a Save-as defaults to everywhere; with no default the native panel opens wherever macOS
+  last was, outside the project, and this phase's own confinement would then make refusal
+  the *normal* first outcome. It refuses before the dialog for the same reason
+  `export_path` does — no document open, no panel.
+
+  **The header's floppy is `Save as…` — one button — and plain `Save` keeps `⌘S` and the
+  menu.** **This is decided, not open**, and the argument for it is this app's own rather
+  than a convention borrowed from editors that work differently. **A button earns its
+  place by being the thing a reader cannot guess.** `⌘S` is the one chord every author
+  already has in their fingers and it is unchanged, so a visible plain-Save button would
+  be chrome for a gesture nobody needs help finding; Save-as is the one reached for rarely,
+  guessed at never, and worth 22px. **And this window is not one where an unsaved document
+  is at risk of being lost from view**: the page follows the pane and not the file — the
+  PDF is what the pane says, per §2's *"the preview shows the PDF itself"* — so the reader
+  is looking at their unsaved work the whole time, which is exactly the pressure a
+  prominent Save button relieves elsewhere and does not have to relieve here.
+
+  **Two buttons is the rejected alternative and it is recorded as rejected**, so a later
+  reader does not take its absence for an oversight: it is what most editors ship, and it
+  would put a second mark in a 14px box Phase 16 measured as already crowded at two
+  internal shapes, to make visible a gesture `⌘S` already serves. **`#save` keeps its
+  id**, so the harness clause below and `rules/desktop-panes.md`'s header paragraph both
+  key to a name that does not move.
+
+  **One consequence named because the close-out has to carry it**: after this phase plain
+  `Save` has no button at all, which retires the reason `app/src/main.rs:SAVE` emits an
+  event rather than acting — *"a menu item and the button beside it run one code path and
+  not two"*. The emit stays, the comment does not.
+
+  **`Shift+CmdOrCtrl+S` moves to `Save as…`**, which is where every other application puts
+  it. **`Save a Copy…` then takes no accelerator**, extending Phase 16's own argument for
+  withdrawing its button — *"a reader who wants it knows to look in `File`"* — rather than
+  spending a second, more obscure chord on it. The named alternative is `⌥⌘S`; the
+  argument against it is that an accelerator nobody guesses is not better than the menu
+  item it duplicates. `app/src/main.rs:menu`'s own comment records that Phase 3 *"spends
+  the accelerator rather than taking one back"*, so a phase moving one says so.
+
+  **"The PDF landing beside the master" is already true and is not this phase's work.**
+  Phase 16's sketch of the save model listed it, and it ships: `Preview::export_path` is
+  `document::default_output(main_path())`, the master's own path with a `.pdf` extension,
+  and its doc comment argues that choice against naming the file in the pane. **Saying so
+  is what stops this phase claiming a fourth deliverable it would not build.** If the
+  sketch meant an export that writes there *without* asking, that is a different decision,
+  it is not taken here, and round 0 is where it should be raised.
+
+  **The mark and its two names.** The floppy's `title` and `aria-label` both become
+  `Save as…`, the correction Phase 16 deliberately deferred. **Whether the mark itself
+  should change is an open call and the phase does not pre-empt it**: a bare floppy reads
+  as *save*, and the conventional Save-as mark is the same body with a pencil or an arrow,
+  a third internal shape in a box Phase 16 measured as crowded at two. Drawn once and
+  looked at, per this repo's order for UI work, before it is written down.
+
+  **Deliberately not in this phase.** No autosave. No recent-files list. No change to
+  `Save`, to `Open…`, to the export's bytes or to its default path. **Folder creation is
+  re-admitted and that is recorded rather than denied**: `specs/file_panel_spec.md` §1.2
+  makes folder creation a non-goal *of the panel's `+` gesture*, and an `NSSavePanel`'s
+  own New Folder button creates the directory on disk before it returns, so the parent
+  canonicalizes and `landing` accepts. The non-goal stands where it was written; this
+  phase does not extend it to what the OS's own panel can do, and says so rather than
+  letting a reader find it.
+
+- **Exit gate:**
+
+  1. `cargo test --workspace` passes with **four new Rust tests keyed to the preamble's
+     four cases and not to invariants that survive them**, each comparing the PDF
+     byte-wise against the compile before the save — which §2's *"Why the exported file is
+     byte-identical to the CLI's"* is what licenses. **Every one states its starting
+     buffer**, because the fourth case makes the starting state load-bearing rather than
+     incidental:
+     - a Save-as onto a path the master names — **one other than the path the pane
+       holds**, since saving onto that one writes identical bytes and moves nothing —
+       **moves the PDF**, from a clean buffer;
+     - a Save-as onto a path the master does **not** name leaves it byte-identical,
+       **from a clean buffer** — this is the one that is false from a dirty one, and
+       saying so is the correction;
+     - **the fourth case**: pane on a file the master names, buffer **dirty**, Save-as
+       under a name the master does not name — the PDF **moves**, the master reverting to
+       its own on-disk text, which is the behaviour the preamble argues is correct;
+     - a Save-as aimed outside the root is refused with `create_file`'s sentence and
+       writes nothing.
+
+     **The first draft got clause 1 backwards** — asserting `project_root`'s answer,
+     `Preview::main` and the asset list unchanged is true in every case *including* the
+     ones where the PDF moved, so a test written that way passes for the wrong reason.
+  2. Three further Rust tests for the failure modes the code makes easy to get wrong: a
+     Save-as with a **dirty buffer** moves the pane to the new file rather than setting a
+     divergence and returning `Ok(())`, which is what composing `save` with
+     `Session::set_edited` would do; a Save-as **onto an existing file** overwrites rather
+     than refusing, which is what reusing `create_file`'s `create_new` would do; and a
+     Save-as to a `.txt` is refused, which is what dropping `kind_of` would allow. **And
+     one for each of the `Session` half's three duties**: the page recompiles, the new
+     file has a row in `Preview::tree`, and a `Status` was announced — none of which the
+     watch does, and all three of which a build to "moves `edited` and re-arms" omits.
+  3. `bun app/typecheck.mjs` exits 0.
+  4. `bun app/harness/checks.mjs` and `--webkit` each print **thirteen clauses, thirteen
+     passed** — one added, and adding it is what ends the drop Phase 16 recorded when
+     nothing read the header's children. It asserts the second button's `title` and
+     `aria-label` are equal and say `Save as…`, which is `wearAppearance`'s rule and the
+     page's only visible change.
+  5. `bun app/harness/checks.mjs --falsify` reports **ten mutations, each isolating the
+     clause it owns**, in both engines. The one added is **`save-as-mislabelled`**, and it
+     is named here for Phase 16's reason: it rewrites `#save`'s `aria-label` to `Save`
+     while leaving its `title` at `Save as…`, so the two disagree and the clause's equality
+     reading is what catches it. **It must be measured to bite before it is trusted**, as
+     `header-wraps` was, and it owns clause 4 alone.
+  6. `bun app/driver/drive.mjs` prints four clauses, four passed, and `--falsify` three
+     mutations each isolating its clause — **unchanged, and this is a regression check
+     rather than a reading about the dialog**. Saying so is the correction: a native save
+     panel is the window's and not the page's, the stub cannot open one, and no clause in
+     that rig looks at it. The dialog is clause 7's, and clause 7 is a person.
+  7. **The readings left to a person**, at the window, and the expectation is stated so a
+     second person can reproduce them: `⇧⌘S` opens a panel **on the edited file's own
+     folder, with its own name filled in**; the pane and the title bar both hold the new
+     file afterwards, with unsaved work carried into it rather than left behind; a save
+     aimed outside the project says *"… would land outside this project"* and writes
+     nothing; and the mark still reads as *save something* once its tooltip says `Save
+     as…`.
+  8. `git status` is clean after a full run of clauses 4, 5 and 6.
+
+- **Close-out:** **`rules/desktop.md`** — the menu's three accelerators become two plus a
+  moved one; the sentence Phase 16 just corrected — *"`Open…` and `Save` have that button,
+  in the header; `Save a Copy…` is the menu's alone"* — is corrected again, which is what
+  a rule that tracks the code costs; *"registers sixteen commands"* gains the two this
+  phase adds; and the file I/O paragraph gains the **second writer of a path the author
+  did name in a dialog**, beside the export. 648/650, so it needs a budget.
+
+  **`rules/desktop-project.md`** — `landing` gains its **third** caller. Its
+  *"`app/src/document.rs:create_file` is the one caller"* is **already false** before this
+  phase touches it, `trash_file` having become the second, and the file contradicts itself
+  a dozen lines later; this phase corrects that as well as adding its own. **158 body
+  lines and not 157**, cap 165, so the budget survives — the figure is re-derived here
+  because the first draft cited it wrong.
+
+  **`rules/desktop-panes.md`** — the header section Phase 16 added says the two actions
+  act on the document being edited; a Save-as still does, and what changes is the name the
+  mark carries and the clause that now reads it. **Its two clause counts move and the
+  close-out names them rather than leaving them to a sweep**: the `covers:` phrase *"the
+  twelve clauses it asserts as properties and the nine broken pages that falsify them"*
+  and the body's *"asserts twelve clauses … falsified first against nine broken copies"*
+  both become thirteen and ten. The frontmatter edit is free of the cap and the body's is
+  not: **635/635 exactly, budget +10**, and the commit says the real figure.
+
+  **`README.md`** — *"`⌘S`, or the Save button, writes the pane back to whichever file it
+  is holding"* stops being true of the button; *"**The header is Open and Save**"*, added
+  by Phase 16, becomes false; and the `File → Save a Copy…` sentence names an accelerator
+  that has moved. **Verified by grep at close-out**, and the grep is stated because the
+  enumeration is not trusted: `grep -n 'Save\|header' README.md`.
+
+  **OQ-11 takes a dated note, and it is narrower than the first draft claimed.** OQ-11
+  asks what bare marks cost a **screen reader**; whether `title` paints a native tooltip
+  is a *sighted* reader's question and answering it answers no half of OQ-11. The reading
+  is worth recording on its own: `title` renders in the shipping WKWebView, taken at the
+  window on 2026-08-30 on all four bare marks after Phase 16 shipped, and **neither rig
+  can see a native tooltip** so nothing automated has ever confirmed it or ever will.
+
+  **Commit plan.** One push. The writer and its refusal; the two commands, the menu and
+  the accelerators; the page's button and its names; the harness clause and its mutation;
+  then the rules, the README and the reconciliation.
 
 <!--
 The review record is a sibling file, not a section: it lives at

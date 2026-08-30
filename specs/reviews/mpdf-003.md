@@ -2,6 +2,152 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 13 — Phase 17 only — 2026-08-30 — the same reviewer, resumed — **READY (converged)**
+
+Zero blocking. **All three of round 12's blockers confirmed resolved against the code
+rather than the changelog**, each mechanism re-derived: `on_change` sets `announce =
+outcome != External::Unchanged` on the `edited` branch and compiles only under
+`changed.document || changed.assets`, so a `save_as` that made buffer, file and `saved`
+agree announces nothing and compiles nothing; `Session::trash` does `preview.tree =
+document::files_under(&root)` verbatim and the write preceding the move is what makes
+`files_under` find the new file; `(self.on_render)()` is what `set_edited` and `trash`
+both do. **It looked for a fourth duty and found none** — `main`, `revision` and
+`reloaded` correctly stay put, this being a row-click-shaped change and not an open.
+
+**It caught that the phase adopts `create_file`'s *use* of `kind_of` rather than the
+predicate itself**, and that listing the four extensions is what avoids the trap: `kind_of`
+also accepts `Kind::Image`, which a reader taking "the predicate" literally would have let
+through into a text buffer.
+
+**Clause 2's six tests were checked for instrument collision and do not collide**: the
+compile is readable off `Status::revision`, the announce off the `counted()` helper's
+`Arc<AtomicUsize>` — which counts `on_render` calls and not compiles, despite being named
+`compiles` in the suite. Two readings, two instruments, which is why the clause asks for
+them as two tests.
+
+Three non-blocking findings, **all folded before this record was written**. The first is
+recorded as more than a refinement because the reviewer said it would have been blocking
+had gate clause 1 not carried the case in full: **the preamble still opened "yes, in one
+case" and enumerated three**, while clause 1, the `Session`-duties paragraph and clause 1's
+third bullet all cited "the preamble's four cases" and an argument the preamble did not
+make. **The cause was mechanical and is worth recording**: the edit that added the fourth
+case shared a script with an edit that asserted out, so the script never wrote and the
+whole fold rolled back silently while two later folds succeeded. A §5 consistency sweep
+would have caught it; the reviewer did. Also folded: clause 1's first bullet now says *a
+path the master names other than the one the pane holds*, since saving onto the pane's own
+path writes identical bytes and moves nothing; `create_file`'s refusal is stated as reused
+**with its "new file" wording intact**, so neither caller's copy drifts; and
+`rules/desktop-panes.md`'s two clause counts — twelve to thirteen, nine to ten — are named
+in the close-out with a **+10** budget, where the draft had said "needs a budget" without a
+figure.
+
+**Size was judged rather than assumed**: one writer, one `Preview` method, one `Session`
+method, two commands, one menu item, one page handler, one harness clause and its
+mutation, ten Rust tests, one push — comparable to shipped Phase 16, more Rust and less
+CSS, and one feature end to end rather than two that could be split.
+
+### Round 12 — Phase 17 only — 2026-08-30 — the same reviewer, resumed — **NOT READY**
+
+All eight of round 11's blockers confirmed resolved. **Three new blocking findings, all
+introduced or exposed by the fixes** — §7.3's own warning that a fix can introduce a
+blocker, happening.
+
+**Blocker 1 — a fourth way the observable moves, and it is the default configuration.**
+Round 11's fix enumerated three cases, all about what the write *lands on*. The fourth is
+about what the pane *stops standing in for*: `render_project` substitutes the buffer for
+`edited` alone, so when Save-as moves `edited` away from a file the master names, that file
+reverts to its on-disk text in the next compile. Pane on the master, unsaved edits, Save-as
+under a new name, and the page changes. **It is a state the app has never been in**, because
+`Session::set_edited`'s `refused_while_dirty` blocks exactly it — which is what that refusal
+is for, and which this phase deliberately bypasses. The consequence was a gate that could not
+pass: clause 1's *"a Save-as onto a path the master does not name leaves it byte-identical"*
+is **false from a dirty buffer**, so an implementer could not tell whether the code or the
+clause was wrong. Fixed by making the starting buffer part of every one of clause 1's tests
+and adding the fourth case as its own, asserting the PDF **moves**.
+
+**Blocker 2 — the `Session` half was under-specified where silence is wrong.** The phase
+said "moves `edited` and re-arms". Built to that, a Save-as would **not recompile** —
+after the move, `watch::classify` answers on first match, that match is `Change::Edited`,
+`reload()` answers `External::Unchanged` because `save_as` has just made buffer and file
+agree, and `on_change` sets `announce = false` — and would **not list the new file**, the
+same first match making `Change::Tree` unreachable, racily depending on where the debounce
+fell relative to the move. `Session::trash` is the precedent and refreshes the tree by
+hand. Fixed as three named duties with the mechanism for each.
+
+**Blocker 3 — `create_file`'s third rule was neither adopted nor rejected.** The phase
+adopted `landing` and parted from `create_new`, saying *"both refusals are named here so
+neither is read as forgotten"*, and skipped `kind_of`. `document::files_under` filters
+every panel row through it, so a Save-as to `notes.txt` writes a file the panel can never
+list while the pane holds it, `Status::edited` naming a path with no row and no gesture
+back — against `specs/file_panel_spec.md` §1.2's *"Four kinds of file are listed and
+nothing else"*. Fixed by adopting it unchanged.
+
+Three non-blocking, all accepted: the added mutation was never named, and is now
+`save-as-mislabelled` with what it does and the requirement that it be measured to bite;
+the dialog's `filters` was unstated; and the writer must hand back the landed path, where
+`create_file` returns `Result<(), String>`.
+
+### Round 11 — Phase 17 only — 2026-08-30 — fresh reviewer with repo access — **NOT READY**
+
+**Round 0 — is this the right thing to build at all?** Answered by the author before round
+1: it was drafted as producing no observable, and that was wrong — see blocker 1. It is the
+right thing to build: Phase 16 named the save model in advance as a phase not yet appended
+and deliberately withheld the label so a button would not say what it would do next
+release, and it was asked for at the window after looking at the shipped bar. **The
+arguable part is not *whether* but *which button***: the phase makes the header's one
+floppy a Save-as, which makes the commonest action cost a dialog, and names the two-button
+alternative rather than hiding it.
+
+Eight blocking findings, every one caught by opening the code.
+
+**Blocker 1 — the phase's central scope argument was false.** It claimed confinement to
+the project root kept it off the observable. `document::render_project`'s `read` closure
+substitutes the pane's buffer for `edited` and calls `std::fs::read` for every other path,
+so a Save-as onto the master, onto a file the master names, or onto a path the master names
+that does not exist yet, changes the next compile — the third already shipped as
+`preview.rs:a_section_that_does_not_exist_yet_is_watched_and_then_compiles`. **Confinement
+bounds where a file lands, not what a compile reads.** The phase was inverted to produce
+the observable and argue the cases.
+
+**Blocker 2 — the exit gate passed for the wrong reason.** Clause 1 asserted
+`project_root`'s answer, `Preview::main` and the asset list unchanged, all of which hold in
+every case *including* the ones where the PDF moved. Re-keyed to byte-wise comparisons
+against the compile before the save.
+
+**Blocker 3 — no decision on overwrite or on the main**, against two explicit precedents:
+`Session::trash` refuses the main in terms and `create_file` uses `File::create_new`. Both
+decided and argued — it overwrites, the panel's own replace confirmation being the guard on
+`file_panel_spec.md`'s Trash argument, and it does not refuse the main.
+
+**Blocker 4 — `Session::set_edited` does not set the title**; `app/src/main.rs`'s
+`open_document`, `set_main` and `set_edited` commands each do it themselves. The phase had
+claimed the title bar followed for free.
+
+**Blocker 5 — `set_edited` refuses a dirty buffer and returns `Ok(())`**, a silent success
+that keeps the old file — and Save-as is precisely the gesture made with unsaved work.
+Composing `save` with `set_edited` is now rejected in terms.
+
+**Blocker 6 — `document::landing` is private and `document.rs` was not in scope**, so the
+named file set could not build the design.
+
+**Blocker 7 — `landing` already had two callers**, `create_file` and `trash_file`, so
+Save-as is the third; the close-out would have written a fresh false sentence into the one
+artifact that must track the code.
+
+**Blocker 8 — the save panel's `defaultPath` was unreachable as scoped.** `Status` carries
+root-relative spellings only, which is why the export needed `Preview::export_path` and a
+command of its own.
+
+Eleven non-blocking, all accepted, including two that were plainly wrong in the draft: a
+re-derived `rules/desktop-project.md` at **158** body lines and not 157, and an OQ-11 note
+that overstated what it answered — whether `title` paints a native tooltip is a sighted
+reader's question and answers no half of a screen-reader question.
+
+**Two deferrals recorded as such**: the two-button alternative is named but not costed, and
+folder creation via an `NSSavePanel`'s own New Folder button is recorded as re-admitted
+rather than gated — `file_panel_spec.md` §1.2's non-goal is about the panel's `+` gesture
+and is left standing as written.
+
 ### Round 10 — Phase 16 only — 2026-08-30 — the same reviewer, resumed — **READY (converged)**
 
 Zero blocking. **Both blockers confirmed resolved by measurement rather than by reading
