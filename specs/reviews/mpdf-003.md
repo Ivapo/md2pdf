@@ -2,6 +2,72 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 5 — Phase 14 only — 2026-08-29 — the same reviewer, resumed — **READY (converged)**
+
+Zero blocking. The round-4 blocker is resolved and **the reviewer preferred the author's
+route to its own**, saying so: it had proposed keeping the mutation and stating the
+ordering precondition, where the author removed the precondition instead — *"stating an
+ordering precondition leaves a precondition to be honoured, and removing it leaves nothing
+to honour."*
+
+Two facts were established that the phase had assumed rather than checked, and both are
+stronger than it needed. **`documentElement.removeAttribute` has exactly one call site in
+all 3,968 lines of `app/dist/index.html`** — the `system` branch of `wearAppearance` — so
+the patch can touch nothing else and its counter increments exactly once per `system` step
+in every walk order; the ordering hole is gone rather than narrowed. And **the page carries
+no bare `[data-theme]` presence selector at all**, every one being value-qualified, which
+is the fact the palette-identity argument needs and had been leaning on implicitly.
+Isolation to D1 holds on two independent arguments, and D3's teardown routes through
+neither.
+
+One non-blocking finding, accepted, and it is the sharpest kind — a hazard the *fix*
+created. **`"system"` was the one value that collides with D1's own vocabulary**: D1
+asserted "`data-theme` is the value or absent for `system`", and a permissive spelling of
+that sentence reads `data-theme="system"` as satisfying "the value", under which the
+mutation passes. The do-nothing form could not collide this way, leaving `"light"` or
+`"dark"` behind. Resolved twice over: the mutation now writes the sentinel `"mutated"`,
+which no appearance is named by, and **D1 is respelled strictly** — absent for `system`,
+equal to the appearance otherwise.
+
+**The episode's own tally, recorded because it is the useful part.** Five blocking findings
+across five rounds; **three were introduced by the author's own fixes to earlier ones**,
+each surfacing exactly one round later — the pattern §3 of the loop names. The most
+valuable finding was non-blocking and deleted a third of the phase: a reviewer asking
+whether the hard part was *necessary* rather than whether it was *correct*.
+
+### Round 4 — Phase 14 only — 2026-08-29 — the same reviewer, resumed — **NOT READY**
+
+Run past §7.6's three-round cap **on the human's explicit decision**, recorded as one: the
+cap had been reached on a round that verified nothing, the fault being the author's tooling
+rather than any disagreement, so the alternative was clearing a phase on a blocker no round
+had confirmed resolved.
+
+All five round-3 edits confirmed present. The mechanism question the previous round could
+not reach is answered: the DOM-interception route **is** buildable without further
+invention — `themeButton` is a live node reached by `getElementById`, `wearAppearance`
+assigns `textContent` by property lookup at call time, so an own accessor shadows
+`Node.prototype`'s and takes — and the invocation-counter rule **is** precise enough to
+judge a run by.
+
+**One new blocker, and it was the author's third fix-induced one.** The mutation had
+changed form in round 3 — from "`wearAppearance` always sets `data-theme`" to
+"`removeAttribute` patched to ignore it" — and the rationale beside it was carried over
+verbatim. It argued from `data-theme="system"`, which the new form can never write: the
+page's only `setAttribute` for that attribute is on the *non*-`system` branch, so ignoring
+the removal leaves whatever was already there. **The consequence was worse than wrong
+prose — the mutation could pass.** D1 walks all three appearances in no stated order; on a
+launch from a stored `system`, which is the default and what clause 3's own restore
+guarantees between runs, the attribute is already absent, the patched call still fires so
+the counter rule does not catch it, D1's assertion holds, and clause 4 fails for a reason
+the phase treats as impossible. Resolved by making the patch **write a value** rather than
+do nothing.
+
+One non-blocking, accepted: *"the same shape Phase 13 already introduced there"* has no
+precedent — that phase's change is a block inside the `setup` closure, not a break in the
+builder chain. Recorded as a correction rather than quietly deleted. The correction itself
+then failed `spec-lint` for citing `main.rs:78`, a `file:line` citation this corpus forbids
+(§2.5).
+
 ### Round 3 — Phase 14 only — 2026-08-29 — the same reviewer, resumed — **NOT READY (cap reached, escalated)**
 
 **The round reviewed a file that did not carry the fix, and the fault was the author's

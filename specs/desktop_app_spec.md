@@ -74,7 +74,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 14 — the window gates run themselves"
-    reviewed: null
+    reviewed: 2026-08-29
     shipped: null
     cut: null
     by: null
@@ -3437,8 +3437,10 @@ by a machine, and it is worth building for that alone.
 
   - **D1 — the value reaches Rust and the page places it.** All three appearances
     through `invoke('set_appearance')`, asserting `Status::appearance` comes back, that
-    `data-theme` is the value or absent for `system`, and that `title` and `aria-label`
-    agree and name an appearance. **It does not assert the mark**, which is D2's, so
+    `data-theme` is **absent for `system` and equal to the appearance otherwise** —
+    spelled that way round and not as "the value or absent", which a mutation below turns
+    out to be able to exploit — and that `title` and `aria-label` agree and name an
+    appearance. **It does not assert the mark**, which is D2's, so
     that the two mutations below can each fail exactly one clause.
   - **D2 — the marks, measured at a width the driver set.** Exactly two distinct
     glyphs across the three states, their widths within a pixel of each other, and
@@ -3488,8 +3490,8 @@ by a machine, and it is worth building for that alone.
   that is not the clause's own. Two mutations, each owning one clause:
 
   - `attribute-always-set` — `documentElement.removeAttribute` patched so that a
-    `data-theme` removal **writes `"system"` instead**, rather than merely doing
-    nothing. **The difference is not cosmetic and round 4 is what found it.** Doing
+    `data-theme` removal **writes the sentinel `"mutated"` instead**, rather than
+    merely doing nothing. **The difference is not cosmetic and round 4 is what found it.** Doing
     nothing leaves whatever was already there, and the page's only `setAttribute` for
     this attribute is on the *non*-`system` branch — so a walk that reaches `system`
     while the attribute happens to be absent, which is the state a launch on a stored
@@ -3498,10 +3500,18 @@ by a machine, and it is worth building for that alone.
     not catch it either. Writing a value makes it bite in every order and lets the walk
     stay ordered however D1 wants.
 
-    Fails **D1** alone: `data-theme="system"` matches neither `:root[data-theme='dark']`
+    **The value is a sentinel outside the appearance vocabulary, and that is round 5's
+    catch rather than a flourish.** Writing `"system"` — the obvious choice — is the one
+    value that collides with what D1 asserts *about*: under the strict spelling the
+    converted clause inherits it fails as intended, but a permissive spelling of the same
+    sentence would read `data-theme="system"` as satisfying "the value" and let the
+    mutation pass. A value no appearance is named by cannot be read either way.
+
+    Fails **D1** alone: `data-theme="mutated"` matches neither `:root[data-theme='dark']`
     nor `:root[data-theme='light']` and does match the media query's
-    `:not([data-theme='light'])`, so it is palette-identical to the attribute being
-    absent. **And the mark does not move even if that were wrong**, which is the
+    `:not([data-theme='light'])` — **the page carries no bare `[data-theme]` presence
+    selector at all**, every one being value-qualified — so it is palette-identical to
+    the attribute being absent. **And the mark does not move even if that were wrong**, which is the
     independent half: it is `APPEARANCE_MARK[inEffect(next)]`, and `inEffect` reads
     `matchMedia('(prefers-color-scheme: dark)')`, which no `data-theme` affects. So D2's
     glyphs, widths and `#brand` rect stand on two arguments rather than one.
