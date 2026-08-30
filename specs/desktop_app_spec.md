@@ -3374,8 +3374,10 @@ by a machine, and it is worth building for that alone.
   through `.setup(…)` and `.invoke_handler(…)` to `.build(generate_context!())`. The
   plugin is registered by breaking that chain at the top —
   `let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());` then a
-  `#[cfg(feature = "driven")]` rebinding, then the rest — which is the same shape
-  Phase 13 already introduced there for `set_theme`.
+  `#[cfg(feature = "driven")]` rebinding, then the rest. **It has no precedent in this
+  file, and the draft's claim that Phase 13 introduced the same shape was wrong** —
+  round 4's catch: that phase's change is a block *inside* the `setup` closure, not a
+  break in the builder chain, which `app/src/main.rs:main` today runs unbroken.
 
   **Not `[target.'cfg(debug_assertions)'.dependencies]`, which is what WebdriverIO's
   own setup page prescribes and which does not work.** Cargo says so outright —
@@ -3485,12 +3487,24 @@ by a machine, and it is worth building for that alone.
   each walk the three states, so a counter shared across them would be read after a walk
   that is not the clause's own. Two mutations, each owning one clause:
 
-  - `attribute-always-set` — `documentElement.removeAttribute` patched to ignore
-    `data-theme`, so the attribute stays behind in the `system` state. Fails **D1**
-    alone: `data-theme="system"` matches neither `:root[data-theme='dark']` nor
-    `:root[data-theme='light']` and does match the media query's
+  - `attribute-always-set` — `documentElement.removeAttribute` patched so that a
+    `data-theme` removal **writes `"system"` instead**, rather than merely doing
+    nothing. **The difference is not cosmetic and round 4 is what found it.** Doing
+    nothing leaves whatever was already there, and the page's only `setAttribute` for
+    this attribute is on the *non*-`system` branch — so a walk that reaches `system`
+    while the attribute happens to be absent, which is the state a launch on a stored
+    `system` and clause 3's own restore both produce, would find D1's assertion holding
+    and **the mutation passing**, with its counter incremented so the counter rule would
+    not catch it either. Writing a value makes it bite in every order and lets the walk
+    stay ordered however D1 wants.
+
+    Fails **D1** alone: `data-theme="system"` matches neither `:root[data-theme='dark']`
+    nor `:root[data-theme='light']` and does match the media query's
     `:not([data-theme='light'])`, so it is palette-identical to the attribute being
-    absent and D2's glyphs, widths and brand rect do not move.
+    absent. **And the mark does not move even if that were wrong**, which is the
+    independent half: it is `APPEARANCE_MARK[inEffect(next)]`, and `inEffect` reads
+    `matchMedia('(prefers-color-scheme: dark)')`, which no `data-theme` affects. So D2's
+    glyphs, widths and `#brand` rect stand on two arguments rather than one.
   - `third-mark` — the button's `textContent` setter patched, through an
     instance-level `Object.defineProperty`, to write a third glyph while `data-theme` is
     absent. **It must delegate to the original setter and actually put the glyph in the
