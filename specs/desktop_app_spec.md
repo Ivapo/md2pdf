@@ -3633,10 +3633,23 @@ therefore a different one.** That is the order UI work takes in this project —
 shape is argued about better on screen than on paper — and it means round 0 is
 not *is this the right thing to build* but **is this the right thing to keep**.
 The measurements quoted below are readings taken off that prototype, not
-predictions. **What exists is the page and the harness — clauses 1 to 5 and 8 —
-uncommitted; the driver clause that round 1 moved into clause 6 is not built.**
-Which half is measured and which is expected is the whole value of saying this at
-all.
+predictions.
+
+**What is already built, and what an implementer is therefore picking up.** The
+page and the harness halves of the scope below are **written, passing and
+committed** — `spec(mpdf-003): Phase 15 drafted`, then the `feat` and `test`
+commits beside it — and with them **exit-gate clauses 1 to 5**. What remains is
+**clause 6**, the driver clause the review moved out of a pasteable window gate
+and which the prototype never had; **clause 7**, the one reading a person takes;
+and the close-out. **Clause 8 is half-checkable until clause 6 exists**: it is
+`git status` clean after a run of clauses 3, 4 and 6, and only the harness half
+of that run can be made today.
+
+**So this phase is not implemented from nothing, and saying which half is
+measured is the whole value of the paragraph.** A phase prototyped before it was
+written still gains scope in review — that is what happened here, and an
+implementer told only "implement Phase 15" would otherwise find most of it on
+disk and have to work out why.
 
 - **Scope:** **`app/dist/index.html`**; three files of the harness —
   **`app/harness/checks.mjs`**, **`app/harness/serve.mjs`** and
