@@ -9,6 +9,7 @@ sources:
   - app/harness/stub.mjs
   - app/harness/serve.mjs
   - app/harness/checks.mjs
+  - app/driver/drive.mjs
 covers: >
   the desktop app's two panes: the one file the front end is, the text pane and
   the pages the app rasterises the artifact onto, the wrapper a page is and the
@@ -39,8 +40,9 @@ covers: >
   two declarations it holds to each other, the harness that drives it in two
   engines and the copy it drives rather than the file, the boundary it records
   because the DOM cannot show one, the ten clauses it
-  asserts as properties and the six broken pages that falsify them, and the
-  seven defects neither reaches
+  asserts as properties and the six broken pages that falsify them, the second
+  rig that drives the shipped binary instead and which of the two a claim
+  belongs to, and the seven defects none of them reaches
 max_lines: 545
 generated: 2026-08-28
 ---
@@ -562,6 +564,17 @@ number moves as clauses are added, being the only one that accumulates across th
 than inherited from Playwright, because the palette has to win in both directions and a
 suite run in one of them would miss half of it.
 
+**`app/driver/drive.mjs` is a second rig, and the two are not interchangeable.** It launches
+`target/debug/letur` from a `--features driven` build and speaks plain HTTP to the WebDriver
+server inside it, so what it drives is the **real WKWebView** and the shipped binary; its
+mutations go into the live session rather than into a copy, `generate_context!` having walked
+this file into the executable, and each must fire or the run failed as an instrument and not as
+a clause. **Which to reach for is the distinction worth carrying**: a claim about this page —
+geometry, the panel, the palette, anything wanting a broken copy or a second engine — is
+`app/harness/`'s; a claim about the *window* — the real IPC, `settings.json` on disk, an OS
+resize the page is refused — is the driver's, which reaches no more of the seven below than the
+harness does.
+
 **What none of it reaches is most of what has gone wrong in this file.** Of the eight defects it
 has produced, a type check catches **one** — a `destroy` that `PDFDocumentProxy` does not have,
 swallowed by optional chaining, and caught in review before it shipped. The seven it misses are
@@ -569,7 +582,7 @@ swallowed by optional chaining, and caught in review before it shipped. The seve
 delivery racing an animation frame, a forced pass dropped rather than re-armed, a stale
 `deliveryMs`, a settle timer cancelling the render that was about to set the fit, a counter
 advanced for a render that never drew, and an early return leaving a caret band on an empty
-pane. Every one is behaviour, and **neither the type check nor the harness sees any of them** —
+pane. Every one is behaviour, and **neither the type check nor either rig sees any of them** —
 the second half measured: the A/B that justified a browser reaching them, 0 `ResizeObserver`
 errors before `overflow-x: auto` and 21 after, was re-run through `serve.mjs --rev` against both
 revisions at `devicePixelRatio` 2 and a 520px pane, in both engines headless and headed, and

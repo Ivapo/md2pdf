@@ -11,6 +11,7 @@ sources:
   - app/dist/index.html
   - app/tsconfig.json
   - app/package.json
+  - app/driver/drive.mjs
 covers: >
   the desktop app: the crate and its files, the window and its menu, the two
   titles an open sets, the commands and the signal between them, the file I/O the
@@ -31,9 +32,11 @@ covers: >
   the vendored renderer the front end imports and what embedding it costs, the
   declarations it is type-checked against and where they may not live, the node
   manifest the crate carries for its test rig and the build that reads neither,
-  the window that is built hidden and shown a hook later, and the configuration
-  facts a build enforces
-max_lines: 635
+  the window that is built hidden and shown a hook later, the configuration
+  facts a build enforces, and the server one build carries behind a feature,
+  the capability it looks to want and does not, and the setter it offers where
+  the page is refused one
+max_lines: 650
 generated: 2026-08-28
 ---
 
@@ -113,6 +116,31 @@ manifest says, and answers `window.set_size not allowed. Permissions associated 
 this command: core:window:allow-set-size`. So which of them are reachable is a question
 to settle by calling one, never by `typeof` — which cost `tests/gates/mpdf-003-phase11.js`
 two runs.
+
+**One build of this crate carries a WebDriver server, and it is asked for by
+name.** `Cargo.toml` declares `tauri-plugin-wdio-webdriver` 1.3.0 **optional**
+behind `[features]`' `driven = ["dep:tauri-plugin-wdio-webdriver"]`, and
+`main.rs:main` breaks its builder chain at the top — an attribute cannot be
+applied to a method call — so a `#[cfg(feature = "driven")]` rebinding can add
+the plugin and nothing else moves. `cargo tree -p letur -e normal` names the
+crate **zero** times and once under `--features driven`, and
+`app/driver/drive.mjs` is the only thing that asks for it. **Not
+`[target.'cfg(debug_assertions)'.dependencies]`**, which WebdriverIO's own setup
+page prescribes and which selects nothing — cargo says so in as many words — so
+under the documented form the crate is compiled and linked into a *release* build
+and only `init()` is gated.
+
+**No capability goes with it, and the entry that looks required is a trap.** The
+plugin declares `COMMANDS: &[]` and `permissions = []` and exposes no IPC at all,
+every automation going over its own HTTP server on 4445; `wdio-webdriver:default`
+in `capabilities/default.json` would therefore grant nothing when the plugin is
+present and **fail the build when it is absent**, `tauri-build` globbing
+`capabilities/**/*`. A `--features driven` binary with no capability entry
+anywhere was built and driven. **What the server does offer is the setter the
+page is refused**: `setWindowRect` is in the session's capabilities, and
+`window/rect` is **physical** pixels where `tauri.conf.json`'s `width` is
+logical, so a driver reaches a viewport width by reading `innerWidth` back rather
+than by arithmetic.
 
 **A third configuration fact costs a frame rather than a build.** The `main`
 window is declared `"visible": false` and `setup` shows it, after `set_theme` and
