@@ -170,6 +170,50 @@ const MUTATIONS = {
     const line = "editedCell.textContent = state.edited?.split('/').pop() ?? ''"
     if (page.split(line).length !== 2) die('the mutation cell-main found no single cell line')
     return page.replace(line, "editedCell.textContent = state.main?.split('/').pop() ?? ''")
+  },
+
+  /* Drops the attribute block that opts *in* under a light system, leaving the
+     media query's `:not([data-theme='light'])` to carry both directions — which
+     it cannot. Under a dark system nothing changes, which is the half a suite
+     driven in one colour scheme would miss. */
+  'theme-dark-attr': (page) => {
+    const rule = page.match(/\n( *):root\[data-theme='dark'\] \{\n[\s\S]*?\n\1\}\n/)
+    if (!rule) die('the mutation theme-dark-attr found no :root[data-theme=dark] block')
+    return page.replace(rule[0], '\n')
+  },
+
+  /* Lets the page decide instead of asking. The attribute still moves and the
+     mark still follows, so everything a check reads off the DOM alone is
+     unchanged — the boundary is the only thing that moved. */
+  'theme-click-direct': (page) => {
+    const call = `invoke('set_appearance', {
+          appearance: APPEARANCES[(APPEARANCES.indexOf(worn) + 1) % APPEARANCES.length]
+        }).catch(fail)`
+    if (page.split(call).length !== 2) die('the mutation theme-click-direct found no single invoke')
+    return page.replace(
+      call,
+      `Promise.resolve(
+          wearAppearance(APPEARANCES[(APPEARANCES.indexOf(worn) + 1) % APPEARANCES.length])
+        )`
+    )
+  },
+
+  /* Puts the auto margin back where Phase 11 had it. **This changes nothing
+     about `#brand`'s own rect** — an auto margin absorbs exactly the free space
+     in total, so a last child with no right margin cannot move, which is what
+     falsified this mutation's first draft. What moves is the group. */
+  'controls-auto-margin': (page) => {
+    const controls = page.match(/\n( *)#controls \{\n[\s\S]*?\n\1\}\n/)
+    const brand = page.match(/\n( *)#brand \{\n[\s\S]*?\n\1\}\n/)
+    if (!controls) die('the mutation controls-auto-margin found no #controls rule')
+    if (!brand) die('the mutation controls-auto-margin found no #brand rule')
+
+    const moved = controls[0].replace(/^ *margin-left: auto;\n/m, '')
+    if (moved === controls[0]) die('the mutation controls-auto-margin moved no margin')
+
+    return page
+      .replace(controls[0], moved)
+      .replace(brand[0], brand[0].replace('flex: none;', 'flex: none;\n        margin-left: auto;'))
   }
 }
 

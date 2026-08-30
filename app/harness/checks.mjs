@@ -27,8 +27,12 @@
 
    **The suite is falsified before it is trusted.** `--mutate <name>` serves a
    deliberately broken copy and judges that **exactly** the clause that owns it
-   fails; `--falsify` runs all three. That is the gate's clause 3, run rather than
-   read.                                                                        */
+   fails; `--falsify` runs all six. That is the gate's clause 3, run rather than
+   read.
+
+   **`light` is the default colour scheme and it is written down**, because one
+   of the clauses below is about a page that must behave differently under each
+   and Playwright's own default is not a thing to inherit silently.           */
 
 import { chromium, webkit } from 'playwright'
 import { spawnSync } from 'node:child_process'
@@ -45,7 +49,14 @@ const flag = (name, fallback = null) => {
 /* Which clause each mutation owns. A mutation that fails a second clause is a
    check measuring something it does not claim to; a mutation that fails none is a
    check that would pass on a page the scope forbids. */
-const OWNS = { 'footer-last': 1, 'flex-min': 3, 'cell-main': 5 }
+const OWNS = {
+  'footer-last': 1,
+  'flex-min': 3,
+  'cell-main': 5,
+  'theme-dark-attr': 7,
+  'theme-click-direct': 8,
+  'controls-auto-margin': 9
+}
 
 /* **58 characters, and the length is asserted rather than trusted.** The
    `flex-min` mutation only bites where `#edited`'s content overflows the bar, and
@@ -82,8 +93,12 @@ const settle = async (page) =>
 
 /** A page with the document open and its first compile drawn. Every check gets
     its own, so no check inherits the state another left behind. */
-const opened = async (browser, url, width = WIDTHS[0]) => {
-  const page = await browser.newPage({ viewport: { width, height: HEIGHT }, deviceScaleFactor: 2 })
+const opened = async (browser, url, width = WIDTHS[0], colorScheme = 'light') => {
+  const page = await browser.newPage({
+    viewport: { width, height: HEIGHT },
+    deviceScaleFactor: 2,
+    colorScheme
+  })
   await page.goto(url, { waitUntil: 'load' })
   await page.waitForFunction(() => typeof window.__harness === 'object')
   await page.evaluate(() => {
@@ -389,6 +404,214 @@ const panelDrawsTheEntries = async (browser, url) => {
   return errors
 }
 
+
+/* 7. **Six readings, and the point is the two that a one-scheme suite would
+      miss.** The palette has to win in *both* directions: `dark` chosen under a
+      light system and `light` chosen under a dark one. The tokens are one half
+      and `color-scheme` the other — it is what paints the `#fit` select, its
+      arrow and the scrollbars, so a page whose tokens said dark while it said
+      light would put a light scrollbar on a dark pane.
+
+      **And `--paper` is unchanged in all six**, which is the clause that keeps
+      `specs/desktop_app_spec.md` §1.1's narrowing honest: this app themes its
+      own chrome and nothing about the document, the page Typst compiles being
+      white in either palette. Every value is read against the page's own other
+      readings — the system's own dark and its own light — so no colour literal
+      is written here. */
+const paletteTurnsBothWays = async (browser, url) => {
+  const read = []
+  const errors = { total: 0, loops: 0, spoken: [] }
+
+  for (const system of ['light', 'dark']) {
+    const page = await opened(browser, url, WIDTHS[0], system)
+    for (const appearance of ['system', 'light', 'dark']) {
+      read.push({
+        system,
+        appearance,
+        ...(await page.evaluate(async (appearance) => {
+          window.__harness.set({ appearance })
+          window.__harness.fire('rendered')
+          await new Promise((r) => setTimeout(r, 150))
+          const root = document.documentElement
+          const style = getComputedStyle(root)
+          return {
+            attribute: root.getAttribute('data-theme'),
+            scheme: style.colorScheme,
+            ground: style.getPropertyValue('--ground').trim(),
+            ink: style.getPropertyValue('--ink').trim(),
+            paper: style.getPropertyValue('--paper').trim()
+          }
+        }, appearance))
+      })
+    }
+    const seen = await drainErrors(page)
+    errors.total += seen.total
+    errors.loops += seen.loops
+    errors.spoken.push(...seen.spoken)
+    await page.close()
+  }
+
+  const at = (system, appearance) => read.find((r) => r.system === system && r.appearance === appearance)
+
+  /* The two the page has always had, and every other reading is compared to one
+     of them rather than to a literal. */
+  const lightGround = at('light', 'light').ground
+  const darkGround = at('dark', 'dark').ground
+  const wants = (r) => (r.appearance === 'system' ? r.system : r.appearance)
+
+  const wrong = read.filter((r) => {
+    const wanted = wants(r)
+    const ground = wanted === 'dark' ? darkGround : lightGround
+    const attribute = r.appearance === 'system' ? null : r.appearance
+    return (
+      r.attribute !== attribute ||
+      r.ground !== ground ||
+      !r.scheme.includes(wanted) ||
+      (wanted === 'dark' ? r.scheme === 'light' : r.scheme === 'dark')
+    )
+  })
+
+  const paper = new Set(read.map((r) => r.paper))
+  for (const r of read) {
+    note(`system ${r.system} + ${r.appearance}: attr ${r.attribute} scheme ${r.scheme} ground ${r.ground}`)
+  }
+
+  ok(
+    7,
+    'the palette turns both ways, and --paper turns in neither',
+    wrong.length === 0 && paper.size === 1 && lightGround !== darkGround,
+    wrong.length
+      ? `wrong: ${wrong.map((r) => `${r.system}+${r.appearance}`).join(', ')}`
+      : `six readings, --paper ${[...paper][0]} in all of them; the two grounds differ: ${lightGround} / ${darkGround}`
+  )
+  return errors
+}
+
+/* 8. **The boundary, which nothing read off the DOM alone can see.** A toggle
+      that set the attribute itself would look identical from the page: same
+      mark, same palette, same cycle. So this asserts both halves — that Rust
+      moving the value alone moves the attribute, and that the click's only act
+      is to ask, naming the next of the three.
+
+      The stub's answer is what closes the loop, so the second half is measured
+      after it: a page that had already moved the attribute before the answer
+      arrived would be deciding. */
+const cellPlacesAndDoesNotDecide = async (browser, url) => {
+  const page = await opened(browser, url)
+
+  /* Rust moves it, nobody clicks. */
+  const placed = await page.evaluate(async () => {
+    const seen = []
+    for (const appearance of ['dark', 'light', 'system']) {
+      window.__harness.set({ appearance })
+      window.__harness.fire('rendered')
+      await new Promise((r) => setTimeout(r, 150))
+      seen.push({ appearance, attribute: document.documentElement.getAttribute('data-theme') })
+    }
+    return seen
+  })
+
+  /* The click, from a known state, with the boundary read rather than the DOM. */
+  const clicked = await page.evaluate(async () => {
+    window.__harness.set({ appearance: 'system' })
+    window.__harness.fire('rendered')
+    await new Promise((r) => setTimeout(r, 150))
+
+    window.__harness.forget()
+    document.getElementById('theme').click()
+    await new Promise((r) => setTimeout(r, 150))
+
+    return {
+      asked: window.__harness.invokes().filter((i) => i.name === 'set_appearance'),
+      attribute: document.documentElement.getAttribute('data-theme'),
+      answered: window.__harness.status().appearance
+    }
+  })
+
+  const errors = await drainErrors(page)
+  await page.close()
+
+  const misplaced = placed.filter((p) => p.attribute !== (p.appearance === 'system' ? null : p.appearance))
+  /* system -> light is the cycle's first step, and the mark that follows is the
+     stub's answer rather than the click. */
+  const asked = clicked.asked.length === 1 && clicked.asked[0].args.appearance === 'light'
+  const followed = clicked.attribute === 'light' && clicked.answered === 'light'
+
+  note(`placed: ${placed.map((p) => `${p.appearance}->${p.attribute}`).join('  ')}`)
+  note(`clicked: asked ${JSON.stringify(clicked.asked.map((i) => i.args))}, attribute ${clicked.attribute}`)
+
+  ok(
+    8,
+    'the cell places what Rust says, and the click only asks',
+    misplaced.length === 0 && asked && followed,
+    misplaced.length
+      ? `Rust moved and the page did not: ${JSON.stringify(misplaced)}`
+      : `three placed with no click; one click asked for ${JSON.stringify(clicked.asked.map((i) => i.args.appearance))} and the attribute followed the answer`
+  )
+  return errors
+}
+
+/* 9. **Keyed to the group and not to the brand, because the brand cannot move.**
+      An auto margin absorbs exactly the free space in total, so a last child
+      with no right margin reads the same x under either layout — which is what
+      falsified this clause's first draft. What separates them is the distance
+      from the group to the brand, and it must equal the bar's own gap.
+
+      **Read off the stylesheet, never written as a number**, per this file's
+      one rule; and **taken at the sweep's widest width**, which is part of the
+      clause rather than incidental: at 240px the 58-character name has filled
+      `#edited` and left no free space for an auto margin to absorb, so both
+      layouts read the gap and the clause would falsify nothing.
+
+      The exact equality depends on `#controls` holding one flush, unpadded
+      child. A second cell in that group would want measuring from `#controls`'
+      own right edge instead. */
+const groupSitsBesideTheBrand = async (browser, url) => {
+  const page = await opened(browser, url, WIDTHS[0])
+
+  const read = await page.evaluate(async () => {
+    const footer = document.querySelector('footer')
+    const theme = document.getElementById('theme')
+    const brand = document.getElementById('brand')
+
+    const seen = []
+    for (const appearance of ['system', 'light', 'dark']) {
+      window.__harness.set({ appearance })
+      window.__harness.fire('rendered')
+      await new Promise((r) => setTimeout(r, 150))
+      seen.push({
+        appearance,
+        gap: brand.getBoundingClientRect().left - theme.getBoundingClientRect().right,
+        brand: brand.getBoundingClientRect().left
+      })
+    }
+
+    return {
+      seen,
+      columnGap: parseFloat(getComputedStyle(footer).columnGap),
+      last: footer.lastElementChild === brand
+    }
+  })
+
+  const errors = await drainErrors(page)
+  await page.close()
+
+  const apart = read.seen.filter((s) => Math.abs(s.gap - read.columnGap) > 0.5)
+  const brands = new Set(read.seen.map((s) => s.brand.toFixed(2)))
+
+  note(`gap ${read.seen.map((s) => `${s.appearance} ${s.gap.toFixed(2)}`).join('  ')}`)
+
+  ok(
+    9,
+    `the icon group sits one gap from the brand at ${WIDTHS[0]}px, in all three states`,
+    apart.length === 0 && brands.size === 1 && read.last,
+    apart.length
+      ? `the bar's own column-gap is ${read.columnGap}; read ${apart.map((s) => `${s.appearance} ${s.gap.toFixed(2)}`).join(', ')}`
+      : `${read.columnGap} in all three, the brand still last and unmoved at ${[...brands][0]}`
+  )
+  return errors
+}
+
 /* ----------------------------------------------------------------- the run */
 
 const run = async ({ engine, headed, rev, doc, mutate }) => {
@@ -411,7 +634,16 @@ const run = async ({ engine, headed, rev, doc, mutate }) => {
   )
 
   try {
-    for (const check of [elementOrder, sweep, statusPlaces, cellFollowsThePane, panelDrawsTheEntries]) {
+    for (const check of [
+      elementOrder,
+      sweep,
+      statusPlaces,
+      cellFollowsThePane,
+      panelDrawsTheEntries,
+      paletteTurnsBothWays,
+      cellPlacesAndDoesNotDecide,
+      groupSitsBesideTheBrand
+    ]) {
       gather(await check(browser, held.url))
     }
   } finally {
@@ -419,11 +651,13 @@ const run = async ({ engine, headed, rev, doc, mutate }) => {
     await held.close()
   }
 
-  /* 7. **Named and not merely counted**, and the `ResizeObserver` class counted
-        apart: that is the failure `mpdf-009` Phase 3 found twenty-one of in a
-        single run, and an unrelated throw must still be visible beside it. */
+  /* 10. **Named and not merely counted**, and the `ResizeObserver` class counted
+         apart: that is the failure `mpdf-009` Phase 3 found twenty-one of in a
+         single run, and an unrelated throw must still be visible beside it.
+         **It stays last** — it is the only clause that accumulates across every
+         other one, so its number moves as clauses are added and theirs do not. */
   ok(
-    7,
+    10,
     'no uncaught error reached the console through any of it',
     errors.total === 0,
     `${errors.total} uncaught, ${errors.loops} of them ResizeObserver` +

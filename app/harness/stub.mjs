@@ -77,17 +77,25 @@ const derived = (state) => ({
     `app/dist/index.html:report` through each of them. */
 const EMPTY = {
   state: 'empty', time: null, error: null, page: false, divergence: null,
-  revision: 0, reloaded: 0, anchors: [], entries: [], main: null, edited: null
+  revision: 0, reloaded: 0, anchors: [], entries: [], main: null, edited: null,
+  appearance: 'system'
 }
 const OPEN = {
   state: 'current', time: '31 ms', error: null, page: true, divergence: null,
   revision: 1, reloaded: 1, anchors: [{ line: 5, page: 1 }],
-  entries: CONFIG.entries, main: CONFIG.main, edited: CONFIG.main
+  entries: CONFIG.entries, main: CONFIG.main, edited: CONFIG.main,
+  appearance: 'system'
 }
 
 let status = { ...EMPTY }
 let text = ''
 const listeners = {}
+
+/* **Every command the page sends, in order.** The page is supposed to ask Rust
+   for things rather than do them itself, and a check that reads only the DOM
+   cannot tell the two apart: a toggle that set `data-theme` on its own would
+   look identical. So the boundary is recorded and asserted against. */
+const invokes = []
 
 const fire = (name, payload = null) => {
   for (const fn of listeners[name] ?? []) fn({ event: name, id: 0, payload })
@@ -100,6 +108,7 @@ const fire = (name, payload = null) => {
    throwing**: the page's `fail` would put a sentence in the error bar and the
    status checks would then be reading the harness's own complaint. */
 const invoke = async (name, args = {}) => {
+  invokes.push({ name, args: JSON.parse(JSON.stringify(args)) })
   switch (name) {
     case 'status':
       return JSON.parse(JSON.stringify(derived(status)))
@@ -154,6 +163,17 @@ const invoke = async (name, args = {}) => {
        than refused, so this says so. */
     case 'asset_bytes':
       throw new Error(`the harness serves no asset bytes for ${args.path}`)
+
+    /* **The whole of the Rust half, as the page can see it.** The real command
+       also writes `settings.json` and calls `window.set_theme`, neither of
+       which a browser has — `specs/desktop_app_spec.md` Phase 13's own window
+       clause is where those two get eyes. What matters here is the shape: the
+       value moves in Rust and comes back through the compile signal, so the
+       page places it rather than deciding it. */
+    case 'set_appearance':
+      status = { ...status, appearance: args.appearance }
+      fire('rendered')
+      return null
 
     default:
       return null
@@ -238,5 +258,13 @@ window.__harness = {
 
   /** The names `listen` has been called with, so a check can say the page
       registered before it was driven rather than assuming it. */
-  listening: () => Object.keys(listeners)
+  listening: () => Object.keys(listeners),
+
+  /** Every command the page has sent, oldest first, as a copy. */
+  invokes: () => JSON.parse(JSON.stringify(invokes)),
+
+  /** Forget them, so a check can say "since here" rather than "ever". */
+  forget: () => {
+    invokes.length = 0
+  }
 }
