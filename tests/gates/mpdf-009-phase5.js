@@ -22,7 +22,11 @@
 ;(() => {
   const pages = document.getElementById('pages')
   const text = document.getElementById('text')
-  const fitEl = document.getElementById('fit')
+  /* `#fit-footer` and not `#fit`: `mpdf-003` Phase 16 withdrew the header's
+     copy of this control, leaving the footer's as the only one. The clauses
+     below are unchanged — this script is still the only thing that has seen
+     the seven defects neither rig reaches, so it has to keep running. */
+  const fitEl = document.getElementById('fit-footer')
   const P = () => window.__pane
   let noise = 0
   const spoken = []

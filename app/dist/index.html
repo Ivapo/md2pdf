@@ -40,9 +40,10 @@
         why `system` removes the attribute rather than setting a third value.
 
         **`color-scheme` follows all three ways and is not decoration.** It is
-        what paints the `#fit` select, its native arrow and the scrollbars —
-        measured against the case a naive implementation gets wrong, a dark
-        page on a light system, where without it the select alone stays light.
+        what paints the `#fit-footer` select, its native arrow and the
+        scrollbars — measured against the case a naive implementation gets
+        wrong, a dark page on a light system, where without it the select alone
+        stays light.
 
         `--paper` is in none of them, for the reason its own comment above
         gives. `specs/desktop_app_spec.md` Phase 13 pins it unmoved in all six
@@ -93,9 +94,14 @@
       header {
         flex: none;
         display: flex;
-        align-items: baseline;
-        gap: 8px;
-        padding: 8px 12px;
+        align-items: center;
+        gap: 4px;
+        height: 27px;
+        /* Left 8 so a 4px-padded button puts its ink at 12px, where the
+           footer's own marks start; right 12 so the status ends where the
+           brand does. */
+        padding: 0 12px 0 8px;
+        font-size: 11px;
         background: var(--chrome);
         border-bottom: 1px solid var(--edge);
       }
@@ -111,12 +117,70 @@
         background: var(--edge);
       }
       /*
-        The fit control. A `select` and not a row of buttons because the ten
-        choices are one exclusive setting, and because **the list is the
-        cap**: nothing above 400% is offered and no second clamp is written
-        anywhere in this file. The control is the whole surface — there is no
-        pinch and no wheel — so a scale stated twice would be a scale stated
-        once wrongly.
+        The header's two marks. **The footer sets and the header acts**, which
+        is the rule that decided which copy of each control survived: a setting
+        is left where a reader likes it and stops being noticed, so the fold,
+        the gutter and the fit belong in the 24px bar, and an action wants the
+        bar the eye starts at.
+
+        **Drawn rather than borrowed**, which is the footer's own rule applied
+        rather than a taste restated: no glyph in the font means *open a folder*
+        or *write this out*. So a folder, and a floppy of **two internal shapes
+        and not three** — the body with its cut corner and the label block, the
+        shutter dropped, because at 14px the shutter and the label leave three
+        pixels between them and the mark reads as busy before it reads as a
+        floppy. **14px and not the footer's 12**: a 28px bar, and these are the
+        window's two primary actions rather than two toggles beside a file name.
+        `currentColor`, a 1px stroke, and **every coordinate on a half pixel** —
+        the folder's tab apex included — so the stroke lands on the pixel rather
+        than across two of them. The footer's vocabulary unchanged, because two
+        bars drawing marks two ways would be worse than either way alone.
+
+        **The hover ground is the affordance, and it is needed here where the
+        footer does not need it.** The bar's marks are toggles: they carry their
+        state in their ink, so a reader who presses one is told it took. These
+        two are actions with no state to carry, and a bare mark on a bar says
+        nothing about being pressable — so the ground comes up on hover.
+        **`--edge` and not a new token**: it is `--chrome`'s contrast neighbour
+        in both palettes, darker in light and lighter in dark, so one
+        declaration wins both ways.
+
+        **22px in a 28px bar** — a 14px mark and 4px of padding, leaving 2.5px
+        of air above and below. A `button` brings a border, a radius, a padding
+        and a ground of its own, and all four come off.
+      */
+      header button {
+        flex: none;
+        display: flex;
+        align-items: center;
+        padding: 4px;
+        border: 0;
+        border-radius: 3px;
+        background: none;
+        color: var(--quiet);
+        font: inherit;
+        line-height: 1;
+        cursor: pointer;
+      }
+      header button:hover {
+        background: var(--edge);
+        color: var(--ink);
+      }
+      header button svg {
+        display: block;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      /*
+        The fit control, which the footer carries and the header does not. A
+        `select` and not a row of buttons because the ten choices are one
+        exclusive setting, and because **the list is the cap**: nothing above
+        400% is offered and no second clamp is written anywhere in this file.
+        The control is the whole surface — there is no pinch and no wheel — so
+        a scale stated twice would be a scale stated once wrongly.
       */
       select {
         font: inherit;
@@ -294,39 +358,14 @@
       }
       /*
         Collapsed is not hidden, and the two are different states. No document
-        open at all has no panel and no toggle — `hidden`. A reader who folded
-        the panel away keeps the toggle, so they can get it back — `.collapsed`.
+        open at all has no panel and no `#views-files` — `hidden`. A reader who
+        folded the panel away keeps that mark, so they can get it back —
+        `.collapsed`.
       */
       #files.collapsed {
         display: none;
       }
 
-      /*
-        The toggle. Leftmost in the header because it works the leftmost pane,
-        and text rather than an icon because every other control here is text.
-        The chevron turns; it does not redraw.
-      */
-      #toggle {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-      }
-      #toggle[hidden] {
-        display: none;
-      }
-      #toggle::before {
-        content: '';
-        width: 0;
-        height: 0;
-        border: 4px solid transparent;
-        border-left-color: currentColor;
-        border-right: 0;
-        transform-origin: 25% 50%;
-        transition: transform 120ms ease;
-      }
-      #toggle[aria-expanded='true']::before {
-        transform: rotate(90deg);
-      }
       /*
         The heading is a row so the one control the panel itself carries can sit
         at its end, where `.mark` and `.set` sit on a file's row — `margin-left:
@@ -657,11 +696,6 @@
           Menlo,
           monospace;
         tab-size: 4;
-      }
-
-      /* A view toggle that is on. The panel's chevron turns; this one fills. */
-      #numbers[aria-pressed='true'] {
-        background: var(--edge);
       }
 
       /*
@@ -1079,12 +1113,12 @@
         `min-width: 0` was load-bearing by itself. Both are kept: the first says
         what is meant, the second is wanted anyway for the ellipsis. With the
         cell as it stands the footer holds one line and keeps `Letur` standing
-        down to a 240px viewport. **The header has no equivalent rule**, and its behaviour is
-        the contrast this bar is drawn against rather than a defect it fixes: it
-        is `flex-wrap: nowrap`, so it never wraps as a row — instead its items'
-        own text wraps inside them and the bar grows taller, below a width its
-        seven children derive, 555 + six 8px gaps + 24px of padding = 627px.
-        Shipped behaviour, and not this phase's to rewrite.
+        down to a 240px viewport. **The header keeps its line a different way**,
+        and the contrast this bar was drawn against has gone with it: while the
+        header carried seven children their own text wrapped inside them and the
+        bar grew taller below 627px. It carries three now and pins its `height`,
+        so it neither wraps nor grows — and what a pin can hide instead is an
+        overflowing child, which is what `app/harness/checks.mjs` clause 3 reads.
 
         **Both cells are `--quiet`, chosen rather than defaulted to.** The file
         name is a readout and the brand a signature, and at 10px on the chrome
@@ -1135,11 +1169,10 @@
         gap: 8px;
       }
       /*
-        The bar's own view toggles, at the left because they work the leftmost
-        panes — the same reason `#toggle` is the header's first control. The
-        header's two are still shipped and untouched; this is the fit's
-        duplication again, one setting with two controls, and a press on either
-        copy moves both.
+        The view toggles, at the left because they work the leftmost panes.
+        **These are the only two, and the bar is where a setting belongs**: the
+        header briefly carried a copy of each, and the fit beside them, until
+        the shape had been looked at — the footer sets and the header acts.
 
         **Chromeless, because the bar is 23px and a `button` is not.** A button
         brings a font, a padding, a border and a background of its own, and all
@@ -1147,10 +1180,11 @@
         one rule rather than repeating it.
 
         **On is ink and off is quiet, and both toggles are marked the same
-        way.** The header marks a folded panel with a turning chevron and a
-        pressed `Lines` with a filled background; neither survives at 10px in a
-        bar whose entire ink is one colour, and two view toggles standing side
-        by side would be worse for being marked by two different devices.
+        way.** The header's copies marked a folded panel with a turning chevron
+        and a pressed `Lines` with a filled background; neither would survive at
+        10px in a bar whose entire ink is one colour, and two view toggles
+        standing side by side would be worse for being marked by two different
+        devices.
       */
       #views {
         flex: none;
@@ -1191,16 +1225,14 @@
         stroke-linecap: round;
       }
       /*
-        The bar's own copy of the fit. **A second control on one setting and
-        not a second setting**: both selects carry the same ten options,
-        `showFit` writes a chosen value to both, and either one's `change` runs
-        the one handler. Duplicated rather than moved while it is being looked
-        at — the header's copy is shipped behaviour and this pass does not
-        touch it.
+        The fit, and the bar is the only place it is offered. `showFit` writes
+        a chosen value to it and its `change` runs the one handler — the shape
+        a second copy in the header needed, kept because it costs nothing and
+        `fitControls` is still what the writer walks.
 
         **It must not change the bar's height**, which is the whole of what
-        this footer costs `main`. At the bar's 10px the header's `select` rule
-        — 3px of padding and a border — puts the box at the footer's full
+        this footer costs `main`. At the bar's 10px the shared `select` rule
+        above — 3px of padding and a border — puts the box at the footer's full
         23px, so both come off. What is left is the native arrow, which is the
         part that says the text can be pressed.
       */
@@ -1230,39 +1262,33 @@
     </style>
   </head>
   <body>
-    <header>
-      <button id="toggle" type="button" aria-expanded="true" aria-controls="files" hidden>
-        Files
-      </button>
-      <button id="numbers" type="button" aria-pressed="false" aria-controls="lines">
-        Lines
-      </button>
-      <!--
-        How the page fits the pane. The header sits above `main`, so unlike
-        the section panel and the line gutter this control takes no width out
-        of the column the pages are measured from.
+    <!--
+      The header's element children, in order: `#open`, `#save`, `#status`.
+      **Two actions and a status line, and nothing that decides what the window
+      shows** — the fold, the gutter and the fit are the bar's, one copy each.
+      Open and Save act on the document the author is editing, the file `⌘S`
+      writes and the title bar names. *Save a Copy…* is neither, and it is the
+      `File` menu's alone: it writes a **derived artifact** to a path the author
+      picks once, so `app/src/main.rs:export`, the item and its
+      `Shift+CmdOrCtrl+S` all stand and only the button here went.
 
-        **Nothing above 400% is offered, and that edge is the cap itself.** A
-        pinned page costs `7.645·s²` MiB of backing store at `devicePixelRatio`
-        2 whatever the pane measures, so one page alone crosses the 128 MiB
-        budget above about 410% — `sqrt(128 / 7.645) = 4.09` — where holding
-        fewer pages has stopped being a lever, one being the floor.
-      -->
-      <select id="fit" aria-label="How the page fits the pane">
-        <option value="width" selected>Fit width</option>
-        <option value="page">Fit page</option>
-        <option value="0.5">50%</option>
-        <option value="0.75">75%</option>
-        <option value="1">100%</option>
-        <option value="1.25">125%</option>
-        <option value="1.5">150%</option>
-        <option value="2">200%</option>
-        <option value="3">300%</option>
-        <option value="4">400%</option>
-      </select>
-      <button id="open" type="button">Open…</button>
-      <button id="save" type="button">Save</button>
-      <button id="export" type="button">Save a Copy…</button>
+      **Each mark carries `title` and `aria-label` both**, `wearAppearance`'s
+      rule and the footer's: a bare mark names nothing to a screen reader.
+      `Save` and not `Save as…` — a button that says what it will do next
+      release is the defect this phase's own deferral invites.
+    -->
+    <header>
+      <button id="open" type="button" title="Open…" aria-label="Open…">
+        <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false">
+          <path d="M0.5 11.5 V2.5 H5.5 L7.5 4.5 H13.5 V11.5 Z" />
+        </svg>
+      </button>
+      <button id="save" type="button" title="Save" aria-label="Save">
+        <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false">
+          <path d="M1.5 1.5 H9.5 L12.5 4.5 V12.5 H1.5 Z" />
+          <rect x="3.5" y="8.5" width="7" height="4" />
+        </svg>
+      </button>
       <span id="status"></span>
     </header>
     <main>
@@ -1369,19 +1395,19 @@
     -->
     <footer>
       <!--
-        The header's `Files` and `Lines`, with their ARIA carried across rather
+        `Files` and `Lines`, with their ARIA the shape the state is in rather
         than invented: the panel fold is `aria-expanded` on a control that owns
-        `#files`, the gutter is `aria-pressed` on one that owns `#lines`.
-        **Both copies of a toggle carry the same state**, so a reader who folds
-        the panel from the header finds the bar's copy already saying so.
+        `#files`, the gutter is `aria-pressed` on one that owns `#lines`. **Each
+        is the only control on its setting.** The header carried a copy of both
+        while the bar was being looked at, and `showFold`, `offerFold` and the
+        gutter's writer still walk a list for that reason.
 
         **Marks and not words, which is the bar's own vocabulary**: `#theme`
         beside them is a glyph, and three text buttons in a 23px bar would read
         as a second header rather than a status line. **A mark names nothing to
         a screen reader**, so each carries `title` and `aria-label` both — the
         rule `wearAppearance` wrote for the first mark this bar carried — and
-        the word each says is the header's own, because these are the same two
-        controls and not new ones.
+        the word each says is the one the mark draws.
 
         **Drawn rather than borrowed.** No glyph in the font means *a panel*,
         and the two that come closest — `▥` and `☰` — differ by their fill at
@@ -1397,9 +1423,8 @@
         by 4, half a pixel high of centre, and crisp. A straddled rule is visible
         at 1x; half a pixel of offset in a 12px mark is not.
 
-        `hidden` on the `Files` copy for the same reason the header's carries
-        it: with no document open there is no panel, so there is nothing to
-        fold.
+        `hidden` on `Files`, `offerFold` the only writer of it: with no document
+        open there is no panel, so there is nothing to fold.
       -->
       <span id="views">
         <button
@@ -1438,10 +1463,10 @@
       <span id="edited"></span>
       <span id="controls">
         <!--
-          The header's ten options, transcribed. **The list is the cap** and it
-          is now written twice, which is the one thing this duplication costs:
-          the two must not drift. Nothing enforces that yet — while the shape is
-          being looked at, a copy is the cheapest way to see it.
+          **The list is the cap**, and it is written once. It was briefly
+          written twice — the header carried a second select while the shape was
+          being looked at — and a cap stated twice is a cap stated once wrongly,
+          which is what ended that.
         -->
         <select id="fit-footer" aria-label="How the page fits the pane">
           <option value="width" selected>Fit width</option>
@@ -1615,16 +1640,16 @@
       const error = document.getElementById('error')
       const status = document.getElementById('status')
       /*
-        Every control that carries the fit. **Two selects, one setting**: the
-        header's and the footer's hold the same ten options, so a value chosen
-        on either has to show on both or the two disagree about a scale the
-        page holds once. `showFit` is the only writer, and the `change`
-        listener below is installed on each rather than duplicated.
+        Every control that carries the fit — **one today, and a list because
+        the setting is what this names rather than the control**. The header
+        held a second select while the bar's shape was being looked at, and a
+        value chosen on either had to show on both or the two disagreed about a
+        scale the page holds once. `showFit` stays the only writer, and the
+        `change` listener below is still installed per control rather than
+        written against an id, which is what made withdrawing the second copy
+        one line.
       */
-      const fitControls = /** @type {HTMLSelectElement[]} */ ([
-        document.getElementById('fit'),
-        document.getElementById('fit-footer')
-      ])
+      const fitControls = /** @type {HTMLSelectElement[]} */ ([document.getElementById('fit-footer')])
 
       /**
        * Show a fit on every control that carries it.
@@ -2027,13 +2052,13 @@
       const files = document.getElementById('files')
       const list = document.getElementById('parts')
       /*
-        Every control that folds the panel — the header's and the bar's.
-        **Two controls, one setting**, the fit's arrangement again: `showFold`
-        is the only writer of the state onto them, `offerFold` the only writer
-        of whether they are there at all, and the `click` listener below is
-        installed on each rather than written twice.
+        Every control that folds the panel — the bar's, and no other since the
+        header gave its copy up. The fit's arrangement, for the fit's reason:
+        `showFold` is the only writer of the state onto them, `offerFold` the
+        only writer of whether they are there at all, and the `click` listener
+        below is installed per control rather than against an id.
       */
-      const foldControls = [document.getElementById('toggle'), document.getElementById('views-files')]
+      const foldControls = [document.getElementById('views-files')]
 
       /*
         Folded or not, held in the page. **Decided there rather than in
@@ -3933,8 +3958,9 @@
       const lines = document.getElementById('lines')
       const mirror = document.getElementById('mirror')
       /* Every control that shows the gutter, on the fold's arrangement: the
-         press is read off the control that was pressed and written to both. */
-      const lineControls = [document.getElementById('numbers'), document.getElementById('views-lines')]
+         press is read off the control that was pressed and written to every
+         one. One control since the header gave its copy up. */
+      const lineControls = [document.getElementById('views-lines')]
 
       // What the gutter was last built for, so an event that changed neither
       // costs nothing.
@@ -4188,7 +4214,6 @@
       document.getElementById('discard').addEventListener('click', discardEdits)
       document.getElementById('open').addEventListener('click', openDocument)
       document.getElementById('save').addEventListener('click', saveDocument)
-      document.getElementById('export').addEventListener('click', exportDocument)
       listen('open', openDocument)
       listen('save', saveDocument)
       listen('export', exportDocument)
