@@ -18,9 +18,10 @@ covers: >
   the pages the reader is near and the observer that reports them, the two terms
   a raster's freshness turns on, the one drawing pass and the rest it re-checks
   before every page, the release that zeroes a canvas and the two sweeps that
-  catch one, the reading a box height is taken by and the engine its literals
-  belong to, and the surface the pane publishes for its own gate
-max_lines: 355
+  catch one, the reading a box height is taken by, the engine its literals belong
+  to and which of them is history, and the surface the pane publishes for its own
+  gate
+max_lines: 370
 generated: null
 ---
 
@@ -58,15 +59,14 @@ the rounded CSS box as `logical.w / natural.w` is a different number and never
 equals a fit-page derivation, so every rest would re-lay the document out for
 nothing.
 
-**The control is a `<select>` in each bar — `#fit` in the header and
-`#fit-footer` in the footer, two controls on one setting — and its option list is
-the cap.** `Fit width`, `Fit page`, then `50% · 75% · 100% · 125% · 150% · 200% ·
-300% · 400%`. Nothing above 400% is offered and no second clamp is written
-anywhere: there is no pinch and no wheel, so the two selects are the whole
-surface, and a scale stated twice would be a scale stated once wrongly. **The
-list itself is now written twice and nothing enforces that the two match**, which
-is exactly that hazard in the one place the duplication put it; `showFit` writes a
-chosen value to both, so only the markup can drift. **400% is the
+**The control is one `<select>` — `#fit-footer`, in the footer — and its option
+list is the cap.** `Fit width`, `Fit page`, then `50% · 75% · 100% · 125% · 150% ·
+200% · 300% · 400%`. Nothing above 400% is offered and no second clamp is written
+anywhere: there is no pinch and no wheel, so that select is the whole surface, and
+a scale stated twice would be a scale stated once wrongly — which is what ended the
+header's own copy, the list having been written twice for as long as it stood.
+`showFit` writes a chosen value to every control that carries it, so only the
+markup could ever drift. **400% is the
 last step that fits the budget**: a pinned page costs `7.645·s²` MiB of backing
 store at `devicePixelRatio` 2 whatever the pane measures, so above about 410% —
 `√(128 / 7.645) = 4.09` — one page alone exceeds 128 MiB, where holding fewer
@@ -120,23 +120,28 @@ anchor stays *(page, vertical fraction)*.
 
 **A box height is read off `getBoundingClientRect().height` and never off
 `offsetHeight`**, and the difference is a correctness point rather than a style one.
-`offsetHeight` is an integer. The page's own three boxes — `header`, `main`, `footer`
-— sum to `innerHeight` exactly by rects, and by `offsetHeight` they overshoot it by
-one **at some viewports and not at others**: the header is 46.5px at the body's
-13px/1.5, which rounds to 47. Measured at two viewports rather than reasoned about: at a
-616px viewport the rects give 616 where the same three `offsetHeight`s give 617, and
-at 700px both give 700. A check written the obvious way therefore fails on correct
-code, intermittently, at window sizes its author did not try.
+`offsetHeight` is an integer, so a sum of three of them can overshoot `innerHeight`
+by one at some viewports and not at others where the same three rects are exact —
+and a check written the obvious way then fails on correct code, intermittently, at
+window sizes its author did not try.
+
+**The reading that established the rule can no longer occur in this page**, and
+which it is worth saying rather than leaving as a live instance. It was the header,
+46.5px at the body's 13px/1.5 and rounding to 47: at a 616px viewport the rects gave
+616 where the three `offsetHeight`s gave 617, and at 700px both gave 700. Both bars
+are integers now — the header pins 27 and its 1px rule, the footer 23 and its own —
+so the overshoot has nowhere to come from here. The rule is unaffected and stays.
 
 **Those literals are the engine's and not the page's**, which is the second half of
-the rule and the one a reader is likelier to get wrong. Chromium reads the 46.5, and
-66px and 80.5px for a header whose items have wrapped at 620 and 500. The WKWebView
-this ships on reads 47 and 79 — whole numbers — and at the window measured its three
-`offsetHeight`s agreed with its rects, so the overshoot above did not appear there at
-all. **A clause keyed to a height literal is keyed to an engine.** Key it to the
-property instead — the sum is exact, the footer does not move, the header grows —
-which is what `tests/gates/mpdf-003-phase11.js` does, and why it reads the same on
-both.
+the rule and the one a reader is likelier to get wrong. Chromium read the 46.5, and
+66px and 80.5px for a header whose items had wrapped at 620 and 500; the WKWebView
+this ships on read 47 and 79 — whole numbers — and at the window measured its three
+`offsetHeight`s agreed with its rects, so the overshoot did not appear there at all.
+The header's 28 is that distinction again: it is WKWebView's figure for the bar that
+read 47 there and 46.5 in Chromium. **A clause keyed to a height literal is keyed to
+an engine.** Key it to the property instead — the sum is exact, and each bar is the
+box its own rule declares — which is what `app/harness/checks.mjs` clauses 2 and 3
+do, and why they read the same in both.
 
 **A page is separated from the next by 16 CSS pixels, and the container adds
 nothing at its own sides.** The gap is the top margin on each page's

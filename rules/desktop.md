@@ -175,7 +175,10 @@ a `File` submenu carrying `Open…` at `CmdOrCtrl+O`, `Save` at `CmdOrCtrl+S` an
 submenu. **No item acts on its own.** Each emits an event of its own id to the
 window, and the page invokes, so a menu item and the button beside it run one
 code path and not two — which is why `Save` emits too, though it opens no dialog
-and so costs no capability. `core:default` already carries
+and so costs no capability. **`Open…` and `Save` have that button, in the header;
+`Save a Copy…` is the menu's alone**, its header button withdrawn on the argument
+that the other two act on the document being edited where the export writes a
+derived artifact. `core:default` already carries
 `core:event:allow-listen`, so neither those events nor the `rendered` signal
 below needs an entry either.
 

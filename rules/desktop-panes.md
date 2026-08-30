@@ -17,8 +17,11 @@ covers: >
   redraw that moves the reader and the three causes that decide where to, the
   anchor path that opens on the author's own page and the one file it is
   filtered to, the status the page places and never composes, the bar along the
-  foot, the four cells and two rules it carries and the three duplicated
-  settings inside them, the two marks it draws rather than borrows, the file it
+  top and the two actions it keeps, the marks it draws for them and the ground
+  that says they can be pressed, the rule that decided which of the two bars a
+  control belongs to and the third thing that is neither, the bar along the
+  foot, the four cells and two rules it carries and the one control each of its
+  settings has, the two marks it draws rather than borrows, the file it
   names, the one it does not and the figure that is neither,
   the appearance the author chooses and the four token blocks that wear it, the
   button's two positions against the three values behind them and the state that
@@ -45,7 +48,7 @@ covers: >
   asserts as properties and the nine broken pages that falsify them, the second
   rig that drives the shipped binary instead and which of the three kinds of
   claim belongs where, and the seven defects none of them reaches
-max_lines: 615
+max_lines: 635
 generated: 2026-08-28
 ---
 
@@ -204,6 +207,36 @@ through broken states constantly and blanking the pane would lose their place.
 read, an export the pane cannot serve — and the next status replaces what it
 wrote.
 
+## The header
+
+A bar along the top: 27px and its own 1px rule, so 28px out of `main`. **Its element
+children, in order — `#open`, `#save`, `#status` — are two actions and a status line,
+and nothing that decides what the window shows**, which is the rule the two bars are
+split on: **the footer sets and the header acts**. A setting is left where a reader
+likes it and stops being noticed, so the fold, the gutter and the fit are the footer's
+one copy each; an action wants the bar the eye starts at. *Save a Copy…* is neither and
+is argued on its own — Open and Save act on the document being edited, the file `⌘S` writes
+and the title bar names, where the export writes a **derived artifact** to a path picked
+once — so it is the `File` menu's alone, `app/src/main.rs:export`, the item and its
+`Shift+CmdOrCtrl+S` all standing with no button beside them.
+
+**Two marks, drawn rather than borrowed**, the footer's rule rather than a taste
+restated: no glyph means *open a folder* or *write this out*. A folder, and a floppy of
+**two internal shapes and not three**, the shutter dropped as busy at 14px. **14px
+against the footer's 12**, these being the window's two primary actions and not two
+toggles beside a file name, in a 22px button leaving 2.5px of air; every coordinate on a
+half pixel; `currentColor`, a 1px stroke, `title` and `aria-label` saying `Open…` and
+`Save` — the footer's vocabulary unchanged. **The hover
+ground is the affordance, and the footer needs none**: its marks are toggles carrying
+their state in their ink, these two are actions with none to carry, so `var(--edge)`
+comes up behind them at a 3px radius and the ink goes `--quiet` to `--ink`. **`--edge`
+and not a new token** — `--chrome`'s contrast neighbour in both palettes.
+
+`#status` sits at the end on an auto margin, four states composed in Rust and placed by
+`report`, wearing the bar's own 11px rather than the body's 13px. **Nothing reads the
+header's element order, its 12px shared left column or its 22px button** — clause 1 asserts
+`body`'s children, clause 3 the bar's box, and a person the marks.
+
 ## The footer
 
 A bar along the foot of the window: 23px and its own 1px rule, so 24px taken out of
@@ -239,17 +272,13 @@ much. **Page state, for `folded`'s reason**: it decides nothing but its own draw
 and `hideAsset` is the one exit all three ways back go through. **Nothing marks that
 `edited` may differ from `main`** — the panel below draws that distinction.
 
-**Three of the bar's settings are the header's, duplicated rather than moved, and all
-three take one shape: one setting, two controls, one writer.** The fit has
-`fitControls` and `showFit`, the fold `foldControls`, `showFold` and `offerFold`, the
-gutter `lineControls`. In each the listener is installed on every control rather than
-written twice, the new value is read off *the control that was pressed*, and every
-writer writes both — so **neither copy is the original**: a bar that could only receive
-would leave a reader who folded the panel from the header looking at a footer that
-disagreed. A move is the larger decision and was not taken; a second placement can be
-withdrawn in a line where a move cannot. **What the copy costs is stated rather than
-hidden**: the fit's ten options are written twice, nothing enforces that the two lists
-match, and `rules/desktop-geometry.md` records that the option list *is* the cap.
+**Three of the bar's settings have one control each, and the bar is where a setting
+goes**: the footer sets and the header acts. The fit has `fitControls` and `showFit`,
+the fold `foldControls`, `showFold` and `offerFold`, the gutter `lineControls`. Each was
+briefly two — the header carried a copy while the bar's shape was being looked at — and
+the shape of that survives: the listener is installed on every control rather than
+against an id and the new value is read off *the control that was pressed*, which is
+what made withdrawing the second copy one line.
 
 **The two view toggles are drawn marks where the appearance toggle stays a glyph, and
 that is one rule rather than an inconsistency: a mark a glyph names is a glyph, a mark
@@ -265,8 +294,8 @@ declaration: **on is `--ink`, off is `--quiet`, for both**, and neither of the h
 devices — a turning chevron, a filled background — is carried across, neither surviving
 at 10px in a bar whose entire ink is one colour. **A bare mark names nothing to a
 screen reader**, so each carries `title` and `aria-label` both, `wearAppearance`'s
-rule, and the word each says is the header's own: `Files` and `Lines`, the same two
-controls and not new ones. `app/driver/drive.mjs` read them 12x12 in the shipping
+rule, and the word each says is the one its mark draws: `Files` and `Lines`.
+`app/driver/drive.mjs` read them 12x12 in the shipping
 WKWebView, each in its two inks.
 
 **It duplicates the window title**, which `main.rs:set_edited` sets to the same
@@ -317,8 +346,8 @@ with an attribute selector, so winning in *both* directions takes both —
 out, and `:root[data-theme='dark']` to opt in. **No attribute at all is the third
 state** and it is the page's own earlier behaviour unchanged, which is why `system`
 removes the attribute rather than setting a third value. `color-scheme` follows all
-three ways and is not decoration: it paints the `#fit` select, its native arrow and
-the scrollbars. **`--paper` is in none of them** — the page Typst compiles is white in
+three ways and is not decoration: it paints the `#fit-footer` select, its native arrow
+and the scrollbars. **`--paper` is in none of them** — the page Typst compiles is white in
 either palette — and `checks.mjs` pins it unmoved in all six system-by-state
 readings, which is what keeps `specs/desktop_app_spec.md` §1.1's narrowing honest:
 this app themes its own chrome and nothing about the document.
@@ -347,16 +376,12 @@ identically in Chromium and WebKit, and held now by `app/harness/checks.mjs`: it
 sweep, and the `flex-min` mutation that falsifies it. The literals are name-dependent and
 stay where they were taken, in `specs/desktop_app_spec.md` Phase 12. `flex: none` on
 `#brand` was not shown to matter at any width tested. As the cell stands the footer holds
-one line and keeps the brand down to a 240px viewport. **The header has no equivalent
-rule**, and its behaviour is the contrast rather than a defect: it is `flex-wrap: nowrap`,
-so it never wraps *as a row* — its items' own text wraps inside them and the bar grows
-taller, below the 627px its seven visible children derive (555px, six 8px gaps and 24px of
-padding). **That threshold and the heights under it are Chromium's**, and
-`rules/desktop-geometry.md` has why that matters: there the header is 47px above the width,
-66px at 620 and 81px at 500, where the WKWebView this ships on reads 47 above and 79 below.
-The widths it has been measured at there — 445 and 677 — do not bracket 627, so the derived
-figure is unconfirmed in the shipping engine. **What holds in both is the shape**: the
-header grows and the footer does not.
+one line and keeps the brand down to a 240px viewport. **The header holds its line a
+different way and neither bar grows**: it pins `height: 27px`, so what a wrap can do
+there is not get taller but push a child out of the box — the half `header-wraps`
+falsifies and clause 3 reads. It did grow while it carried seven children, below the
+627px they derived, and `rules/desktop-geometry.md` keeps those heights as the
+measurement that established its own rule rather than as a live reading.
 
 **The three boxes sum to `innerHeight` exactly**, which is how the bar's cost is
 checked. `rules/desktop-geometry.md` has the reading that sum must be taken by, and
@@ -619,9 +644,11 @@ that asked Rust to are indistinguishable from the DOM. `checks.mjs`
 asserts twelve clauses in Playwright's Chromium and WebKit, **both of which must pass, every
 clause a property and none a metric literal**, and is falsified first against nine broken copies
 of the page, each failing exactly the clause it owns. **Two mutations may own one clause
-without either being redundant**: `views-one-way` reaches the sync between a toggle's two
-copies and `marks-unlit` reaches the mark, and the clause asserts both because with the
-words gone the only visible difference between on and off is a colour. The error clause stays last and its
+without either being redundant**, and clause 3 is where that now stands: `flex-min` reaches
+the footer's half, the brand pushed out of a bar that holds one line, and `header-wraps`
+the header's, a pinned box whose children have left it. Clause 10 was the other such pair;
+`views-one-way` went when the header gave its copies up, a copy that cannot disagree being
+no copy, and `marks-unlit` owns that clause alone. The error clause stays last and its
 number moves as clauses are added, being the only one that accumulates across the others.
 **One clause drives two colour schemes**, `light` being written down as the default rather
 than inherited from Playwright, because the palette has to win in both directions and a

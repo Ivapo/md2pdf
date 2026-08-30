@@ -85,7 +85,7 @@ phases:
     by: null
   - name: "Phase 16 — the header sheds what the footer carries"
     reviewed: 2026-08-30
-    shipped: null
+    shipped: 2026-08-30
     cut: null
     by: null
 
@@ -1039,6 +1039,12 @@ list to one item.
   and `aria-label`. Tab order is DOM order by construction, nothing setting `order` or
   `tabindex`, and nothing checks it. Still a pass over the landmarks rather than one
   control, over four times as much surface.
+  **Noted 2026-08-30, by Phase 16: unanswered and wider again, and no longer only the
+  footer's question.** The header now carries **two controls with no text either**,
+  named only by `title` and `aria-label`, so the window's bare marks have gone from two
+  to four while its worded buttons have gone from five to none. Nothing checks tab order
+  in either bar. The pass this wants is over the window's landmarks and every mark in
+  them, not over one bar.
 
 - **OQ-12** — ~~should the appearance marks be glyphs or inline SVG? Raised 2026-08-29 by
   Phase 13. *(design call)* `◐ ☀ ☾` measured stable and legible at 10px — 9.23, 9.23 and
@@ -3698,6 +3704,17 @@ disk and have to work out why.
   the option list *is* the cap, so a copy that drifts is a cap stated twice and
   therefore stated once wrongly. **This phase does not fix that**, and naming it
   here is what stops it being smuggled past as an oversight.
+
+  > **CORRECTED 2026-08-30, by Phase 16.** The paragraph above is kept as it was
+  > written and its opening decision has been taken the other way. Duplicated was
+  > the decision *then*, and this phase named in advance what would end it — *"a
+  > second placement can be withdrawn in a line where a move cannot"*. Phase 16 is
+  > that withdrawal: `#toggle`, `#numbers` and `#fit` are gone from the header and
+  > the bar's three are the one copy of each, under a rule that phase introduces —
+  > the footer sets and the header acts. **The cost this paragraph states is
+  > therefore also gone**: the fit's ten options are written once. Everything else
+  > Phase 15 decided — the footer's controls, the four cells, the two drawn marks —
+  > stands exactly as it shipped.
 
   **The bar's element children, in order, with their ids.** Stated exactly for
   Phase 11's reason — a clause keyed to an arrangement the spec never gives is one

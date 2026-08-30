@@ -7,7 +7,7 @@ note: >
   rather than a transform, the type is sharp at the display's own resolution,
   and the text and links come back with it.
 status: accepted
-last_updated: 2026-08-26
+last_updated: 2026-08-30
 
 phases:
   - name: "Phase 1 — the page is drawn here"
@@ -1045,6 +1045,16 @@ a decision the prototype had not been asked to exercise; this text folds them in
   400%`. A change sets `fitMode`/`fitScale` and runs the fit-change path below.
   **`window.__pane` gains `fit` and `scale`**, because the gate reads them and
   nothing else can. No pinch, no wheel: the control is the whole surface.
+
+  > **CORRECTED 2026-08-30, by `mpdf-003` Phase 16.** The first sentence above is
+  > kept as it was written and its *placement* is no longer true: the control is
+  > `<select id="fit-footer">` in the footer bar, and there is nothing beside it
+  > called `Lines`. **Everything else in this paragraph stands** — the ten options,
+  > the list being the cap, `fitMode`/`fitScale`, `window.__pane.fit` and `scale`,
+  > and no pinch and no wheel — which is why this is a dated note and not a
+  > `supersedes`: `mpdf-009` Phase 3 built all of it and all of it ships. What
+  > changed is which of the window's two bars carries it. `mpdf-003` Phase 15 put a
+  > second copy in the footer and Phase 16 withdrew the header's.
 
   **The scale is chosen in `layoutPages` and nowhere else**, one expression per
   fit: `paneWidth / natural.w` under width, **`min(paneWidth / natural.w,
