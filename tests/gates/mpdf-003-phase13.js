@@ -16,11 +16,13 @@
        browser has a title bar. From the page that call would reject —
        `core:default` is the window's getters and no setter — but the command
        makes it from Rust, where capabilities do not apply.
-     * **`◐ ☀ ☾` render alike in WKWebView.** They measured 9.23 / 9.23 / 9.22px
-       in Playwright's Chromium and WebKit, identical to the digit, with the
+     * **`☀ ☾` render alike in WKWebView.** Measured 9.23 / 9.22px in this
+       window on 2026-08-29 and identical in Playwright's two engines, with the
        brand not moving as they swap — but Phase 12's own note records that
-       neither engine is this one. `specs/desktop_app_spec.md` OQ-12 is what
-       this answers, and its answer may be three small inline paths instead.
+       neither of those is this one, which is why it is asked here.
+       `specs/desktop_app_spec.md` OQ-12 is what this answers. **`◐` is gone**:
+       the button has two positions, and the third value is the unset state
+       rather than a destination.
      * **the launch does not flash the other palette.** That is a claim about a
        frame, and only a relaunch can see it. **This clause failed on its first
        run, on 2026-08-29, and the phase's named fallback was taken**: reading
@@ -85,7 +87,12 @@
   const { getCurrentWindow } = window['__TAURI__'].window
 
   const APPEARANCES = ['system', 'light', 'dark']
-  const MARK = { system: '◐', light: '☀', dark: '☾' }
+  const MARK = { light: '☀', dark: '☾' }
+  /* What the *page* should be showing for a given value, which for the unset
+     state is whatever the machine is giving. Read the same way the page reads
+     it, so a disagreement is the page's and not this gate's arithmetic. */
+  const inEffect = (a) =>
+    a === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : a
 
   let noise = 0
   let loops = 0
@@ -196,8 +203,19 @@
     await settled()
   }
 
-  /** What this session found the appearance at, so it can be put back. */
-  let found = null
+  /** What the FIRST window found the appearance at, so it can be put back.
+      **Kept beside the transcript**, because `restore()` runs after the relaunch
+      and the relaunched window finds the value `flash()` deliberately stored —
+      which on the run of 2026-08-29 put the appearance back at `dark` rather
+      than where the run started. */
+  const FOUND = 'mpdf-003-phase13-found'
+  let found = (() => {
+    try {
+      return localStorage.getItem(FOUND)
+    } catch {
+      return null
+    }
+  })()
 
   window.__gate = {
     /** The whole run, both windows, and its own tally derived from the lines
@@ -216,7 +234,13 @@
         the relaunch adds to the run rather than starting a new one. */
     forget() {
       transcript.length = 0
+      found = null
       keep()
+      try {
+        localStorage.removeItem(FOUND)
+      } catch {
+        /* The in-memory reset above is the one that matters. */
+      }
       console.log(
         '%cforgotten%c  — now run: await __gate.arm()',
         'font-weight:bold;color:#1a73e8',
@@ -249,8 +273,17 @@
       )
 
       const state = await asked()
-      found = state.held
-      note(`the window came up wearing ${JSON.stringify(found)} (${state.how})`)
+      // Only the first arming records it; the second is after `flash()` stored
+      // its own value and would overwrite the thing being preserved.
+      if (found === null) {
+        found = state.held
+        try {
+          localStorage.setItem(FOUND, found)
+        } catch {
+          /* `restore()` then falls back to `system`, and says what it did. */
+        }
+      }
+      note(`this window came up wearing ${JSON.stringify(state.held)} (${state.how}); the run started at ${JSON.stringify(found)}`)
       note(`the window's own theme reads ${await windowTheme()}`)
       note(`the mark on the bar is ${JSON.stringify(themeButton.textContent)}`)
 
@@ -289,7 +322,11 @@
             `window theme ${seen[seen.length - 1].theme}, ` +
             `status says ${seen[seen.length - 1].said}`
         )
-        ask(`LOOK AT THE TITLE BAR NOW — is it ${appearance === 'system' ? 'following the system' : appearance}?`)
+        ask(
+          `LOOK AT THE TITLE BAR NOW — is it ${
+            appearance === 'system' ? `following the system (so, ${inEffect('system')})` : appearance
+          }?`
+        )
         await wait(1500)
       }
 
@@ -300,7 +337,7 @@
       const moved = seen.every((s) => s.said === s.appearance)
       const placed = seen.every(
         (s) =>
-          s.mark === MARK[s.appearance] &&
+          s.mark === MARK[inEffect(s.appearance)] &&
           s.attribute === (s.appearance === 'system' ? null : s.appearance) &&
           s.title === s.label &&
           /appearance/i.test(s.label || '')
@@ -315,24 +352,30 @@
           'If the title bar did NOT follow above, mark this FAIL in your notes and say which state.'
       )
 
-      /* Clause 2. The three widths against each other, and against the brand.
-         **No literal**: Playwright's two engines both said 9.23 / 9.23 / 9.22,
-         but that is a reading from elsewhere and this clause is about here, so
-         what it asserts is that the three agree with one another and that the
-         bar does not move as they swap. */
+      /* Clause 2. The widths against each other, and against the brand. **No
+         literal**: Playwright's two engines both said 9.23 / 9.22, but that is a
+         reading from elsewhere and this clause is about here, so what it asserts
+         is that the marks agree with one another and that the bar does not move
+         as they swap.
+
+         **All three readings, not the two distinct marks**, and deliberately:
+         the unset state must show the same glyph at the same width as whichever
+         of the two it is in effect, so a page that gave `system` a mark of its
+         own would widen the spread here. */
       const widths = seen.map((s) => s.width)
       const spread = Math.max(...widths) - Math.min(...widths)
       const brands = new Set(seen.map((s) => s.brand.toFixed(2)))
+      const marks = new Set(seen.map((s) => s.mark))
       const drawn = widths.every((w) => w > 4 && w < 20)
 
       ok(
         2,
-        'the three marks render alike in WKWebView, and the brand does not move as they swap',
-        spread < 1 && brands.size === 1 && drawn,
+        'the marks render alike in WKWebView, and the brand does not move as they swap',
+        spread < 1 && brands.size === 1 && drawn && marks.size === 2,
         `widths ${widths.map((w) => w.toFixed(2)).join(' / ')} — spread ${spread.toFixed(2)}px; ` +
-          `brand at ${[...brands].join(', ')}. ` +
-          'ALSO LOOK: are all three legible at this size, and does each read as what it means? ' +
-          'If any is a tofu box, a colour emoji or unreadable, that is OQ-12 answered "inline SVG".'
+          `${marks.size} distinct marks ${JSON.stringify([...marks])}; brand at ${[...brands].join(', ')}. ` +
+          'ALSO LOOK: are both legible at this size, and does each read as what it means? ' +
+          'If either is a tofu box, a colour emoji or unreadable, that is OQ-12 answered "inline SVG".'
       )
 
       note(`${noise} uncaught so far, ${loops} of them ResizeObserver`)
@@ -417,11 +460,16 @@
       return tally('launch')
     },
 
-    /** Put the appearance back where `arm()` found it. */
+    /** Put the appearance back where the run's FIRST window found it. */
     async restore() {
       const back = found ?? 'system'
       await wear(back)
-      note(`the appearance is back at ${JSON.stringify((await asked()).held)}`)
+      try {
+        localStorage.removeItem(FOUND)
+      } catch {
+        /* Nothing depends on the removal; the next `forget()` is the reset. */
+      }
+      note(`the appearance is back at ${JSON.stringify((await asked()).held)}, where the run started`)
       return back
     }
   }

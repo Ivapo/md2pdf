@@ -18,8 +18,10 @@ covers: >
   filtered to, the status the page places and never composes, the bar along the
   foot and the three cells it carries, the file it names and the one it does not,
   the appearance the author chooses and the four token blocks that wear it, the
-  one value in the bar the page asks for rather than decides, the auto margin
-  that moved and the reading that can tell it moved, the panel that
+  button's two positions against the three values behind them and the state that
+  is not a destination, the mark that is what is worn rather than what is
+  offered, the one value in the bar the page asks for rather than decides, the
+  auto margin that moved and the reading that can tell it moved, the panel that
   lists the project's files and the two states it keeps apart, the flat entries
   it is drawn from and the folders derived rather than sent, the fold the page
   holds, the three gestures on a row and the two marks it may carry, the two
@@ -39,7 +41,7 @@ covers: >
   because the DOM cannot show one, the ten clauses it
   asserts as properties and the six broken pages that falsify them, and the
   seven defects neither reaches
-max_lines: 530
+max_lines: 545
 generated: 2026-08-28
 ---
 
@@ -233,17 +235,30 @@ this app a rename could leave wrong in silence**, the page being outside every o
 suite here.
 
 **Between them, `#controls` holds `#theme`: the appearance the author chose, and the
-bar's first interactive control.** Three states — `system`, `light`, `dark`, marked
-`◐ ☀ ☾` — cycling in that order. **The page places and never decides**: the value is
+bar's first interactive control.** **Two positions and three values, which is not a
+mismatch**: it gives `light` or `dark`, marked `☀ ☾`, and `system` is what the app
+holds before the button has ever been pressed — the window following the machine, at
+sunset included, until the first press pins it. **There is no way back to following**
+short of deleting `settings.json`, which `specs/desktop_app_spec.md` Phase 13's dated
+note records as overruled knowingly rather than unnoticed, and OQ-13 carries.
+**So the mark is the appearance in effect and never the one on offer**: in the unset
+state it is read off `matchMedia('(prefers-color-scheme: dark)')` and re-read when that
+changes, or the bar would show yesterday's answer at sunset; and the click asks for the
+other of the two read off *that* rather than off the stored value, so the one press a
+person expects from the unset state on a dark machine gives light.
+**The page places and never decides**: the value is
 `Status::appearance`, `report` wears it beside the cell it writes, and the click's
 only act is `invoke('set_appearance')`, so the attribute moves when Rust answers and
-not when the button is pressed. `checks.mjs` owns that as a clause, and the
-`theme-click-direct` mutation — the click rewired to set `data-theme` itself — is
-what makes it a claim rather than a hope, since nothing read off the DOM alone can
-tell the two apart. The button carries `title` and `aria-label`, which is more than
-the bar had; `<footer>` is still an unlabelled `contentinfo` landmark, and
-`specs/desktop_app_spec.md` OQ-11 carries that. The marks are chosen and not
-defended — OQ-12 carries whether they should be inline SVG instead.
+not when the button is pressed. `checks.mjs` owns that as a clause — pressing from
+all three values, the `system` press being what separates *the other of the two* from
+*always dark* — and the `theme-click-direct` mutation, the click rewired to set
+`data-theme` itself, is what makes it a claim rather than a hope, since nothing read
+off the DOM alone can tell the two apart. The button carries `title` and `aria-label`,
+which is more than the bar had; `<footer>` is still an unlabelled `contentinfo`
+landmark, and `specs/desktop_app_spec.md` OQ-11 carries that. **The glyphs are
+measured rather than chosen now**: 9.23 and 9.22px in the shipping WKWebView, the same
+figures Playwright's two engines gave, with `#brand` unmoved as they swap — which is
+OQ-12 resolved against inline SVG.
 
 **The palette is four token blocks where it was two, and the dark values are written
 twice.** The duplication is the pattern: a media query's condition cannot be shared

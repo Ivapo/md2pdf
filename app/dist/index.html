@@ -1467,20 +1467,36 @@
         So the attribute moves when Rust answers, not when the button is
         pressed. `app/harness/checks.mjs` owns that as a clause of its own.
 
-        The marks are chosen and not defended — `specs/desktop_app_spec.md`
-        OQ-12 is what will force that, and its answer may be three small inline
-        paths instead.
+        **The button has two positions and Rust has three values, and that is
+        not a mismatch.** `system` is what the app holds before the author has
+        ever pressed it: the window follows the machine, at sunset included. The
+        button does not offer it as a destination — pressing gives the other of
+        light and dark, and from then on the window is pinned. **The cost is
+        stated rather than hidden**: there is no way back to following except by
+        deleting `settings.json`, which `specs/desktop_app_spec.md` Phase 13's
+        own note records as a decision taken with that known.
+
+        **So the mark is the appearance in effect, never the one on offer.** In
+        the unset state that is whatever the system is giving, which is why
+        `system` has no mark of its own and why the media query below is
+        listened to: at sunset, with nothing chosen, the bar would otherwise
+        show yesterday's answer.
       */
       const themeButton = /** @type {HTMLButtonElement} */ (document.getElementById('theme'))
-      /** @type {Appearance[]} */
-      const APPEARANCES = ['system', 'light', 'dark']
-      const APPEARANCE_MARK = { system: '◐', light: '☀', dark: '☾' }
-      const APPEARANCE_SAYS = {
-        system: 'Appearance: following the system',
-        light: 'Appearance: light',
-        dark: 'Appearance: dark'
-      }
-      /** The appearance last placed, which is the one the next click cycles off.
+      const APPEARANCE_MARK = { light: '☀', dark: '☾' }
+      const APPEARANCE_SAYS = { light: 'Appearance: light', dark: 'Appearance: dark' }
+      const systemIsDark = matchMedia('(prefers-color-scheme: dark)')
+
+      /**
+       * Which of the two the window is actually wearing.
+       *
+       * @param {Appearance} appearance
+       * @returns {'light' | 'dark'}
+       */
+      const inEffect = (appearance) =>
+        appearance === 'system' ? (systemIsDark.matches ? 'dark' : 'light') : appearance
+
+      /** The appearance last placed, which is what the next click is read off.
           @type {Appearance} */
       let worn = 'system'
 
@@ -1490,7 +1506,7 @@
        *
        * **`system` removes the attribute rather than setting a third value**,
        * so the two guarded blocks in the stylesheet are all it takes and the
-       * third state is the page as it was before there was a choice.
+       * unset state is the page as it was before there was a choice.
        *
        * A bare glyph names nothing to a screen reader, and this is the first
        * interactive control the bar has carried — so it carries `title` and
@@ -1503,10 +1519,18 @@
         worn = next
         if (next === 'system') document.documentElement.removeAttribute('data-theme')
         else document.documentElement.setAttribute('data-theme', next)
-        themeButton.textContent = APPEARANCE_MARK[next]
-        themeButton.title = APPEARANCE_SAYS[next]
-        themeButton.setAttribute('aria-label', APPEARANCE_SAYS[next])
+        const shown = inEffect(next)
+        themeButton.textContent = APPEARANCE_MARK[shown]
+        themeButton.title = APPEARANCE_SAYS[shown]
+        themeButton.setAttribute('aria-label', APPEARANCE_SAYS[shown])
       }
+
+      // Only while nothing is chosen: then the mark is the machine's answer and
+      // the machine has just changed its mind. Once pinned, the media query is
+      // not what the window is following and this must not touch the bar.
+      systemIsDark.addEventListener('change', () => {
+        if (worn === 'system') wearAppearance('system')
+      })
 
       /*
         The document the canvases were drawn from, held between renders, and
@@ -3896,13 +3920,17 @@
         relines()
       })
 
-      // **The click asks and does not act.** It names the next of the three and
+      // **The click asks and does not act.** It names the other of the two and
       // stops there; `set_appearance` writes the file, moves the native title
       // bar and announces, and the announce is what brings the value back
       // through `refresh` to `report` above.
+      //
+      // **It is read off what is in effect and not off `worn`**, which is what
+      // makes the unset state press correctly: with nothing chosen on a dark
+      // machine, the one press a person expects is the one that gives light.
       themeButton.addEventListener('click', () =>
         invoke('set_appearance', {
-          appearance: APPEARANCES[(APPEARANCES.indexOf(worn) + 1) % APPEARANCES.length]
+          appearance: inEffect(worn) === 'dark' ? 'light' : 'dark'
         }).catch(fail)
       )
 

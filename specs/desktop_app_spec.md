@@ -959,13 +959,34 @@ list to one item.
   tagging — and is a question about the preview rather than about the chrome. Blocks
   nothing; it wants a pass over the window's landmarks rather than one control.
 
-- **OQ-12** — should the appearance marks be glyphs or inline SVG? Raised 2026-08-29 by
+- **OQ-12** — ~~should the appearance marks be glyphs or inline SVG? Raised 2026-08-29 by
   Phase 13. *(design call)* `◐ ☀ ☾` measured stable and legible at 10px — 9.23, 9.23 and
   9.22px, identical in Playwright's Chromium and WebKit, with the brand not moving as
   they swap — **but Phase 12's own note records that neither engine is the window**, so
   what WKWebView does with them at 10px is unmeasured until Phase 13's own gate runs. If
   they render badly there, inline SVG is the answer and it costs the page three small
-  paths. Blocks nothing; the gate's window clause is what will answer it.
+  paths. Blocks nothing; the gate's window clause is what will answer it.~~
+  **RESOLVED (2026-08-29), by Phase 13's own gate, run in the window: glyphs, and no
+  SVG.** WKWebView measured **9.23 / 9.23 / 9.22px** — the same three figures
+  Playwright's Chromium and WebKit gave, to the digit — with `#brand` unmoved at 862.98
+  as they swapped, and all of them legible at 10px. **The engine that ships agrees with
+  the two that do not**, which is the thing Phase 12's note said could not be assumed;
+  it is now measured rather than assumed, for these glyphs at this size.
+
+  The residual, recorded rather than hidden: `◐` was measured and then **cut**, the
+  button having been narrowed to two positions the same day. So the reading that
+  survives is `☀ ☾`, and `◐`'s is a measurement of something no longer on screen.
+
+- **OQ-13** — how does an author get back to following the system? Raised 2026-08-29 by
+  Phase 13's own narrowing. *(design call)* The button has two positions and `system` is
+  the state before the first press, so **the first press is one-way**: from then on the
+  window is pinned and a machine that switches at sunset no longer moves it. The scope
+  Phase 13 was reviewed against argued that this is a regression, and the author overruled
+  it knowingly — so what is open is not *whether* the two-position button is right but
+  *what the way back is*, if there should be one: a third press restored, a menu item, a
+  long-press, or nothing at all and deleting `settings.json` is the answer. **Deliberately
+  not folded into OQ-11**, which asks what the bar costs a screen reader. Blocks nothing;
+  it wants an author who has lived with the pinned window for a while.
 
 ## 4. Implementation phases
 
@@ -3139,6 +3160,48 @@ Phase 11 named it as the thing to do before a toggle could be a phase.
   > kept in `localStorage` now; and clause 4 counted errors in a window `arm()`
   > had never run in, so it passed by counting nothing — it now fails unarmed and
   > says so.
+  >
+  > **RE-RUN 2026-08-29, and it passed.** No flash, on a light system with `dark`
+  > stored. Clauses 1 and 2 passed with it: the values reached Rust and the window
+  > in all three states, and the marks measured **9.23 / 9.23 / 9.22px** in
+  > WKWebView with `#brand` unmoved at 862.98 — **which answers OQ-12**, the
+  > glyphs rendering in the shipping engine exactly as they did in Playwright's
+  > two. A third defect in the gate came out of that run and is fixed with this
+  > note: `restore()` put the appearance back to what the *relaunched* window
+  > found, which is the value `flash()` had just stored, so a run ended by
+  > pinning `dark` rather than where it started.
+
+  > **NARROWED 2026-08-29, by the author, on seeing it in the window: the button
+  > has two positions and not three.** It gives light or dark, and `system` is no
+  > longer a destination — it is the state the app holds before the button has
+  > ever been pressed, so a fresh install follows the machine and the first press
+  > pins it.
+  >
+  > **This contradicts the scope above, and the contradiction is the record
+  > rather than a slip.** That scope argues the third state earns its place
+  > because *"a toggle that could not get back to it would be a regression for a
+  > machine that switches at sunset"*, and **that argument was not refuted — it
+  > was overruled**, the cost accepted knowingly: once pressed, this window stops
+  > following the machine, and the only way back to following is to delete
+  > `settings.json`. It is recorded here so a later phase reversing it knows what
+  > it is reversing, and OQ-13 below carries the way back.
+  >
+  > **Rust does not change and the three values stay**, which is what keeps the
+  > cost to one press rather than to the design: `Appearance::System` is still
+  > what a missing settings file reads as, still what `set_theme(None)` follows,
+  > and still what the page places by removing the attribute. What changed is the
+  > page's own arithmetic — the mark is now **the appearance in effect and never
+  > the one on offer**, which in the unset state is read off
+  > `matchMedia('(prefers-color-scheme: dark)')` and re-read when that changes, or
+  > the bar would show yesterday's answer at sunset. The click asks for the other
+  > of the two, read off what is in effect rather than off the stored value, so
+  > the one press a person expects from the unset state on a dark machine is the
+  > one that gives light.
+  >
+  > **The gate's clause 2 and the harness's clause 8 both moved with it**, and
+  > clause 8 got stronger rather than weaker: it presses from all three values
+  > now, and the `system` press is what separates *the other of the two* from
+  > *always dark*. `◐` is gone from the page and from the gate.
 
 - **Close-out:** **`rules/desktop-panes.md` — and its `max_lines` must be raised,
   which is stated here rather than discovered.** It stands at **475/475**, with no

@@ -489,11 +489,18 @@ const paletteTurnsBothWays = async (browser, url) => {
 
 /* 8. **The boundary, which nothing read off the DOM alone can see.** A toggle
       that set the attribute itself would look identical from the page: same
-      mark, same palette, same cycle. So this asserts both halves — that Rust
+      mark, same palette, same flip. So this asserts both halves — that Rust
       moving the value alone moves the attribute, and that the click's only act
-      is to ask, naming the next of the three.
+      is to ask, naming the other of the two.
 
-      The stub's answer is what closes the loop, so the second half is measured
+      **Three presses and not one**, because the button has two positions and
+      Rust three values: `system` is the unset state, and what a press from it
+      must ask for is read off the *system*, not off the value. Under this
+      page's light scheme that is `dark` — the same answer a press from `light`
+      gives, which is why the `dark` press is here too and is the one that
+      separates "the other of the two" from "always dark".
+
+      The stub's answer is what closes the loop, so the asking half is measured
       after it: a page that had already moved the attribute before the answer
       arrived would be deciding. */
 const cellPlacesAndDoesNotDecide = async (browser, url) => {
@@ -511,42 +518,62 @@ const cellPlacesAndDoesNotDecide = async (browser, url) => {
     return seen
   })
 
-  /* The click, from a known state, with the boundary read rather than the DOM. */
-  const clicked = await page.evaluate(async () => {
-    window.__harness.set({ appearance: 'system' })
-    window.__harness.fire('rendered')
-    await new Promise((r) => setTimeout(r, 150))
+  /* The click, from each of the three, with the boundary read rather than the
+     DOM. The page is under the default light scheme, so `system` is light in
+     effect and a press from it must ask for `dark`. */
+  const clicked = []
+  for (const [from, wanted] of [
+    ['system', 'dark'],
+    ['dark', 'light'],
+    ['light', 'dark']
+  ]) {
+    clicked.push({
+      from,
+      wanted,
+      ...(await page.evaluate(async (from) => {
+        window.__harness.set({ appearance: from })
+        window.__harness.fire('rendered')
+        await new Promise((r) => setTimeout(r, 150))
 
-    window.__harness.forget()
-    document.getElementById('theme').click()
-    await new Promise((r) => setTimeout(r, 150))
+        window.__harness.forget()
+        document.getElementById('theme').click()
+        await new Promise((r) => setTimeout(r, 150))
 
-    return {
-      asked: window.__harness.invokes().filter((i) => i.name === 'set_appearance'),
-      attribute: document.documentElement.getAttribute('data-theme'),
-      answered: window.__harness.status().appearance
-    }
-  })
+        return {
+          asked: window.__harness.invokes().filter((i) => i.name === 'set_appearance'),
+          attribute: document.documentElement.getAttribute('data-theme'),
+          answered: window.__harness.status().appearance
+        }
+      }, from))
+    })
+  }
 
   const errors = await drainErrors(page)
   await page.close()
 
   const misplaced = placed.filter((p) => p.attribute !== (p.appearance === 'system' ? null : p.appearance))
-  /* system -> light is the cycle's first step, and the mark that follows is the
-     stub's answer rather than the click. */
-  const asked = clicked.asked.length === 1 && clicked.asked[0].args.appearance === 'light'
-  const followed = clicked.attribute === 'light' && clicked.answered === 'light'
+  const wrong = clicked.filter(
+    (c) =>
+      c.asked.length !== 1 ||
+      c.asked[0].args.appearance !== c.wanted ||
+      c.attribute !== c.wanted ||
+      c.answered !== c.wanted
+  )
 
   note(`placed: ${placed.map((p) => `${p.appearance}->${p.attribute}`).join('  ')}`)
-  note(`clicked: asked ${JSON.stringify(clicked.asked.map((i) => i.args))}, attribute ${clicked.attribute}`)
+  note(
+    `clicked: ${clicked.map((c) => `${c.from} asked ${c.asked.map((i) => i.args.appearance).join('+') || 'nothing'}`).join('  ')}`
+  )
 
   ok(
     8,
-    'the cell places what Rust says, and the click only asks',
-    misplaced.length === 0 && asked && followed,
+    'the cell places what Rust says, and the click only asks, for the other of the two',
+    misplaced.length === 0 && wrong.length === 0,
     misplaced.length
       ? `Rust moved and the page did not: ${JSON.stringify(misplaced)}`
-      : `three placed with no click; one click asked for ${JSON.stringify(clicked.asked.map((i) => i.args.appearance))} and the attribute followed the answer`
+      : wrong.length
+        ? `wrong: ${wrong.map((c) => `from ${c.from} wanted ${c.wanted}, asked ${c.asked.map((i) => i.args.appearance).join('+') || 'nothing'}`).join('; ')}`
+        : `three placed with no click; three clicks each asked for the other and the attribute followed the answer`
   )
   return errors
 }

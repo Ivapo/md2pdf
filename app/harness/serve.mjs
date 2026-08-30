@@ -187,14 +187,12 @@ const MUTATIONS = {
      unchanged — the boundary is the only thing that moved. */
   'theme-click-direct': (page) => {
     const call = `invoke('set_appearance', {
-          appearance: APPEARANCES[(APPEARANCES.indexOf(worn) + 1) % APPEARANCES.length]
+          appearance: inEffect(worn) === 'dark' ? 'light' : 'dark'
         }).catch(fail)`
     if (page.split(call).length !== 2) die('the mutation theme-click-direct found no single invoke')
     return page.replace(
       call,
-      `Promise.resolve(
-          wearAppearance(APPEARANCES[(APPEARANCES.indexOf(worn) + 1) % APPEARANCES.length])
-        )`
+      `Promise.resolve(wearAppearance(inEffect(worn) === 'dark' ? 'light' : 'dark'))`
     )
   },
 

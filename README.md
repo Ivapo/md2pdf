@@ -105,10 +105,12 @@ rebuild-on-change.
 unsaved work. `⌘S`, or the Save button, writes the pane back to whichever file it is
 holding. **The bar along the foot of the window names that file** — which, once you
 have clicked another file in the list, is not the file the page beside it comes from.
-**The button in that bar sets the window light or dark**: click it to go from
-following your system, to light, to dark, and back. It remembers your choice the next
-time you open the app, and it changes only the app's own chrome — the page stays the
-white it will print as. Drag the divider to give either side more room. **`Lines` in the header numbers the
+**The button in that bar sets the window light or dark**: it starts on whichever your
+system is set to, and clicking gives you the other one. It remembers your choice the
+next time you open the app, and it changes only the app's own chrome — the page stays
+the white it will print as. Until you press it the window follows your system, so a
+machine that switches at sunset takes the window with it; pressing it once settles
+that, and there is no way back short of clearing the app's own settings. Drag the divider to give either side more room. **`Lines` in the header numbers the
 pane and marks the line your cursor is on**, so an error that names a line names
 somewhere you can see.
 
