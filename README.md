@@ -104,10 +104,11 @@ rebuild-on-change.
 **the PDF is what the pane says, not what the file says** — so the page shows your
 unsaved work. `⌘S` writes the pane back to whichever file it is
 holding. **The floppy in the header, or `⇧⌘S`, is `Save as…`**: it writes the pane to a
-name you pick and then holds that file, so the next `⌘S` goes there. It saves **inside
-the project** — a name outside it is refused, because opening a document somewhere else
-is what `Open…` is for — and it takes the same kinds the panel lists, `.md`, `.bib`,
-`.yml` and `.yaml`. If you save a file your document names, the page redraws with it;
+name you pick and then holds that file, so the next `⌘S` goes there. It saves **wherever you point
+it**, and it takes the same kinds the panel lists — `.md`, `.bib`, `.yml` and `.yaml`.
+**The window keeps compiling the project it had**: saving elsewhere moves the pane, not
+the document. A file saved outside the project is not in the list and is not watched, so
+editing it in another program will not redraw the page. If you save a file your document names, the page redraws with it;
 if you save the file you were editing under a new name, the page goes back to what the
 old one says on disk, because that is the file the document still names. **The bar along the foot of the window names whatever the pane is holding** — the
 file you are typing in, which once you have clicked another file in the list is not

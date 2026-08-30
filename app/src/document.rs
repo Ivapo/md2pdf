@@ -933,11 +933,19 @@ pub fn create_file(root: &Path, path: &str) -> Result<(), String> {
 /// "a new file is" wording intact** so that neither caller's copy is quietly
 /// reworked and the two drift apart.
 ///
-/// **[`landing`] is kept**, so this is its third caller after `create_file` and
-/// [`trash_file`]. A dialog answers with an absolute path, which `landing`
-/// handles without a special case: `Path::join` with an absolute path replaces
-/// the base, so the parent is still canonicalized and still required under the
-/// root.
+/// **It is not confined, and that is the decision.** `mpdf-003` Phase 17 asked
+/// [`landing`] and refused anything outside the root, on the argument that
+/// `Open…` is how an author goes elsewhere. **That argument was retrofitted** —
+/// what drove it was that `landing` already existed — and a `Save as…` that
+/// cannot save where the author points it is not the gesture that name denotes.
+/// Phase 18 dropped the call, so `landing` is back to `create_file` and
+/// [`trash_file`].
+///
+/// **The path is written as given**, so an absolute one from a dialog lands
+/// where it says and a *relative* one would resolve against the process working
+/// directory rather than the project. No caller passes a relative path — the
+/// dialog always answers absolute — and this sentence is what keeps the next one
+/// from starting.
 ///
 /// **`create_new` is parted from, and that is the decision.** `O_EXCL` makes
 /// *already exists* a refusal, which is right for a `+` gesture that invents a
@@ -952,7 +960,7 @@ pub fn create_file(root: &Path, path: &str) -> Result<(), String> {
 ///
 /// **It is a function and not the command**, per this file's own header.
 /// `mpdf-003` Phase 17.
-pub fn save_file(root: &Path, path: &str, bytes: &[u8]) -> Result<PathBuf, String> {
+pub fn save_file(path: &str, bytes: &[u8]) -> Result<PathBuf, String> {
     match kind_of(path) {
         Some(Kind::Markdown | Kind::Bibliography) => {}
         _ => {
@@ -963,8 +971,7 @@ pub fn save_file(root: &Path, path: &str, bytes: &[u8]) -> Result<PathBuf, Strin
         }
     }
 
-    let landed =
-        landing(root, path).ok_or_else(|| format!("{path} would land outside this project"))?;
+    let landed = PathBuf::from(path);
 
     std::fs::write(&landed, bytes)
         .map_err(|e| format!("cannot write {}: {e}", landed.display()))?;

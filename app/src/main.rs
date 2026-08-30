@@ -482,12 +482,17 @@ fn save(session: tauri::State<'_, Mutex<Session>>) -> Result<(), String> {
 /// Where the Save-as panel should open, or why it should not open.
 ///
 /// **A mirror of [`export_path`] and for its reason**: the page cannot build an
-/// absolute path, `Status` carrying root-relative spellings only, and a panel
-/// given no default opens wherever macOS last was — outside the project, where
-/// [`crate::document::save_file`]'s confinement would make refusal the *normal*
-/// first outcome. It answers with the file the pane is holding, which is what a
-/// Save-as defaults to everywhere, and it refuses **before** the dialog rather
-/// than after it.
+/// absolute path of its own, and a panel given no default opens wherever macOS
+/// last was rather than where the author is working. It answers with the file
+/// the pane is holding, which is what a Save-as defaults to everywhere, and it
+/// refuses **before** the dialog rather than after it.
+///
+/// **Two sentences here were corrected by `mpdf-003` Phase 18 and the code was
+/// not.** `Status` no longer carries root-relative spellings *only* —
+/// `Preview::edited_relative` falls back to an absolute path for a pane outside
+/// the root — and [`crate::document::save_file`] no longer confines, so a panel
+/// opening elsewhere is no longer a refusal waiting to happen. The default is
+/// still worth answering: it opens where the author is, not where macOS was.
 ///
 /// It names the file in the pane and not the file that compiles, which is the
 /// opposite of [`export_path`]'s choice and right for the opposite reason: the

@@ -17,13 +17,15 @@ covers: >
   titles an open sets, the commands and the signal between them, the file I/O the
   app owns and the two read passes one closure serves, the fourth reader of a
   path the author did not name in a dialog, the first write to one and the first
-  delete of one, the three answers the
+  delete of one, the second writer of a path the author did name and the
+  confinement it does not share, the spelling that goes absolute where it cannot
+  go relative, the three answers the
   asset list gives and the filter reads, the project this file hands to a rule of
   its own, the panel's status fields and the union built where no disk is
   read, the watch loop and its fourth answer and the two debounces it runs on,
   the three values the state holds where it held one and the two of them that
   are now two files, the second file beside the store and the one thing in it that
-  is not about a folder, the sixteenth command and the two halves it is, the second
+  is not about a folder, the eighteenth command and the two halves one of them is, the second
   setter called where capabilities do not apply, the field composed in two places
   and the seam that holds them, the buffer that compiles and the closure it rides, the rule
   an external change runs and the second occasion its one field carries, the
@@ -496,7 +498,12 @@ paths are root-relative so the page can match them to a row, and **`edited` ride
 because the page cannot derive it from `main`** — they are equal at every open and
 differ from the first click. It is spelled with `document::spell` and not
 `document::relative`, a `canonicalize` here being two syscalls in front of every
-render.
+render. **`edited` is root-relative *where it can be*, and absolute where it
+cannot**: `Save as…` can put the pane outside the root since `mpdf-003` Phase 18,
+where `spell`'s `strip_prefix` answers nothing, so `Preview::edited_relative`
+falls back to the whole path rather than letting the field go null and blank the
+bar's cell. The page renders that cell as the path's last segment either way, and
+matches no row against an absolute one — correct, an outside file having none.
 
 ## The rule an external change runs
 

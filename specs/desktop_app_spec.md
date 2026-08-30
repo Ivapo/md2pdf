@@ -95,7 +95,7 @@ phases:
     by: null
   - name: "Phase 18 — Save as saves anywhere"
     reviewed: 2026-08-30
-    shipped: null
+    shipped: 2026-08-30
     cut: null
     by: null
 
@@ -4464,6 +4464,15 @@ work, so round 0 has more to do than usual and the scope says where to point it.
   confined filesystem operations live beside each other. Widening `landing`'s visibility
   to call it from `preview.rs` would buy nothing and split the pattern.
 
+  > **CORRECTED 2026-08-30, by Phase 18.** The paragraph below is kept as it was
+  > written and its first sentence was reversed the same day it shipped. **A path
+  > outside the root is not refused**: `save_file` no longer asks `landing`, which
+  > is back to `create_file` and `trash_file`, and a Save-as writes wherever the
+  > author points it. **The rest of the paragraph stands** — the project still does
+  > not move, and re-rooting is still what `Open…` is for. **The argument recorded
+  > below was retrofitted**, which Phase 18 says rather than restates: what drove
+  > the confinement was that `landing` already existed and reusing it was free.
+
   **A path outside the root is refused, in `create_file`'s words and not
   `trash_file`'s** — *"{path} would land outside this project"*, which is the one written
   for a write. **The project does not move.** Opening a document elsewhere is what
@@ -4717,8 +4726,9 @@ moves, and the clean-only wording of the first draft excluded the very case that
 its headline.
 
 Appended 2026-08-30, per §6.1 step 2. **It reverses a decision Phase 17 shipped the same
-day**, so that phase's scope statement — *"`Save as…` writes inside the project, and the
-project does not move"* — takes a dated `CORRECTED` note pointing here. **The mechanism is
+day**, so that phase's scope statement — *"A path outside the root is refused … The
+project does not move"* — takes a dated `CORRECTED` note pointing here, against the half
+that was reversed and not the half that stands. **The mechanism is
 recorded rather than left arguable**: step 1 ("removes or contradicts shipped work → never
 a phase") plausibly matches, and it is not taken, because Phase 17's Save-as is not
 removed — cutting it would read as never built, which §1.1 calls the false report. A phase

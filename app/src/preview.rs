@@ -303,8 +303,32 @@ impl Preview {
     /// **Textual, off no disk.** Both paths were built here by joining onto one
     /// root, so there is nothing to canonicalize, and [`Preview::status`] calls
     /// this on every render.
+    /// How the pane's own file is spelled, for [`Status`] and for the panel.
+    ///
+    /// **Root-relative where it can be, absolute where it cannot**, and the
+    /// fallback is not cosmetic. `document::spell` is a bare `strip_prefix`, so
+    /// a file outside the root — which `mpdf-003` Phase 18 made reachable
+    /// through `Save as…` — answers `None`, and `Status::edited` would go null
+    /// while a document is open and the pane was holding that file. The footer's
+    /// left cell would then blank, an empty state `app/dist/index.html` reserves
+    /// for *no document at all*.
+    ///
+    /// **The page needs nothing for this**: it renders the cell as the path's
+    /// last segment, so an absolute path shows the same bare name it always
+    /// showed, and `panelRows` compares the same value against root-relative
+    /// rows and matches none — correct, since an outside file has no row.
+    /// [`Session::trash`]'s `held` makes that comparison too and answers
+    /// `holding = false`, which is what `None` answered before and is right for
+    /// the same reason.
     fn edited_relative(&self) -> Option<String> {
-        document::spell(self.root.as_deref()?, self.edited.as_deref()?)
+        let edited = self.edited.as_deref()?;
+        match self.root.as_deref() {
+            Some(root) => Some(
+                document::spell(root, edited)
+                    .unwrap_or_else(|| edited.to_string_lossy().into_owned()),
+            ),
+            None => Some(edited.to_string_lossy().into_owned()),
+        }
     }
 
     /// The text the pane holds, which is the text that compiles.
@@ -499,15 +523,11 @@ impl Preview {
     ///
     /// `mpdf-003` Phase 17.
     pub fn save_as(&mut self, path: &str) -> Result<PathBuf, String> {
-        let root = self
-            .root
-            .clone()
-            .ok_or_else(|| "no document is open".to_string())?;
         if self.edited.is_none() {
             return Err("no document is open".to_string());
         }
 
-        let landed = document::save_file(&root, path, self.buffer.as_bytes())?;
+        let landed = document::save_file(path, self.buffer.as_bytes())?;
 
         self.saved = self.buffer.clone();
         self.divergence = None;
@@ -1639,25 +1659,125 @@ mod tests {
         );
     }
 
-    /// A Save-as aimed outside the project is refused and writes nothing.
+    /// A Save-as outside the project writes, and the project does not move.
+    ///
+    /// **`mpdf-003` Phase 18 inverted this test rather than deleting it.** It
+    /// asserted a refusal until Phase 17; what the reversal has to keep
+    /// asserting is the half a deletion would have dropped — that `main` and
+    /// `root` are **unmoved**, which is this phase's own decision and not the
+    /// PDF's. Whether the page moves is clause 2's, and deliberately not here:
+    /// main-and-root-unchanged is true even in the cases where the page moved.
+    ///
+    /// Its destination has a name of its own, as every outside destination in
+    /// these tests does: they share the `letur-test-<pid>` parent and cargo runs
+    /// them in parallel.
     #[test]
-    fn a_save_as_outside_the_project_is_refused() {
-        let dir = scratch_dir("save-as-outside");
+    fn a_save_as_outside_the_project_writes_and_the_project_stays() {
+        let dir = scratch_dir("save-as-outside-writes");
         let document = multi_file_in(&dir);
-        let outside = dir.parent().unwrap().join("escape.md");
+        let outside = dir.parent().unwrap().join("outside-writes.md");
         let _ = std::fs::remove_file(&outside);
 
         let (mut session, compiles) = counted();
         session.open(document.clone()).unwrap();
         wait_for(&compiles, 1);
+        let root = session.preview().root().unwrap().to_path_buf();
 
-        let refusal = session
+        session
             .save_as(outside.to_string_lossy().into_owned())
-            .unwrap_err();
+            .unwrap();
 
-        assert!(refusal.contains("would land outside this project"), "{refusal}");
-        assert!(!outside.exists(), "the refusal wrote nothing");
-        assert_eq!(session.preview().document(), Some(document.as_path()));
+        assert!(outside.exists(), "the file is written where it was asked for");
+        assert_eq!(session.preview().document(), Some(outside.as_path()));
+        assert_eq!(session.preview().root(), Some(root.as_path()), "the root does not move");
+        assert_eq!(
+            session.preview().status().main.as_deref(),
+            Some("multi_file.md"),
+            "the window keeps compiling the project it had"
+        );
+    }
+
+    /// Clause 2, the clean half: an outside save leaves the page alone.
+    #[test]
+    fn a_save_as_outside_from_a_clean_buffer_leaves_the_page() {
+        let dir = scratch_dir("save-as-outside-clean");
+        let document = multi_file_in(&dir);
+        let outside = dir.parent().unwrap().join("outside-clean.md");
+        let _ = std::fs::remove_file(&outside);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        wait_for(&compiles, 1);
+        let before = session.preview().pdf().unwrap().to_vec();
+
+        session
+            .save_as(outside.to_string_lossy().into_owned())
+            .unwrap();
+
+        assert_eq!(before, session.preview().pdf().unwrap().to_vec());
+    }
+
+    /// Clause 2, the dirty half: **Phase 17's fourth case, outside the project.**
+    ///
+    /// The case the first draft of Phase 18 claimed could not happen. The pane
+    /// holds a file the master names, the buffer is dirty, and the save moves
+    /// `edited` out — so `render_project` stops substituting the buffer for that
+    /// file and it reverts to its own on-disk text. The destination being
+    /// outside the root is what the phase newly permits; the mechanism is
+    /// Phase 17's and unchanged.
+    #[test]
+    fn a_save_as_outside_from_a_dirty_buffer_moves_the_page() {
+        let dir = scratch_dir("save-as-outside-dirty");
+        let document = multi_file_in(&dir);
+        let outside = dir.parent().unwrap().join("outside-dirty.md");
+        let _ = std::fs::remove_file(&outside);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        wait_for(&compiles, 1);
+
+        let text = format!(
+            "{}\n\nA paragraph the file on disk does not have.\n",
+            session.preview().text()
+        );
+        session.preview().edit(text);
+        session.preview().compile();
+        let before = session.preview().pdf().unwrap().to_vec();
+
+        session
+            .save_as(outside.to_string_lossy().into_owned())
+            .unwrap();
+
+        assert_ne!(
+            before,
+            session.preview().pdf().unwrap().to_vec(),
+            "the master stops being read from the buffer and reverts to its disk text"
+        );
+    }
+
+    /// Clause 3: no row for it, and the bar still names it.
+    #[test]
+    fn a_file_saved_outside_has_no_row_but_the_bar_still_names_it() {
+        let dir = scratch_dir("save-as-outside-named");
+        let document = multi_file_in(&dir);
+        let outside = dir.parent().unwrap().join("outside-named.md");
+        let _ = std::fs::remove_file(&outside);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        wait_for(&compiles, 1);
+
+        session
+            .save_as(outside.to_string_lossy().into_owned())
+            .unwrap();
+
+        let status = session.preview().status();
+        assert!(
+            !status.entries.iter().any(|entry| entry.path.ends_with("outside-named.md")),
+            "the panel walks the root, so a file outside it has no row"
+        );
+        let named = status.edited.expect("the bar still names what the pane holds");
+        assert!(named.ends_with("outside-named.md"), "{named}");
     }
 
     /// A Save-as with a dirty buffer moves the pane rather than diverging.
