@@ -27,8 +27,8 @@
 
    **The suite is falsified before it is trusted.** `--mutate <name>` serves a
    deliberately broken copy and judges that **exactly** the clause that owns it
-   fails; `--falsify` runs all six. That is the gate's clause 3, run rather than
-   read.
+   fails; `--falsify` runs all nine. That is the gate's clause 3, run rather
+   than read.
 
    **`light` is the default colour scheme and it is written down**, because one
    of the clauses below is about a page that must behave differently under each
@@ -55,7 +55,10 @@ const OWNS = {
   'cell-main': 5,
   'theme-dark-attr': 7,
   'theme-click-direct': 8,
-  'controls-auto-margin': 9
+  'controls-auto-margin': 9,
+  'views-one-way': 10,
+  'marks-unlit': 10,
+  'figure-unnamed': 11
 }
 
 /* **58 characters, and the length is asserted rather than trusted.** The
@@ -590,15 +593,25 @@ const cellPlacesAndDoesNotDecide = async (browser, url) => {
       `#edited` and left no free space for an auto margin to absorb, so both
       layouts read the gap and the clause would falsify nothing.
 
-      The exact equality depends on `#controls` holding one flush, unpadded
-      child. A second cell in that group would want measuring from `#controls`'
-      own right edge instead. */
+      **Measured from `#controls`' own right edge, and there are two gaps to
+      cross.** The clause's first draft read the theme button's edge, which was
+      the group's right edge only while the group held one flush, unpadded
+      child; the fit select made that false, and the separator put a third cell
+      between the group and the brand. So the reading is the group to the
+      separator and the separator to the brand, each one bar-gap.
+
+      **The second of the two is what still separates the layouts.** With the
+      auto margin on the group, the separator and the brand are packed at the
+      right; moved to the brand, the free space opens between them — while the
+      group-to-separator gap reads the bar's own under either. A clause that
+      asserted only the first would falsify nothing. */
 const groupSitsBesideTheBrand = async (browser, url) => {
   const page = await opened(browser, url, WIDTHS[0])
 
   const read = await page.evaluate(async () => {
     const footer = document.querySelector('footer')
-    const theme = document.getElementById('theme')
+    const controls = document.getElementById('controls')
+    const sep = document.getElementById('sep-brand')
     const brand = document.getElementById('brand')
 
     const seen = []
@@ -608,7 +621,8 @@ const groupSitsBesideTheBrand = async (browser, url) => {
       await new Promise((r) => setTimeout(r, 150))
       seen.push({
         appearance,
-        gap: brand.getBoundingClientRect().left - theme.getBoundingClientRect().right,
+        gap: sep.getBoundingClientRect().left - controls.getBoundingClientRect().right,
+        toBrand: brand.getBoundingClientRect().left - sep.getBoundingClientRect().right,
         brand: brand.getBoundingClientRect().left
       })
     }
@@ -623,18 +637,172 @@ const groupSitsBesideTheBrand = async (browser, url) => {
   const errors = await drainErrors(page)
   await page.close()
 
-  const apart = read.seen.filter((s) => Math.abs(s.gap - read.columnGap) > 0.5)
+  const off = (n) => Math.abs(n - read.columnGap) > 0.5
+  const apart = read.seen.filter((s) => off(s.gap) || off(s.toBrand))
   const brands = new Set(read.seen.map((s) => s.brand.toFixed(2)))
 
-  note(`gap ${read.seen.map((s) => `${s.appearance} ${s.gap.toFixed(2)}`).join('  ')}`)
+  const said = (s) => `${s.appearance} ${s.gap.toFixed(2)} / ${s.toBrand.toFixed(2)}`
+  note(`gap group→sep / sep→brand: ${read.seen.map(said).join('  ')}`)
 
   ok(
     9,
-    `the icon group sits one gap from the brand at ${WIDTHS[0]}px, in all three states`,
+    `the icon group, the separator and the brand sit one gap apart at ${WIDTHS[0]}px, in all three states`,
     apart.length === 0 && brands.size === 1 && read.last,
     apart.length
-      ? `the bar's own column-gap is ${read.columnGap}; read ${apart.map((s) => `${s.appearance} ${s.gap.toFixed(2)}`).join(', ')}`
-      : `${read.columnGap} in all three, the brand still last and unmoved at ${[...brands][0]}`
+      ? `the bar's own column-gap is ${read.columnGap}; read ${apart.map(said).join(', ')}`
+      : `${read.columnGap} across both, in all three, the brand still last and unmoved at ${[...brands][0]}`
+  )
+  return errors
+}
+
+/* 10. **One setting behind two controls, asserted from both ends.** The bar's
+       `Files` and `Lines` duplicate the header's, and a duplicate is only worth
+       having if it cannot disagree — so each toggle is pressed from the header
+       and from the bar in turn, and after each press *both* controls and the
+       pane they work are read. A copy that placed its own state and never
+       followed the other would pass a one-ended check and fail a reader.
+
+       **The pane is read too, and not just the two attributes.** Two controls
+       that agreed with each other while the panel stayed open would satisfy
+       every ARIA reading and be the defect this exists to catch. */
+const viewsAreOneSetting = async (browser, url) => {
+  const page = await opened(browser, url)
+
+  const read = () =>
+    page.evaluate(() => ({
+      files: [
+        document.getElementById('toggle').getAttribute('aria-expanded'),
+        document.getElementById('views-files').getAttribute('aria-expanded')
+      ],
+      lines: [
+        document.getElementById('numbers').getAttribute('aria-pressed'),
+        document.getElementById('views-lines').getAttribute('aria-pressed')
+      ],
+      panel: !document.getElementById('files').classList.contains('collapsed'),
+      gutter: !document.getElementById('lines').hidden,
+      /* **The ink each mark is wearing**, because the bar's copies are marks
+         and a mark says nothing a word does not. Since they carry no text, the
+         *only* visible difference between on and off is this colour — so a
+         stylesheet that lost the rule would leave two identical icons and every
+         ARIA reading above would still pass. Which value it is is not the
+         clause; that the two states differ is. */
+      ink: {
+        files: getComputedStyle(document.getElementById('views-files')).color,
+        lines: getComputedStyle(document.getElementById('views-lines')).color
+      }
+    }))
+
+  /* Each press is named by where it came from, and the four cover both
+     directions of both toggles: a copy that only *sent* would pass two of
+     these and fail the other two. */
+  const pressed = []
+  for (const [from, selector, which] of [
+    ['the bar', '#views-files', 'files'],
+    ['the header', '#toggle', 'files'],
+    ['the bar', '#views-lines', 'lines'],
+    ['the header', '#numbers', 'lines']
+  ]) {
+    const before = await read()
+    await page.click(selector)
+    /* **Off the control before the colour is read.** A click leaves the pointer
+       where it landed, `:hover` paints the mark with the same ink `on` does,
+       and the reading below would then say the two states match whatever the
+       toggle is actually in. Measured, not reasoned about: without this the
+       off state read as ink in three of the four presses. */
+    await page.mouse.move(0, 0)
+    await settle(page)
+    const after = await read()
+    pressed.push({ from, which, before, after })
+  }
+
+  const errors = await drainErrors(page)
+  await page.close()
+
+  /* Both controls say the same thing, and the pane says what they say. `Files`
+     is expanded-when-open, `Lines` pressed-when-shown, so each is compared
+     against the box it works rather than against a literal. */
+  const wrong = pressed.filter((p) => {
+    const [head, foot] = p.which === 'files' ? p.after.files : p.after.lines
+    const box = p.which === 'files' ? p.after.panel : p.after.gutter
+    const moved = String(p.which === 'files' ? p.before.panel : p.before.gutter) !== String(box)
+    return head !== foot || head !== String(box) || !moved
+  })
+
+  /* The four presses put each toggle in both states, so each mark's two inks
+     are in hand without a fifth reading. */
+  const inks = (which) => new Set(pressed.filter((p) => p.which === which).map((p) => p.after.ink[which]))
+  const marked = inks('files').size === 2 && inks('lines').size === 2
+
+  for (const p of pressed)
+    note(
+      `${p.which} from ${p.from}: header ${p.after[p.which][0]} bar ${p.after[p.which][1]}, ` +
+        `the pane ${p.which === 'files' ? p.after.panel : p.after.gutter}, the mark ${p.after.ink[p.which]}`
+    )
+
+  ok(
+    10,
+    'the two copies of each view toggle are one setting, and the bar\'s marks show which state they are in',
+    wrong.length === 0 && marked,
+    wrong.length || !marked
+      ? `${wrong.map((p) => `${p.which} from ${p.from}: ${JSON.stringify(p.after)}`).join('; ')}` +
+        `${marked ? '' : ` — the marks: files ${[...inks('files')].join(' / ')}, lines ${[...inks('lines')].join(' / ')}`}`
+      : 'four presses, both controls and the pane agreeing after every one, each mark two inks'
+  )
+  return errors
+}
+
+/* 11. **The cell names what the pane is holding, and a figure is not
+       `edited`.** Clicking an image row opens a surface over the text and never
+       moves `Status::edited` — it cannot, `edited` being the file being typed
+       in — so before this the bar named a markdown file that had not been on
+       screen since the click. Both surfaces are asserted: the drawn figure and
+       the sentence a `.pdf` row gets, which is still a surface the pane is
+       holding.
+
+       **And the way back is half the clause.** A cell that took the figure's
+       name and kept it would read correctly in exactly the reading a one-ended
+       check makes, so `Escape` is pressed and the markdown name must return. */
+const cellNamesTheFigure = async (browser, url) => {
+  const page = await opened(browser, url)
+
+  const cell = () => page.evaluate(() => document.getElementById('edited').textContent)
+  const clickRow = async (name) => {
+    await page.evaluate((name) => {
+      const row = [...document.querySelectorAll('#parts li')].find((li) => li.textContent.includes(name))
+      row?.querySelector('button.name')?.click()
+    }, name)
+    await settle(page)
+  }
+
+  const before = await cell()
+  await clickRow('mark.svg')
+  const figure = await cell()
+  /* **That the sheet holds a picture is part of the clause, not colour.** A
+     refused read reaches the same surface through `saySoInstead` and names the
+     same file, so a clause that only asked whether the surface was up passed
+     against a harness that could not serve a figure at all — which is what it
+     did, until `serve.mjs` started copying the project's images in. This is the
+     reading that says the drawn path was the one taken. */
+  const drawn = await page.evaluate(
+    () => !document.getElementById('viewer').hidden && !!document.querySelector('#viewer .sheet img')
+  )
+  await clickRow('plan.pdf')
+  const said = await cell()
+  await page.keyboard.press('Escape')
+  await settle(page)
+  const back = await cell()
+
+  const errors = await drainErrors(page)
+  await page.close()
+
+  note(`the cell: ${before} → mark.svg gives ${figure} → plan.pdf gives ${said} → Escape gives ${back}`)
+
+  ok(
+    11,
+    'the cell names the figure the pane is holding, and the edited file again when it is left',
+    figure === 'mark.svg' && drawn && said === 'plan.pdf' && back === before && before !== '',
+    `opened on ${JSON.stringify(before)}; the figure gave ${JSON.stringify(figure)} with a picture drawn ${drawn}; ` +
+      `the pdf's sentence gave ${JSON.stringify(said)}; Escape gave ${JSON.stringify(back)}`
   )
   return errors
 }
@@ -669,7 +837,9 @@ const run = async ({ engine, headed, rev, doc, mutate }) => {
       panelDrawsTheEntries,
       paletteTurnsBothWays,
       cellPlacesAndDoesNotDecide,
-      groupSitsBesideTheBrand
+      groupSitsBesideTheBrand,
+      viewsAreOneSetting,
+      cellNamesTheFigure
     ]) {
       gather(await check(browser, held.url))
     }
@@ -684,7 +854,7 @@ const run = async ({ engine, headed, rev, doc, mutate }) => {
          **It stays last** — it is the only clause that accumulates across every
          other one, so its number moves as clauses are added and theirs do not. */
   ok(
-    10,
+    12,
     'no uncaught error reached the console through any of it',
     errors.total === 0,
     `${errors.total} uncaught, ${errors.loops} of them ResizeObserver` +

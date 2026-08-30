@@ -158,11 +158,21 @@ const invoke = async (name, args = {}) => {
     case 'trash_file':
       return null
 
-    /* The figure viewer reads bytes for an image row. Nothing in the checks
-       clicks one, and a `null` here would be drawn as a broken picture rather
-       than refused, so this says so. */
-    case 'asset_bytes':
-      throw new Error(`the harness serves no asset bytes for ${args.path}`)
+    /* The figure viewer reads bytes for an image row. **`current_pdf`'s route
+       exactly**: Rust answers both with a `tauri::ipc::Response`, so both
+       arrive as bytes and the page turns them into a blob — and a stub that
+       answered this one in some other shape would be checking a page that does
+       not ship.
+
+       A path the project does not hold is refused rather than answered with a
+       `null` the page would draw as a broken picture, which is the sentence a
+       reader gets for a figure that has gone. */
+    case 'asset_bytes': {
+      const at = CONFIG.assets?.[args.path]
+      const answer = at ? await fetch(`./${at}`) : null
+      if (!answer?.ok) throw new Error(`the harness serves no asset bytes for ${args.path}`)
+      return new Uint8Array(await answer.arrayBuffer())
+    }
 
     /* **The whole of the Rust half, as the page can see it.** The real command
        also writes `settings.json` and calls `window.set_theme`, neither of

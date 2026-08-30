@@ -167,9 +167,9 @@ const MUTATIONS = {
      the pane is holding. The two are equal at every open, so this passes
      everything until a row is clicked. */
   'cell-main': (page) => {
-    const line = "editedCell.textContent = state.edited?.split('/').pop() ?? ''"
+    const line = 'editedPath = state.edited ?? null'
     if (page.split(line).length !== 2) die('the mutation cell-main found no single cell line')
-    return page.replace(line, "editedCell.textContent = state.main?.split('/').pop() ?? ''")
+    return page.replace(line, 'editedPath = state.main ?? null')
   },
 
   /* Drops the attribute block that opts *in* under a light system, leaving the
@@ -200,6 +200,40 @@ const MUTATIONS = {
      about `#brand`'s own rect** — an auto margin absorbs exactly the free space
      in total, so a last child with no right margin cannot move, which is what
      falsified this mutation's first draft. What moves is the group. */
+  /* The bar's copy of a view toggle places its own state and does not follow
+     the header's — the exact defect a duplicated control invites, and the one a
+     check reading only the control it pressed would never see. `Files` is
+     enough to falsify the clause; the `Lines` pair is the same shape. */
+  'views-one-way': (page) => {
+    const line = "for (const control of foldControls) control.setAttribute('aria-expanded', String(!folded))"
+    if (page.split(line).length !== 2) die('the mutation views-one-way found no single fold writer')
+    return page.replace(line, "foldControls[0].setAttribute('aria-expanded', String(!folded))")
+  },
+
+  /* The bar's marks paint the same in both states — on and off alike — which
+     is the failure an icon invites and a word does not: every ARIA reading
+     still agrees, the pane still follows, and a reader cannot see which way
+     either toggle is set. It is the second half of clause 10, and the half
+     `views-one-way` cannot reach. */
+  'marks-unlit': (page) => {
+    const block =
+      "      #views button:hover,\n" +
+      "      #views button[aria-expanded='true'],\n" +
+      "      #views button[aria-pressed='true'] {\n"
+    if (page.split(block).length !== 2) die('the mutation marks-unlit found no single mark rule')
+    return page.replace(block, '      #views button:hover {\n')
+  },
+
+  /* A figure goes up and the bar goes on naming the markdown file — which is
+     the shipped behaviour this changed, so the mutation is the page as it was.
+     The `saySoInstead` write is left alone: one of the two is enough, and
+     removing both would not say which. */
+  'figure-unnamed': (page) => {
+    const block = '        figureInPane = path\n        namePaneFile()\n\n        viewer.hidden = false\n'
+    if (page.split(block).length !== 2) die('the mutation figure-unnamed found no single figure naming')
+    return page.replace(block, '        viewer.hidden = false\n')
+  },
+
   'controls-auto-margin': (page) => {
     const controls = page.match(/\n( *)#controls \{\n[\s\S]*?\n\1\}\n/)
     const brand = page.match(/\n( *)#brand \{\n[\s\S]*?\n\1\}\n/)
@@ -289,10 +323,34 @@ export async function serve({ rev = null, doc = PANEL, port = 0, mutate = null, 
      a module and so runs after parsing but before the page's own module, module
      scripts executing in document order. */
   if (page.split(HEAD).length !== 2) die('the page does not hold exactly one </head>')
+  /* **The project's figures, copied in so a figure can actually be drawn.**
+     `asset_bytes` used to be refused outright — the stub's own comment said
+     nothing in the checks clicked an image row, which stopped being true — and
+     a refusal reaches the surface through `saySoInstead`, so every image row
+     landed on a sentence and the drawn-figure path was unreachable. A clause
+     about a figure on screen has to be able to get one there.
+
+     **Copied rather than served from the tree**, for the server's one rule:
+     nothing outside the scratch directory is served, however the URL is
+     spelled. The missing row is skipped for the same reason Rust would refuse
+     it, and the map is what the stub refuses an unknown path against. */
+  const assets = {}
+  mkdirSync(join(scratch, 'assets'), { recursive: true })
+  for (const entry of here.entries) {
+    if (entry.kind !== 'image' || entry.missing) continue
+    const from = join(here.root, entry.path)
+    if (!existsSync(from)) continue
+    const to = join(scratch, 'assets', entry.path)
+    mkdirSync(dirname(to), { recursive: true })
+    writeFileSync(to, readFileSync(from))
+    assets[entry.path] = `assets/${entry.path}`
+  }
+
   const config = {
     entries: here.entries,
     main: here.main,
     pdf: 'document.pdf',
+    assets,
     text: readFileSync(here.document, 'utf8')
   }
   const inject =
