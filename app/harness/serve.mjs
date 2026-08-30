@@ -186,6 +186,18 @@ const MUTATIONS = {
       .replace(status, '      <span id="wide" style="flex: none; width: 900px; height: 14px"></span>\n' + status)
   },
 
+  /* The header's second mark says one thing to a sighted reader and another to
+     a screen reader: `title` keeps `Save as…` while `aria-label` goes back to
+     the `Save` this button said before `mpdf-003` Phase 17 renamed it. **The
+     half of the clause a single-name check would miss**, and the shape of the
+     defect Phase 16 deferred the rename to avoid — a button naming an action it
+     does not perform. */
+  'save-as-mislabelled': (page) => {
+    const both = '<button id="save" type="button" title="Save as…" aria-label="Save as…">'
+    if (page.split(both).length !== 2) die('the mutation save-as-mislabelled found no single #save button')
+    return page.replace(both, '<button id="save" type="button" title="Save as…" aria-label="Save">')
+  },
+
   /* Rewires the footer's cell to the file that compiles rather than the file
      the pane is holding. The two are equal at every open, so this passes
      everything until a row is clicked. */

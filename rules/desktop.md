@@ -36,7 +36,7 @@ covers: >
   facts a build enforces, and the server one build carries behind a feature,
   the capability it looks to want and does not, and the setter it offers where
   the page is refused one
-max_lines: 650
+max_lines: 660
 generated: 2026-08-28
 ---
 
@@ -165,18 +165,21 @@ capability added for either. `app/gen/` is generated and is not committed.
 
 `app/src/main.rs` holds only what needs a window. `main` registers the dialog
 plugin, builds the menu, manages one `Mutex<Session>` and one
-`app/src/main.rs:Pending`, registers sixteen commands, and — since the bundle —
+`app/src/main.rs:Pending`, registers eighteen commands, and — since the bundle —
 **builds the app rather than running it**, so that it can hand `App::run` a
 callback and see the run events a `.run(generate_context!())` never surfaces.
 
 The menu is built by hand, because macOS draws none of its own: an app submenu,
-a `File` submenu carrying `Open…` at `CmdOrCtrl+O`, `Save` at `CmdOrCtrl+S` and
-`Save a Copy…` at `Shift+CmdOrCtrl+S`, an `Edit` submenu, and a `Window`
+a `File` submenu carrying `Open…` at `CmdOrCtrl+O`, `Save` at `CmdOrCtrl+S`,
+`Save as…` at `Shift+CmdOrCtrl+S` and `Save a Copy…` at no accelerator at all,
+an `Edit` submenu, and a `Window`
 submenu. **No item acts on its own.** Each emits an event of its own id to the
 window, and the page invokes, so a menu item and the button beside it run one
 code path and not two — which is why `Save` emits too, though it opens no dialog
 and so costs no capability. **`Open…` and `Save` have that button, in the header;
-`Save a Copy…` is the menu's alone**, its header button withdrawn on the argument
+`Save as…` has that button — the header's one floppy, `mpdf-003` Phase 17 — while
+`Save` has neither a button nor a rival for `⌘S`, and **`Save a Copy…` is the menu's
+alone and now its only accelerator-less item**, its header button withdrawn on the argument
 that the other two act on the document being edited where the export writes a
 derived artifact. `core:default` already carries
 `core:event:allow-listen`, so neither those events nor the `rendered` signal
@@ -221,7 +224,7 @@ therefore cross the IPC boundary and the debounce is Rust's**, which is what put
 the interval on the testable side of the window: a debounce in the page would be
 logic reachable only by typing at one.
 
-Fifteen of the sixteen commands are wrappers over a plain function.
+Sixteen of the eighteen commands are wrappers over a plain function.
 `app/src/main.rs:pending_open` is the odd one and is not: it reads no session
 and **takes** a slot the run event filled, which the section on the bundle below
 explains. `app/src/main.rs:trash_file` is the newest of the fourteen and the

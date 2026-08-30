@@ -65,7 +65,8 @@ const OWNS = {
   'theme-click-direct': 8,
   'controls-auto-margin': 9,
   'marks-unlit': 10,
-  'figure-unnamed': 11
+  'figure-unnamed': 11,
+  'save-as-mislabelled': 12
 }
 
 /* **58 characters, and the length is asserted rather than trusted.** The
@@ -854,6 +855,47 @@ const cellNamesTheFigure = async (browser, url) => {
   return errors
 }
 
+/* 12. **The header's second mark says what it does, in both of its names.**
+       `mpdf-003` Phase 17 turned this button from `Save` into `Save as…`, and
+       Phase 16 shipped a recorded drop — nothing in either rig read the header's
+       children at all — which this ends. It is the page's only visible change in
+       that phase, and a mark that named the wrong action would be the exact
+       defect Phase 16 deferred the rename to avoid: a button saying what it
+       would do next release.
+
+       **Both names and not one**, `wearAppearance`'s rule and the footer's: the
+       `title` is what a sighted reader hovers for and the `aria-label` is what a
+       screen reader says, so a page that moved one and not the other would tell
+       two readers two different things. `title` renders in the shipping
+       WKWebView — read at the window, since neither rig can see a native
+       tooltip. */
+const theSaveMarkSaysWhatItDoes = async (browser, url) => {
+  const page = await opened(browser, url)
+
+  const read = await page.evaluate(() => {
+    const button = document.getElementById('save')
+    return {
+      title: button.getAttribute('title'),
+      label: button.getAttribute('aria-label'),
+      text: button.textContent.trim()
+    }
+  })
+  const errors = await drainErrors(page)
+  await page.close()
+
+  note(`#save: title ${JSON.stringify(read.title)}, aria-label ${JSON.stringify(read.label)}`)
+
+  ok(
+    12,
+    'the header\'s second mark says `Save as…` in both of its names',
+    read.title === 'Save as…' && read.label === 'Save as…' && read.text === '',
+    read.title === read.label
+      ? `both say ${JSON.stringify(read.title)}`
+      : `title ${JSON.stringify(read.title)} against aria-label ${JSON.stringify(read.label)}`
+  )
+  return errors
+}
+
 /* ----------------------------------------------------------------- the run */
 
 const run = async ({ engine, headed, rev, doc, mutate }) => {
@@ -886,7 +928,8 @@ const run = async ({ engine, headed, rev, doc, mutate }) => {
       cellPlacesAndDoesNotDecide,
       groupSitsBesideTheBrand,
       viewsWorkTheirPanes,
-      cellNamesTheFigure
+      cellNamesTheFigure,
+      theSaveMarkSaysWhatItDoes
     ]) {
       gather(await check(browser, held.url))
     }
@@ -901,7 +944,7 @@ const run = async ({ engine, headed, rev, doc, mutate }) => {
          **It stays last** — it is the only clause that accumulates across every
          other one, so its number moves as clauses are added and theirs do not. */
   ok(
-    12,
+    13,
     'no uncaught error reached the console through any of it',
     errors.total === 0,
     `${errors.total} uncaught, ${errors.loops} of them ResizeObserver` +

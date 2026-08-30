@@ -90,7 +90,7 @@ phases:
     by: null
   - name: "Phase 17 — Save as, and the mark that says so"
     reviewed: 2026-08-30
-    shipped: null
+    shipped: 2026-08-30
     cut: null
     by: null
 
@@ -1044,6 +1044,14 @@ list to one item.
   and `aria-label`. Tab order is DOM order by construction, nothing setting `order` or
   `tabindex`, and nothing checks it. Still a pass over the landmarks rather than one
   control, over four times as much surface.
+  **Noted 2026-08-30, by Phase 17, and it answers no half of this question.** `title`
+  does render in the shipping WKWebView — read at the window on all four of the window's
+  bare marks after Phase 16 shipped, and **neither rig can see a native tooltip**, so
+  nothing automated has confirmed it or will. That is a *sighted* reader's reading, and
+  this question is a screen reader's; the two marks the header carries are still named
+  only by `title` and `aria-label`, and `app/harness/checks.mjs` clause 12 now holds the
+  second of them to saying the same thing in both. Still unanswered, still a pass over
+  the window's landmarks rather than one control.
   **Noted 2026-08-30, by Phase 16: unanswered and wider again, and no longer only the
   footer's question.** The header now carries **two controls with no text either**,
   named only by `title` and `aria-label`, so the window's bare marks have gone from two

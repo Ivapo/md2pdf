@@ -1274,8 +1274,10 @@
 
       **Each mark carries `title` and `aria-label` both**, `wearAppearance`'s
       rule and the footer's: a bare mark names nothing to a screen reader.
-      `Save` and not `Save as…` — a button that says what it will do next
-      release is the defect this phase's own deferral invites.
+      **`Save as…` and one button, which is decided rather than open**: a button
+      earns its place by being the thing a reader cannot guess, and `⌘S` — still
+      Save, still the menu's — is the one chord every author already has in
+      their fingers. `app/harness/checks.mjs` reads these two names.
     -->
     <header>
       <button id="open" type="button" title="Open…" aria-label="Open…">
@@ -1283,7 +1285,7 @@
           <path d="M0.5 11.5 V2.5 H5.5 L7.5 4.5 H13.5 V11.5 Z" />
         </svg>
       </button>
-      <button id="save" type="button" title="Save" aria-label="Save">
+      <button id="save" type="button" title="Save as…" aria-label="Save as…">
         <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false">
           <path d="M1.5 1.5 H9.5 L12.5 4.5 V12.5 H1.5 Z" />
           <rect x="3.5" y="8.5" width="7" height="4" />
@@ -1864,6 +1866,42 @@
         try {
           await invoke('edit', { text: text.value })
           await invoke('save')
+        } catch (problem) {
+          fail(problem)
+        }
+      }
+
+      /*
+        Save as. **`exportDocument`'s shape and not `saveDocument`'s**, because
+        this one opens a dialog: ask Rust where the panel should sit, open it,
+        and hand back the path the author picked.
+
+        **The text goes over first**, as a plain save does, so the bytes written
+        are the pane and not the pane a moment ago — and Rust writes from its own
+        buffer rather than from anything crossing here twice.
+
+        `filters` is markdown and bibliographies, the kinds
+        `app/src/document.rs:save_file` accepts, so the refusal is the floor
+        rather than the first thing a reader meets.
+      */
+      async function saveDocumentAs() {
+        let defaultPath
+        try {
+          await invoke('edit', { text: text.value })
+          defaultPath = await invoke('save_as_path')
+        } catch (problem) {
+          fail(problem)
+          return
+        }
+
+        const path = await save({
+          defaultPath,
+          filters: [{ name: 'Markdown and bibliographies', extensions: ['md', 'bib', 'yml', 'yaml'] }]
+        })
+        if (path === null) return // the user cancelled
+
+        try {
+          await invoke('save_as', { path })
         } catch (problem) {
           fail(problem)
         }
@@ -4213,9 +4251,10 @@
 
       document.getElementById('discard').addEventListener('click', discardEdits)
       document.getElementById('open').addEventListener('click', openDocument)
-      document.getElementById('save').addEventListener('click', saveDocument)
+      document.getElementById('save').addEventListener('click', saveDocumentAs)
       listen('open', openDocument)
       listen('save', saveDocument)
+      listen('save-as', saveDocumentAs)
       listen('export', exportDocument)
       listen('rendered', refresh)
       listen('opened', takePendingOpen)

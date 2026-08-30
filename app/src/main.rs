@@ -36,11 +36,20 @@ const EXPORT: &str = "export";
 
 /// The id of the Save menu item, and the event it sends the page.
 ///
-/// It opens no dialog — the document has a path already — but it still emits
-/// rather than acting, so that the item and the button beside it run one code
-/// path. The page hands its text over before it asks for the save, so the file
-/// is the pane and not the pane a moment ago.
+/// It opens no dialog — the document has a path already — and **since
+/// `mpdf-003` Phase 17 it has no button beside it either**, the header's one
+/// floppy being [`SAVE_AS`]. It still emits rather than acting: the page hands
+/// its text over before it asks for the save, so the file is the pane and not
+/// the pane a moment ago, and that ordering is the page's to do.
 const SAVE: &str = "save";
+
+/// The id of the Save-as menu item, and the event it sends the page.
+///
+/// It follows [`OPEN`] and [`EXPORT`]: the item emits, the page owns the
+/// dialog. **This one has the button beside it**, and it takes
+/// `Shift+CmdOrCtrl+S` — which [`EXPORT`] gave up rather than moving to a
+/// second, more obscure chord. `mpdf-003` Phase 17.
+const SAVE_AS: &str = "save-as";
 
 /// The signal the loop sends the page after every compile.
 ///
@@ -95,7 +104,7 @@ fn main() {
             app.set_menu(menu(app.handle())?)?;
             app.on_menu_event(|app, event| {
                 let id = event.id();
-                if (id == OPEN || id == SAVE || id == EXPORT)
+                if (id == OPEN || id == SAVE || id == SAVE_AS || id == EXPORT)
                     && let Some(window) = app.get_webview_window(MAIN)
                 {
                     let _ = window.emit(id.as_ref(), ());
@@ -174,6 +183,8 @@ fn main() {
             document_text,
             edit,
             save,
+            save_as_path,
+            save_as,
             current_pdf,
             status,
             set_appearance,
@@ -468,6 +479,53 @@ fn save(session: tauri::State<'_, Mutex<Session>>) -> Result<(), String> {
         .save()
 }
 
+/// Where the Save-as panel should open, or why it should not open.
+///
+/// **A mirror of [`export_path`] and for its reason**: the page cannot build an
+/// absolute path, `Status` carrying root-relative spellings only, and a panel
+/// given no default opens wherever macOS last was — outside the project, where
+/// [`crate::document::save_file`]'s confinement would make refusal the *normal*
+/// first outcome. It answers with the file the pane is holding, which is what a
+/// Save-as defaults to everywhere, and it refuses **before** the dialog rather
+/// than after it.
+///
+/// It names the file in the pane and not the file that compiles, which is the
+/// opposite of [`export_path`]'s choice and right for the opposite reason: the
+/// bytes about to be written are the pane's.
+#[tauri::command]
+fn save_as_path(session: tauri::State<'_, Mutex<Session>>) -> Result<String, String> {
+    session
+        .lock()
+        .expect("the session lock was poisoned")
+        .preview()
+        .document()
+        .map(|path| path.to_string_lossy().into_owned())
+        .ok_or_else(|| "no document is open".to_string())
+}
+
+/// Write the pane where the author asked, and hold that file after.
+///
+/// **It sets the title, which is the fourth writer of it in this file** —
+/// [`open_document`], [`set_main`] and [`set_edited`] each do the same, the
+/// window being the command's to retitle and not the session's.
+#[tauri::command]
+async fn save_as(
+    window: tauri::Window,
+    session: tauri::State<'_, Mutex<Session>>,
+    path: String,
+) -> Result<(), String> {
+    let opened = {
+        let mut session = session.lock().expect("the session lock was poisoned");
+        session.save_as(path)?;
+        session.preview().document().map(document::title)
+    };
+
+    if let Some(name) = opened {
+        window.set_title(&name).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// What the pane should be showing now.
 ///
 /// The bytes cross as a `tauri::ipc::Response`, which reaches the page as an
@@ -600,9 +658,14 @@ fn menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> 
     let save = MenuItemBuilder::with_id(SAVE, "Save")
         .accelerator("CmdOrCtrl+S")
         .build(app)?;
-    let export = MenuItemBuilder::with_id(EXPORT, "Save a Copy…")
+    let save_as = MenuItemBuilder::with_id(SAVE_AS, "Save as…")
         .accelerator("Shift+CmdOrCtrl+S")
         .build(app)?;
+    // **The export gives the chord up rather than moving to a second one.**
+    // Phase 16 withdrew its button on the argument that a reader who wants it
+    // knows to look in `File`, and an accelerator nobody guesses is not better
+    // than the item it duplicates. `mpdf-003` Phase 17.
+    let export = MenuItemBuilder::with_id(EXPORT, "Save a Copy…").build(app)?;
 
     MenuBuilder::new(app)
         .items(&[
@@ -620,6 +683,7 @@ fn menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> 
             &SubmenuBuilder::new(app, "File")
                 .item(&open)
                 .item(&save)
+                .item(&save_as)
                 .item(&export)
                 .separator()
                 .close_window()

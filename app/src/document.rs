@@ -917,6 +917,61 @@ pub fn create_file(root: &Path, path: &str) -> Result<(), String> {
     }
 }
 
+/// Write `bytes` to one file under `root`, named by a save dialog.
+///
+/// [`create_file`]'s three rules, two kept and one deliberately parted from,
+/// which is why this is a third function beside it rather than a parameter on
+/// it.
+///
+/// **[`kind_of`] is kept unchanged**, and the reason is the panel rather than
+/// symmetry: [`files_under`] filters every row through it, so a save to
+/// `notes.txt` would write a file the panel can never list while the pane holds
+/// it, [`crate::preview::Status`]'s `edited` would name a path with no row, and
+/// no gesture in the window could get back to it.
+/// `specs/file_panel_spec.md` §1.2 opens "Four kinds of file are listed and
+/// nothing else". The refusal is `create_file`'s own sentence, **reused with its
+/// "a new file is" wording intact** so that neither caller's copy is quietly
+/// reworked and the two drift apart.
+///
+/// **[`landing`] is kept**, so this is its third caller after `create_file` and
+/// [`trash_file`]. A dialog answers with an absolute path, which `landing`
+/// handles without a special case: `Path::join` with an absolute path replaces
+/// the base, so the parent is still canonicalized and still required under the
+/// root.
+///
+/// **`create_new` is parted from, and that is the decision.** `O_EXCL` makes
+/// *already exists* a refusal, which is right for a `+` gesture that invents a
+/// name and wrong for a Save-as, whose purpose is sometimes to replace.
+/// `NSSavePanel` asks before it answers with a path that exists, so the
+/// confirmation is the platform's — `specs/file_panel_spec.md`'s argument for
+/// the Trash being the platform's undo, applied to the same author's other
+/// destructive gesture.
+///
+/// It answers with the path it wrote, which `create_file` has no reason to:
+/// [`crate::preview::Preview::save_as`] needs it to set `edited`.
+///
+/// **It is a function and not the command**, per this file's own header.
+/// `mpdf-003` Phase 17.
+pub fn save_file(root: &Path, path: &str, bytes: &[u8]) -> Result<PathBuf, String> {
+    match kind_of(path) {
+        Some(Kind::Markdown | Kind::Bibliography) => {}
+        _ => {
+            return Err(format!(
+                "{path} is neither markdown nor a bibliography: \
+                 a new file is a .md, .bib, .yml or .yaml"
+            ));
+        }
+    }
+
+    let landed =
+        landing(root, path).ok_or_else(|| format!("{path} would land outside this project"))?;
+
+    std::fs::write(&landed, bytes)
+        .map_err(|e| format!("cannot write {}: {e}", landed.display()))?;
+
+    Ok(landed)
+}
+
 /// Move one file under `root` to the Trash, named by the panel.
 ///
 /// **A third confinement question, and neither shipped rule serves it.**

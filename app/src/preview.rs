@@ -478,6 +478,43 @@ impl Preview {
         Ok(())
     }
 
+    /// Write the buffer to a path the author picked, and hold that file after.
+    ///
+    /// **[`Preview::save`]'s body with a different destination, and the order is
+    /// the load-bearing part.** `saved` moves to the buffer *before* `edited`
+    /// does, for two reasons that both bite: it is what makes the buffer clean,
+    /// so this write's own filesystem event takes [`External::Unchanged`] a
+    /// moment later with no second compile; and it is why
+    /// [`Session::save_as`] cannot be `save` followed by
+    /// [`Session::set_edited`], which would meet `refused_while_dirty` and
+    /// answer `Ok(())` having moved nothing — a silent success, on the one
+    /// gesture an author makes *because* they have unsaved work.
+    ///
+    /// **It does not `load`**, where `set_edited` does: the file was just
+    /// written from this buffer, so a read would answer the text already held.
+    ///
+    /// `main` does not follow. The file that compiles and the file that is
+    /// edited are two — `mpdf-010` Phase 2 — and a Save-as of a section is not a
+    /// claim about which master compiles.
+    ///
+    /// `mpdf-003` Phase 17.
+    pub fn save_as(&mut self, path: &str) -> Result<PathBuf, String> {
+        let root = self
+            .root
+            .clone()
+            .ok_or_else(|| "no document is open".to_string())?;
+        if self.edited.is_none() {
+            return Err("no document is open".to_string());
+        }
+
+        let landed = document::save_file(&root, path, self.buffer.as_bytes())?;
+
+        self.saved = self.buffer.clone();
+        self.divergence = None;
+        self.edited = Some(landed.clone());
+        Ok(landed)
+    }
+
     /// The disk moved under the open document: decide what that means.
     ///
     /// This is [`external_change`] with the file read for it and its answer
@@ -869,6 +906,57 @@ impl Session {
     /// the path back as `missing: true`, because the master still names it.
     ///
     /// `mpdf-010` Phase 4.
+    /// Write the pane to a path the author picked, and hold that file after.
+    ///
+    /// **Three duties the watch will not do for this command**, which is what
+    /// separates it from every other write in this file.
+    ///
+    /// **It compiles.** `document::render_project` substitutes the buffer for
+    /// `edited` alone and reads every other path off the disk, so moving
+    /// `edited` changes what the next compile reads — onto a file the master
+    /// names, or *away* from one, which is the case an author hits by default:
+    /// pane on the master with unsaved edits, saved under a new name, and the
+    /// master goes back to its own on-disk text. **The write's own event will
+    /// not cause that compile.** [`crate::watch::classify`] answers on first
+    /// match and that match is [`crate::watch::Change::Edited`], whose
+    /// `reload()` answers [`External::Unchanged`] — [`Preview::save_as`] having
+    /// just made the buffer and the file agree — so [`Session::on_change`] sets
+    /// `announce = false` and compiles nothing.
+    ///
+    /// **It rebuilds the tree by hand**, exactly as [`Session::trash`] does and
+    /// for the same reason: that same first match means the event never reaches
+    /// `Change::Tree`, so the file just written would have no row in the panel —
+    /// or would have one only depending on where the debounce fell relative to
+    /// the move, which is worse than never.
+    ///
+    /// **It announces**, which is what carries the new [`Status`] to the footer
+    /// cell, the marked row and the title the command sets beside it.
+    ///
+    /// `mpdf-003` Phase 17.
+    pub fn save_as(&mut self, path: String) -> Result<(), String> {
+        let (root, main) = {
+            let preview = self.preview();
+            match (preview.root.clone(), preview.main.clone()) {
+                (Some(root), Some(main)) => (root, main),
+                _ => return Err("no document is open".to_string()),
+            }
+        };
+
+        let landed = {
+            let mut preview = self.preview();
+            preview.save_as(&path)?
+        };
+
+        {
+            let mut preview = self.preview();
+            preview.tree = document::files_under(&root);
+            preview.compile();
+        }
+        (self.on_render)();
+
+        self.arm(root.clone(), root.join(main), landed)
+    }
+
     pub fn trash(
         &mut self,
         path: String,
@@ -1427,6 +1515,251 @@ mod tests {
         );
         assert!(session.preview().pdf().unwrap().starts_with(b"%PDF"));
         assert!(!session.preview().is_stale());
+    }
+
+    // ---------------------------------------------------------- Save as
+    //
+    // `mpdf-003` Phase 17's exit gate, clauses 1 and 2. **Clause 1's four tests
+    // compare the PDF byte-wise against the compile before the save**, which §2
+    // of the spec licenses — five identical compiles across five processes —
+    // and **each states its starting buffer**, because the fourth case makes the
+    // starting state load-bearing rather than incidental.
+
+    /// A Save-as onto a path the master names moves the PDF. Clean buffer.
+    ///
+    /// **A path the master names other than the one the pane holds**: saving
+    /// onto the pane's own path from a clean buffer writes identical bytes and
+    /// moves nothing, which would pass this assertion for the wrong reason.
+    /// **Its project is built here rather than taken from
+    /// [`multi_file_in`]**, and that is a finding rather than a preference:
+    /// every section of that fixture is entangled with the others — one
+    /// declares `#fig:pipeline`, one declares `#fig:mark` and cites a footnote,
+    /// one defines that footnote and references both figures — so overwriting
+    /// *any* of them fails the compile, the last good page survives by design,
+    /// and `pdf()` answers the same bytes for a reason that has nothing to do
+    /// with this clause. Two plain files instead, and the page moves because the
+    /// section's text moved.
+    #[test]
+    fn a_save_as_onto_a_path_the_master_names_moves_the_page() {
+        let dir = scratch_dir("save-as-onto-a-named-path");
+        std::fs::write(dir.join("book.md"), "---\ntitle: A Book\n---\n\n[](part.md)\n").unwrap();
+        std::fs::write(dir.join("part.md"), "# Part\n\nThe text the section had.\n").unwrap();
+        std::fs::write(dir.join("swap.md"), "# Swap\n\nQuite another paragraph.\n").unwrap();
+
+        let (mut session, compiles) = counted();
+        session.open(dir.join("book.md")).unwrap();
+        wait_for(&compiles, 1);
+
+        // The pane holds a file the master does not name, and holds it clean.
+        session.set_edited("swap.md".to_string()).unwrap();
+        session.preview().compile();
+        let before = session.preview().pdf().unwrap().to_vec();
+
+        let onto = dir.join("part.md");
+        session
+            .save_as(onto.to_string_lossy().into_owned())
+            .unwrap();
+
+        let after = session.preview().pdf().unwrap().to_vec();
+        assert!(session.preview().error().is_none(), "{:?}", session.preview().error());
+        assert_ne!(before, after, "overwriting a section the master names moves the page");
+    }
+
+    /// A Save-as onto a path the master does not name leaves the PDF alone.
+    ///
+    /// **From a clean buffer, and that qualification is the clause.** From a
+    /// dirty one this is false — see
+    /// [`a_save_as_off_a_dirty_named_file_moves_the_page`], which is the case an
+    /// author hits by default.
+    #[test]
+    fn a_save_as_onto_a_path_the_master_does_not_name_leaves_the_page() {
+        let dir = scratch_dir("save-as-onto-an-unnamed-path");
+        let document = multi_file_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        wait_for(&compiles, 1);
+        let before = session.preview().pdf().unwrap().to_vec();
+
+        let onto = dir.join("notes.md");
+        session
+            .save_as(onto.to_string_lossy().into_owned())
+            .unwrap();
+
+        let after = session.preview().pdf().unwrap().to_vec();
+        assert_eq!(before, after, "a file nothing names does not reach the compile");
+    }
+
+    /// The fourth case: `edited` leaving a dirty file the master names.
+    ///
+    /// **The default configuration, and the one the first draft of Phase 17 got
+    /// backwards.** `document::render_project` substitutes the buffer for
+    /// `edited` alone, so the moment a Save-as moves `edited` off the master,
+    /// the master goes back to its own on-disk text — and the page changes even
+    /// though the file written is one nothing names. **It is a state this app
+    /// has never been in**: [`Session::set_edited`]'s `refused_while_dirty`
+    /// blocks exactly it, and [`Session::save_as`] bypasses that guard
+    /// deliberately.
+    #[test]
+    fn a_save_as_off_a_dirty_named_file_moves_the_page() {
+        let dir = scratch_dir("save-as-off-a-dirty-file");
+        let document = multi_file_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        wait_for(&compiles, 1);
+
+        // Dirty, and visibly so in the typeset page rather than in a comment.
+        let text = format!("{}\n\nA paragraph the file on disk does not have.\n", session.preview().text());
+        session.preview().edit(text);
+        session.preview().compile();
+        let before = session.preview().pdf().unwrap().to_vec();
+
+        let onto = dir.join("draft.md");
+        session
+            .save_as(onto.to_string_lossy().into_owned())
+            .unwrap();
+
+        let after = session.preview().pdf().unwrap().to_vec();
+        assert_ne!(
+            before, after,
+            "the master stops being read from the buffer and reverts to its own disk text"
+        );
+    }
+
+    /// A Save-as aimed outside the project is refused and writes nothing.
+    #[test]
+    fn a_save_as_outside_the_project_is_refused() {
+        let dir = scratch_dir("save-as-outside");
+        let document = multi_file_in(&dir);
+        let outside = dir.parent().unwrap().join("escape.md");
+        let _ = std::fs::remove_file(&outside);
+
+        let (mut session, compiles) = counted();
+        session.open(document.clone()).unwrap();
+        wait_for(&compiles, 1);
+
+        let refusal = session
+            .save_as(outside.to_string_lossy().into_owned())
+            .unwrap_err();
+
+        assert!(refusal.contains("would land outside this project"), "{refusal}");
+        assert!(!outside.exists(), "the refusal wrote nothing");
+        assert_eq!(session.preview().document(), Some(document.as_path()));
+    }
+
+    /// A Save-as with a dirty buffer moves the pane rather than diverging.
+    ///
+    /// **The failure `Preview::save` followed by [`Session::set_edited`] would
+    /// have**: that path meets `refused_while_dirty`, sets a divergence and
+    /// answers `Ok(())` having moved nothing — a silent success, on the one
+    /// gesture an author makes *because* they have unsaved work.
+    #[test]
+    fn a_save_as_with_a_dirty_buffer_moves_the_pane() {
+        let dir = scratch_dir("save-as-dirty");
+        let document = multi_file_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        wait_for(&compiles, 1);
+        session.preview().edit("Rewritten in the pane.\n".to_string());
+
+        let onto = dir.join("moved.md");
+        session
+            .save_as(onto.to_string_lossy().into_owned())
+            .unwrap();
+
+        assert_eq!(session.preview().document(), Some(onto.as_path()));
+        assert!(session.preview().status().divergence.is_none(), "no divergence");
+        assert_eq!(std::fs::read_to_string(&onto).unwrap(), "Rewritten in the pane.\n");
+    }
+
+    /// A Save-as onto a file that already exists overwrites it.
+    ///
+    /// **Deliberately not `create_file`'s rule.** `File::create_new` makes
+    /// *already exists* a refusal, which is right for a `+` gesture that invents
+    /// a name and wrong for a Save-as, whose purpose is sometimes to replace.
+    #[test]
+    fn a_save_as_onto_an_existing_file_overwrites_it() {
+        let dir = scratch_dir("save-as-overwrite");
+        let document = multi_file_in(&dir);
+        let onto = dir.join("already.md");
+        std::fs::write(&onto, "What was there before.\n").unwrap();
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        wait_for(&compiles, 1);
+        session.preview().edit("What the pane says.\n".to_string());
+
+        session
+            .save_as(onto.to_string_lossy().into_owned())
+            .unwrap();
+
+        assert_eq!(std::fs::read_to_string(&onto).unwrap(), "What the pane says.\n");
+    }
+
+    /// A Save-as to a kind the panel cannot list is refused.
+    ///
+    /// `document::files_under` filters every row through `kind_of`, so a
+    /// `notes.txt` would be a file the panel can never show while the pane holds
+    /// it — `Status::edited` naming a path with no row, and no gesture back.
+    #[test]
+    fn a_save_as_to_a_kind_the_panel_cannot_list_is_refused() {
+        let dir = scratch_dir("save-as-wrong-kind");
+        let document = multi_file_in(&dir);
+        let onto = dir.join("notes.txt");
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        wait_for(&compiles, 1);
+
+        let refusal = session
+            .save_as(onto.to_string_lossy().into_owned())
+            .unwrap_err();
+
+        assert!(refusal.contains("neither markdown nor a bibliography"), "{refusal}");
+        assert!(!onto.exists());
+    }
+
+    /// The three duties the watch will not do for a Save-as.
+    ///
+    /// One test and not three, because they are one call's postconditions and a
+    /// build that omits any of them fails here for its own reason: the page is
+    /// stale, the file has no row, or nothing announced.
+    #[test]
+    fn a_save_as_compiles_lists_the_new_file_and_announces() {
+        let dir = scratch_dir("save-as-duties");
+        let document = multi_file_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        wait_for(&compiles, 1);
+
+        let revision = session.preview().status().revision;
+        let announced = compiles.load(Ordering::SeqCst);
+
+        let onto = dir.join("listed.md");
+        session
+            .save_as(onto.to_string_lossy().into_owned())
+            .unwrap();
+
+        assert!(
+            session.preview().status().revision > revision,
+            "it compiles — the watch will not, `classify` answering Change::Edited on first match"
+        );
+        assert!(
+            compiles.load(Ordering::SeqCst) > announced,
+            "it announces, which is what carries the new Status to the bar"
+        );
+        assert!(
+            session
+                .preview()
+                .status()
+                .entries
+                .iter()
+                .any(|entry| entry.path == "listed.md"),
+            "it rebuilds the tree by hand, as `Session::trash` does"
+        );
     }
 
     /// A section changes and the page comes back, and it is a real one.

@@ -44,11 +44,11 @@ covers: >
   pane that loses both when it empties, the check that reads this file and the
   two declarations it holds to each other, the harness that drives it in two
   engines and the copy it drives rather than the file, the boundary it records
-  because the DOM cannot show one, the twelve clauses it
-  asserts as properties and the nine broken pages that falsify them, the second
+  because the DOM cannot show one, the thirteen clauses it
+  asserts as properties and the ten broken pages that falsify them, the second
   rig that drives the shipped binary instead and which of the three kinds of
   claim belongs where, and the seven defects none of them reaches
-max_lines: 635
+max_lines: 645
 generated: 2026-08-28
 ---
 
@@ -214,7 +214,10 @@ children, in order — `#open`, `#save`, `#status` — are two actions and a sta
 and nothing that decides what the window shows**, which is the rule the two bars are
 split on: **the footer sets and the header acts**. A setting is left where a reader
 likes it and stops being noticed, so the fold, the gutter and the fit are the footer's
-one copy each; an action wants the bar the eye starts at. *Save a Copy…* is neither and
+one copy each; an action wants the bar the eye starts at. **The floppy is `Save as…`,
+one button and not two**: a button earns its place by being what a reader cannot guess,
+and `⌘S` — still Save, still the menu's — is the chord every author already has. *Save a
+Copy…* is neither and
 is argued on its own — Open and Save act on the document being edited, the file `⌘S` writes
 and the title bar names, where the export writes a **derived artifact** to a path picked
 once — so it is the `File` menu's alone, `app/src/main.rs:export`, the item and its
@@ -641,8 +644,8 @@ sentence — found by a mutation that falsified nothing, not by reading.
 `core:default`'s own words — the half a stub that merely omits it never tests. It also keeps
 **a log of every command the page sends**, because a page that did a thing itself and a page
 that asked Rust to are indistinguishable from the DOM. `checks.mjs`
-asserts twelve clauses in Playwright's Chromium and WebKit, **both of which must pass, every
-clause a property and none a metric literal**, and is falsified first against nine broken copies
+asserts thirteen clauses in Playwright's Chromium and WebKit, **both of which must pass, every
+clause a property and none a metric literal**, and is falsified first against ten broken copies
 of the page, each failing exactly the clause it owns. **Two mutations may own one clause
 without either being redundant**, and clause 3 is where that now stands: `flex-min` reaches
 the footer's half, the brand pushed out of a bar that holds one line, and `header-wraps`

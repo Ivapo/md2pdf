@@ -118,7 +118,8 @@ it answers with its *input* when canonicalization fails, so
 `root.join("../escape.md")` would survive a `starts_with` textually. A parent
 that will not canonicalize is a refusal too, which is how `newdir/x.md` is
 refused with no clause of its own and folder creation stays a non-goal.
-`app/src/document.rs:create_file` is the one caller, and asks two more:
+`app/src/document.rs:create_file` is one of its three callers — `trash_file` and
+`save_file` are the others — and asks two more:
 `document::kind_of` is the predicate, so the extension decides the kind and
 `.md`, `.bib`, `.yml` and `.yaml` are the panel's own filter minus the images it
 does not make; and `File::create_new` makes *already exists* the filesystem's

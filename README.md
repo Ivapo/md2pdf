@@ -102,13 +102,19 @@ rebuild-on-change.
 
 **Type in the left pane and the page follows.** It redraws when you stop typing, and
 **the PDF is what the pane says, not what the file says** — so the page shows your
-unsaved work. `⌘S`, or the Save button, writes the pane back to whichever file it is
-holding. **The bar along the foot of the window names whatever the pane is holding** — the
+unsaved work. `⌘S` writes the pane back to whichever file it is
+holding. **The floppy in the header, or `⇧⌘S`, is `Save as…`**: it writes the pane to a
+name you pick and then holds that file, so the next `⌘S` goes there. It saves **inside
+the project** — a name outside it is refused, because opening a document somewhere else
+is what `Open…` is for — and it takes the same kinds the panel lists, `.md`, `.bib`,
+`.yml` and `.yaml`. If you save a file your document names, the page redraws with it;
+if you save the file you were editing under a new name, the page goes back to what the
+old one says on disk, because that is the file the document still names. **The bar along the foot of the window names whatever the pane is holding** — the
 file you are typing in, which once you have clicked another file in the list is not
 the file the page beside it comes from, or the picture, if you have clicked an image
 row to look at one. **That bar also carries the view and fit controls**: the panel and
 the line numbers as two small marks on the left, and the fit beside the appearance
-button. **The header is Open and Save** — two marks and the status line, and nothing
+button. **The header is Open and Save as…** — two marks and the status line, and nothing
 that decides what the window shows.
 **The button in that bar sets the window light or dark**: it starts on whichever your
 system is set to, and clicking gives you the other one. It remembers your choice the
@@ -159,7 +165,7 @@ nothing, so those links are inert on the page.
 The header says where the page stands — `current` with the time the compile took, or
 `stale` when the last one failed and the page you are looking at is the older one.
 
-**`File → Save a Copy…`, or `⇧⌘S`, writes the PDF where you ask**, offering the path of
+**`File → Save a Copy…` writes the PDF where you ask**, offering the path of
 the file that compiles with a `.pdf` extension — the page is that document's, whichever
 file you happen to be editing. It writes the page on screen and compiles nothing, so
 the file and the page cannot disagree, and it is byte for byte the file `md2pdf` writes
