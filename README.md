@@ -103,8 +103,12 @@ rebuild-on-change.
 **Type in the left pane and the page follows.** It redraws when you stop typing, and
 **the PDF is what the pane says, not what the file says** — so the page shows your
 unsaved work. `⌘S`, or the Save button, writes the pane back to whichever file it is
-holding. **The bar along the foot of the window names that file** — which, once you
-have clicked another file in the list, is not the file the page beside it comes from.
+holding. **The bar along the foot of the window names whatever the pane is holding** — the
+file you are typing in, which once you have clicked another file in the list is not
+the file the page beside it comes from, or the picture, if you have clicked an image
+row to look at one. **That bar also carries the view and fit controls**: the panel and
+the line numbers as two small marks on the left, and a second copy of the fit beside
+the appearance button, so you need not go back to the header for them.
 **The button in that bar sets the window light or dark**: it starts on whichever your
 system is set to, and clicking gives you the other one. It remembers your choice the
 next time you open the app, and it changes only the app's own chrome — the page stays

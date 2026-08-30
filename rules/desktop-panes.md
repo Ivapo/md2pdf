@@ -17,7 +17,9 @@ covers: >
   redraw that moves the reader and the three causes that decide where to, the
   anchor path that opens on the author's own page and the one file it is
   filtered to, the status the page places and never composes, the bar along the
-  foot and the three cells it carries, the file it names and the one it does not,
+  foot, the four cells and two rules it carries and the three duplicated
+  settings inside them, the two marks it draws rather than borrows, the file it
+  names, the one it does not and the figure that is neither,
   the appearance the author chooses and the four token blocks that wear it, the
   button's two positions against the three values behind them and the state that
   is not a destination, the mark that is what is worn rather than what is
@@ -39,11 +41,11 @@ covers: >
   pane that loses both when it empties, the check that reads this file and the
   two declarations it holds to each other, the harness that drives it in two
   engines and the copy it drives rather than the file, the boundary it records
-  because the DOM cannot show one, the ten clauses it
-  asserts as properties and the six broken pages that falsify them, the second
-  rig that drives the shipped binary instead and which of the two a claim
-  belongs to, and the seven defects none of them reaches
-max_lines: 545
+  because the DOM cannot show one, the twelve clauses it
+  asserts as properties and the nine broken pages that falsify them, the second
+  rig that drives the shipped binary instead and which of the three kinds of
+  claim belongs where, and the seven defects none of them reaches
+max_lines: 615
 generated: 2026-08-28
 ---
 
@@ -205,8 +207,13 @@ wrote.
 ## The footer
 
 A bar along the foot of the window: 23px and its own 1px rule, so 24px taken out of
-`main`. Three cells: `#edited` on the left, `#controls` holding one button, and
-`#brand` last. It is `main`'s
+`main`. **Four cells and two rules**, counted as this file counts them — the
+footer's own element children, in order: `#views` (holding `#views-files`, then
+`#views-lines`), `#sep-views`, `#edited`, `#controls` (holding `#fit-footer`, then
+`#theme`), `#sep-brand`, `#brand`. **Two of those placements are load-bearing rather
+than aesthetic**: the fit select sits *inside* `#controls`, because the auto margin
+that right-aligns the group is the group's, and each `.sep` sits *outside* the group
+it follows, for the same reason. It is `main`'s
 next element sibling and the last element before the module script — **not `body`'s
 last element child**, and those are two facts rather than one restated. By the file
 `body` ends `FOOTER, SCRIPT`; **at runtime it ends `FOOTER, SCRIPT, CANVAS`**, `pdf.js`
@@ -214,14 +221,53 @@ appending a hidden zero-size canvas of its own to measure text with. So the last
 element child is the script by source order and that canvas by the DOM, and the footer
 is neither.
 
-**The left cell is `Status::edited`, not `Status::main`**: the file the pane is
-holding, which from the first click on a panel row is not the file that compiles.
-`report` writes its `textContent` beside `parts(state)`, and the rule above holds —
-the status line is composed in Rust and a page-side value is never folded into it, so
-this is a cell of its own. The value is `state.edited?.split('/').pop() ?? ''`: the
-bare file name, and the empty state collapses the cell to nothing while the brand
-stays. **Nothing marks that `edited` may differ from `main`** — the panel below draws
-that distinction, and the bar does not repeat it.
+**The left cell names what the pane is holding**: `Status::edited` and not
+`Status::main`, which from the first click on a panel row is not the file that
+compiles — **and a figure when there is one**. A click on an image row puts a surface
+over the text and never moves `edited`, and must not: `edited` is the file being typed
+in, the one a save writes and the one `main.rs:set_edited` hands to `window.set_title`,
+and a figure is none of those. So the page holds `figureInPane` beside the viewer's own
+state and **`namePaneFile` is the single writer of the cell**, called from three places
+— the status, a figure opening, a figure closing — two sources taking turns written
+from two places showing whichever wrote last rather than what is on screen. The value
+is `(figureInPane ?? editedPath)` reduced to its bare name, `report` keeping
+`editedPath` current beside `parts(state)`; the rule above holds, so this is a cell of
+its own, and the empty state collapses it to nothing while the brand stays. **Both
+surfaces count as held, including the one that draws nothing** — a `.pdf` row gets
+`saySoInstead`'s sentence rather than a picture, and the pane holds that file just as
+much. **Page state, for `folded`'s reason**: it decides nothing but its own drawing,
+and `hideAsset` is the one exit all three ways back go through. **Nothing marks that
+`edited` may differ from `main`** — the panel below draws that distinction.
+
+**Three of the bar's settings are the header's, duplicated rather than moved, and all
+three take one shape: one setting, two controls, one writer.** The fit has
+`fitControls` and `showFit`, the fold `foldControls`, `showFold` and `offerFold`, the
+gutter `lineControls`. In each the listener is installed on every control rather than
+written twice, the new value is read off *the control that was pressed*, and every
+writer writes both — so **neither copy is the original**: a bar that could only receive
+would leave a reader who folded the panel from the header looking at a footer that
+disagreed. A move is the larger decision and was not taken; a second placement can be
+withdrawn in a line where a move cannot. **What the copy costs is stated rather than
+hidden**: the fit's ten options are written twice, nothing enforces that the two lists
+match, and `rules/desktop-geometry.md` records that the option list *is* the cap.
+
+**The two view toggles are drawn marks where the appearance toggle stays a glyph, and
+that is one rule rather than an inconsistency: a mark a glyph names is a glyph, a mark
+no glyph names is drawn.** No glyph means *a panel*, and the two that come closest —
+`▥` and `☰` — differ only by their fill at 10px. So a pane with a column down its left
+and lines with their numbers beside them: two shapes from different families, which is
+what makes them one glance apart. **Every coordinate sits on a half pixel** so a 1px
+stroke lands on a pixel rather than across two, which a 12px mark at `devicePixelRatio`
+1 needs — and that set the gutter mark's spacing rather than the other way round, three
+rules evenly about a 12-box's centre putting the middle one on a whole pixel, so they
+are `1.5 / 5.5 / 9.5`. `currentColor` and nothing else, so the state is one
+declaration: **on is `--ink`, off is `--quiet`, for both**, and neither of the header's
+devices — a turning chevron, a filled background — is carried across, neither surviving
+at 10px in a bar whose entire ink is one colour. **A bare mark names nothing to a
+screen reader**, so each carries `title` and `aria-label` both, `wearAppearance`'s
+rule, and the word each says is the header's own: `Files` and `Lines`, the same two
+controls and not new ones. `app/driver/drive.mjs` read them 12x12 in the shipping
+WKWebView, each in its two inks.
 
 **It duplicates the window title**, which `main.rs:set_edited` sets to the same
 `document::title`. What the second placement buys is that the title is native chrome
@@ -236,8 +282,9 @@ either, which is the hazard the panel answers by carrying the whole path.
 this app a rename could leave wrong in silence**, the page being outside every other
 suite here.
 
-**Between them, `#controls` holds `#theme`: the appearance the author chose, and the
-bar's first interactive control.** **Two positions and three values, which is not a
+**`#controls` holds the fit select and then `#theme`: the appearance the author
+chose.** It was the bar's first interactive control and is now its third, the two view
+toggles standing to the left of the cell. **Two positions and three values, which is not a
 mismatch**: it gives `light` or `dark`, marked `☀ ☾`, and `system` is what the app
 holds before the button has ever been pressed — the window following the machine, at
 sunset included, until the first press pins it. **There is no way back to following**
@@ -257,7 +304,8 @@ all three values, the `system` press being what separates *the other of the two*
 `data-theme` itself, is what makes it a claim rather than a hope, since nothing read
 off the DOM alone can tell the two apart. The button carries `title` and `aria-label`,
 which is more than the bar had; `<footer>` is still an unlabelled `contentinfo`
-landmark, and `specs/desktop_app_spec.md` OQ-11 carries that. **The glyphs are
+landmark carrying **four** interactive controls now, two of them named by nothing
+else, and `specs/desktop_app_spec.md` OQ-11 carries that. **The glyphs are
 measured rather than chosen now**: 9.23 and 9.22px in the shipping WKWebView, the same
 figures Playwright's two engines gave, with `#brand` unmoved as they swap — which is
 OQ-12 resolved against inline SVG.
@@ -281,9 +329,14 @@ where it was, the toggle would have sat outside the group's own right edge. **`#
 own rect cannot tell the two layouts apart** — an auto margin absorbs exactly the free
 space in total, so a last child with no right margin does not move, which falsified
 the first draft of the clause meant to catch this. What separates them is the group's
-distance to the brand, which must equal the footer's own `gap`, **and only at a wide
-viewport**: at 240px a 58-character name has filled `#edited` and left no free space
-to absorb, so both layouts read the gap. The button takes its font, padding, border
+distance to the brand — **two gaps and not one**, `#sep-brand` standing between them,
+each equal to the footer's own `gap`. **The second is the one the layouts differ in**:
+with the auto margin on the group, the separator and the brand are packed at the right;
+moved to the brand, the free space opens *between* them, while the first gap reads the
+bar's own under either, so a clause measuring only it would falsify nothing. And **only
+at a wide viewport**: at
+240px a 58-character name has filled `#edited` and left no free space to absorb, so
+both layouts read both gaps. The button takes its font, padding, border
 and background off and pins `line-height: 1`, so the bar's height does not move.
 
 **What keeps the brand in the bar is `#edited`'s zero automatic minimum size**, and
@@ -551,14 +604,24 @@ declaration. A field renamed on either side alone fails one of the two.
 **`app/harness/` drives this page rather than reading it.** `serve.mjs` copies it into a
 gitignored scratch directory — never edits it, `typecheck.mjs` dying on a page with two module
 scripts — injects `stub.mjs` into the `<head>`, where it must run before the page reads
-`window['__TAURI__']` at module top level, and serves real compiled bytes for `current_pdf`.
+`window['__TAURI__']` at module top level, and serves real compiled bytes for `current_pdf`
+**and the project's own images for `asset_bytes`**, copied into the scratch tree rather
+than served from the source tree, for that server's one rule that nothing outside it is
+served however the URL is spelled, and answered on `current_pdf`'s exact route, Rust
+returning a `tauri::ipc::Response` for both. **Until it did, the drawn-figure path had
+never been exercised by anything**: the stub threw on `asset_bytes`, a refusal reaches
+the same surface through `saySoInstead`, so every image row in the rig landed on a
+sentence — found by a mutation that falsified nothing, not by reading.
 **The stub rejects what the app forbids as well as answering what it returns**, `setSize` in
 `core:default`'s own words — the half a stub that merely omits it never tests. It also keeps
 **a log of every command the page sends**, because a page that did a thing itself and a page
 that asked Rust to are indistinguishable from the DOM. `checks.mjs`
-asserts ten clauses in Playwright's Chromium and WebKit, **both of which must pass, every
-clause a property and none a metric literal**, and is falsified first against six broken copies
-of the page, each failing exactly the clause it owns. The error clause stays last and its
+asserts twelve clauses in Playwright's Chromium and WebKit, **both of which must pass, every
+clause a property and none a metric literal**, and is falsified first against nine broken copies
+of the page, each failing exactly the clause it owns. **Two mutations may own one clause
+without either being redundant**: `views-one-way` reaches the sync between a toggle's two
+copies and `marks-unlit` reaches the mark, and the clause asserts both because with the
+words gone the only visible difference between on and off is a colour. The error clause stays last and its
 number moves as clauses are added, being the only one that accumulates across the others.
 **One clause drives two colour schemes**, `light` being written down as the default rather
 than inherited from Playwright, because the palette has to win in both directions and a
@@ -569,11 +632,18 @@ suite run in one of them would miss half of it.
 server inside it, so what it drives is the **real WKWebView** and the shipped binary; its
 mutations go into the live session rather than into a copy, `generate_context!` having walked
 this file into the executable, and each must fire or the run failed as an instrument and not as
-a clause. **Which to reach for is the distinction worth carrying**: a claim about this page —
-geometry, the panel, the palette, anything wanting a broken copy or a second engine — is
-`app/harness/`'s; a claim about the *window* — the real IPC, `settings.json` on disk, an OS
-resize the page is refused — is the driver's, which reaches no more of the seven below than the
-harness does.
+a clause. **Which to reach for is the distinction worth carrying, and it sorts three kinds of claim
+rather than two**: a claim about this page — geometry, the panel, the palette, anything
+wanting a broken copy or a second engine — is `app/harness/`'s; a claim about the *window*
+— the real IPC, `settings.json` on disk, an OS resize the page is refused — is the
+driver's; and **a claim about how the engine that ships *renders*** is the driver's too,
+not because it is about the window but because only the driver reaches that engine. The
+two drawn marks are that third kind: it reads them at the size their own `svg` attributes
+declare, in their two inks, with the footer still the height its own rule declares —
+**four clauses and three mutations**, the third `marks-unlit` in this rig's terms, an own
+`setAttribute` swallowing the state attribute the ink rule selects on. It opens
+`tests/fixtures/panel/book.md` in place and writing nothing to do it, a control over a
+pane needing the pane. Neither rig reaches more of the seven below than the other.
 
 **What none of it reaches is most of what has gone wrong in this file.** Of the eight defects it
 has produced, a type check catches **one** — a `destroy` that `PDFDocumentProxy` does not have,

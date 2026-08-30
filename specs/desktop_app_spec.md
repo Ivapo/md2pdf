@@ -80,7 +80,7 @@ phases:
     by: null
   - name: "Phase 15 — the bar gains controls and names what the pane holds"
     reviewed: 2026-08-30
-    shipped: null
+    shipped: 2026-08-30
     cut: null
     by: null
 
@@ -1028,6 +1028,12 @@ list to one item.
   OQ-3**, which asks what a *canvas* costs a screen reader — `getStructTree`, Typst
   tagging — and is a question about the preview rather than about the chrome. Blocks
   nothing; it wants a pass over the window's landmarks rather than one control.
+  **Noted 2026-08-30, by Phase 15: the question is unanswered and sharper.** The bar
+  now carries **four** interactive controls where it carried one, and **two of them
+  have no text at all** — the drawn `Files` and `Lines` marks, named only by `title`
+  and `aria-label`. Tab order is DOM order by construction, nothing setting `order` or
+  `tabindex`, and nothing checks it. Still a pass over the landmarks rather than one
+  control, over four times as much surface.
 
 - **OQ-12** — ~~should the appearance marks be glyphs or inline SVG? Raised 2026-08-29 by
   Phase 13. *(design call)* `◐ ☀ ☾` measured stable and legible at 10px — 9.23, 9.23 and
@@ -2556,6 +2562,17 @@ bundle's own `productName`, which a phase before the rename could not have passe
   `rules/desktop-project.md` records as the pair it is. `main` is what compiles;
   `edited` is what the pane holds and what `⌘S` writes. **The bar names the file
   you are typing in.**
+
+  > **CORRECTED 2026-08-30, by Phase 15.** The paragraph above is kept as it was
+  > written and **one sentence of it is now false**: *"The bar names the file you
+  > are typing in."* It names **what the pane is holding**, which from the first
+  > click on an image row is a figure — a surface over the text that never moves
+  > `edited` and must not, `edited` being the file a save writes and the one
+  > `main.rs:set_edited` hands to `window.set_title`. `namePaneFile` is the cell's
+  > single writer and `(figureInPane ?? editedPath)` is its value.
+  > **The neighbouring sentence is untouched and stays true**: the cell is
+  > `Status::edited` and not `Status::main`, and that contrast is exactly the one
+  > Phase 15 keeps.
 
   **It therefore duplicates the window title, and that is a decision rather than
   an oversight.** `app/src/main.rs:set_edited` already ends in

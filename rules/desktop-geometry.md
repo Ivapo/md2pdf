@@ -58,11 +58,15 @@ the rounded CSS box as `logical.w / natural.w` is a different number and never
 equals a fit-page derivation, so every rest would re-lay the document out for
 nothing.
 
-**The control is a `<select id="fit">` in the header, and its option list is the
-cap.** `Fit width`, `Fit page`, then `50% · 75% · 100% · 125% · 150% · 200% ·
+**The control is a `<select>` in each bar — `#fit` in the header and
+`#fit-footer` in the footer, two controls on one setting — and its option list is
+the cap.** `Fit width`, `Fit page`, then `50% · 75% · 100% · 125% · 150% · 200% ·
 300% · 400%`. Nothing above 400% is offered and no second clamp is written
-anywhere: there is no pinch and no wheel, so the control is the whole surface,
-and a scale stated twice would be a scale stated once wrongly. **400% is the
+anywhere: there is no pinch and no wheel, so the two selects are the whole
+surface, and a scale stated twice would be a scale stated once wrongly. **The
+list itself is now written twice and nothing enforces that the two match**, which
+is exactly that hazard in the one place the duplication put it; `showFit` writes a
+chosen value to both, so only the markup can drift. **400% is the
 last step that fits the budget**: a pinned page costs `7.645·s²` MiB of backing
 store at `devicePixelRatio` 2 whatever the pane measures, so above about 410% —
 `√(128 / 7.645) = 4.09` — one page alone exceeds 128 MiB, where holding fewer
