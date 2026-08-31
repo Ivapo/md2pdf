@@ -98,6 +98,11 @@ phases:
     shipped: 2026-08-30
     cut: null
     by: null
+  - name: "Phase 19 — the pane stays in the project, and a save says so"
+    reviewed: 2026-08-30
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -4878,6 +4883,220 @@ it is not the gesture that name denotes in any application they have used.**
 
   **Commit plan.** One push, two commits: the writer, the fallback and the tests; then the
   rules, the README, the doc comment and the note.
+
+### Phase 19 — the pane stays in the project, and a save says so
+
+*Produces the observable: **it stops one from moving**, which is the honest wording and
+not "no".* Phase 18 produced the observable through Phase 17's fourth case: a dirty pane
+saved out of the project moved `edited` off a file the master names, and that file
+reverted to its on-disk text. **This phase removes that path** — `edited` never leaves the
+root — so the PDF that moved becomes byte-identical, and the shipped
+`a_save_as_outside_from_a_dirty_buffer_moves_the_page` inverts from `assert_ne!` to
+`assert_eq!`. What the fourth case does *inside* the project is untouched.
+
+Appended 2026-08-30, per §6.1 step 2. **It narrows a decision Phase 17 shipped and
+reverses one Phase 18 shipped**, both the same day, so both take dated `CORRECTED` notes.
+
+**It was found at the window, and the finding is the phase.** The author saved to a folder
+outside the project and the footer named the new file — correctly by this app's rules, and
+misleadingly, because that cell renders `path.split('/').pop()` and a bare name says
+nothing about where a file is. **The ambiguity was manufactured by Phase 18's own
+close-out**: `Preview::edited_relative` gained an absolute-path fallback so an outside pane
+would not blank the cell, which stopped a blank and shipped a cell that names an outside
+file exactly as it names a project one.
+
+- **Scope:** **`app/src/preview.rs`** — `Preview::save_as`, `Session::save`,
+  `Session::save_as`, `edited_relative`; **`app/src/main.rs`** — the two commands pass a
+  sentence through; **`app/dist/index.html`** — one footer cell and the two save handlers;
+  **`app/harness/stub.mjs`** — its `save` answer; **`app/harness/`** — one clause and one
+  mutation.
+
+  **The pane follows a save inside the project and does not follow one outside it.** That
+  is the decision, and it is the third option Phase 18 did not consider. That phase
+  accepted an asymmetry it could not mitigate — an outside file has no row and no watch, so
+  an external edit will not redraw — and argued the only mitigation was re-rooting, which
+  it rejected. **Not moving the pane mitigates it completely**, the state that produces it
+  ceasing to exist. Inside the root, `Save as…` is unchanged and still what Phase 17 built.
+  A save outside is therefore **a copy**, and the receipt says so rather than leaving it to
+  be inferred from a cell that did not change.
+
+  **The predicate wants both halves, which is `document::trash_file`'s recorded shape** —
+  *"the name is under the root, and something is at it"*. `document::spell` alone is **not**
+  it, and the first draft of this phase said it was: `spell` is a component-wise
+  `strip_prefix`, so `root.join("../escape.md")` strips to `../escape.md`, answers `Some`,
+  and would be judged **inside** — after which the pane follows the file out of the project
+  and, where a master names that spelling, the case this phase exists to remove fires
+  anyway. `document::confined`'s own comment names the trap in those words: *"`root.join("../b")`
+  survives a component-wise `starts_with` textually, `..` and all"*, which is why it
+  canonicalizes. `save_as` is a command taking the page's `path` verbatim, so the standard
+  is `set_main`'s and not the dialog's.
+
+  **So: a canonicalized comparison decides the confinement, and `spell` decides the
+  spelling.** `document::confined` is the first half and is asked *after* the write, when
+  the file exists for it to canonicalize. `spell` is the second, and keying the move to the
+  same function that has to spell it afterwards is what makes the unreachability claim
+  below true — rejecting `landing`'s canonicalizing test alone was right; rejecting
+  canonicalization entirely is what opened the hole.
+
+  **An outside save touches nothing but the disk, and this is the phase's most dangerous
+  paragraph.** `Preview::save_as` currently moves `saved` to the buffer before moving
+  `edited`, and its own comment argues for it. **On the outside path both are wrong and the
+  first is unsafe.** Leaving `saved == buffer` while the pane keeps a file whose disk copy
+  is older makes `Session::refused_while_dirty` answer *clean*: the next row click,
+  `set_main` or trash would call `Preview::load` and replace the author's text with no
+  divergence sentence — and worse, `app/src/preview.rs:external_change` would
+  fall to its `buffer == saved` arm and answer **`External::Taken`**, taking the disk copy
+  over the author's work on any event touching that file. §2's *"Why an external change
+  waits for a clean buffer"* names that outcome as the one that loses. **So an outside save
+  leaves `saved`, `divergence` and `edited` exactly as it found them**: the buffer is still
+  dirty against the file the pane holds, which is the truth.
+
+  **It also does not re-arm, and does not recompile.** `Session::arm`'s two closures both
+  open by comparing `preview.edited` against a path captured when they were built, so
+  arming on the outside `landed` while `edited` stays inside would make every filesystem
+  event and every typing recompile return early — **the window would stop redrawing
+  altogether**. Nothing moved, so nothing needs arming. The compile is dropped for a
+  quieter reason: it reads exactly what it read before, and `Preview::compile` bumps
+  `revision`, which the page's `refresh` treats as a reason to re-fetch and re-place the
+  reader — a redraw `revision` exists to prevent.
+
+  **The tree rebuild and the announce stay, and that is stated rather than left to the
+  implementer.** Both are no-ops on the outside path — `document::files_under` finds nothing
+  new, and an unchanged `Status` stops at `refresh`'s `revision === drawnRevision` guard —
+  and Phase 18's own argument keeps them: the same call is what lists the file when it
+  landed inside, and branching on where it landed would be two paths where the walk is one.
+  Gate clause 2's typing test therefore counts compiles relatively, not absolutely.
+
+  **`edited_relative`'s fallback goes, because it becomes unreachable.**
+  `Session::set_edited` confines through `document::confined`, `open_at` sets root and
+  edited together, `Session::trash` moves the pane to `main`, and `save_as` now moves it
+  only where `spell` succeeds — so `spell` can never decline. **A fallback for a state that
+  cannot occur is one nothing can test**, and it is removed rather than kept as insurance.
+
+  **The receipt is transient, it is composed in `Session`, and it rides the commands'
+  return.** Every word in this window's chrome is chosen in Rust and merely placed by the
+  page. **It is composed in `Session` and not in the command**, which is forced rather than
+  stylistic: `app/src/main.rs` has no test module — the crate is bin-only and
+  `tauri::State` has a private field and no public constructor — so a sentence written in
+  the command is a sentence no test in this repository can reach, which
+  `app/src/document.rs:asset_bytes`'s own comment already records for a different rule. And
+  it rides the **return** rather than `Status` because it is an event, not state: a field
+  would re-arrive on every render, need clearing, and cost the typedef block and
+  `the_page_typedefs_name_exactly_the_fields_status_serializes` a property null in almost
+  every status. So both methods answer `Ok(String)` where they answered `Ok(())`, and the
+  page owns only the timer.
+
+  **Two sentences. `⌘S` answers `saved`** — the file is the one the bar already names, so a
+  path would repeat its neighbour. **`Save as…` answers `saved as <name> in <folder>`,
+  and the folder is the containing directory's absolute path, spelled plainly.** The first
+  draft split it — root-relative inside, absolute outside — and that was wrong in the
+  commonest case: `document::spell` ends `(!spelled.is_empty()).then_some(spelled)`, so a
+  destination *directly in the root* answers `None`, and saving beside the file you are
+  editing is exactly that case.
+
+  **And it is not abbreviated to `~`, which the second draft wanted.** There is no home
+  resolution anywhere in this workspace and no dependency that offers one; every
+  platform-resolved path reaches `Session` as a **constructor parameter**, for the reason
+  its own field records — *"a parameter and not a call to the platform, so a test hands in a
+  scratch directory and the rule that reads it stays on the testable side of the window"*.
+  A `~` would force either a fourth `Session::new` parameter or a bare `std::env::var`
+  inside `Session`, which is the untestable platform call composing the sentence there
+  exists to forbid — and which no test could override anyway, `set_var` being `unsafe` and
+  racy in edition 2024. **The plain absolute path needs no lookup and no clause**, and it
+  is `to_string_lossy`, this file's existing habit for a path that must become a string.
+
+  **It sits to the right of the file name.** The bar's element children become `#views`,
+  `#edited`, `#receipt`, `#controls`, `#sep-brand`, `#brand` — **four cells and one rule
+  become five and one** — with `#receipt` before `#controls`, which owns the auto margin
+  that right-aligns the group. **`#receipt:empty { display: none }` is what makes it cost
+  nothing when silent**: `footer` sets `gap: 8px`, so an empty span is still a flex item
+  and still takes its gaps, absorbed by the auto margin everywhere except the 240px floor,
+  where it would narrow `#edited` instead.
+
+  **Four seconds, re-armed rather than stacked**: a second save inside the window replaces
+  the sentence and restarts the clock, so two saves cannot leave two timers racing one cell.
+
+  **Deliberately not in this phase.** No receipt for `Save a Copy…`, whose dialog confirms
+  itself. No undo, no save history. No change to what `⌘S` writes or where.
+
+- **Exit gate:**
+
+  1. `cargo test --workspace` passes, and **three shipped Phase 18 tests are inverted
+     rather than deleted**, named here as that phase named its own:
+     `a_save_as_outside_the_project_writes_and_the_project_stays` asserts the pane **keeps**
+     its file where it asserted the pane moved; `a_save_as_outside_from_a_dirty_buffer_moves_the_page`
+     becomes `assert_eq!` on the PDF and is renamed for what it now says; and
+     `a_file_saved_outside_has_no_row_but_the_bar_still_names_it` asserts the bar names the
+     file the pane **kept**.
+  2. **Three tests for the unsafe path, because a green gate is how it would ship.** After a
+     Save-as outside the root from a dirty buffer: `Preview` still reports the buffer
+     **dirty** — a following `set_edited` is refused and sets a divergence, where a
+     `saved == buffer` build would silently `load` over the author's text; and
+     `app/src/preview.rs:external_change` for that file answers **`Diverged`** and not
+     `Taken`. And
+     the loops still live: after such a save, typing still reaches a compile.
+  3. Tests that `Session::save` and `Session::save_as` answer with their sentence, and that
+     the Save-as one names the containing folder absolutely — **in `preview.rs`, which is
+     why the sentence is composed there**. **The folder is spelled as landed and not
+     canonicalized**, which is the one thing that decides whether this clause's test can be
+     written and fail for the right reason: a scratch directory sits under `/var/folders/…`
+     while its canonical form is `/private/var/folders/…`, so a test comparing against its
+     own `dest.parent()` matches only the un-resolved spelling.
+  4. **Both halves of the predicate, because a gate that tests one passes the regression
+     this phase was rewritten to close.** A destination whose spelling `document::spell`
+     cannot produce is treated as outside — the second half; **and `root.join("../escape.md")`
+     is treated as outside** — the first, which a `spell`-only predicate judges *inside* and
+     which nothing else in this gate would catch. Plus an inside save still moving the pane:
+     **narrower than Phase 17's**, which accepted an in-root symlink to an outside target
+     through `landing`'s parent-only canonicalization, where `document::confined` refuses
+     it.
+  5. `bun app/typecheck.mjs` exits 0. **No `Status` field is added**, so the typedef test is
+     untouched, and saying so stops a reader assuming the block moved.
+  6. `bun app/harness/checks.mjs` and `--webkit` each print **fourteen clauses, fourteen
+     passed** — one added: a plain save places `saved`, and the cell is empty again after
+     its own window. **It reads the cell's emptiness and never the timer's length.** The
+     stub's `dialog.save` answers `null`, so `Save as…` is undrivable there and the clause
+     asserts only the plain save, deliberately.
+  7. `bun app/harness/checks.mjs --falsify` reports **eleven mutations, each isolating the
+     clause it owns**, in both engines. The one added is **`receipt-sticks`**, dropping the
+     `setTimeout` that clears the cell — the failure a clause reading only "it appeared"
+     would miss.
+  8. `bun app/driver/drive.mjs` and `--falsify` pass, unchanged.
+  9. **The reading left to a person**: `⌘S` shows `saved` and it goes; `⇧⌘S` into the
+     project moves the pane; `⇧⌘S` outside it writes the file, **leaves the pane where it
+     was**, and names the folder.
+  10. `git status` clean after a full run of clauses 6, 7 and 8.
+
+- **Close-out:** **Phase 17 takes a dated note** — *"The pane then holds the new file"* is
+  true only inside the project now. **Phase 18 takes one** against *"the pane holds a file
+  outside the project it is compiling"*, reversed, and against its accepted asymmetry,
+  mitigated by a route it did not consider.
+
+  **`rules/desktop-panes.md`** — the footer's element list and count go to five cells and
+  one rule; the header section's account of a save gains the inside/outside split; the
+  harness counts go from thirteen and ten to fourteen and eleven in both the `covers:`
+  phrase and the body; and **the `covers:` phrase still reads "four cells and two rules",
+  false since Phase 16 withdrew the second separator** — corrected in the same pass. 641/645,
+  so it needs a budget.
+
+  **`rules/desktop.md`** — the spelling sentence Phase 18 added is removed with the
+  fallback, and the two save methods change return type. 656/660.
+
+  **`rules/desktop-project.md` — one sentence, not none**, and the first draft said none.
+  `landing` is indeed untouched, but that file reads *"`Session::set_main`,
+  `Session::set_edited` and `document::asset_bytes` **all** go through it"* of
+  `document::confined`, and this phase makes `Preview::save_as` a **fourth** caller. The
+  enumeration is the half that rots — the same drift Phase 17's close-out caught in the
+  neighbouring `landing` sentence. `rules/desktop.md`'s "all four" is *not* affected: it
+  counts readers of a path the author did **not** name in a dialog, which a save-as is not.
+  159/165.
+
+  **`README.md`** — Phase 18's sentences about saving anywhere are narrowed: the file goes
+  where you point it, and the pane follows only inside the project.
+
+  **Commit plan.** One push, three commits: the pane's confinement, the untouched dirty
+  state and the removed fallback; the receipt, its sentences and its cell; then the harness
+  clause, the rules and the README.
 
 <!--
 The review record is a sibling file, not a section: it lives at

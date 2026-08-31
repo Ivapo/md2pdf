@@ -2,6 +2,117 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 18 — Phase 19 only — 2026-08-30 — the same reviewer, resumed — **READY (converged)**
+
+Zero blocking. Both of round 17's blockers resolved, and the predicate re-verified against
+the code rather than the prose.
+
+**`document::confined`'s ordering is not merely right but forced**, which the reviewer
+established rather than accepted: it opens on `landed.is_file()`, so asked *before* the
+write it answers `None` for every save-as to a new name and would judge every new file
+outside. After the write is the only order that works. `root.join(path)` with the dialog's
+absolute string discards the base, `canonicalize` resolves it, and it returns the **join**
+rather than the resolution — which is the un-resolved path `spell` needs next.
+
+**Every escape it could construct falls to "outside", which is the safe direction**:
+`root.join("../escape.md")` — `spell` says inside, `confined` resolves to `/escape.md` and
+refuses; an in-root symlink to an outside target — `confined` refuses, stricter than Phase
+17's `landing` and consistent with the shipped
+`a_link_out_of_the_project_is_refused_however_it_is_spelled`; a symlinked root in **both**
+directions — `confined` says inside, `spell` declines, the AND rejects, which is the case
+that killed the `landing`-only predicate; case-differing spellings on APFS — `spell`
+declines. **The fallback-unreachability claim survives because the move is gated on `spell`
+succeeding.**
+
+Four non-blocking, all folded. **One was weighed as blocking and argued down, and it is the
+most valuable finding of the round**: gate clause 4 exercised only the `spell` half, so an
+implementation of the *first draft's* `spell`-only predicate — the exact regression round 17
+found — would have passed all ten clauses. It was judged non-blocking because the scope
+paragraph names `confined`, the ordering and the `../escape.md` example verbatim, so it
+forces no guess; the gate was one sentence thin rather than unverifiable. Clause 4 now
+asserts both halves. Also folded: clause 3 must spell the folder **as landed and not
+canonicalized**, a scratch directory sitting under `/var/folders/…` where its canonical form
+is `/private/var/folders/…`, so a test comparing against its own `dest.parent()` matches only
+the un-resolved spelling; `rules/desktop-project.md` is **not** "nothing needed", its
+*"`set_main`, `set_edited` and `asset_bytes` all go through it"* enumeration gaining a fourth
+caller; and clause 4's "unchanged from Phase 17" was generous, the inside path being strictly
+narrower now that `confined` refuses an in-root symlink `landing` allowed.
+
+**Size judged rather than assumed**: 202 lines against Phase 17's 298 and Phase 18's 174,
+both of which shipped in one pass, and a three-commit plan smaller than Phase 17's.
+
+### Round 17 — Phase 19 only — 2026-08-30 — the same reviewer, resumed — **NOT READY**
+
+Round 16's four blockers resolved, and **both new blockers were introduced by those fixes** —
+§7.3's warning happening for the second time in this phase.
+
+**Blocker 1 — the replacement predicate had a hole the codebase already documents.** Round 16
+rejected `landing`'s canonicalizing test, because a symlinked root would misjudge, and swung
+to `document::spell` alone. `spell` is a component-wise `strip_prefix`, so
+`root.join("../escape.md")` strips to `../escape.md`, answers `Some`, and is judged
+**inside** — after which the pane follows the file out of the project and the case this phase
+exists to remove fires anyway. `document::confined`'s own comment names the trap: *"`root.join("../b")`
+survives a component-wise `starts_with` textually, `..` and all"*. Fixed by taking **both
+halves**, which is `trash_file`'s recorded shape: a canonicalized comparison decides the
+confinement, `spell` decides the spelling.
+
+**Blocker 2 — `~` for home was a platform lookup in the one method the phase had just argued
+must be testable.** No home resolution exists anywhere in the workspace and no dependency
+offers one; every platform-resolved path reaches `Session` as a constructor parameter, for the
+reason that field's own comment records. A `~` would force a fourth `Session::new` parameter
+or a bare `std::env::var` inside `Session` — the untestable platform call composing the
+sentence there exists to forbid, and unoverridable anyway, `set_var` being `unsafe` and racy in
+edition 2024. **Dropped rather than parameterised**, the plain absolute path needing no lookup.
+
+Two non-blocking, both accepted: `external_change` was cited as `document::`'s when it is a
+free function in `preview.rs`; and the tree rebuild and the announce were left unstated where
+the compile and the arm were named — both no-ops on the outside path, kept on Phase 18's
+one-walk-not-two-paths argument.
+
+### Round 16 — Phase 19 only — 2026-08-30 — fresh reviewer with repo access — **NOT READY**
+
+**Round 0 — is this the right thing to build at all?** Yes, and it was found by using the app
+rather than reading it: the author saved outside the project and the footer named the new file
+by bare name, which says nothing about where a file is. The phase produces no new observable —
+it *stops* one moving — and argues that explicitly. **It also closes something Phase 18 gave
+up on**: that phase accepted an asymmetry (an outside file has no row and no watch) and argued
+the only mitigation was re-rooting, which it rejected. Neither the author nor the round-14
+reviewer considered the third option — not moving the pane at all — which mitigates it
+completely by removing the state that produces it.
+
+Four blocking findings.
+
+**Blocker 1 — the obvious implementation loses the author's work, silently.** `Preview::save_as`
+moves `saved = buffer` before moving `edited`, and its own comment argues for it. With the pane
+kept on file A while its bytes go to B, `saved == buffer` while A's disk copy is older:
+`refused_while_dirty` answers **clean**, so a following row click, `set_main` or trash calls
+`Preview::load` and replaces the author's text with no divergence sentence; and
+`preview.rs:external_change` falls to its `buffer == saved` arm and answers **`External::Taken`**,
+taking the disk copy over the author's work on any event touching that file. §2's *"Why an
+external change waits for a clean buffer"* names that outcome as the one that loses. No gate
+clause read `saved`, the dirty refusal or the external-change outcome, **so it would have
+shipped green**. Fixed: an outside save leaves `saved`, `divergence` and `edited` as it found
+them, with three gate tests.
+
+**Blocker 2 — it would also have frozen the window.** `Session::arm`'s two closures both open by
+comparing `preview.edited` against a path captured when they were built, so arming on the
+outside `landed` while `edited` stays inside makes every filesystem event and every typing
+recompile return early. Fixed: no re-arm, nothing having moved — and no recompile either, since
+it reads what it read before while bumping `revision`, which `refresh` treats as a reason to
+re-place the reader.
+
+**Blocker 3 — the receipt could not be tested where the scope put it.** `app/src/main.rs` has no
+test module — bin-only crate, `tauri::State` with a private field and no public constructor — so
+a sentence composed in the command is one no test here can reach. Moved into `Session`.
+
+**Blocker 4 — the folder spelling had no answer for the commonest case.** `document::spell` ends
+`(!spelled.is_empty()).then_some(spelled)`, so a destination directly in the root answers
+`None`, and `save_as_path` defaults the panel to the edited file's own directory — making a
+root-level document's default gesture exactly that case. The root-relative/absolute split was
+abandoned for one absolute spelling.
+
+Seven non-blocking, all folded, including the predicate that became blocker 1 of round 17.
+
 ### Round 15 — Phase 18 only — 2026-08-30 — the same reviewer, resumed — **READY (converged)**
 
 Zero blocking. Both blockers confirmed resolved, and the observable line judged **not
