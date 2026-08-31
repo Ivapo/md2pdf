@@ -36,17 +36,45 @@
    twice. That is what stops this clause being passed by a divider that does
    nothing.
 
+   **Every clause is guarded against the hand doing something else, and this
+   file's own first run is why.** That run failed 7a with the focus on `#pages`
+   — which carries `tabindex="0"` so a keyboard reader can scroll the preview —
+   and the drag turned out to be innocent. A probe of the real window recorded
+   `pointerdown` on `#divider` marked `[defaultPrevented]`, **no compat
+   `mousedown` at all**, and **no focus event of any kind**, across two gestures
+   including one run hard into the `room - 160` clamp with the pointer ending
+   95px past the divider and over `#pages`. The focus had been moved by a stray
+   press between two console calls. So: `arm()` records every press from that
+   moment on, and a reading taken across a press on anything but the divider is
+   reported **invalid** rather than blamed on the gesture. A gate asserts only
+   what it can attribute.
+
    NO PRECONDITION beyond a document being open. **It writes no file** — the one
    keystroke dirties the buffer in the pane, exactly as typing does, and nothing
    here presses `⌘S`. Undo it with `⌘Z` when you are done, or leave it; the file on
    disk is untouched either way.
+
+   **Hand the keyboard back by pressing the DIVIDER once, not the title bar and
+   not the pane.** Keys typed while the Web Inspector holds focus never reach the
+   page at all, so the web content has to be made first responder somehow. A
+   click in the pane does it and moves the caret, which is the press that
+   invalidates 7b. **The title bar does not do it** — it focuses the window and
+   leaves the keyboard where it was, measured, and two readings of this clause
+   were wasted on it. A press on the divider does: it is the one press whose
+   default action this phase cancels, so it reaches the view without taking the
+   focus off the pane. The drag itself is fine to start cold, for the same reason.
+
+   **A key that never reached the page is reported as the rig and not the
+   defect.** 7b records what the page saw, so a keystroke the Inspector kept and
+   a keystroke the pane dropped are told apart instead of both reading as a
+   buffer that did not grow.
 
    ORDER:
      __gate.forget()          <- once, at the start: clears any earlier transcript
      await __gate.arm()       <- focuses the pane, sets a caret, reads the baseline
      ... drag the divider LEFT past the middle and back RIGHT, one gesture ...
      __gate.dragged()         <- clause 7a
-     ... type ONE character ...
+     ... press the DIVIDER once, then type ONE character ...
      __gate.typed()           <- clause 7b
      __gate.ring()            <- clause 7c, in the appearance you are in
      ... switch appearance from the footer bar ...
@@ -125,6 +153,31 @@
 
   const seenGrounds = []
 
+  /* **What pressed what, and when the focus moved.** Without these a reading of
+     `activeElement` after the fact cannot say whether the drag moved it or a
+     stray click did, and the clause would report the second as the first. */
+  const presses = []
+  const focusMoves = []
+  const keys = []
+  let watching = false
+
+  const named = (n) =>
+    !n ? 'nothing' : n === document.body ? 'body' : n.id ? '#' + n.id : n.nodeName ? n.nodeName.toLowerCase() : String(n)
+
+  const watch = () => {
+    if (watching) return
+    watching = true
+    window.addEventListener('pointerdown', (e) => presses.push(named(e.target)), true)
+    window.addEventListener('focusin', (e) => focusMoves.push(`${named(e.relatedTarget)} → ${named(e.target)}`))
+    /* **Whether the key reached the page at all**, which is a different question
+       from where it landed. Without this, a key the Web Inspector kept and a key
+       the pane dropped read identically — as a buffer that did not grow. */
+    window.addEventListener('keydown', (e) => keys.push({ where: named(e.target), key: e.key }), true)
+  }
+
+  /** The presses since the given mark, and a sentence naming the stray ones. */
+  const strayFrom = (mark) => presses.slice(mark).filter((where) => where !== '#divider')
+
   /* ---------------------------------------------------------------- the run */
 
   window.__gate = {
@@ -153,6 +206,11 @@
         spoken.push(String(e.reason))
       })
 
+      watch()
+      presses.length = 0
+      focusMoves.length = 0
+      keys.length = 0
+
       text.focus()
       const caret = Math.floor(text.value.length / 2)
       text.setSelectionRange(caret, caret)
@@ -161,6 +219,7 @@
 
       const before = paneState()
       this._before = before
+      this._mark = presses.length
       armed = before.holding === 'text'
 
       note(`armed: focus ${before.holding}, caret ${before.from}, basis ${before.basis}, ${before.length} characters`)
@@ -178,7 +237,27 @@
       if (!was) return 'NOT ARMED — run await __gate.arm() first'
 
       const now = paneState()
+      const stray = strayFrom(this._mark)
+      const dragged = presses.slice(this._mark).includes('#divider')
+
+      if (stray.length || !dragged) {
+        note(`presses since arming: ${presses.slice(this._mark).join(', ') || 'none'}`)
+        note(`focus moves since arming: ${focusMoves.join(', ') || 'none'}`)
+        ok(
+          '7a',
+          'a hand drag of the divider resizes the pane, highlights nothing, keeps the focus and leaves the caret where it was',
+          false,
+          stray.length
+            ? `INVALID READING — you also pressed on ${[...new Set(stray)].join(' and ')} after arming, and this clause cannot tell that press's effects from the drag's. Run await __gate.arm() again and touch nothing but the divider.`
+            : 'INVALID READING — no press on #divider was recorded, so there was no drag to judge. Run await __gate.arm() again and drag the divider.'
+        )
+        tell('run await __gate.arm() and try again, touching nothing but the divider.')
+        return 'clause 7a invalid — re-arm'
+      }
+
       this._after = now
+      this._markAfter = presses.length
+      this._keyMark = keys.length
 
       const resized = now.basis !== was.basis
       const kept = now.holding === 'text'
@@ -195,13 +274,14 @@
           resized ? null : `THE PANE DID NOT RESIZE — basis is still ${now.basis}; did the gesture reach the divider?`,
           kept ? null : `the focus left the pane for ${now.holding}`,
           still ? null : `the caret moved from ${was.from} to ${now.from}${now.to === now.from ? '' : '–' + now.to}`,
-          quiet ? null : `it selected ${JSON.stringify(now.selection)}`
+          quiet ? null : `it selected ${JSON.stringify(now.selection)}`,
+          kept && still && quiet ? null : `focus moves recorded: ${focusMoves.join(', ') || 'none'}`
         ]
           .filter(Boolean)
           .join('; ') || `resized ${was.basis} → ${now.basis}, focus kept, caret still ${now.from}, nothing selected`
       )
 
-      tell('now type ONE character, then run __gate.typed()')
+      tell('now press the DIVIDER once — not the pane — then type ONE character, then run __gate.typed()')
       return 'clause 7a recorded'
     },
 
@@ -210,11 +290,47 @@
       const was = this._after
       if (!was) return 'NO DRAG READING — run __gate.dragged() first'
 
+      /* A press on the divider is allowed here and is in fact the recommended
+         way to hand the keyboard back: it is the one press whose default this
+         phase cancels, so it makes the web content first responder without
+         taking focus off the pane. Any other press moves the caret itself. */
+      const stray = strayFrom(this._markAfter)
+      if (stray.length) {
+        ok(
+          '7b',
+          'the keystroke after the drag goes into the pane, at the caret',
+          false,
+          `INVALID READING — you pressed on ${[...new Set(stray)].join(' and ')} after the drag, which moves the caret itself. The swallowed keystroke this clause is about only shows on a pane nobody clicked back into. Run await __gate.arm() again.`
+        )
+        tell('run await __gate.arm() again, drag, then press the DIVIDER once and type.')
+        return 'clause 7b invalid — re-arm'
+      }
+
       const now = paneState()
+      const arrived = keys.slice(this._keyMark)
+
+      note(`after the keystroke: ${was.length} → ${now.length} characters, caret ${was.from} → ${now.from}; keys the page saw: ${arrived.map((k) => `${k.key} on ${k.where}`).join(', ') || 'none'}`)
+
+      /* **No key reached the page at all is the rig, not the defect**, and the
+         two are told apart rather than guessed at. The Web Inspector holds the
+         keyboard until the web content is made first responder, and clicking the
+         window's title bar does not do that — measured, and it is what made this
+         clause's first two readings worthless. The pane keeping its focus
+         throughout is what licenses calling it the rig: a swallowed keystroke is
+         a keystroke the page *saw* and the pane did not get. */
+      if (arrived.length === 0) {
+        ok(
+          '7b',
+          'the keystroke after the drag goes into the pane, at the caret',
+          false,
+          `NO KEY REACHED THE PAGE — the pane still holds the focus${focusMoves.length ? '' : ' and never lost it'}, so this is the Web Inspector keeping the keyboard rather than a swallowed keystroke. Press the DIVIDER once — the one press whose default this phase cancels — then type, and run __gate.typed() again.`
+        )
+        tell('press the DIVIDER once, type ONE character, then run __gate.typed() again.')
+        return 'clause 7b inconclusive — the key never arrived'
+      }
+
       const landed = now.length === was.length + 1
       const atCaret = now.from === was.from + 1
-
-      note(`after the keystroke: ${was.length} → ${now.length} characters, caret ${was.from} → ${now.from}`)
 
       ok(
         '7b',
@@ -225,8 +341,8 @@
             ? `one character, at ${now.from}`
             : `the character landed, but at ${now.from} rather than ${was.from + 1}`
           : now.length === was.length
-            ? 'THE KEYSTROKE WAS SWALLOWED — the buffer is the length it was; this is the defect'
-            : `the buffer moved by ${now.length - was.length} characters, not one — did you type more than once?`
+            ? `THE KEYSTROKE WAS SWALLOWED — the page saw ${arrived.map((k) => `${k.key} on ${k.where}`).join(', ')} and the buffer is the length it was; this is the defect`
+            : `the buffer moved by ${now.length - was.length} characters, not one — the page saw ${arrived.length} keys`
       )
 
       tell('now run __gate.ring(), then switch appearance in the footer bar and run it again')
@@ -295,6 +411,9 @@
      and says so rather than throwing. */
   window.__gate._before = null
   window.__gate._after = null
+  window.__gate._mark = 0
+  window.__gate._markAfter = 0
+  window.__gate._keyMark = 0
 
   console.log(
     '%cmpdf-003 Phase 20 gate loaded%c — run __gate.forget() then await __gate.arm()',
