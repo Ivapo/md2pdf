@@ -3,9 +3,12 @@
 ## Headings
 
 Levels 1 to 6 map to headings of the same level, so the four below are real
-headings rather than bold paragraphs. Neither bundled look numbers them, and
-under `figures: sectioned` they still do not — the number goes on the figure,
-not on the heading.
+headings rather than bold paragraphs. This document sets `headings: 2`, so the
+`#` and the `##` above carry numbers and the four below carry none — a level
+past the depth costs the levels below it nothing, which is why *The inline
+constructs* after them still counts on. `plain` is the default, and under it no
+heading carries a number while `figures: sectioned` still numbers every figure:
+the two keys are independent.
 
 ### A third level heading
 

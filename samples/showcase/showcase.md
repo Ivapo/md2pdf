@@ -6,6 +6,7 @@ template: article
 columns: 1
 equations: numbered
 figures: sectioned
+headings: 2
 bibliography: refs.bib
 ---
 
@@ -24,9 +25,9 @@ this folder reaches outside it — the bibliography sits beside this file and th
 four figures beside the sections that draw them, which is the only shape a path
 may take. A document and the files it names travel as one folder.
 
-## The frontmatter, all eight keys
+## The frontmatter, all nine keys
 
-The block at the top of this file carries every key there is, and all eight are
+The block at the top of this file carries every key there is, and all nine are
 optional. Delete the whole block and the PDF still compiles: it arrives with no
 title block, two columns, no numbers on anything, and no reference list.
 
@@ -45,11 +46,16 @@ than two narrow ones.
 `equations: numbered` puts a number on every display formula, which is what
 lets a sentence point at one. `figures: sectioned` gives every figure, table
 and listing the number of the section it stands in, which is why every caption
-below carries two numbers rather than one. `bibliography` names the file the
-citations at the end are resolved against.
+below carries two numbers rather than one. `headings: 2` numbers the headings
+themselves, down to the second level — which is why the line above this
+paragraph reads *1.1* and why the third-level headings under *Headings* carry
+no number at all. `bibliography` names the file the citations at the end are
+resolved against.
 
-You say *whether* in all three cases. The look says *how*: what a number looks
-like, what word stands before it, and what punctuation follows.
+You say *whether* in all four cases, and for `headings` you say *how deep* as
+well: there is no `headings: numbered`, because a depth is the part a yes-or-no
+key cannot say. The look says *how*: what a number looks like, what word stands
+before it, and what punctuation follows.
 
 ## Several files, and the marker that joins them
 

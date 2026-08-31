@@ -1412,6 +1412,21 @@ a key for.
   touch, so it travels with whatever next edits that test rather than with this phase.
   **Blocks nothing** — Phase 8 ships one depth under one settled key.
 
+  **The showcase third closed 2026-08-31, the same day and not with a later edit to that
+  test.** It was taken as a follow-up rather than folded into the phase, so gate (6) held
+  over the phase's own diff and the test moved in a commit that says so. The showcase sets
+  `headings: 2`, the master's three headings move to `[13, 28, 60]`, and
+  `app/src/preview.rs`'s pin and its doc comment move with them. **A fifth stale claim
+  turned up that this entry had not counted**, and it is the one that misinformed rather
+  than miscounted: `samples/showcase/sections/text.md` told the reader "Neither bundled
+  look numbers them, and under `figures: sectioned` they still do not — the number goes on
+  the figure, not on the heading." That is the document that teaches the dialect denying a
+  key the dialect now has. The depth is `2` rather than `6` because that section already
+  sets all six levels, so the cap is *shown* there — the four below the depth carry no
+  number and the `##` after them still counts on, which is the half of the key a boolean
+  could not have expressed. **The opt-out and `A.1` appendices are untouched and stay
+  open.**
+
 ## 4. Implementation phases
 
 Strictly sequential; each is one plan-mode pass. All three produce the

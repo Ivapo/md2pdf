@@ -3280,8 +3280,8 @@ mod tests {
     /// precisely what drops `location.file`, so the claim is keyed to what
     /// survives it. The two sets are disjoint by construction: `mathematics.md`
     /// has one heading, on its own first line, where the master's own three sit
-    /// at lines 12, 27 and 54 of `showcase.md` — below its ten-line frontmatter,
-    /// and nowhere near line 1.
+    /// at lines 13, 28 and 60 of `showcase.md` — below its eleven-line
+    /// frontmatter, and nowhere near line 1.
     #[test]
     fn the_anchors_are_the_headings_of_whichever_file_the_pane_holds() {
         let (root, _) = showcase_in("phase2-anchors");
@@ -3291,7 +3291,7 @@ mod tests {
 
         let (theirs, its_own) = (lines_of(&section), lines_of(&master));
         assert_eq!(theirs, [1], "the section's own heading");
-        assert_eq!(its_own, [12, 27, 54], "the master's own three");
+        assert_eq!(its_own, [13, 28, 60], "the master's own three");
         assert!(
             theirs.iter().all(|line| !its_own.contains(line)),
             "the two sets are not disjoint, so this clause proves nothing"
