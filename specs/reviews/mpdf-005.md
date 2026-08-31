@@ -2,6 +2,112 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 9 only — 2026-08-31 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, **zero newly found**, one courtesy non-blocking folded at
+convergence. **Converged at the cap**, the third time this spec has, and again because the
+round that would have escalated is the one that cleared.
+
+All three round-2 findings confirmed **against the files**, and both arithmetic asks
+answered by counting rather than by assent: the close-out's list has exactly six items under
+"six claims", the round-1 version listed exactly three, and all six quoted strings were
+matched against `rules/pipeline.md` on whitespace-normalised text, since every one of them
+wraps across lines in the file. Gate (2)'s citation now resolves, and the reviewer
+additionally established the claim behind it rather than taking it: the twins' edges really
+are identical in the 4-and-5 configuration, because the caption's `pad` does not touch the
+body.
+
+**The courtesy note, folded rather than deferred, and it carried a second defect the round
+did not see.** `core/tests/golden_test.rs:BUNDLED_TEMPLATES`' doc comment says "Four tests
+read these"; five do today and six will after gate (4). Pre-existing staleness this phase
+does not create, corrected because the implementer is in that header anyway. The author then
+found that the same sentence names "the three **Phase 9** cases" meaning `mpdf-001`'s Phase
+9 — a bare phase number, in the one file this spec's own Phase 9 edits, which is §3's
+"one numbering per spec" hazard reached across two documents. The spec id goes in.
+**Folded at convergence without a fourth round**, per §7.5's "fold in worthwhile
+non-blocking refinements": both edits are one-line and neither touches a gate.
+
+**Converged.** Phase 9's `reviewed` is set to 2026-08-31; `status` was already `accepted`.
+
+### Round 2 — Phase 9 only — 2026-08-31 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, three non-blocking, all three folded. **All three were
+defects the author's own round-1 folds introduced**, which is §7.3's named hazard and the
+third consecutive episode in this spec's record to hit it.
+
+1. **Gate (2) cited §2 for a number §2 did not carry.** The fold wrote "§2 records a
+   configuration where identical edges reported as 4 and 5"; that configuration was the
+   *reviewer's*, and the string appeared nowhere in the document. Fixed at the §2 end rather
+   than by dropping the citation, because the measurement is real and belongs in the record.
+2. **§2 contradicted itself one paragraph apart.** The fold claimed "three relations, every
+   one of them an equality", while its own bullet recorded the third as a *move* from column
+   25 to 27. The third is a **negative** — the image-first group's listing stays centred —
+   and §2 now says so, with the note that no gate is keyed to it and OQ-18 owns it.
+3. **A sixth stale claim in `rules/pipeline.md`.** Line 898's "The fifth is the only
+   `.where(kind: …)` *rule* in either look" becomes false the moment
+   `show figure.caption.where(kind: raw)` lands. It is a distinct claim rather than something
+   the rule-count clause covers, so the close-out names it and counts six.
+
+**Both of the author's direct asks were answered by measurement.** The narrowed needle
+`figure.where(kind: raw): set align(left)` is byte-identical in both looks
+(`core/assets/template.typ:143`, `core/assets/press-release.typ:131`), occurs exactly once
+per file against the old selector's twice, and was simulated in both directions: with Phase
+6's rule deleted the **old** needle still passes in both looks and the new one fails in both.
+And gate (2) did not become unfalsifiable — its ±1 tiebreak resolves against the rendered
+page, which is stricter than the grid, and cannot absorb a real failure, since the two
+figure-level spellings land the captioned listing 5 and 11 columns off its twin.
+
+### Round 1 — Phase 9 only — 2026-08-31 — fresh general-purpose reviewer with repo access — **READY**
+
+**Round 0 (this episode — one appended phase):** *does this produce the observable, and is it
+the right one?* **Yes to the first** — a PDF whose block code stands 2em off the prose's
+edge. **The second is recorded rather than glossed**, because it is the weakest warrant this
+spec has run a phase on: it was asked for directly, which is the precedent `mpdf-006` OQ-3
+and `mpdf-007` OQ-6 set, but it is the first phase here whose want is *legibility* rather
+than a defect — and Phase 6's own round 0 praised that phase for "taking something off the
+page rather than adding a capability nobody asked for", which this puts back. §2 states it
+plainly rather than dressing it up.
+
+Verdict: `READY`, **zero blocking**, four non-blocking, all four folded, none rejected.
+
+**The round reproduced the phase end to end rather than trusting its measurements** — built
+the tree, installed the rules in both looks, compiled a probe carrying all six shapes, and
+read it with `pdftotext -layout`. Every load-bearing claim reproduced: the twins moving
+together 0 → 4 in both looks; the second rule being necessary, the caption sitting at 0 under
+a block at 4 without it; **both** figure-level spellings reintroducing Phase 6's defect
+(`pad` → 5 against 0, `set block(inset:)` → 11 against 0), so gate (2) catches each; Phase
+6's rule not being subsumed, its removal re-centring the captioned listing to 13/16 against a
+twin at 4; and gate (5) holding, the whole workspace suite green with both rules installed,
+`the_articles_last_heading_is_not_on_the_first_page` included.
+
+**The sharpest finding is a defect in shipped work rather than in the draft, and it had been
+unable to fail for eight days.** Gate (3) leaned on
+`core/tests/golden_test.rs:every_bundled_template_places_a_listing` to show Phase 6's rule
+survives. Its needle is `figure.where(kind: raw)` — and **Phase 7's counter reset writes
+`counter(figure.where(kind: raw)).update(0)` into both looks**, so the string occurs twice
+per file and the test passes with Phase 6's `set align(left)` deleted outright, while its own
+doc comment still calls it "the first `.where(kind: …)` rule either look carries". The phase
+now repairs it: the needle narrows to the whole rule. Taken as in scope deliberately — the
+gate leans on the assertion, and an assertion that cannot fail is not one.
+
+The other three, all folded: **§2's absolute columns are probe-specific and not
+reproducible**, since `pdftotext -layout` re-grids per document — the reviewer's own run read
+the list item at 2 → 8 where the author's read 2 → 6 — so §2 is rekeyed to relations and gate
+(2) gained the quantisation guard; **the two `2em`s are the same number in different units**,
+the first resolving against `raw`'s size and the second against the caption's, coinciding
+only because each bundled look sizes them identically (9/9, 9.5/9.5), so the contract a third
+look inherits is "the caption sits on the block's edge" rather than "both numbers are 2em";
+and the close-out **under-counted `rules/pipeline.md`**, missing line 446's uncaptioned-wrap
+argument and line 451's "exactly once, over a listing's alignment".
+
+Grounding confirmed rather than corrected, so a later round need not re-verify: every
+`file:symbol` the phase cites resolves; both looks carry Phase 6's rule; the call contract is
+seven; neither new needle exists in either look today, so gate (4)'s needles are fresh;
+`samples/showcase/sections/figures.md:19` is the only sample prose stating the edge, and the
+only line-pinned showcase test pins `showcase.md` and `sections/mathematics.md`, not
+`figures.md`; and `rules/pipeline.md` sits at 993 against `max_lines: 1010`, so unlike Phase
+8 no cap move is needed.
+
 ### Round 3 — Phase 8 only — 2026-08-31 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, one cosmetic non-blocking, folded. **Converged at three

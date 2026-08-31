@@ -50,6 +50,11 @@ phases:
     shipped: 2026-08-31
     cut: null
     by: null
+  - name: "Phase 9 — a listing sits off the margin"
+    reviewed: 2026-08-31
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -615,6 +620,18 @@ number and disagree on a caption's separator. The argument is about how code is
 read, not about house style, so a third look that centred its listings would be
 choosing something rather than inheriting it.
 
+**WIDENED 2026-08-31, on drafting Phase 9: the claim that survives is "the position
+its uncaptioned twin has", and the one that does not is this section's own
+heading.** The rule above returns a captioned listing to its uncaptioned twin's
+edge, and everything here names that edge as the prose's, because when it was
+measured it was. Phase 9 moves *both* twins 2em off it — so the property this
+section exists for is untouched, and "a listing sits flush left" stops being
+literally true. **The rule itself is unchanged and is still required**, which is
+measured rather than assumed: removing it while Phase 9's two rules stand puts the
+captioned listing back in the centre, at column 16 against its uncaptioned twin's
+column 4. Recorded because a later reader re-deriving "flush left" against the page
+would find it false with no way to tell an omission from a regression.
+
 ### Why the check is on what the author wrote (decision, recorded)
 
 `mpdf-004` §2 settled this shape once and it applies unchanged: **a construct
@@ -890,6 +907,104 @@ against `I.1`, and whether it sits in the margin, stay the look's, on `equations
 `figures`' precedent: the author says *how deep*, the look says *how*. A depth is a scheme
 and a scheme is what the document is; a separator is typography, which OQ-2 already refused
 a key for.
+
+### A listing sits off the margin, and its caption goes with it, measured (decision, recorded)
+
+**APPENDED 2026-08-31**, on the prototype logged below. Phase 6 sent a captioned listing back
+to the edge its uncaptioned twin stands on, and that edge is the prose's. This phase moves
+both twins 2em off it.
+
+**The want is legibility rather than a defect, and that is said plainly because it is the
+weaker warrant.** Phase 6 took a page that was wrong — the same `fn` standing in two places
+in one document — and made it right. Nothing here is wrong: a block of code that begins where
+the sentence above it begins is merely doing all its work with a fixed-width face and no
+other mark that it is a block. A reader will ask what was broken, and the answer is nothing.
+
+**Measured 2026-08-31 through the shipped pipeline**, on Phases 7 and 8's own method — a
+temporary edit to a look file, rebuilt, compiled through the CLI and read with
+`pdftotext -layout`, then reverted. The probe is gate (1)'s document: an uncaptioned block, a
+captioned one, a group of two listings, a mixed group in each order, a block in a list item
+and a block in a block quote.
+
+**The columns below are one probe's grid, and what reproduces is the *relations* rather than
+the absolute numbers** — recorded because Phase 8's round 1 caught this spec publishing a
+number a second person could not re-derive, and the same trap is here in a different shape.
+`pdftotext -layout` re-grids per document, so a probe whose prose wraps differently reports
+different columns for the same page: a second measurement of the same rules read the list
+item at 2 → 8 where this one reads 2 → 6. **Three relations are what the phase is keyed to,
+and not one of them is a literal.** Two are equalities — the twins land on the same column,
+and the caption lands on the body's column. **The third is a negative rather than an
+equality**, and saying so is the point: an image-first group's listing stays *centred*, which
+the bullet below records as a move from column 25 to 27. No gate is keyed to the third; gate
+(1) reads it by eye and OQ-18 owns the asymmetry.
+
+**The tool's grid also quantises**, so two blocks with identical left edges can report
+adjacent columns: measured in the configuration where the first rule is installed without the
+second, where the twins read **4 and 5** on one edge. That is why gate (2) says to confirm
+against the rendered page when two columns differ by exactly one, and why the check is an
+equality read inside one run rather than a number carried between probes.
+
+**The rule is two rules, and the first is the one that matters:**
+
+```typst
+show raw.where(block: true): set block(inset: (left: 2em))
+show figure.caption.where(kind: raw): it => pad(left: 2em, it)
+```
+
+**The inset is on `raw` and not on the `figure`, and that is the whole of why this does not
+undo Phase 6.** A rule on the figure is the spelling an implementer reaches for and it was
+measured and rejected: it reaches only a *captioned* listing, so the same code would stand at
+two edges in one document depending on whether it carries a number — Phase 6's defect,
+reintroduced by the fix for something else. On `raw.where(block: true)` both twins move by
+the same 2em: the probe's uncaptioned block and its captioned neighbour went from column 0 to
+column 4 together.
+
+**Phase 6's rule is *not* subsumed and stays**, which a draft of this section assumed and the
+measurement falsified. With the two rules above installed and
+`show figure.where(kind: raw): set align(left)` removed, the captioned listing centres to
+**column 16** while its uncaptioned twin sits at **column 4**, and a group of two listings
+goes to 17 and 18. So this phase adds two rules to a look and removes none.
+
+**The caption is a second rule with a second argument, not a consequence of the first.**
+Phase 6 got the caption for free — `set align(left)` on the figure carried it. An inset on
+the *body* cannot, because a caption is not a `raw` block: measured at column 0 under a block
+sitting at column 4, before the second rule was added. So it is argued separately, and the
+argument is that a caption names the thing above it and reads as detached from a block whose
+edge it does not share. `figure.caption.where(kind: raw)` is a real selector on the pinned
+0.15.1, which was not obvious from the docs and is recorded so it is not re-derived.
+
+**Two consequences are recorded because they are what a reader will find and call bugs.**
+
+- **The inset compounds with an enclosing indent, and that is wanted.** A code block inside a
+  list item went from column 2 to column 6, and one inside a block quote from 2 to 7. The
+  block sits 2em off *its own container's* edge rather than 2em off the page, which is the
+  same relation it has at the top level.
+- **A listing inside an image-first group is untouched by all of this.** Phase 6 measured that
+  a mixed group takes its *first member's* kind — listing-first reads *Listing* and goes left,
+  image-first reads *Figure* and stays centred. Under these rules the image-first group's
+  listing member moved from column 25 to **column 27**: still centred, and now 2em further in.
+  Nothing here fixes that and nothing here should. It is Phase 6's asymmetry, and the fix is a
+  rule that places a group by what it contains rather than by its first member, which is a
+  kind question no phase has wanted. OQ-18 carries it.
+
+**The value is 2em and it is the look's**, on the seam every phase since Phase 1 has used:
+the author writes the code and the look decides where it sits. There is no frontmatter key,
+because OQ-2 refused one for per-kind typography and nothing here reopens that. Both bundled
+looks take the same two rules and the same value, for the reason Phase 6 gave for its own
+agreement — how code is read is not house style — so a third look choosing 1em or zero would
+be choosing rather than inheriting.
+
+**The two `2em`s are the same number in different units, and a third look is the one that
+finds out.** The first resolves against the size in effect on the `raw` block and the second
+against the size in effect on the caption. They land on one edge in both bundled looks only
+because each look sizes the two the same — the article at 9pt and 9pt, the press release at
+9.5pt and 9.5pt — which is a coincidence of house style rather than a property of the rules.
+A look that set a caption smaller than its code would misalign the caption from the block it
+names, silently and by exactly the ratio. **The contract a third look inherits is therefore
+"the caption sits on the block's edge", not "both numbers are 2em"**, and the two bundled
+looks satisfy it by having nothing to reconcile. Recorded rather than fixed: an absolute
+length would remove the coupling and would also stop the inset scaling with the code it
+offsets, which is the property that makes `em` the right unit for the first rule.
 
 ## 3. Open questions
 
@@ -1427,6 +1542,20 @@ a key for.
   could not have expressed. **The opt-out and `A.1` appendices are untouched and stay
   open.**
 
+- **OQ-18 — should a mixed group place its listing, and does the inset ever stop being the
+  look's?** *(design call)* Phase 9 settles the two rules and the value, and leaves two things
+  it forces. **The mixed group**: a group whose first member is an image reads *Figure* and
+  stays centred, so its listing member is centred and, under Phase 9, 2em further in —
+  measured at column 27 against 25 before. Phase 6 measured the asymmetry and recorded it;
+  Phase 9 inherits it unchanged and makes it one notch more visible. Fixing it means placing a
+  group by what it *contains* rather than by its first member, which is a kind question this
+  spec has never had to answer and which no phase has wanted — and a group mixing code with a
+  diagram is a shape nothing in the corpus contains. **The value**: 2em is the look's, on
+  OQ-2's ground, and both bundled looks agree. A third look wanting 1em is the look choosing,
+  which costs nothing; an *author* wanting it is OQ-2 reopened, and that should be reopened
+  deliberately rather than by adding a key to settle one document. **Blocks nothing** — Phase
+  9 ships two rules under one value.
+
 ## 4. Implementation phases
 
 Strictly sequential; each is one plan-mode pass. All three produce the
@@ -1468,6 +1597,14 @@ display span as `$ … $` and wraps none, which is why OQ-16 records that `equat
 `figures` do not meet on the page. It is the second to move the **look contract**, which Phase 7 took from
 five to six and this takes to seven, and the first whose key takes a **depth** rather than
 one of two names.
+
+**A ninth was appended 2026-08-31**, after Phase 8 shipped and on §2's inset decision, per
+§6.1 step 2. It is the **second here to change no markdown at all** and the second to move
+only a look — Phase 6 was the first, and this one moves the very edge Phase 6 chose.
+**It is also the first in this spec whose want is legibility rather than a defect**, which
+§2 states plainly rather than dressing up: Phase 6 took a wrong page and made it right, and
+this takes a right page and makes it easier to read. That is a weaker warrant than any phase
+before it has run on, and round 0 is the place to test it.
 
 ### Phase 1 — a captioned figure
 *Produces the observable: yes — a PDF with a captioned, numbered figure under an
@@ -2839,6 +2976,137 @@ phase, not a spec.
   which pins the master's own headings at `[12, 27, 54]` — a `cargo test --workspace`
   failure that gate (6) forbids, in the one file this phase says it does not touch. OQ-17
   carries the showcase forward. One push.
+
+### Phase 9 — a listing sits off the margin
+*Produces the observable: yes — a PDF whose block code stands 2em off the edge the prose
+stands on, captioned and uncaptioned alike, with a listing's caption on the code's edge
+rather than the page's.*
+
+**Drafted 2026-08-31**, on §2's inset decision above, and appended per §6.1 step 2. The
+ordered test lands on step 2 and the steps above it are worked rather than skipped.
+
+- **Step 0 — a decision, not only code?** Yes. Phase 6 resolved that a captioned listing
+  "returns to the position its uncaptioned twin holds", and both `rules/pipeline.md` and
+  `README.md` state that position as the left edge. This moves it.
+- **Step 1 — does it remove or contradict shipped work? No, and the measurement is what says
+  so rather than the intent.** Phase 6's rule stays and is still load-bearing: §2 records that
+  removing it while this phase's rules stand puts a captioned listing back in the centre at
+  column 16 while its uncaptioned twin sits at column 4. What this phase moves is the *shared*
+  edge, which leaves Phase 6's property — the two twins agree — exactly as Phase 6 left it,
+  and §2 carries the dated note on the section whose heading stops being literally true.
+  **The `mpdf-004` Phase 3 property Phase 6 bent is bent again, in the same direction and for
+  a weaker reason**, and Phase 6's three bounds are inherited rather than re-argued — with one
+  honestly widened: the blast radius here is every document that contains a block of code, not
+  only one that captions it, which is why gate (5) measures the sample this spec has always
+  measured.
+- **Step 2 — the subject.** Where a listing sits, which this spec has owned since Phase 6, and
+  whose rollup is `done` rather than `abandoned`. So a phase, not a spec.
+
+- **Scope: two rules per look, and nothing else.**
+
+  `core/assets/template.typ` and `core/assets/press-release.typ` each gain
+
+  ```typst
+  show raw.where(block: true): set block(inset: (left: 2em))
+  show figure.caption.where(kind: raw): it => pad(left: 2em, it)
+  ```
+
+  and each **keeps** `show figure.where(kind: raw): set align(left)`. **The inset is on `raw`
+  and not on the figure**, per §2: a figure rule reaches only a captioned listing and
+  reintroduces the defect Phase 6 removed.
+
+  **No `core/src` file changes, no golden moves, and the look contract stays at seven.** Both
+  rules reach Typst elements the emitter already emits, the way both looks already reach
+  `raw`, `table.cell` and `figure.caption` — the mechanism OQ-3 settled in Phase 1 and every
+  look-only phase since has used. `cli/src` and `app/src` are untouched.
+
+  **One shipped test is repaired rather than only added to**, and gate (3) carries the
+  argument: `core/tests/golden_test.rs:every_bundled_template_places_a_listing`'s needle has
+  been satisfiable by Phase 7's counter reset since Phase 7 shipped, so it no longer pins the
+  rule this phase's step-1 argument depends on.
+
+  **`samples/showcase/sections/figures.md` is in scope**, and it is the one document in the
+  corpus that states the edge in its own prose: "both bundled looks send a captioned listing
+  back to the left edge that its uncaptioned twin stands on". The twin half stays true and the
+  edge half does not.
+
+- **Exit gate:** five cases. Two of them exist only because §2 measured a wrong implementation
+  that passes the other three.
+
+  (1) **The phase itself, read by eye, one PDF per look**, over a document carrying every
+  shape a listing takes: an uncaptioned block, a captioned one, a group of two listings, a
+  mixed group in each order, a block in a list item and a block in a block quote. Both looks
+  put block code 2em off the prose, with a listing's caption on the code's edge.
+
+  (2) **The twin property, as the equality Phase 6 was written for.** In that same document,
+  in one `pdftotext -layout` run, and in both looks, the uncaptioned block and the captioned
+  listing sit on the **same** left edge. **Read within one run and one document**, per §2:
+  the tool re-grids per document, so a column from one probe means nothing against a column
+  from another, and where the two differ by exactly one, confirm against the rendered page
+  rather than the grid — §2 records the configuration where identical edges reported as 4 and
+  5. **Confirming against the page is gate (1)'s by-eye read on that same PDF**, not a second
+  instrument. **This is the case an implementer who insets the figure fails**, and it is the only case
+  that fails them: both figure-level spellings were measured moving the captioned listing
+  while leaving its uncaptioned twin at the margin, and every other case here accepts them.
+
+  (3) **Phase 6's rule is still there and still doing work — and the test that was supposed
+  to say so cannot, which this phase repairs.**
+  `core/tests/golden_test.rs:every_bundled_template_places_a_listing` asserts the needle
+  `figure.where(kind: raw)`, and its own doc comment calls that "the first `.where(kind: …)`
+  rule either look carries". **That stopped being true at Phase 7**, whose counter reset
+  writes `counter(figure.where(kind: raw)).update(0)` into both looks — so the phrase now
+  occurs **twice** in each file and the test passes with Phase 6's `set align(left)` deleted
+  outright. It does not pin the rule at all. So this phase narrows the needle to
+  **`figure.where(kind: raw): set align(left)`**, the whole rule rather than its selector,
+  and corrects the doc comment's "first" claim. **That is a repair to shipped work and is in
+  scope deliberately**: the gate leans on this assertion, an assertion that cannot fail is
+  not one, and the alternative — a gate citing a test it has just been shown does not hold —
+  is worse than the one-string edit. The alignment's *direction* stays off the needle for the
+  reason Phase 6 gave; what is added is that the rule is a `show` rule at all. Even repaired
+  the test is a needle over source, so it would pass a look carrying the rule and an inset
+  that defeated it — which is what (1) and (2) are for.
+
+  (4) **Both looks carry both new rules**, by needles over
+  `core/tests/golden_test.rs:BUNDLED_TEMPLATES`. **The needles are `raw.where(block: true)`
+  and `figure.caption.where(kind: raw)`**, and **the 2em is deliberately not a needle** — the
+  value is each look's own call, on the precedent this file already records for an equation's
+  format, a group's gutter and a caption's separator. **A test of its own rather than an
+  extension of `every_bundled_template_places_a_listing`**, whose name is about where a
+  listing is *aligned*; hanging an inset off it would leave a test whose name had stopped
+  describing it, which is the argument Phase 1 gate (6) and Phase 5 gate (8) each made.
+
+  (5) **`cargo test --workspace` passes with no golden re-blessed and no `core/src` file
+  touched** — `git diff --stat` naming the two `.typ` files, the new test, and the close-out's
+  prose, and nothing else. A golden that moved would be the emitter having started to write an
+  inset, which §2's seam refuses. **The one shipped assertion in the blast radius is named:**
+  `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page` pins
+  pagination over `samples/article.md`, which carries a fenced block *and* an indented one,
+  and an inset changes the width both set in. Measured 2026-08-31 with both rules installed in
+  both looks: the whole workspace suite passes, this case included.
+
+- **Close-out:** `rules/pipeline.md` — **six claims and not the three a draft of this line
+  counted**, on the standard Phase 6 set when it counted its own three explicitly. The
+  listing sentence, "both looks send one back to the left edge, caption and all", which
+  becomes an edge 2em off the prose's; the needle list, which gains two and has one narrowed;
+  the count of rules each look carries over a `figure`; **the uncaptioned-wrap argument**,
+  which says "`figure` centres its body where a bare block sits flush left" — Phase 6
+  qualified that clause rather than dropping it, and a bare block is no longer flush left
+  either; **"Both bundled looks do so exactly once, over a listing's alignment"**, which
+  becomes twice; and **"The fifth is the only `.where(kind: …)` *rule* in either look"**,
+  which `show figure.caption.where(kind: raw)` makes false and which is named here rather
+  than left to the rule-count clause it shares a paragraph with.
+  `README.md` — `## Styling`'s "the left edge a captioned code block sits on".
+  `samples/showcase/sections/figures.md` — the prose the scope names.
+
+  **And one free line in the file the phase is already editing**, folded at convergence from
+  round 3's courtesy note. `core/tests/golden_test.rs:BUNDLED_TEMPLATES`' doc comment says
+  "**Four** tests read these"; five do today and six will after gate (4). It is pre-existing
+  staleness this phase does not create, and it is corrected because the implementer is in
+  that header anyway. **The same sentence carries a second hazard worth fixing with it**: it
+  names "the three **Phase 9** cases", meaning `mpdf-001`'s Phase 9, in a file this spec's
+  own Phase 9 is editing. The spec id goes in.
+  **`samples/showcase/` moves on the page and that is the point**, and nothing pins its
+  pagination. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
