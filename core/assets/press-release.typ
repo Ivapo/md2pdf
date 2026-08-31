@@ -3,7 +3,7 @@
 // does, and the parser and the emitter know nothing about either.
 //
 // The emitter names every argument on every call, so this file takes the same
-// six the article look takes. It sets only what the frontmatter supplied and
+// seven the article look takes. It sets only what the frontmatter supplied and
 // prints no fixed text of its own: the look is this file's job, and the words
 // on the page are the author's.
 
@@ -17,7 +17,7 @@
 
 // `divider` is defined above because a Typst closure captures the scope it is
 // written in. The masthead calls it, so it has to exist by this line.
-#let template(title: none, author: none, columns: 1, date: none, equations: "plain", figures: "flat", doc) = {
+#let template(title: none, author: none, columns: 1, date: none, equations: "plain", figures: "flat", headings: "plain", doc) = {
   // A press release runs in one column by convention, and the frontmatter
   // resolves the count to 1 where the document left the key out. An author who
   // writes `columns: 2` still gets two.
@@ -35,18 +35,29 @@
   show raw: set text(font: "Libertinus Mono", size: 9.5pt)
   show table.cell.where(y: 0): strong
 
-  // Whether a heading advances a counter of its own, answered here as
-  // everything else is. Under `sectioned` a figure number is built off
-  // `counter(heading)`, which does not advance while its own numbering is
-  // `none` — every figure would read `Table 0.1`. A numbering function
-  // returning `none` advances it and puts nothing on the page, where
-  // `show heading: it => it.body` would leave the block rule below nothing to
-  // apply to and cost this look its heading spacing.
+  // What a heading's number says, and whether it says anything, answered here
+  // as everything else is. Two keys meet on this one rule, and it is one rule
+  // rather than two because the later of two set rules over one field wins: a
+  // second `set heading(numbering: …)` above this one would silently no-op the
+  // whole scheme.
   //
-  // It *replaces* the plain `set heading(numbering: none)` rather than joining
-  // it: the later of two set rules over one field wins, so the old line left
-  // below would silently no-op the whole scheme.
-  set heading(numbering: if figures == "sectioned" { (..n) => none } else { none })
+  // Under `headings` the author has named the deepest level that carries a
+  // number, and this look reaches the same convention the article look reaches:
+  // `1.1`, the levels joined by a full stop. `numbering("1.1", ..)` repeats its
+  // last separator past the pattern, so one pattern serves all six levels, and
+  // the cap is the closure returning nothing above the depth — a level past the
+  // cap costs the levels below it nothing.
+  //
+  // Under `plain` this falls back to the rule `figures` needs: a figure's
+  // section prefix is built off `counter(heading)`, which does not advance
+  // while its own numbering is `none` — every figure would read `Table 0.1`. A
+  // numbering function returning `none` advances it and puts nothing on the
+  // page, where `show heading: it => it.body` would leave the block rule below
+  // nothing to apply to and cost this look its heading spacing. A real
+  // numbering function advances that counter too, so the two keys compose.
+  set heading(numbering: if headings != "plain" {
+    (..n) => if n.pos().len() <= int(headings) { numbering("1.1", ..n.pos()) }
+  } else if figures == "sectioned" { (..n) => none } else { none })
   show heading: set text(weight: "bold", size: 12pt)
   show heading: set block(above: 1.8em, below: 0.85em)
 

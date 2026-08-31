@@ -4,12 +4,12 @@
 // change to the parser or the emitter.
 //
 // The emitter names every argument on every call, so every bundled look takes
-// title, author, columns, date, equations and figures. That is the contract a
-// third look has to meet. The defaults below are the fallback for a
+// title, author, columns, date, equations, figures and headings. That is the
+// contract a third look has to meet. The defaults below are the fallback for a
 // hand-written call; core/src/frontmatter.rs holds the ones a document actually
 // gets.
 
-#let template(title: none, author: none, columns: 2, date: none, equations: "plain", figures: "flat", doc) = {
+#let template(title: none, author: none, columns: 2, date: none, equations: "plain", figures: "flat", headings: "plain", doc) = {
   set page(paper: "a4", margin: 2.5cm, columns: columns)
   set text(font: "Libertinus Serif", size: 10pt, lang: "en")
   set par(justify: true, leading: 0.65em)
@@ -29,21 +29,38 @@
   // source draws with its delimiter row.
   show table.cell.where(y: 0): strong
 
-  // Whether a heading advances a counter of its own. Under `sectioned` a figure
-  // number is built off `counter(heading)`, and that counter does not advance
-  // while its own numbering is `none` — a figure numbered off it would read
-  // `Table 0.1` and `Table 0.2` across two sections. A numbering function
+  // What a heading's number says, and whether it says anything. Two keys meet
+  // on this one rule, and it is one rule rather than two because the later of
+  // two set rules over one field wins: a second `set heading(numbering: …)`
+  // above this one would silently no-op back to unnumbered headings and
+  // `Table 0.1`.
+  //
+  // Under `headings`, the author has named the deepest level that carries a
+  // number and this look decides what one looks like: `1.1`, the levels joined
+  // by a full stop. `numbering("1.1", ..)` repeats its last separator for
+  // arguments beyond the pattern, so this one pattern serves all six levels.
+  // The cap is the closure returning nothing above the depth — which is what
+  // lets a `###` past the cap carry no number while the `##` after it still
+  // reads `1.2`, where suppressing the heading *element* would have cost the
+  // levels below it their numbers too.
+  //
+  // Under `plain`, this falls back to the rule `figures` needs. A figure's
+  // section prefix is built off `counter(heading)`, and that counter does not
+  // advance while its own numbering is `none` — a figure numbered off it would
+  // read `Table 0.1` and `Table 0.2` across two sections. A numbering function
   // returning `none` advances it and still puts nothing on the page.
   //
-  // This *replaces* the plain `set heading(numbering: none)` rather than
-  // joining it. Two set rules over one field resolve to the later one, so the
-  // old line standing below this one would win and the whole scheme would
-  // silently no-op back to `Table 0.1`.
+  // The two keys compose without either knowing about the other: the `none`
+  // branch exists only to advance `counter(heading)`, and a real numbering
+  // function advances it too, so a sectioned document that also numbers its
+  // headings gets both.
   //
-  // `show heading: it => it.body` reaches the same page and is refused: it
-  // leaves the block rule below nothing to apply to, so a sectioned document's
-  // headings lose their spacing and read as ordinary paragraphs.
-  set heading(numbering: if figures == "sectioned" { (..n) => none } else { none })
+  // `show heading: it => it.body` reaches the unnumbered page and is refused:
+  // it leaves the block rule below nothing to apply to, so a sectioned
+  // document's headings lose their spacing and read as ordinary paragraphs.
+  set heading(numbering: if headings != "plain" {
+    (..n) => if n.pos().len() <= int(headings) { numbering("1.1", ..n.pos()) }
+  } else if figures == "sectioned" { (..n) => none } else { none })
   show heading: set text(weight: "bold")
   show heading: set block(above: 1.4em, below: 0.8em)
 

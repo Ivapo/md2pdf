@@ -1434,7 +1434,7 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 
 /// Every bundled look meets the call contract the emitter writes.
 ///
-/// `header` names all six arguments on every call and imports both names, so a
+/// `header` names all seven arguments on every call and imports both names, so a
 /// look missing one would fail the compile with an error naming neither the
 /// document nor the key. Golden files pin emitter output only, so the
 /// templates' side of the contract needs an artifact of its own.
@@ -1452,6 +1452,14 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 /// one line no look can carry while ignoring the key. `set figure(numbering:`
 /// would not do: a look may set that and never section anything. The format
 /// stays off the list for the same reason `equations`' does.
+///
+/// `headings` brings its own pair on the same precedent, and the second is
+/// `int(headings)` — the conversion the cap comparison needs, which is the one
+/// fragment no look can carry while ignoring the key. **`n.pos().len() <=` is
+/// deliberately not the needle**: a look that hardcoded its own depth carries
+/// it and never reads the key, so it would check the rule's shape where
+/// `int(headings)` checks that the key reaches it. The `1.1` pattern stays off
+/// the list for the same reason the other two formats do.
 ///
 /// These needles join the contract test rather than taking one of their own,
 /// where a caption, a gutter and a listing's alignment each took one: those
@@ -1471,6 +1479,8 @@ fn every_bundled_template_meets_the_call_contract() {
             "math.equation",
             "figures",
             "counter(figure.where(kind:",
+            "headings",
+            "int(headings)",
         ] {
             assert!(source.contains(needle), "{file} does not carry `{needle}`");
         }
