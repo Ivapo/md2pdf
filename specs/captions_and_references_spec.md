@@ -52,7 +52,7 @@ phases:
     by: null
   - name: "Phase 9 — a listing sits off the margin"
     reviewed: 2026-08-31
-    shipped: null
+    shipped: 2026-08-31
     cut: null
     by: null
 
@@ -3107,6 +3107,27 @@ ordered test lands on step 2 and the steps above it are worked rather than skipp
   own Phase 9 is editing. The spec id goes in.
   **`samples/showcase/` moves on the page and that is the point**, and nothing pins its
   pagination. One push.
+
+  **WIDENED 2026-08-31, on shipping: the six `rules/pipeline.md` claims were all six, and
+  two files outside that list state the edge as well.** The count above is confirmed rather
+  than corrected — every one of the six was found and moved. What the close-out did not
+  name is `web/index.html`, whose captioned-listing row reads "set to the left edge" about
+  a PDF `rules/web-demo.md` records as *the PDF the CLI writes*, so these two rules move
+  what that sentence describes; and
+  `core/tests/golden_test.rs:an_uncaptioned_table_and_code_block_are_not_wrapped`'s doc
+  comment, which carries the uncaptioned-wrap argument's "a bare block sits flush left" in
+  the one file this phase was already editing — Phase 6 qualified that clause in
+  `rules/pipeline.md` and left this copy alone. Both are qualified rather than dropped, on
+  Phase 6's own ground: the counter half of the argument carries the decision by itself.
+  The sibling comment on `an_uncaptioned_standalone_image_is_not_wrapped` is about an
+  *image* and stays true as written. Recorded because the close-out's list is the thing a
+  later phase re-derives, and a list that was short once is worth saying so.
+
+  **The showcase's pagination was measured rather than assumed**, since the close-out
+  asserts nothing pins it: `samples/showcase/showcase.md` compiles to **6 pages** before and
+  after, and `samples/article.md` to **3** — which also leaves
+  `tests/gates/mpdf-009-phase5.js`'s hand-run `k.length === 6` standing, a check outside
+  `cargo test` that no gate here would have caught.
 
 <!--
 The review record is a sibling file, not a section: it lives at

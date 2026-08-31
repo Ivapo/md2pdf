@@ -15,8 +15,9 @@ counts it.
 
 ![The same three steps, uncaptioned](pipeline.svg)
 
-A code block takes a caption the same way, and both bundled looks send a
-captioned listing back to the left edge that its uncaptioned twin stands on:
+A code block takes a caption the same way. Both bundled looks stand a block of
+code 2em off the edge this sentence begins on, captioned and uncaptioned alike,
+so the same code reads the same wherever it stands:
 
 ```rust
 fn convert(md: &str) -> Result<Vec<u8>> {

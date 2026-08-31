@@ -440,16 +440,17 @@ kind from the body it was handed: three supplements and three independent counte
 A `:::` group is the fourth place a caption attaches, and the section below holds it.
 Nothing else in the dialect takes a caption; a display equation takes a name without one.
 
-**The caption is what makes a figure.** An uncaptioned construct is written exactly as it
-is above, because a `#figure` with no caption prints no number and still consumes the
-counter — so the next captioned one would read "Figure 2" with no Figure 1 on the page —
-and because `figure` centres its body where a bare block sits flush left, which holds for an
-image and a table in every look and for a listing in any look that does not send one back. So
-a caption is not decoration on a figure; **writing one is the whole ask**, which is why no
-frontmatter key carries it: an equation has no caption to read the ask from and needs the
-`equations` key, and these three have one. A look may still decide per kind, with a
-`show figure.where(kind: …)` rule and no argument crossing the seam. Both bundled looks do
-so exactly once, over a listing's alignment; all three kinds carry their numbers in both.
+**The caption is what makes a figure.** An uncaptioned construct is written exactly as it is
+above, because a `#figure` with no caption prints no number and still consumes the counter — so
+the next captioned one would read "Figure 2" with no Figure 1 on the page — and because
+`figure` centres its body where a bare block sits at the edge its look gives it — the prose's
+for an image and a table, and 2em off it for a code block in both bundled looks, which a
+captioned listing is sent back to. So a caption is not decoration on a figure; **writing one is
+the whole ask**, which is why no frontmatter key carries it: an equation has no caption to read
+the ask from and needs the `equations` key, and these three have one. A look may still decide
+per kind, with a `show figure.where(kind: …)` rule and no argument crossing the seam. Both
+bundled looks do so **twice**, over a listing's alignment and over its caption's inset; all
+three kinds carry their numbers in both.
 
 The caption is a paragraph of its own, immediately after the construct, opening `: `.
 `: ` costs nothing here — it is Pandoc's own table-caption spelling, GFM gives it no
@@ -891,26 +892,40 @@ wrong default in `frontmatter.rs`.
 
 A caption crosses no argument at all, and neither does a group. Each look carries
 `set figure.caption(…)`, `show figure: set block(…)`, `show figure.caption: …`,
-`show figure: set grid(gutter: …)` and `show figure.where(kind: raw): set align(left)` of its
-own, reaching Typst elements the way both already reach `raw` and `table.cell`, so the
-contract stays at seven. **The first four are kind-agnostic in both looks**, which is what
-styled and numbered a captioned table, a captioned listing and a group the day the emitter
-first emitted one, with no look edit at all. **The fifth is the only `.where(kind: …)` *rule*
-in either look** — `figures`' counter reset names all three kinds, but through
-`counter(figure.where(kind: …))`, which is a selector rather than a rule: `figure` centres
-its body, which an image and a table want and code cannot have — a captioned listing would otherwise stand where its uncaptioned twin does not — so
-both looks send one back to the left edge, caption and all, and a group of listings with it.
+`show figure: set grid(gutter: …)`, `show figure.where(kind: raw): set align(left)` and
+`show figure.caption.where(kind: raw): …` of its own, plus one rule that reaches past a
+figure entirely — `show raw.where(block: true): set block(inset: …)`. All seven reach Typst
+elements the way both looks already reach `raw` and `table.cell`, so the contract stays at
+seven. **The first four are kind-agnostic in both looks**, which is what styled and numbered
+a captioned table, a captioned listing and a group the day the emitter first emitted one,
+with no look edit at all. **The fifth and sixth are the only `.where(kind: …)` *rules* in
+either look** — `figures`' counter reset names all three kinds, but through
+`counter(figure.where(kind: …))`, which is a selector rather than a rule.
+
+**Where a listing sits is three rules together and none is redundant.** `figure` centres its
+body, which an image and a table want and code cannot have, so a captioned listing would
+otherwise stand where its uncaptioned twin does not: the fifth sends it back, caption and
+all, and a group of listings with it. The seventh then moves *both* twins 2em off the prose's
+edge — on `raw` rather than on the `figure`, because a figure rule reaches only the captioned
+one and would part the two edges again. The sixth carries the caption after the body, which
+neither of the others can, since a caption is not a `raw` block. The two `2em` resolve
+against two sizes, the code's and the caption's, so what a third look inherits is "the
+caption sits on the block's edge" rather than "both numbers are 2em".
+
 Each look answers for itself: the article separates the number from the words with a full
 stop and the press release with a dash, both set the caption beneath, the two gutters differ,
-and the two agree on the alignment because how code is read is not house style. The gutter
-rule is not optional — Typst's own default is zero, so two members would touch. Three tests
-in `core/tests/golden_test.rs` hold these, by needles over each look's source: `show figure`
-and `figure.caption` for the caption, `set grid(gutter:` for the gutter, which is keyed to
-the exact phrase because both looks already carry `show figure: set block(…)`, and
-`figure.where(kind: raw)` for the alignment. The caption's position, the gutter's value and
-the alignment's direction are deliberately not needles.
+and the two agree on where a listing sits because how code is read is not house style. The
+gutter rule is not optional — Typst's own default is zero, so two members would touch. Four
+tests in `core/tests/golden_test.rs` hold these, by needles over each look's source:
+`show figure` and `figure.caption` for the caption, `set grid(gutter:` for the gutter, keyed
+to the exact phrase because both looks already carry `show figure: set block(…)`,
+`figure.where(kind: raw): set align(left)` for the alignment — **the whole rule**, since
+`figures`' counter reset puts the selector alone in both files and a needle keyed to it
+passes with the rule deleted — and `raw.where(block: true)` with
+`figure.caption.where(kind: raw)` for the inset. The caption's position, the gutter's value,
+the alignment's direction and the inset's length are deliberately not needles.
 
-**A sixth rule, `show bibliography:`, draws the label above the reference list**, and it is
+**An eighth rule, `show bibliography:`, draws the label above the reference list**, and it is
 not optional either: the emitter writes `title: none`, so without it the list runs straight
 on from the last paragraph unlabelled. Both looks draw "References" and neither draws a
 `heading` — a heading here is exactly what `title: none` exists to prevent. Each sets it to

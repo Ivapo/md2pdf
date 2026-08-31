@@ -818,9 +818,9 @@ document argument. `md2pdf` names all seven on every call.
 
 Everything else a look decides, it decides over Typst's own elements with `show` and `set`
 rules, taking no argument at all. A table's header row, a code block's font, a figure's
-caption, the space between a group's members and the left edge a captioned code block sits
-on all reach a look that way — which is why neither a caption nor a group widened the call
-at all. An argument is added only where the *author* has something to ask for, which is
+caption, the space between a group's members and how far off the margin a block of code
+sits all reach a look that way — which is why neither a caption nor a group widened the
+call at all. An argument is added only where the *author* has something to ask for, which is
 what `equations`, `figures` and `headings` are: the three questions a look cannot answer on
 its own, because the answer is a fact about the document rather than about the house style.
 
