@@ -1146,6 +1146,34 @@
         text-overflow: ellipsis;
       }
       /*
+        The receipt a save leaves, `mpdf-003` Phase 19. **Transient, and every
+        word of it chosen in Rust** — `app/src/main.rs:save` and `save_as` answer
+        it and `sayReceipt` places it, the bar's own rule that nothing here is
+        composed. It rides those returns rather than `Status`, so no field was
+        added and the typedef block below did not move.
+
+        **It sits between the file name and the controls**, so it reads as a
+        second line about the same file rather than as part of the icon group,
+        and `#controls` keeps the auto margin that right-aligns that group.
+
+        **`:empty` is what makes it cost nothing when silent**, and it is not
+        decoration: `footer` sets `gap: 8px`, so an empty `span` is still a flex
+        item and still takes its gaps. Everywhere but the floor the auto margin
+        absorbs them; at 240px there is no free space left to absorb and they
+        would come out of `#edited` instead — which is the width
+        `app/harness/checks.mjs`'s sweep reads and the `flex-min` mutation is
+        measured at.
+
+        `flex: none` for the reason `#controls` and `#brand` have it: this cell
+        says what it says, and the one cell that gives ground is the file name.
+      */
+      #receipt {
+        flex: none;
+      }
+      #receipt:empty {
+        display: none;
+      }
+      /*
         **The auto margin is the icon group's and the brand comes last**, which
         is the shape `notes-ivan/letur_footer.md` names: readouts left, a group
         of small icon buttons right, product name last. Left on `#brand` the
@@ -1379,6 +1407,11 @@
       last element before the module — and not `body.lastElementChild`, which
       is that script.
 
+      **Its element children, in order — `#views`, `#edited`, `#receipt`,
+      `#controls`, `#sep-brand`, `#brand`: five cells and one rule.** The receipt
+      is `mpdf-003` Phase 19's and is the only one that is usually not there;
+      `#receipt:empty` is what keeps an absent one out of the bar's gaps.
+
       **The left cell is `Status::edited`, not `Status::main`** — the file being
       typed in, which from the first click on a panel row is not the file that
       compiles. **Nothing here marks that difference**, and it was considered:
@@ -1467,6 +1500,11 @@
         </button>
       </span>
       <span id="edited"></span>
+      <!--
+        What the last save did, for four seconds. Empty the rest of the time, and
+        `#receipt:empty` is what keeps an empty one out of the bar's gaps.
+      -->
+      <span id="receipt"></span>
       <span id="controls">
         <!--
           **The list is the cap**, and it is written once. It was briefly
@@ -1670,6 +1708,36 @@
       const editedCell = document.getElementById('edited')
 
       /*
+        What the last save did, said for four seconds.
+
+        **The page owns the timer and nothing else.** Both sentences are composed
+        in `app/src/preview.rs:Session` and arrive as the two save commands'
+        return — an event rather than state, so nothing here re-derives one and
+        nothing clears one off a status.
+
+        **Re-armed rather than stacked.** A second save inside the window
+        replaces the sentence and restarts the clock, so two saves cannot leave
+        two timers racing one cell — the failure a bare `setTimeout` per save
+        would have, the first one blanking a sentence the second had just
+        written.
+
+        `mpdf-003` Phase 19.
+      */
+      const receiptCell = document.getElementById('receipt')
+      const RECEIPT_MS = 4000
+      /** @type {ReturnType<typeof setTimeout> | null} */
+      let receiptClock = null
+
+      /** @param {string} sentence */
+      function sayReceipt(sentence) {
+        receiptCell.textContent = sentence
+        clearTimeout(receiptClock)
+        receiptClock = setTimeout(() => {
+          receiptCell.textContent = ''
+        }, RECEIPT_MS)
+      }
+
+      /*
         The footer's own control, and the first thing in the bar a person can
         press. **The page places the appearance and never decides it**: the
         value comes off `Status` and the click goes to Rust, which is where it
@@ -1869,7 +1937,7 @@
       async function saveDocument() {
         try {
           await invoke('edit', { text: text.value })
-          await invoke('save')
+          sayReceipt(await invoke('save'))
         } catch (problem) {
           fail(problem)
         }
@@ -1905,7 +1973,7 @@
         if (path === null) return // the user cancelled
 
         try {
-          await invoke('save_as', { path })
+          sayReceipt(await invoke('save_as', { path }))
         } catch (problem) {
           fail(problem)
         }

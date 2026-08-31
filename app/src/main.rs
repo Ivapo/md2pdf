@@ -471,8 +471,13 @@ fn edit(session: tauri::State<'_, Mutex<Session>>, text: String) {
 /// It needs no dialog and so no capability: the path is the one the window
 /// already names. The save's own filesystem event arrives a moment later and
 /// compiles nothing, because the file and the buffer then say the same thing.
+///
+/// **It answers the receipt the footer shows**, composed in
+/// [`crate::preview::Session`] with every other word in this window's chrome and
+/// merely placed by the page. It rides this return rather than `Status` because
+/// it is an event and not state — `mpdf-003` Phase 19.
 #[tauri::command]
-fn save(session: tauri::State<'_, Mutex<Session>>) -> Result<(), String> {
+fn save(session: tauri::State<'_, Mutex<Session>>) -> Result<String, String> {
     session
         .lock()
         .expect("the session lock was poisoned")
@@ -487,12 +492,15 @@ fn save(session: tauri::State<'_, Mutex<Session>>) -> Result<(), String> {
 /// the pane is holding, which is what a Save-as defaults to everywhere, and it
 /// refuses **before** the dialog rather than after it.
 ///
-/// **Two sentences here were corrected by `mpdf-003` Phase 18 and the code was
-/// not.** `Status` no longer carries root-relative spellings *only* —
-/// `Preview::edited_relative` falls back to an absolute path for a pane outside
-/// the root — and [`crate::document::save_file`] no longer confines, so a panel
-/// opening elsewhere is no longer a refusal waiting to happen. The default is
-/// still worth answering: it opens where the author is, not where macOS was.
+/// **This comment has been corrected twice and the code neither time**, which is
+/// worth saying rather than quietly fixing a third stale sentence. Phase 18
+/// falsified two claims here: that `Status` carries root-relative spellings only,
+/// and that [`crate::document::save_file`]'s confinement made refusal the
+/// *normal* first outcome for a panel opening elsewhere. **Phase 19 restores the
+/// first and leaves the second reversed** — the pane can no longer hold a file
+/// outside the root, so `Preview::edited_relative` is root-relative again; but
+/// `save_file` still writes wherever it is pointed. The default is worth
+/// answering either way: it opens where the author is, not where macOS was.
 ///
 /// It names the file in the pane and not the file that compiles, which is the
 /// opposite of [`export_path`]'s choice and right for the opposite reason: the
@@ -508,27 +516,35 @@ fn save_as_path(session: tauri::State<'_, Mutex<Session>>) -> Result<String, Str
         .ok_or_else(|| "no document is open".to_string())
 }
 
-/// Write the pane where the author asked, and hold that file after.
+/// Write the pane where the author asked, and hold that file if it is one of the
+/// project's.
 ///
 /// **It sets the title, which is the fourth writer of it in this file** —
 /// [`open_document`], [`set_main`] and [`set_edited`] each do the same, the
-/// window being the command's to retitle and not the session's.
+/// window being the command's to retitle and not the session's. **It reads the
+/// title off the pane and not off the path it was handed**, which is what makes
+/// it right on both of `mpdf-003` Phase 19's paths: a save inside the project
+/// moves the pane and retitles the window, a save outside it moves neither, and
+/// this writes the same name back.
+///
+/// **It answers the receipt**, `saved as <name> in <folder>`, composed in
+/// [`crate::preview::Session`] for [`save`]'s reason.
 #[tauri::command]
 async fn save_as(
     window: tauri::Window,
     session: tauri::State<'_, Mutex<Session>>,
     path: String,
-) -> Result<(), String> {
-    let opened = {
+) -> Result<String, String> {
+    let (receipt, opened) = {
         let mut session = session.lock().expect("the session lock was poisoned");
-        session.save_as(path)?;
-        session.preview().document().map(document::title)
+        let receipt = session.save_as(path)?;
+        (receipt, session.preview().document().map(document::title))
     };
 
     if let Some(name) = opened {
         window.set_title(&name).map_err(|e| e.to_string())?;
     }
-    Ok(())
+    Ok(receipt)
 }
 
 /// What the pane should be showing now.

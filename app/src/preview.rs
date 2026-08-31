@@ -121,6 +121,26 @@ const SWITCHING: &str = "the pane holds unsaved edits, so it is still holding th
 const TRASHING: &str = "the pane holds unsaved edits, and this is the file it is holding. \
     Save to keep them, or discard them to move it to the Trash.";
 
+/// The receipt a plain save leaves in the bar.
+///
+/// **No path, because the bar already carries one.** `⌘S` writes the file
+/// `Status::edited` names two cells to the left, so a receipt spelling it again
+/// would repeat its neighbour. [`Session::save_as`] composes the other sentence,
+/// which does carry a path, because that gesture's whole question is *where*.
+///
+/// **Transient, and it rides the command's return rather than [`Status`].** It
+/// is an event and not state: a field would re-arrive on every render, need
+/// clearing, and cost the page's typedef block a property null in almost every
+/// status. `app/dist/index.html` owns the timer and nothing else.
+///
+/// **It is composed here and not in the command**, which is forced rather than
+/// stylistic: `app/src/main.rs` has no test module — the crate is bin-only and
+/// `tauri::State` has a private field and no public constructor — so a sentence
+/// written in the command is a sentence no test in this repository can reach,
+/// which `crate::document::asset_bytes`'s own comment records for a different
+/// rule. `mpdf-003` Phase 19.
+const SAVED: &str = "saved";
+
 /// OQ-5's rule: what an event naming the open document means.
 ///
 /// Three strings and two comparisons. `file` is what the disk holds now,
@@ -1013,8 +1033,29 @@ impl Session {
     /// the same call is what lists the file when it landed inside. Branching on
     /// where it landed would be two paths where the walk is one.
     ///
+    /// **It answers a receipt**, `saved as <name> in <folder>`, for [`SAVED`]'s
+    /// reasons and with one addition of its own: a save outside the project is a
+    /// copy, and the sentence says which rather than leaving it to be inferred
+    /// from a footer cell that names an outside file exactly as it names a
+    /// project one.
+    ///
+    /// **The folder is the containing directory's absolute path, spelled
+    /// plainly**, and it is not split root-relative-inside / absolute-outside.
+    /// `document::spell` ends `(!spelled.is_empty()).then_some(spelled)`, so a
+    /// destination *directly in the root* answers `None` — and saving beside the
+    /// file you are editing is exactly that case, `crate::main::save_as_path`
+    /// defaulting the panel there. **Nor is it abbreviated to `~`**: there is no
+    /// home resolution anywhere in this workspace, every platform-resolved path
+    /// reaches [`Session`] as a constructor parameter for the reason
+    /// [`Session::store`]'s own comment records, and a lookup here would be the
+    /// untestable platform call that rule exists to forbid.
+    ///
+    /// **It is spelled as landed and not canonicalized**, which is what makes the
+    /// sentence the author's own path back rather than the filesystem's answer
+    /// about it.
+    ///
     /// `mpdf-003` Phase 17, narrowed by Phase 19.
-    pub fn save_as(&mut self, path: String) -> Result<(), String> {
+    pub fn save_as(&mut self, path: String) -> Result<String, String> {
         let (root, main) = {
             let preview = self.preview();
             match (preview.root.clone(), preview.main.clone()) {
@@ -1038,9 +1079,14 @@ impl Session {
         (self.on_render)();
 
         if moved {
-            self.arm(root.clone(), root.join(main), landed)?;
+            self.arm(root.clone(), root.join(main), landed.clone())?;
         }
-        Ok(())
+
+        Ok(format!(
+            "saved as {} in {}",
+            landed.file_name().unwrap_or_default().to_string_lossy(),
+            landed.parent().unwrap_or(Path::new("")).to_string_lossy()
+        ))
     }
 
     pub fn trash(
@@ -1151,9 +1197,13 @@ impl Session {
         }
     }
 
-    /// Write the pane's text to the document's own path.
-    pub fn save(&self) -> Result<(), String> {
-        self.preview().save()
+    /// Write the pane's text to the document's own path, and say so.
+    ///
+    /// The receipt is [`SAVED`], which carries no path: the file is the one the
+    /// bar already names.
+    pub fn save(&self) -> Result<String, String> {
+        self.preview().save()?;
+        Ok(SAVED.to_string())
     }
 
     /// The filter, closed over the asset list the last successful parse left.
@@ -2147,6 +2197,85 @@ mod tests {
             session.preview().document(),
             Some(document.as_path()),
             "and the pane did not follow them"
+        );
+    }
+
+    // -- the receipt ---------------------------------------------------------
+    //
+    // `mpdf-003` Phase 19's gate clause 3. **Here and not in `app/src/main.rs`,
+    // which is exactly why the sentences are composed in `Session`**: that file
+    // has no test module — the crate is bin-only and `tauri::State` has a private
+    // field and no public constructor — so a sentence written in the command is
+    // one nothing in this repository can reach.
+
+    /// `⌘S` answers `saved`, and carries no path.
+    #[test]
+    fn a_plain_save_answers_saved() {
+        let dir = scratch_dir("save-receipt-plain");
+        let document = multi_file_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        wait_for(&compiles, 1);
+
+        assert_eq!(session.save().unwrap(), SAVED);
+    }
+
+    /// `Save as…` answers with the name it wrote and the folder it wrote it in.
+    ///
+    /// **The folder is compared against the destination's own `parent()`,
+    /// un-resolved**, and that is the one thing that decides whether this case
+    /// can be written at all: a scratch directory sits under `/var/folders/…`
+    /// while its canonical form is `/private/var/folders/…`, so only the
+    /// spelling as landed matches.
+    ///
+    /// **Both destinations, because the two are the sentence's whole point.**
+    /// Inside, the pane moves and the receipt is a confirmation; outside, the
+    /// pane stays and the receipt is the only thing that says where the bytes
+    /// went.
+    #[test]
+    fn a_save_as_answers_with_the_name_and_the_folder_it_landed_in() {
+        let dir = scratch_dir("save-receipt-as");
+        let document = multi_file_in(&dir);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        wait_for(&compiles, 1);
+
+        // Directly in the root, which is the commonest destination — the panel
+        // defaults there — and the case that ended the root-relative/absolute
+        // split: `document::spell` of that *folder* is the empty string, which
+        // it answers `None` for, so a root-relative folder would be no folder.
+        assert_eq!(document::spell(&dir, &dir), None);
+
+        let beside = dir.join("draft.md");
+        assert_eq!(
+            session
+                .save_as(beside.to_string_lossy().into_owned())
+                .unwrap(),
+            format!("saved as draft.md in {}", dir.display())
+        );
+        assert_eq!(
+            session.preview().document(),
+            Some(beside.as_path()),
+            "an inside save still moves the pane"
+        );
+
+        let outside = dir.parent().unwrap().join("receipt-outside.md");
+        let _ = std::fs::remove_file(&outside);
+        assert_eq!(
+            session
+                .save_as(outside.to_string_lossy().into_owned())
+                .unwrap(),
+            format!(
+                "saved as receipt-outside.md in {}",
+                dir.parent().unwrap().display()
+            )
+        );
+        assert_eq!(
+            session.preview().document(),
+            Some(beside.as_path()),
+            "and the outside one leaves it where the inside one put it"
         );
     }
 
