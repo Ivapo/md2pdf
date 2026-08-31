@@ -292,6 +292,24 @@ const MUTATIONS = {
     return page
       .replace(controls[0], moved)
       .replace(brand[0], brand[0].replace('flex: none;', 'flex: none;\n        margin-left: auto;'))
+  },
+
+  /* The divider's press keeps its default action. **One statement and nothing
+     else**: the capture above it stays taken, so the drag still tracks and the
+     pane still resizes — which is the whole reason a clause asserting only that
+     the pane resized would pass against this page.
+
+     The comment above the statement stays too. It is a comment, and a mutation
+     that took prose out with the code would be falsifying the page's
+     documentation rather than its behaviour.
+
+     **The match is the whole indented statement, not the bare word.** The
+     paragraph directly above the line says `preventDefault` in prose, and two
+     other handlers in the file call it on their own events. */
+  'divider-selects': (page) => {
+    const statement = '        down.preventDefault()\n'
+    if (page.split(statement).length !== 2) die('the mutation divider-selects found no single cancelled default')
+    return page.replace(statement, '')
   }
 }
 

@@ -4288,6 +4288,39 @@
         divider.setPointerCapture(down.pointerId)
 
         /*
+          **Pointer capture routes the events; it does not cancel the gesture
+          the press already started.** `setPointerCapture` guarantees the
+          `pointermove`s and the `pointerup` come back here, which is all the
+          resize needs, and it says nothing about the **default action** of the
+          press that opened the sequence — which, on a bare element, is to
+          anchor a selection there.
+
+          **Both directions were damaged, differently, and neither was the
+          highlight the report described.** Narrowing moved focus off the
+          textarea onto `body` at the `mousedown` and left it there, so the
+          keystroke after the drag was swallowed; WebKit additionally left a
+          one-character selection behind. Widening kept focus and moved the
+          author's caret instead — 65 to 279 on the harness fixture, at a span
+          where nothing is selected and the pointer never leaves this element.
+          Past a longer span a widening drag also selected the pages' own text
+          layer, which is transparent but is real text and is there to be
+          selected.
+
+          **Why those three, and why a threshold, is not established** — the
+          spec records the measurements and claims no mechanism. The statement
+          below is not reasoned from one: it was measured to repair every one
+          of them, in both engines, in both directions, at both spans.
+
+          `preventDefault` is what suppresses the compatibility mouse events
+          all of it rides on, and nothing else this handler needs: the capture
+          above is already taken, `pointermove` and `pointerup` are untouched,
+          and the focus it also suppresses is focus the divider — which has no
+          `tabindex` and cannot hold it — should never have taken from the
+          textarea.
+        */
+        down.preventDefault()
+
+        /*
           Where the text pane starts, taken once at the grab. `clientX` is
           measured from the window and the width being set is the pane's own,
           so the two differ by whatever sits to the left — which was nothing

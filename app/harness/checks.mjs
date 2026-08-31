@@ -27,7 +27,7 @@
 
    **The suite is falsified before it is trusted.** `--mutate <name>` serves a
    deliberately broken copy and judges that **exactly** the clause that owns it
-   fails; `--falsify` runs all eleven. That is the gate's clause 3, run rather
+   fails; `--falsify` runs all twelve. That is the gate's clause 3, run rather
    than read.
 
    **`light` is the default colour scheme and it is written down**, because one
@@ -67,7 +67,8 @@ const OWNS = {
   'marks-unlit': 10,
   'figure-unnamed': 11,
   'save-as-mislabelled': 12,
-  'receipt-sticks': 13
+  'receipt-sticks': 13,
+  'divider-selects': 14
 }
 
 /* **58 characters, and the length is asserted rather than trusted.** The
@@ -955,6 +956,132 @@ const theSaveSaysWhatItDidAndThenStops = async (browser, url) => {
   return errors
 }
 
+/* 14. **A drag of the divider resizes the pane and leaves the pane's own
+       selection and its own focus alone.**
+       `mpdf-003` Phase 20's clause. `setPointerCapture` routes the events of the
+       gesture; it never cancelled the default action of the press that opened it,
+       and the page had no rule about that default at all.
+
+       **It drags both ways, and neither leg is padding.** The defect is not one
+       defect: narrowing moves focus off the textarea onto `body` — so the
+       keystroke after the drag is swallowed — and in WebKit leaves a `"\n"`
+       selection behind; widening keeps focus and moves the author's caret
+       instead. A clause that dragged only left would never see the caret move,
+       and one that dragged only right would never see the focus loss.
+
+       **Two assertions carry the mutation, and each carries it alone.** That is
+       deliberate rather than belt-and-braces: a clause reading only the selection
+       would pass in Chromium against the very page this exists to fix, since a
+       leftward drag leaves `"\n"` there and nothing at all here. The focus loss
+       and the moved caret both reproduce in both engines.
+
+       **`String(document.getSelection())` and not `rangeCount`**, because the
+       guilty WebKit page leaves a one-character selection that has a range.
+
+       **The span is derived from the pane's own geometry at each leg's own
+       start**, not chosen: the midpoint between the pane's current width and the
+       `room - 160` ceiling the drag clamps to. At `opened()`'s own viewport the
+       widening leg therefore lands short of that ceiling, and the pointer stays on
+       the divider rather than wandering onto `#pages` — which would be a different
+       gesture from the one under test. A pixel span would be the metric literal
+       this file forbids, and would also be wrong twice over here: too long reaches
+       the clamp, too short is below the span at which a selection appears at all.
+       **The construction is not claimed at every viewport**: where `room - 160`
+       falls below the pane's width the midpoint degenerates and the widening leg
+       narrows instead.
+
+       **It waits for the text layer before either leg.** The pages are not bare
+       rasters — `pdf.js` lays transparent, real, selectable text over them — and
+       without the layer the selection halves would be asserting against a pane
+       with nothing to select. */
+const dividerLeavesThePaneAlone = async (browser, url) => {
+  const page = await opened(browser, url)
+  await page.waitForFunction(() => document.querySelector('.textLayer span') !== null, null, { timeout: 30000 })
+
+  /** One leg. `sign` is -1 to narrow and +1 to widen; everything else is read. */
+  const leg = async (sign) => {
+    const start = await page.evaluate((towards) => {
+      const text = document.getElementById('text')
+      text.focus()
+      /* Mid-document rather than an offset written down: what is asserted is
+         that it did not move, and a literal here would say nothing more. */
+      const caret = Math.floor(text.value.length / 2)
+      text.setSelectionRange(caret, caret)
+
+      const pane = text.getBoundingClientRect()
+      const room = document.body.clientWidth - pane.left
+      const bar = document.getElementById('divider').getBoundingClientRect()
+      return {
+        caret,
+        was: pane.width,
+        by: (towards * (room - 160 - pane.width)) / 2,
+        x: bar.left + bar.width / 2,
+        y: bar.top + bar.height / 2
+      }
+    }, sign)
+
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(start.x + start.by, start.y, { steps: 5 })
+    await page.mouse.up()
+    await settle(page)
+
+    const after = await page.evaluate(() => {
+      const text = document.getElementById('text')
+      const held = document.activeElement
+      return {
+        /* Named rather than compared to a boolean, so a failure says where the
+           focus went — `body` is the answer this clause was written for. */
+        holding: held === text ? 'text' : held ? held.id || held.tagName.toLowerCase() : 'nothing',
+        selection: String(document.getSelection()),
+        from: text.selectionStart,
+        to: text.selectionEnd,
+        now: text.getBoundingClientRect().width
+      }
+    })
+    return { ...start, ...after }
+  }
+
+  const narrowed = await leg(-1)
+  const widened = await leg(+1)
+
+  const errors = await drainErrors(page)
+  await page.close()
+
+  const said = (r) => `${r.was.toFixed(1)} → ${r.now.toFixed(1)} by ${r.by.toFixed(1)}, focus ${r.holding}, ` +
+    `caret ${r.caret} → ${r.from}${r.to === r.from ? '' : `–${r.to}`}, selection ${JSON.stringify(r.selection)}`
+
+  note(`narrowing: ${said(narrowed)}`)
+  note(`widening:  ${said(widened)}`)
+
+  const moved = (r) => Math.abs(r.now - r.was) > 0.5
+
+  ok(
+    14,
+    "a drag of the divider resizes the pane and leaves the pane's own selection and its own focus alone",
+    moved(narrowed) &&
+      narrowed.holding === 'text' &&
+      narrowed.selection === '' &&
+      moved(widened) &&
+      widened.from === widened.caret &&
+      widened.to === widened.caret &&
+      widened.selection === '',
+    [
+      moved(narrowed) ? null : 'the narrowing drag did not resize the pane',
+      narrowed.holding === 'text' ? null : `narrowing left the focus on ${narrowed.holding}`,
+      narrowed.selection === '' ? null : `narrowing selected ${JSON.stringify(narrowed.selection)}`,
+      moved(widened) ? null : 'the widening drag did not resize the pane',
+      widened.from === widened.caret && widened.to === widened.caret
+        ? null
+        : `widening moved the caret from ${widened.caret} to ${widened.from}–${widened.to}`,
+      widened.selection === '' ? null : `widening selected ${JSON.stringify(widened.selection)}`
+    ]
+      .filter(Boolean)
+      .join('; ') || 'both legs resized, and neither touched the focus or the caret'
+  )
+  return errors
+}
+
 /* ----------------------------------------------------------------- the run */
 
 const run = async ({ engine, headed, rev, doc, mutate }) => {
@@ -989,7 +1116,8 @@ const run = async ({ engine, headed, rev, doc, mutate }) => {
       viewsWorkTheirPanes,
       cellNamesTheFigure,
       theSaveMarkSaysWhatItDoes,
-      theSaveSaysWhatItDidAndThenStops
+      theSaveSaysWhatItDidAndThenStops,
+      dividerLeavesThePaneAlone
     ]) {
       gather(await check(browser, held.url))
     }
@@ -1004,7 +1132,7 @@ const run = async ({ engine, headed, rev, doc, mutate }) => {
      **It stays last** — it is the only clause that accumulates across every
      other one, so its number moves as clauses are added and theirs do not. */
   ok(
-    14,
+    15,
     'no uncaught error reached the console through any of it',
     errors.total === 0,
     `${errors.total} uncaught, ${errors.loops} of them ResizeObserver` +
