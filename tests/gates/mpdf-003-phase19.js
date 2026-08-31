@@ -24,6 +24,18 @@
        distinction this phase is about, and neither is a question you can answer
        backwards.
 
+   **One reading is deliberately a note and not a clause**, and it was a clause in
+   this file's first draft, which failed on it: that an outside save **compiles
+   nothing**. The claim is true and
+   `app/src/preview.rs:a_save_as_outside_the_project_compiles_nothing` is where it
+   is asserted, with nothing in the way. It cannot be read at the window, because
+   `saveDocumentAs` sends the pane's text over with `invoke('edit')` **before** it
+   opens the dialog and `Session::edit` kicks the 300ms typing debounce — so a
+   compile falls due while the native panel is still open, on both paths, for a
+   reason that has nothing to do with the save. **A gate that reads a number it
+   cannot attribute is worse than one that does not read it**, and this is the
+   shape of that.
+
    **It reads the cell's emptiness and never the timer's length.** `RECEIPT_MS`
    is `app/dist/index.html`'s and could move without touching this file: what is
    asserted is that the sentence appeared and that the cell went back to empty on
@@ -307,7 +319,21 @@
 
       note(`the cell held ${JSON.stringify(said)}`)
       note(`the bar names ${JSON.stringify(pane())}, where it named ${JSON.stringify(was)} before`)
-      note(`Rust's edited is ${JSON.stringify(now.edited)}; revision ${wasRevision} → ${now.revision}`)
+
+      /* **A note and not a clause, and the first draft of this gate had it as a
+         clause and failed on it.** `Session::save_as` compiles nothing on the
+         outside path — `app/src/preview.rs:a_save_as_outside_the_project_compiles_nothing`
+         is where that is asserted, with nothing in the way. It cannot be read
+         *here*: `saveDocumentAs` sends the pane's text over with `invoke('edit')`
+         **before** it opens the dialog, and `Session::edit` kicks the 300ms
+         typing debounce — so a compile falls due while the native panel is still
+         open, on both paths, for a reason that has nothing to do with the save.
+         A revision that moved across this gesture is the typing loop and is
+         printed as such. */
+      note(
+        `revision ${wasRevision} → ${now.revision}` +
+          ` — the typing loop's, not the save's: the page's own pre-dialog \`edit\` arms it`
+      )
 
       /* A receipt appeared and the pane did **not** move: the only way both are
          true is a destination outside the project. Cancelling would have left no
@@ -318,17 +344,16 @@
       const stayed =
         parts !== null && was !== null && pane() === was && wasEdited !== null && now.edited === wasEdited
       const named = parts !== null && parts.folder.startsWith('/')
-      const quiet = wasRevision !== null && now.revision === wasRevision
 
       ok(
         '9c',
         '`⇧⌘S` outside the project writes the file, leaves the pane where it was, and names the folder',
-        stayed && named && quiet && cleared,
+        stayed && named && cleared,
         parts === null
           ? `NO RECEIPT of the right shape: ${JSON.stringify(said)} — cancelled, or the sentence changed`
           : `named ${JSON.stringify(parts.name)} in ${JSON.stringify(parts.folder)}; ` +
-            `the bar ${stayed ? 'stayed on' : 'MOVED TO'} ${JSON.stringify(pane())}; ` +
-            `revision ${quiet ? 'stood still' : `MOVED ${wasRevision} → ${now.revision}`}; it cleared: ${cleared}`
+            `the bar ${stayed ? 'stayed on' : 'MOVED TO'} ${JSON.stringify(pane())}, ` +
+            `Rust ${stayed ? 'kept' : 'MOVED TO'} ${JSON.stringify(now.edited)}; it cleared: ${cleared}`
       )
 
       ok(

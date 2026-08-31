@@ -2036,6 +2036,51 @@ mod tests {
         assert_eq!(session.preview().reload(), External::Diverged);
     }
 
+    /// And the save itself compiled nothing.
+    ///
+    /// **`revision` is the reading, because it is what the page guards its
+    /// redraw on.** [`Preview::compile`] bumps it and `app/dist/index.html`'s
+    /// `refresh` treats a new one as a reason to re-fetch the bytes and re-place
+    /// the reader — so a compile here would throw the author back up the page to
+    /// show them exactly what was already on it.
+    ///
+    /// **It cannot be read at the window, and that is worth recording here
+    /// rather than in a gate that tries.** `saveDocumentAs` sends the pane's
+    /// text over with `invoke('edit')` *before* it opens the dialog, and
+    /// [`Session::edit`] kicks the [`crate::watch::TYPING_DEBOUNCE`] — so a
+    /// compile falls due while the native panel is still open, on both paths and
+    /// for a reason that has nothing to do with the save. Nothing intervenes
+    /// here.
+    #[test]
+    fn a_save_as_outside_the_project_compiles_nothing() {
+        let dir = scratch_dir("save-as-outside-quiet");
+        let document = multi_file_in(&dir);
+        let outside = dir.parent().unwrap().join("outside-quiet.md");
+        let _ = std::fs::remove_file(&outside);
+
+        let (mut session, compiles) = counted();
+        session.open(document).unwrap();
+        wait_for(&compiles, 1);
+        let before = session.preview().status().revision;
+
+        session
+            .save_as(outside.to_string_lossy().into_owned())
+            .unwrap();
+
+        assert_eq!(
+            session.preview().status().revision,
+            before,
+            "it reads what it read before, so a compile would only move the reader"
+        );
+
+        // The announce is kept all the same, which is the half a reader would
+        // otherwise assume went with the compile.
+        assert!(
+            compiles.load(Ordering::SeqCst) > 1,
+            "the tree rebuild and the announce stay on both paths"
+        );
+    }
+
     /// And both loops are still running, because nothing was re-armed.
     ///
     /// **The failure this rules out is the whole window going still.**
