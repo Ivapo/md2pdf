@@ -1,6 +1,6 @@
 //! Parses the leading YAML frontmatter block.
 //!
-//! The schema is eight keys, so this is a hand-written parser over a documented
+//! The schema is nine keys, so this is a hand-written parser over a documented
 //! YAML subset rather than a dependency. It follows the same policy the emitter
 //! applies to markdown: anything outside the subset is an error that names the
 //! offending key and its line, never a guess.
@@ -137,6 +137,72 @@ impl Figures {
     }
 }
 
+/// How deep a document numbers its headings.
+///
+/// A name against a closed set, on `Equations`' and `Figures`' shape, with seven
+/// members rather than two. The value is the deepest level that carries a
+/// number, because the question is genuinely not binary: a boolean is what
+/// leaves an author unable to say "the sections but not their subsections", and
+/// a depth is the `secnumdepth` an author already knows. `numbered` is
+/// deliberately not an eighth name — it would be a second spelling of `6`, and
+/// this schema has no synonyms — so an author who guesses it meets an error
+/// that lists the way through.
+///
+/// The author decides *how deep*; the look decides *how* a number is formatted
+/// and where it sits, which is why this crosses to the template as the name it
+/// was written as and carries no numbering string of its own. The look converts
+/// it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Headings {
+    Plain,
+    Depth1,
+    Depth2,
+    Depth3,
+    Depth4,
+    Depth5,
+    Depth6,
+}
+
+impl Headings {
+    /// Every accepted name. The default sits first, as `Figures::ALL`'s does.
+    pub const ALL: [Headings; 7] = [
+        Headings::Plain,
+        Headings::Depth1,
+        Headings::Depth2,
+        Headings::Depth3,
+        Headings::Depth4,
+        Headings::Depth5,
+        Headings::Depth6,
+    ];
+
+    /// The name a document writes in the `headings` key, and the string the
+    /// emitter hands the look.
+    ///
+    /// The depths are unit variants rather than a `Depth(u8)` carrying its
+    /// number, so this match is exhaustive over what exists and needs no
+    /// unreachable arm for a depth the schema cannot produce.
+    pub fn name(self) -> &'static str {
+        match self {
+            Headings::Plain => "plain",
+            Headings::Depth1 => "1",
+            Headings::Depth2 => "2",
+            Headings::Depth3 => "3",
+            Headings::Depth4 => "4",
+            Headings::Depth5 => "5",
+            Headings::Depth6 => "6",
+        }
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        Headings::ALL.into_iter().find(|h| h.name() == name)
+    }
+
+    /// The accepted names, for the error a name outside the set raises.
+    fn names() -> String {
+        Headings::ALL.map(Headings::name).join(" or ")
+    }
+}
+
 /// The keys a document may carry.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Frontmatter {
@@ -147,6 +213,7 @@ pub(crate) struct Frontmatter {
     pub date: Option<String>,
     pub equations: Equations,
     pub figures: Figures,
+    pub headings: Headings,
     /// The bibliography file this document names, with the line that named it.
     ///
     /// The only key that names a *file*, which is why it alone carries a line:
@@ -173,9 +240,10 @@ impl Default for Frontmatter {
     /// is read, and the value below is what a document with no `template` key
     /// lands on.
     ///
-    /// `equations` defaults to the name that numbers nothing, and `figures` to
-    /// the name that sections nothing, so a document written before either key
-    /// existed compiles to the same page it always did.
+    /// `equations` defaults to the name that numbers nothing, `figures` to the
+    /// name that sections nothing, and `headings` to the name that numbers no
+    /// heading, so a document written before any of the three existed compiles
+    /// to the same page it always did.
     fn default() -> Self {
         Self {
             title: None,
@@ -185,6 +253,7 @@ impl Default for Frontmatter {
             date: None,
             equations: Equations::Plain,
             figures: Figures::Flat,
+            headings: Headings::Plain,
             bibliography: None,
         }
     }
@@ -276,6 +345,15 @@ pub(crate) fn parse(block: &str, first_line: usize) -> Result<Frontmatter> {
                     ));
                 };
                 out.figures = figures;
+            }
+            "headings" => {
+                let Some(headings) = Headings::from_name(value) else {
+                    return Err(problem(
+                        line,
+                        format!("key 'headings' takes {}, not '{value}'", Headings::names()),
+                    ));
+                };
+                out.headings = headings;
             }
             // The one key that names a file. Its value takes the shape rule
             // every path in this dialect takes — a document and the files it
@@ -464,6 +542,54 @@ mod tests {
         }
     }
 
+    /// All seven names parse, the depths included.
+    ///
+    /// The depths are the whole reason this key departs from `equations`' and
+    /// `figures`' two-name shape, so the loop names each one rather than
+    /// sampling.
+    #[test]
+    fn every_headings_name_parses() {
+        for (name, headings) in [
+            ("plain", Headings::Plain),
+            ("1", Headings::Depth1),
+            ("2", Headings::Depth2),
+            ("3", Headings::Depth3),
+            ("4", Headings::Depth4),
+            ("5", Headings::Depth5),
+            ("6", Headings::Depth6),
+        ] {
+            let out = parse(&format!("headings: {name}\n"), 2).unwrap();
+            assert_eq!(out.headings, headings, "for {name}");
+        }
+    }
+
+    /// A document that leaves the key out numbers no heading.
+    #[test]
+    fn an_absent_headings_key_numbers_nothing() {
+        assert_eq!(parse("title: A\n", 2).unwrap().headings, Headings::Plain);
+    }
+
+    /// A name outside the set names the key and lists what it accepts, exactly
+    /// as `template`, `equations` and `figures` do. One mechanism, not four.
+    ///
+    /// Both bad values are deliberate. `numbered` is the guess an author who
+    /// knows the other two numbering keys makes, and this schema has no synonym
+    /// for `6`; `7` is the boundary of the depth, one past the six levels
+    /// markdown has.
+    #[test]
+    fn a_headings_name_outside_the_set_lists_the_names_it_accepts() {
+        for value in ["numbered", "7"] {
+            match parse(&format!("headings: {value}\n"), 2) {
+                Err(Error::Frontmatter { problem, .. }) => {
+                    assert!(problem.contains("headings"), "problem was: {problem}");
+                    assert!(problem.contains("plain"), "problem was: {problem}");
+                    assert!(problem.contains("6"), "problem was: {problem}");
+                }
+                other => panic!("expected a Frontmatter error for {value}, got {other:?}"),
+            }
+        }
+    }
+
     /// The one key that names a file keeps the line it was named on.
     #[test]
     fn the_bibliography_key_carries_its_path_and_its_line() {
@@ -538,6 +664,7 @@ mod tests {
             ("title: A\ntemplate: ieee\n", "press-release"),
             ("title: A\nequations: yes\n", "numbered"),
             ("title: A\nfigures: yes\n", "sectioned"),
+            ("title: A\nheadings: yes\n", "plain or 1"),
             ("title: A\nbibliography: /refs.yml\n", "beside the document"),
             ("title: A\ntitle: B\n", "title"),
             ("title: A\njust a line\n", "key: value"),

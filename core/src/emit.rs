@@ -2701,17 +2701,20 @@ fn align_name(align: &Alignment) -> &'static str {
 ///
 /// Every argument is named on every call, including the ones the frontmatter
 /// left out, so that same output shows the layout the document actually gets.
-/// A bundled look therefore accepts all six, and one missing an argument
+/// A bundled look therefore accepts all seven, and one missing an argument
 /// would fail the compile with an error naming neither the document nor the
 /// key.
 ///
-/// `equations` and `figures` cross as Typst strings rather than through
-/// `typst_string_or_none`: the schema resolves each to a name on every
+/// `equations`, `figures` and `headings` cross as Typst strings rather than
+/// through `typst_string_or_none`: the schema resolves each to a name on every
 /// document, so the `none` arm would be dead, and a bare `plain` reaching the
 /// call unquoted fails the compile with `unknown variable: plain` — at compile
 /// time rather than at the schema, naming an identifier the author never typed.
-/// The name is all that crosses; what a number looks like, and whether it
-/// carries the section it stands in, is the look's own.
+/// `headings` crosses as the name it was written as, `"2"` and not `2`, for
+/// the same reason and one more: it is the look that converts it, so no
+/// numbering format and no depth arithmetic reaches this file. The name is all
+/// that crosses; what a number looks like, whether it carries the section it
+/// stands in, and how deep the numbers go, is the look's own.
 fn header(front: &Frontmatter, math: bool) -> String {
     let prelude = match math {
         true => format!("#import \"{PRELUDE_NAME}\": {PRELUDE_NAMES}\n"),
@@ -2720,7 +2723,7 @@ fn header(front: &Frontmatter, math: bool) -> String {
     format!(
         "#import \"{}\": template, divider\n\
          {prelude}\
-         #show: template.with(title: {}, author: {}, columns: {}, date: {}, equations: {}, figures: {})\n",
+         #show: template.with(title: {}, author: {}, columns: {}, date: {}, equations: {}, figures: {}, headings: {})\n",
         front.template.file(),
         typst_string_or_none(front.title.as_deref()),
         typst_string_or_none(front.author.as_deref()),
@@ -2728,6 +2731,7 @@ fn header(front: &Frontmatter, math: bool) -> String {
         typst_string_or_none(front.date.as_deref()),
         typst_string(front.equations.name()),
         typst_string(front.figures.name()),
+        typst_string(front.headings.name()),
     )
 }
 
@@ -2746,10 +2750,10 @@ fn typst_string_or_none(value: Option<&str>) -> String {
 /// mode interprets; a string literal interprets only `\` and `"`, and escaping
 /// the markup set inside one would put the backslashes into the PDF. Two kinds
 /// of thing travel this way: the frontmatter's own strings — the title, the
-/// author, the date and the `equations` and `figures` names — the content of
-/// every `#raw` call the walk writes, for inline code and for code blocks
-/// alike, and the two a citation needs, the key inside `label(…)` and the
-/// bibliography's own path.
+/// author, the date and the `equations`, `figures` and `headings` names — the
+/// content of every `#raw` call the walk writes, for inline code and for code
+/// blocks alike, and the two a citation needs, the key inside `label(…)` and
+/// the bibliography's own path.
 ///
 /// A newline is the one addition a code block needs. A literal cannot hold one,
 /// and inline code never carries one, because CommonMark folds a code span's
