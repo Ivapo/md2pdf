@@ -72,9 +72,11 @@ const CITATIONS_PRESS_RELEASE_MD: &str =
 const CITATIONS_PRESS_RELEASE_TYP: &str =
     include_str!("../../tests/golden/citations_press_release.typ");
 
-/// Every bundled look, by the name the `template` key selects it with. Four
-/// tests read these: the header-row rule, and the three Phase 9 cases that no
-/// golden file can pin, because a golden pins emitter output alone.
+/// Every bundled look, by the name the `template` key selects it with. **Six
+/// tests read these**: the call contract `mpdf-001` Phase 9 fixed, and the five
+/// look-side rules that no golden file can pin, because a golden pins emitter
+/// output alone. The spec id is written out because this file now carries a
+/// second Phase 9 — `mpdf-005`'s, below — and a bare phase number names neither.
 const TEMPLATE_TYP: &str = include_str!("../assets/template.typ");
 const PRESS_RELEASE_TEMPLATE_TYP: &str = include_str!("../assets/press-release.typ");
 const BUNDLED_TEMPLATES: [(&str, &str); 2] = [
@@ -2271,7 +2273,10 @@ fn the_captioned_blocks_golden_carries_each_form() {
 /// unconditionally fails while passing everything above. An uncaptioned
 /// `#figure` prints no number and still consumes the counter, so the next
 /// captioned one reads "Table 2" with no Table 1 on the page, and `figure`
-/// centres its body where a bare block sits flush left.
+/// centres its body where a bare block sits at its own edge — the prose's for a
+/// table, and 2em off it for a code block since `mpdf-005` Phase 9 inset every
+/// block of code in both looks. The counter half of the argument carries the
+/// decision on its own, which is why the qualification costs it nothing.
 ///
 /// The blast radius is one golden each: `tests/golden/table.typ` carries the
 /// only `#table(` in the corpus and `tests/golden/blocks.typ` the only
@@ -3373,16 +3378,25 @@ fn every_bundled_template_separates_a_figures_members() {
 /// what it asserts, which is the argument Phase 1 gate (6) and Phase 5 gate (8)
 /// both made.
 ///
-/// **The needle is `figure.where(kind: raw)`**, the first `.where(kind: …)`
-/// rule either look carries. The alignment's *direction* is deliberately not
-/// part of it, on the same ground the caption's position and the gutter's value
-/// are not: what a needle can hold is that each look answers the question, and
-/// where the block landed is what the by-eye read on one PDF per look is for.
+/// **The needle is the whole rule, `figure.where(kind: raw): set align(left)`,
+/// and the selector alone will not do** — which `mpdf-005` Phase 9 measured and
+/// repaired here. This test was written with the selector as its needle, on the
+/// claim that it was "the first `.where(kind: …)` rule either look carries".
+/// **Phase 7 falsified both halves**: its per-section counter reset writes
+/// `counter(figure.where(kind: raw)).update(0)` into each look, so the string
+/// occurs twice per file and this assertion passed with the alignment rule
+/// deleted outright. An assertion that cannot fail is not one.
+///
+/// The alignment's *direction* is still deliberately outside the needle, on the
+/// same ground the caption's position and the gutter's value are: what a needle
+/// can hold is that each look answers the question, and where the block landed
+/// is what the by-eye read on one PDF per look is for. What the repair adds is
+/// that the answer is a `show` rule at all.
 #[test]
 fn every_bundled_template_places_a_listing() {
     for (file, source) in BUNDLED_TEMPLATES {
         assert!(
-            source.contains("figure.where(kind: raw)"),
+            source.contains("figure.where(kind: raw): set align(left)"),
             "{file} does not decide where a listing sits"
         );
     }
@@ -4686,4 +4700,40 @@ fn a_key_repeated_across_two_frontmatter_blocks_names_its_own_line() {
         source.contains("title: \"Master\", author: \"Someone\""),
         "{source}"
     );
+}
+
+// -- mpdf-005 Phase 9: a listing sits off the margin --------------------------
+
+/// Both bundled looks send a block of code off the margin, and a listing's
+/// caption with it.
+///
+/// A test of its own rather than an extension of
+/// `every_bundled_template_places_a_listing`, whose name is about where a
+/// listing is *aligned*: hanging an inset off it would leave a test whose name
+/// had stopped describing it, which is the argument Phase 1 gate (6) and Phase 5
+/// gate (8) each made.
+///
+/// **The needles are `raw.where(block: true)` and
+/// `figure.caption.where(kind: raw)`, and the `2em` is deliberately not one.**
+/// The value is each look's own call, on the precedent this file already records
+/// for an equation's format, a group's gutter and a caption's separator.
+///
+/// **Two rules and not one, because the first cannot carry the second.** The
+/// inset is on `raw` rather than on the `figure` — a figure rule reaches only a
+/// *captioned* listing, so the same code would stand at two edges in one
+/// document, which is the defect
+/// `every_bundled_template_places_a_listing`'s rule removed. And a caption is
+/// not a `raw` block, so it stays at the margin under a block that has moved
+/// unless a rule of its own moves it.
+///
+/// Even together the two are needles over source, so they would pass a look
+/// carrying both rules and a third that defeated them. That the twins land on
+/// one edge is what the by-eye read on one PDF per look is for.
+#[test]
+fn every_bundled_template_insets_a_listing() {
+    for (file, source) in BUNDLED_TEMPLATES {
+        for needle in ["raw.where(block: true)", "figure.caption.where(kind: raw)"] {
+            assert!(source.contains(needle), "{file} does not carry `{needle}`");
+        }
+    }
 }
