@@ -47,7 +47,7 @@ phases:
     by: null
   - name: "Phase 8 — a heading may carry its number"
     reviewed: 2026-08-31
-    shipped: null
+    shipped: 2026-08-31
     cut: null
     by: null
 
