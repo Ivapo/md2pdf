@@ -742,6 +742,18 @@
       #text:disabled {
         color: var(--quiet);
       }
+      /*
+        **No focus ring.** The engine's default draws one around the whole pane
+        the moment the textarea takes focus, which is most of the time the app
+        is open — and it is a border on a pane that has no border, against a
+        divider that is the only chrome between the two. It also says nothing a
+        reader does not already know: a focused text pane shows a caret, and
+        with `Lines` on it shows the caret's line twice over. The ring is
+        removed rather than restyled because there is nothing for it to say.
+      */
+      #text:focus {
+        outline: none;
+      }
 
       /* The divider the reader drags. It is the only chrome between panes. */
       #divider {

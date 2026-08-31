@@ -12,7 +12,8 @@ sources:
   - app/driver/drive.mjs
 covers: >
   the desktop app's two panes: the one file the front end is, the text pane and
-  the pages the app rasterises the artifact onto, the wrapper a page is and the
+  the pages the app rasterises the artifact onto, the divider between them and
+  the press's own default action its drag cancels, the wrapper a page is and the
   canvas and two layers inside it, the vendored renderer and its worker, the retained document a geometry-only redraw draws from, the
   redraw that moves the reader and the three causes that decide where to, the
   anchor path that opens on the author's own page and the one file it is
@@ -41,15 +42,15 @@ covers: >
   select and the stream it is read off, the link filter and the destination a click resolves, the scaffolding the
   bundle does not carry and the app supplies, the gutter whose rows are as tall
   as their lines render, the follow
-  that keeps the numbers against their lines, the caret's two marks and the
-  pane that loses both when it empties, the check that reads this file and the
+  that keeps the numbers against their lines, the caret's two marks, the third
+  the pane does not draw, and the pane that loses both when it empties, the check that reads this file and the
   two declarations it holds to each other, the harness that drives it in two
   engines and the copy it drives rather than the file, the boundary it records
-  because the DOM cannot show one, the fourteen clauses it
-  asserts as properties and the eleven broken pages that falsify them, the second
+  because the DOM cannot show one, the fifteen clauses it
+  asserts as properties and the twelve broken pages that falsify them, the second
   rig that drives the shipped binary instead and which of the three kinds of
   claim belongs where, and the seven defects none of them reaches
-max_lines: 680
+max_lines: 720
 generated: 2026-08-28
 ---
 
@@ -67,6 +68,28 @@ Two panes: a `<textarea>` at 40% of the width, a divider the reader drags, and
 `#pages`, a scroll container holding one `div.page` per page of the document.
 **The text pane is plain** — no highlighting, no autocomplete, no formatting commands — and every
 change goes straight to Rust, which holds the buffer.
+
+**The divider's press cancels its own default action, and the capture is not what
+does that.** `setPointerCapture` routes the gesture — the `pointermove`s and the
+`pointerup` come back to the divider, which is all the resize needs — and says
+nothing about the **default action** of the press that opened it, which on a bare
+element is to anchor a selection. Unprevented, that damaged the pane three ways and
+the direction decided which showed. **Narrowing lost focus** to `body` at the
+`mousedown` and still held it at the `pointerup`, so the keystroke after the drag
+was swallowed; WebKit additionally left a `"\n"` selection where Chromium left
+nothing. **Widening kept focus and moved the caret**, 65 to 279 at a 30px span with
+nothing selected and the pointer never leaving the divider — the quietest of the
+three, since nothing highlights and the next keystroke lands two hundred characters
+away. Past a longer span a widening drag also selected 21 characters, **and the
+clamp does not cause that**: 30 and 60 select nothing; 88, 120 and 160 select the
+same 21 with the pointer still on the divider; 200 reaches the `room - 160` ceiling
+and selects those same 21. The pages contribute only that there is something to
+select — the `.textLayer` is real text, transparent, and deliberately selectable.
+**Why any of the three happens is not established**: `down.preventDefault()` is the
+whole repair, measured across both engines, both directions and both spans rather
+than reasoned from a mechanism. It is that and not `user-select: none`, a claim
+about what may be selected *in the divider* which moves no focus, and not a class
+on `body`, which would be two writes that must pair across a gesture.
 
 **The app rasterises the artifact itself.** `pdf.js` is vendored as two static
 ES modules under `app/dist/pdfjs/` — `pdf.min.mjs` and `pdf.worker.min.mjs`,
@@ -591,6 +614,23 @@ panel lost all of them — strictly less motion than `mpdf-008` §2 accepted —
 **`Lines` is a view and changes not one byte of the buffer.** Off, the pane is
 the plain textarea. On, it gains numbered rows and marks the caret's line
 **twice** — the row's number in the gutter, and a band behind the line itself.
+
+**`#text` draws no focus ring, and those two marks are why.** The engine's default
+is `outline-style: auto`, 3px in the shipping family, painted whenever the textarea
+has focus — nearly the whole time the app is open, and a border on the one pane
+whose design says the divider is the only chrome between the two. A focused text
+field already shows a caret, the platform's own indicator and the only one saying
+*where* in the text the focus is; with `Lines` on, the two marks above say it twice
+more. The ring is a third mark of a fact already marked twice and the only one
+nobody chose, so `#text:focus` sets `outline: none`. **Scoped to that one
+control**, the only one in the window carrying a caret: every other, the row
+buttons included, keeps the engine's ring. `:focus` rather than `:focus-visible`
+costs a keyboard reader nothing here, measured — a mouse-clicked textarea matches
+`:focus-visible` in both engines, text-entry controls always do, while `#save`,
+focused by script, does not. The file's one `:focus-visible` rule is a
+**visibility** rule and not an indicator:
+`#files li .controls button:focus-visible` sets `visibility: visible` so a
+keyboard-focused row control is drawn at all.
 The textarea stays the editor either way, so nothing that assumes one — the
 buffer sent to `edit`, the reload that replaces `value`, `caretPage`, the
 disabled state, the divider — is forked.
@@ -679,8 +719,8 @@ sentence — found by a mutation that falsified nothing, not by reading.
 `core:default`'s own words — the half a stub that merely omits it never tests. It also keeps
 **a log of every command the page sends**, because a page that did a thing itself and a page
 that asked Rust to are indistinguishable from the DOM. `checks.mjs`
-asserts fourteen clauses in Playwright's Chromium and WebKit, **both of which must pass, every
-clause a property and none a metric literal**, and is falsified first against eleven broken copies
+asserts fifteen clauses in Playwright's Chromium and WebKit, **both of which must pass, every
+clause a property and none a metric literal**, and is falsified first against twelve broken copies
 of the page, each failing exactly the clause it owns. **Two mutations may own one clause
 without either being redundant**, and clause 3 is where that now stands: `flex-min` reaches
 the footer's half, the brand pushed out of a bar that holds one line, and `header-wraps`

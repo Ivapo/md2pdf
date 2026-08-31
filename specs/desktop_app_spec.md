@@ -105,7 +105,7 @@ phases:
     by: null
   - name: "Phase 20 — the two defaults the page never named"
     reviewed: 2026-08-30
-    shipped: null
+    shipped: 2026-08-30
     cut: null
     by: null
 
