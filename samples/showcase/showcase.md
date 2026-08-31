@@ -1,6 +1,6 @@
 ---
 title: Everything the Dialect Carries
-author: Iva Po
+author: Ivan Postigo
 date: 23 August 2026
 template: article
 columns: 1
