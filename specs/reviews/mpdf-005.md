@@ -2,6 +2,107 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 8 only — 2026-08-31 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, one cosmetic non-blocking, folded. **Converged at three
+rounds**, the cap, with the third spent verifying fixes rather than on new substance.
+
+All three round-2 findings confirmed **against the files**. The reviewer additionally
+re-grounded the two clauses the fixes touched: the emitter does write
+`#figure(…, caption: …)` for images, tables, listings and groups, and its `Event::DisplayMath`
+arm writes `format!("$ {markup} $")` and wraps nothing — so §4's narrowed "figures, tables
+and listings" is true and the sentence excluding the equation is grounded rather than
+asserted. `grep` confirms no "three hashes" survives anywhere in the document.
+
+The one cosmetic finding, folded: **OQ-17 opened "leaves two things it forces" and then
+called the showcase "the third"** — a count the round-2 edit staled and this round caught.
+Corrected to three.
+
+### Round 2 — Phase 8 only — 2026-08-31 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, three non-blocking, all three folded. All three were
+defects the *author's own round-1 fixes* introduced, which is the pattern §7.3 warns about
+and the reason the loop re-reviews after folding rather than stopping at the first READY.
+
+1. **Gate (5) still said "the three hashes" after §2 was corrected to two.** The
+   re-measurement did not propagate one clause. Corrected at both ends, with the reason
+   carried: two and not three because `flat` is the resolved default.
+2. **§4's new preamble paragraph claimed the emitter wraps equations in `figure`** — false,
+   and contradicted by this spec's own OQ-16 and by `rules/pipeline.md`'s "The two keys do
+   not meet on the page". Narrowed to figures, tables and listings, with the exclusion
+   stated rather than left implicit.
+3. **The showcase gap was one document wider than the close-out described.**
+   `samples/showcase/showcase.md:27` carries "## The frontmatter, all eight keys" and
+   "carries every key there is, and all eight are optional" — the document a reader is
+   pointed at, not a README about it. OQ-17 now records four claims, not two.
+
+**A number the author re-measured, and the correction it forced.** Round 1 asked for §2's
+inertness fixtures to be specified so their hashes reproduce. Specifying them exposed that
+the third fixture measured on 2026-08-31 carried **four** headings where the other two
+carried five, so `8e885f46…` was a hash of a different document. The probe was re-run on
+three fixtures sharing one body: the true record is **two** hashes, `013e44a5…` for
+`figures: sectioned` and `ee54df7f…` for *both* `figures: flat` and the no-frontmatter
+document, which coincide because `flat` is the resolved default — that being
+`core/tests/golden_test.rs:the_two_forms_of_the_default_compile_to_the_same_bytes`' property
+appearing in the measurement. `8e885f46…` is struck from the document.
+
+### Round 1 — Phase 8 only — 2026-08-31 — fresh general-purpose reviewer with repo access — **READY**
+
+**Round 0 (this episode — one appended phase):** *does this produce the observable, and is
+it the right one?* **Yes.** Phase 8 produces a PDF whose headings read `1 First` and
+`1.1 Background` — a change to the typeset page, not to internal machinery. It is the right
+one: §1.2 records heading numbering as a thing both looks merely *decline*, Phase 7's own
+gate carved it out ("separates this phase from one that merely switched heading numbering
+on"), and the phase was requested rather than inferred.
+
+Verdict: `READY`, **zero blocking**, eight non-blocking, seven folded and one rejected.
+
+**Every number the phase is keyed to was re-derived independently and held**: the 28
+goldens carrying a `template.with` line; the look contract at six moving to seven;
+`rules/pipeline.md` saying "six" in exactly three places (732, 812, 858) with the other
+`six`/`sixth` hits being `show`-rule ordinals and font faces; the anchors count of **5** for
+the specified fixture; `ENABLE_HEADING_ATTRIBUTES` absent from the six extensions
+`core/src/emit.rs:parser` enables; and all five README fragments verbatim. The reviewer also
+established that `core/tests/golden_test.rs:absent_frontmatter_gets_every_default` is the
+**only** literal copy of the call line outside the goldens — line 1634 uses a `starts_with`
+prefix and is unaffected — which is what makes the phase's "three sets of assertions" claim
+complete rather than merely plausible.
+
+The seven folded, in the author's words:
+
+1. **`web/index.html:416` "Seven frontmatter keys decide the look" becomes eight** — the
+   demo page is documentation this project keeps current (`mpdf-007` Phase 4 added line
+   477's "An eighth frontmatter key" in the phase that added that key), and
+   `core/tests/page_examples_test.rs` asserts nothing about the count, so only the close-out
+   catches it.
+2. **The showcase, and the trap in fixing it.** `samples/showcase/showcase.md` has a
+   ten-line frontmatter with its first heading at line 12, and
+   `app/src/preview.rs:the_anchors_are_the_headings_of_whichever_file_the_pane_holds` pins
+   `[12, 27, 54]`. Adding the ninth key there breaks a test in the one file the phase says
+   it does not touch, failing gate (6). The close-out now **makes the call explicitly**:
+   the showcase is not changed and its "all eight" claims are reworded, with OQ-17 carrying
+   it forward.
+3. **`README.md`'s `## Styling` carries two sentences that move, not one** — the contract
+   prose, and "the two questions a look cannot answer on its own", which becomes three.
+4. **`rules/pipeline.md` needs a `max_lines` bump** (955 of 960 before a ninth key and a
+   seventh parameter), and two wordings move: line 732 carries *both* "Seven of them reach
+   the look" and "names all six arguments", and **line 754 argues against this phase in as
+   many words** — "`figures`' third name, not a ninth key" — which the tree now falsifies.
+5. **Gate (5)'s fixtures were unspecified, so its hashes were not reproducible.** Specifying
+   them is what exposed the four-heading fixture recorded under Round 2.
+6. **§4's preamble records every prior appended phase and stopped at the seventh.** An
+   eighth paragraph was added.
+7. **Gate (4)'s rule needle was satisfiable by a look that hardcoded its depth.** Changed
+   from `n.pos().len() <=` to **`int(headings)`**, the one fragment that cannot be present
+   unless the look reads the key, with the weaker fragment's rejection recorded.
+
+**Rejected, with the reason recorded:** *§1.2's "both bundled looks currently decline" is
+made false and no in-place note is planned.* Phase 7 reopened a §1.2 non-goal without
+annotating §1.2 in place, so a note here would depart from the corpus rather than match it;
+§2's decision quotes the sentence and states exactly what moves, and the spec is
+append-only. The reviewer had flagged it only so the call would be made deliberately.
+
+
 ### Round 2 — Phase 7 only — 2026-08-23 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, four non-blocking, all four folded. Converged in two

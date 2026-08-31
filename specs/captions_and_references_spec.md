@@ -7,7 +7,7 @@ note: >
   what a caption and a number look like, and a reference that names one stays
   true when another is inserted above it.
 status: accepted
-last_updated: 2026-08-23
+last_updated: 2026-08-31
 
 phases:
   - name: "Phase 1 — a captioned figure"
@@ -43,6 +43,11 @@ phases:
   - name: "Phase 7 — a figure number may carry its section"
     reviewed: 2026-08-23
     shipped: 2026-08-23
+    cut: null
+    by: null
+  - name: "Phase 8 — a heading may carry its number"
+    reviewed: 2026-08-31
+    shipped: null
     cut: null
     by: null
 
@@ -803,6 +808,89 @@ that does not discriminate. **`A.1` appendices are a different subject**: an app
 document-structure concept this dialect does not carry and markdown has no syntax for, so
 it needs something invented before it needs a number. OQ-16 records both.
 
+### The author says how deep and the look says what a number looks like, measured (decision, recorded)
+
+§1.2 refuses a caption on a heading and, in the same sentence, records where heading
+numbering lives today: *"Headings are already numbered by Typst if a look asks, and both
+bundled looks currently decline."* Phase 8 moves the asking from the look to the document,
+onto the seam `equations` and `figures` already sit on.
+
+**Measured 2026-08-31 through the shipped pipeline**, on Phase 7's own method — a
+temporary `headings` parameter added to `core/assets/template.typ` with a literal default,
+rebuilt and reverted after each run, the PDF read with `pdftotext`.
+
+**The rule is one rule, and it replaces the line Phase 7 wrote:**
+
+```typst
+set heading(numbering: if headings != "plain" {
+  (..n) => if n.pos().len() <= int(headings) { numbering("1.1", ..n.pos()) }
+} else if figures == "sectioned" { (..n) => none } else { none })
+```
+
+**It replaces rather than joins, for the reason Phase 7 recorded about its own rule 1** —
+two `set heading(numbering: …)` lines and the later one wins, so a rule added *above*
+Phase 7's silently no-ops back to unnumbered headings and `Table 0.1`.
+
+Four things were measured, each against the shape that looks right:
+
+- **The cap is the whole depth mechanism, and returning `none` above it is what makes it
+  one.** At `headings: 2`, over a document of `#`, `##`, `###`, `##`, `#`: **`1 First`**,
+  **`1.1 Background`**, **`Detail`** carrying no number, **`1.2 Second Background`**,
+  **`2 Second`**. The `###` takes no number and the `##` after it still reads **`1.2`**, so
+  a level above the cap costs the levels below it nothing — which is the property a cap
+  implemented by suppressing the *element* would not have.
+- **The pattern extends itself.** The same document at `headings: 3` reads
+  **`1.1.1 Detail`**. `numbering("1.1", ..)` repeats its last separator for arguments
+  beyond the pattern, so one pattern serves all six levels and no look carries six.
+- **Phase 7's scheme survives underneath, measured together rather than argued apart.** A
+  `figures: sectioned` document of three captioned tables at `headings: 2` reads
+  **`Table 1.1`**, **`Table 1.2`** and **`Table 2.1`** beside **`1 First`**,
+  **`1.1 Background`** and **`2 Second`**, and `[](#tab:one)` reads **`Table 1.1`**.
+  Phase 7's `(..n) => none` branch is *subsumed* rather than fought: it exists only to
+  advance `counter(heading)`, and a real numbering function advances it too — so the two
+  keys compose without either knowing about the other.
+- **Inertness is measured rather than argued, because a golden cannot see it.** Three
+  fixtures compiled under the shipped look and under the probe carrying the rule with
+  `headings: "plain"` produced **byte-identical PDFs**, 2026-08-31. **The three are
+  specified, because a hash a second person cannot reproduce is a number the gate would
+  pass on trust:** one body throughout — `# First`, `## Background`, `### Detail`,
+  `## Second Background`, `# Second`, each followed by a blank line and one short line of
+  prose — under three frontmatters, being `figures: sectioned`, `figures: flat`, and no
+  frontmatter block at all. They carry **two** hashes and not three: `013e44a5…` for the
+  sectioned one, and `ee54df7f…` for *both* the flat one and the one with no block, which
+  coincide because `flat` is the resolved default — which is
+  `core/tests/golden_test.rs:the_two_forms_of_the_default_compile_to_the_same_bytes`'
+  property showing up in the measurement rather than a collision.
+  That is `mpdf-004` Phase 3's property held rather than bent, and §4's gate reproduces the
+  comparison rather than asserting it.
+
+**The key is `headings`, taking `plain` and `1`–`6`, and `plain` is the default.**
+
+- **`headings` rather than `sections`.** A *section* in this project is a markdown file a
+  master names — `core/src/lib.rs:section_paths`, and `rules/pipeline.md`'s "a master and
+  the sections it names". `sections: numbered` would read as numbering the *files*, which
+  is `mpdf-008`'s subject and not this one.
+- **A depth rather than a boolean, and no `numbered` beside it.** The value is the deepest
+  level that carries a number. `numbered` as an eighth name would be a second spelling of
+  `6`, and this schema has no synonyms. This is the one place it departs from `equations`'
+  and `figures`' two-name shape, and it departs because the question is genuinely not
+  binary: **Pandoc's `--number-sections` is the binary form, and the depth is exactly what
+  its authors then cannot tune** — its manual documents no depth control at all. So
+  `mpdf-001`'s "Pandoc is the inspiration" stops at the shape here, as this spec's own
+  `reference` block already stops at it for `implicit_figures`. LaTeX's `secnumdepth` is
+  the integer precedent an author will recognise, and it is the one Pandoc does not offer.
+- **An integer-valued key is not new here.** `columns` takes `1` or `2` against a closed
+  set; this is that shape with seven members rather than two. The value crosses to the look
+  as the string it was written as, exactly as `equations` and `figures` do, and the look
+  converts it — `int(headings)` — so **no numbering format string reaches the emitter** and
+  the seam Phase 7 drew holds unchanged.
+
+**What the author does not decide is what a number looks like.** `1.1` against `1.1.`
+against `I.1`, and whether it sits in the margin, stay the look's, on `equations`' and
+`figures`' precedent: the author says *how deep*, the look says *how*. A depth is a scheme
+and a scheme is what the document is; a separator is typography, which OQ-2 already refused
+a key for.
+
 ## 3. Open questions
 
 - **OQ-1** — ~~what is the syntax for a caption and for a name?~~ **RESOLVED
@@ -1299,6 +1387,31 @@ it needs something invented before it needs a number. OQ-16 records both.
   and probably not this spec's. **Blocks nothing** — Phase 7 ships one scheme under one
   settled key.
 
+- **OQ-17 — does a heading ever opt *out*, and what else might want a depth?**
+  *(design call)* Phase 8 settles the key — `headings`, taking `plain` and `1`–`6` — and
+  leaves three things it forces. **The opt-out**: Pandoc's `unnumbered` class exempts one
+  heading, the appendix or the preface that should carry no number while its neighbours do,
+  and this dialect has no syntax for one. `ENABLE_HEADING_ATTRIBUTES` is not among the six
+  extensions `core/src/emit.rs:parser` enables, and `core/src/emit.rs` matches
+  `Tag::Heading { level, .. }` and discards the id and the classes — so adopting it widens
+  the dialect from its stated twenty-four things rather than adding a value to a key. That
+  makes it a later phase and not a value this one could have taken. **`A.1` appendices**
+  stay exactly where OQ-16 left them: an appendix is a document-structure concept this
+  dialect does not carry and markdown has no syntax for, so it needs something invented
+  before it needs a number, and the opt-out above is the smaller half of the same want.
+  **The showcase** is the third thing it forces and the one with a date on it:
+  `samples/showcase/` is "one document that uses every construct in the dialect" and will
+  carry **eight of the nine** keys the day Phase 8 lands. The gap is **four claims and
+  not the two the close-out rewords**: `samples/showcase/showcase.md` itself carries the
+  heading "## The frontmatter, all eight keys" and the sentence "carries every key there
+  is, and all eight are optional", and that is the document a reader is pointed at rather
+  than a README about it. It stays as it is because adding the ninth key shifts
+  its ten-line frontmatter and moves the heading lines
+  `app/src/preview.rs:the_anchors_are_the_headings_of_whichever_file_the_pane_holds` pins
+  at `[12, 27, 54]`. Restoring it is a line-literal edit in a file this spec does not
+  touch, so it travels with whatever next edits that test rather than with this phase.
+  **Blocks nothing** — Phase 8 ships one depth under one settled key.
+
 ## 4. Implementation phases
 
 Strictly sequential; each is one plan-mode pass. All three produce the
@@ -1330,6 +1443,16 @@ non-goal** rather than to extend a decision — that section refused every numbe
 beyond one counter per kind, and named "a later phase or a later spec" as the way back in
 the same sentence. It is also the first to move the **look contract**, which has stood at
 five parameters since Phase 1.
+
+**An eighth was appended 2026-08-31**, after Phase 7 shipped and on §2's depth decision,
+per §6.1 step 2. It is the first here to put a number on a **heading**: the seven above
+number figures, tables and listings, every one of them something the emitter wraps in
+`figure`, and this one changes an element the emitter has only ever written as `=` markup
+and never wrapped. **The equation is not in that list on purpose** — the emitter writes a
+display span as `$ … $` and wraps none, which is why OQ-16 records that `equations` and
+`figures` do not meet on the page. It is the second to move the **look contract**, which Phase 7 took from
+five to six and this takes to seven, and the first whose key takes a **depth** rather than
+one of two names.
 
 ### Phase 1 — a captioned figure
 *Produces the observable: yes — a PDF with a captioned, numbered figure under an
@@ -2545,6 +2668,162 @@ The subject is figure numbering, which this spec has owned since Phase 1, and it
   sentence becomes eight; **`## Styling` states the contract in prose** — "let `template`
   take `title`, `author`, `columns`, `date` and `equations` … `md2pdf` names all five on
   every call" — so that is three edits there, not a clause. One push.
+
+### Phase 8 — a heading may carry its number
+*Produces the observable: yes — a PDF whose headings read **1 First**, **1.1 Background**
+and **2 Second**, with a `###` between them carrying no number under a depth of `2`. It is
+the first number this project has put on a heading; §1.2 records that both bundled looks
+decline one today.*
+
+**Drafted 2026-08-31**, on §2's depth decision above, and appended per §6.1 step 2. The
+ordered test lands on step 2 and the steps above it are worked rather than skipped. **Step
+0 — a decision, not only code:** §1.2 says heading numbering happens "if a look asks, and
+both bundled looks currently decline", so this phase moves the asking to the document and
+reverses a stated position rather than only adding code. **Step 1 — does it remove or
+contradict shipped work? No, and the default is the whole reason.** `plain` is what a
+document gets when it asks for nothing, measured byte-identical in §2 across all three
+shapes, so Phase 7's `Table 1.1` and every unnumbered heading before it stand. The subject
+is numbering the author selects and the look formats, which this spec has owned since
+Phase 4 and widened in Phase 7, and its rollup is `done` rather than `abandoned` — so a
+phase, not a spec.
+
+- **Scope: one frontmatter key, one parameter per look, one rule, and the assertions it
+  moves.**
+
+  `core/src/frontmatter.rs` gains the **ninth key**, `headings`, taking `plain` — the
+  default — and `1` through `6`, refusing anything else by name with its line. It takes
+  `Equations`' and `Figures`' shape exactly — `ALL`, `name()`, `from_name`, `names()` —
+  with **seven members rather than two**, so the refusal reads `key 'headings' takes plain
+  or 1 or 2 or 3 or 4 or 5 or 6, not 'numbered'`. **`numbered` is deliberately not a
+  name**, per §2; that error is what an author who guesses it meets, and it lists the way
+  through.
+
+  `core/assets/template.typ` and `core/assets/press-release.typ` each take it as a
+  **seventh parameter** and carry §2's one rule **verbatim**, *replacing* the
+  `set heading(numbering: …)` line Phase 7 wrote rather than joining it. **Both looks, not
+  one** — §2's probe ran in `template.typ` alone, and a rule in one look with a parameter
+  in both is precisely the silent half-ship gate (4) exists to catch.
+  **The look contract moves from six to seven**, which is worth naming rather than
+  discovering: `rules/pipeline.md` says six in three places, `README.md`'s `## Styling`
+  states it in prose, and `core/src/emit.rs:header` names every parameter on every call, so
+  a look missing the seventh fails the compile with an error naming neither the document
+  nor the key.
+
+  `core/src/emit.rs:header` passes it through. **No numbering format string reaches the
+  emitter** — the `"1.1"` pattern and the cap comparison are both inside the look — which
+  is the seam Phase 7 drew and gate (5) re-checks.
+
+  **Three sets of assertions move with the seventh argument, and each is named here rather
+  than met in the gate:**
+  - **Every shipped golden changes on its `template.with` line** — all **28**, counted
+    2026-08-31, each gaining a seventh argument. Phase 7 moved 26 on the sixth and argued
+    why on `mpdf-004` Phase 3's precedent: a golden pins what a document compiles to, and a
+    document carrying a seventh parameter genuinely compiles to that.
+  - **`core/tests/golden_test.rs:absent_frontmatter_gets_every_default` carries the call
+    line as a literal** and breaks on the seventh argument, as it broke on the fifth and
+    again on the sixth. The ordinal is not restated; the count that matters is the 28 above
+    and this assertion beside them.
+  - **`core/tests/golden_test.rs:every_bundled_template_meets_the_call_contract` gains two
+    needles**, on the precedent `rules/pipeline.md` records for `equations` and Phase 7
+    followed for `figures`: "the parameter alone is satisfied by a look that takes it and
+    ignores it". **The needles are named**: `headings` for the parameter and
+    `int(headings)` for the rule, the second chosen because it is the one fragment no look
+    can carry while ignoring the key. **`n.pos().len() <=` is deliberately not the
+    needle**: a look that hardcoded its own depth carries it and never reads the key, so
+    it checks the rule's shape where `int(headings)` checks that the key reaches it.
+
+  **The new fixture takes a golden of its own**, making the tree **29**. It is a fixture
+  like any other and the 28 above is the count *before* it.
+
+  **`cli/src` and `app/src` are untouched**, on this spec's own standing argument.
+- **Exit gate:** six cases. Two exist because other phases already paid for the lesson, and
+  one is a comparison rather than an assertion because §2 measured that a golden cannot see
+  this phase at all.
+
+  (1) **The phase itself, read by eye, one PDF per look.** The fixture is specified,
+  because gates (2) and (3) both need more than "two headings": **two `#` sections; under
+  the first a `##`, then a `###`, then a second `##`; a captioned table under the first
+  `#` named `{#tab:one}`, one under its first `##`, one under the second `#`;
+  `figures: sectioned`; and a `[](#tab:one)` in prose.** Under `headings: 2` both looks
+  show **`1 First`**, **`1.1 Background`**, **`Detail`** with no number,
+  **`1.2 Second Background`** and **`2 Second`** — which is §2's measurement reproduced.
+  **The `###` sits between the two `##` deliberately**: with it, the cap is checked *and*
+  the level below it is checked to still advance, and a cap that silently stopped numbering
+  everything after the first heading above it would pass a fixture that ended at the `###`.
+
+  (2) **The two keys compose, on the one document.** The same fixture keeps Phase 7's
+  numbers exactly — **`Table 1.1`**, **`Table 1.2`**, **`Table 2.1`** — and the reference
+  `[](#tab:one)` reads **`Table 1.1`** and not `Table 1`. §2 measured that a real numbering
+  function advances `counter(heading)` as Phase 7's `(..n) => none` did; a phase that got
+  this wrong puts **`Table 0.1`** back on the page, which is the exact failure §2 opens
+  with.
+
+  (3) **The heading anchors survive, asserted and not hoped.** Phase 7 carries this case
+  for the same reason and it is not inherited by having passed once:
+  `core/src/lib.rs:anchors_from` returns an **empty** vector when the walk's heading count
+  and the compiled document's disagree, and it does so silently, taking `mpdf-003` Phase 6's
+  scroll sync and `web/src/lib.rs:anchors` with it. This phase changes what every heading
+  *renders as*. So: the fixture under `headings: 2` returns a **non-empty** `anchors` from
+  `core/src/lib.rs:md_to_pdf_with_anchors`, of length **5** — its two `#`, its two `##` and
+  its one `###`.
+
+  (4) **Both looks carry the parameter *and act on it*** — the needle pair named in the
+  scope above, over `core/tests/golden_test.rs:BUNDLED_TEMPLATES`.
+
+  (5) **Inertness, as a byte comparison a second person can reproduce — not as an in-suite
+  assertion, which cannot fail.** `core/src/emit.rs:header` writes the *resolved* default
+  on every call, so "no key" and `headings: plain` emit identical Typst and therefore
+  identical PDFs whatever the looks contain. So the check is the one §2 ran: **compile §2's
+  three fixtures on the tree before this phase, compile them again after with no `headings`
+  key, and compare the PDF bytes.** They must be equal, and §2 records the **two** hashes those
+  three fixtures were equal at — two and not three, because `flat` is the resolved
+  default and the no-frontmatter document compiles to the flat one's bytes. An implementer who writes the rule unconditionally passes (1) and fails
+  here, which is the discrimination the in-suite form cannot make. **All three compiles are
+  of documents with no `headings` key**, which is the only form the pre-phase tree can read
+  at all — `headings: 2` is an unknown key there and `core/src/frontmatter.rs` refuses it by
+  name, so the fixture as (1) defines it cannot be the input to the first compile.
+  `mpdf-001` Phase 9 hit this wall first and recorded the answer, quoted by `mpdf-004`
+  Phase 3 and again by Phase 7 — *"a golden pins emitter output and cannot pin a look, so
+  the observable needs an artifact of its own"*.
+
+  (6) **`headings: numbered` and `headings: 7` are each refused by name with the
+  frontmatter line**, listing the seven accepted values — the first because §2 predicts it
+  is the commonest wrong guess and the second because it is the boundary — and
+  `cargo test --workspace` passes with the 28 goldens re-blessed on their `template.with`
+  line **and nowhere else**. A change reaching any other line is the emitter having started
+  to write numbering, which §2 refuses.
+- **Close-out:** `rules/pipeline.md` — the frontmatter schema's **ninth** key; the look
+  contract at **seven** rather than six, which three sentences state (732, 812, 858); line
+  732's "**Seven** of them reach the look" becomes eight in the same sentence that carries
+  the six; **line 754 argues against this phase in as many words** — "a per-chapter figure
+  restart without a prefix is `figures`' third name, **not a ninth key**" — which the tree
+  now falsifies, so it is corrected rather than left standing; the numbering section; and
+  **`max_lines` moves**, the file sitting at 955 of 960 before a ninth key, a seventh
+  parameter and a `headings` passage are added to it.
+
+  `README.md` — `## Frontmatter`'s "eight keys" becomes nine and its block gains the key;
+  **the `figures` paragraph's "The headings themselves stay unnumbered" is made false by
+  this phase** and is the line a reader catches first; "A key outside the eight" becomes
+  nine and its name-set list gains `headings`; and **`## Styling` carries two sentences
+  that move, not one** — the contract prose "`md2pdf` names all six on every call", and
+  "what `equations` and `figures` are: the two questions a look cannot answer on its own",
+  which becomes three.
+
+  `web/index.html` — line 416's "**Seven** frontmatter keys decide the look" becomes
+  eight, on `mpdf-007` Phase 4's precedent, which added line 477's "An eighth frontmatter
+  key names a bibliography" in the phase that added that key. `rules/web-demo.md` covers
+  that list, and `core/tests/page_examples_test.rs` compiles the page's examples while
+  asserting nothing about the count — so nothing catches this but the close-out.
+
+  **`samples/showcase/` is deliberately not changed, and that is a call rather than an
+  omission.** `README.md`'s "under all eight frontmatter keys" and
+  `samples/showcase/README.md`'s "all eight frontmatter keys" are **reworded to eight of
+  the nine**, and the ninth key is *not* added to the showcase: adding it shifts the
+  master's ten-line frontmatter by one line and breaks
+  `app/src/preview.rs:the_anchors_are_the_headings_of_whichever_file_the_pane_holds`,
+  which pins the master's own headings at `[12, 27, 54]` — a `cargo test --workspace`
+  failure that gate (6) forbids, in the one file this phase says it does not touch. OQ-17
+  carries the showcase forward. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
