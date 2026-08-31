@@ -20,9 +20,10 @@ covers: >
   top and the two actions it keeps, the marks it draws for them and the ground
   that says they can be pressed, the rule that decided which of the two bars a
   control belongs to and the third thing that is neither, the bar along the
-  foot, the four cells and two rules it carries and the one control each of its
+  foot, the five cells and one rule it carries and the one control each of its
   settings has, the two marks it draws rather than borrows, the file it
-  names, the one it does not and the figure that is neither,
+  names, the one it does not and the figure that is neither, the receipt a save
+  leaves and the cell that costs nothing while it is silent,
   the appearance the author chooses and the four token blocks that wear it, the
   button's two positions against the three values behind them and the state that
   is not a destination, the mark that is what is worn rather than what is
@@ -44,11 +45,11 @@ covers: >
   pane that loses both when it empties, the check that reads this file and the
   two declarations it holds to each other, the harness that drives it in two
   engines and the copy it drives rather than the file, the boundary it records
-  because the DOM cannot show one, the thirteen clauses it
-  asserts as properties and the ten broken pages that falsify them, the second
+  because the DOM cannot show one, the fourteen clauses it
+  asserts as properties and the eleven broken pages that falsify them, the second
   rig that drives the shipped binary instead and which of the three kinds of
   claim belongs where, and the seven defects none of them reaches
-max_lines: 645
+max_lines: 680
 generated: 2026-08-28
 ---
 
@@ -223,6 +224,14 @@ and the title bar names, where the export writes a **derived artifact** to a pat
 once — so it is the `File` menu's alone, `app/src/main.rs:export`, the item and its
 `Shift+CmdOrCtrl+S` all standing with no button beside them.
 
+**`Save as…` writes wherever it is pointed and the pane follows it only inside the
+project.** `document::save_file` confines nothing; `Preview::save_as` asks
+`document::confined` and `document::spell` *after* the write and moves `edited` only
+where both answer, so a save outside the root is a **copy** — the file is written, the
+pane keeps what it was holding, and nothing recompiles and nothing re-arms. **Both saves
+answer a receipt** the footer shows and drops, which is what says which of the two just
+happened; `#receipt` below is where it lands.
+
 **Two marks, drawn rather than borrowed**, the footer's rule rather than a taste
 restated: no glyph means *open a folder* or *write this out*. A folder, and a floppy of
 **two internal shapes and not three**, the shutter dropped as busy at 14px. **14px
@@ -243,13 +252,15 @@ header's element order, its 12px shared left column or its 22px button** — cla
 ## The footer
 
 A bar along the foot of the window: 23px and its own 1px rule, so 24px taken out of
-`main`. **Four cells and one rule**, counted as this file counts them — the
+`main`. **Five cells and one rule**, counted as this file counts them — the
 footer's own element children, in order: `#views` (holding `#views-files`, then
-`#views-lines`), `#edited`, `#controls` (holding `#fit-footer`, then `#theme`),
-`#sep-brand`, `#brand`. **Two of those placements are load-bearing rather
+`#views-lines`), `#edited`, `#receipt`, `#controls` (holding `#fit-footer`, then
+`#theme`), `#sep-brand`, `#brand`. **Three of those placements are load-bearing rather
 than aesthetic**: the fit select sits *inside* `#controls`, because the auto margin
-that right-aligns the group is the group's, and `.sep` sits *outside* the group
-it follows, for the same reason. **A second rule stood between `#views` and
+that right-aligns the group is the group's; `.sep` sits *outside* the group
+it follows, for the same reason; and `#receipt` sits *before* `#controls`, so the
+auto margin still belongs to the group and the sentence reads as a second line about
+the file named beside it. **A second rule stood between `#views` and
 `#edited` and was withdrawn**, the bar's own gap being enough to part two marks
 from a file name; it was `aria-hidden` and read by no clause and neither rig,
 where `#sep-brand` is what clause 9 measures two gaps across. It is `main`'s
@@ -316,6 +327,27 @@ either, which is the hazard the panel answers by carrying the whole path.
 `tauri.conf.json`'s `productName` by `include_str!` on both. **It is the one name in
 this app a rename could leave wrong in silence**, the page being outside every other
 suite here.
+
+**`#receipt` is what the last save did, for four seconds, and it is usually not
+there.** Both sentences are `app/src/preview.rs:Session`'s — `SAVED` is the bare word
+`⌘S` gets, since the file is the one the cell to its left already names, and
+`Session::save_as` composes `saved as <name> in <folder>` with the folder absolute and
+spelled as landed. They ride the two commands' **return** and not `Status`, a receipt
+being an event rather than state: a field would re-arrive on every render, need
+clearing, and put a near-always-null property in the page's typedef block. So the page
+owns the timer and nothing else, and it is **re-armed rather than stacked** — a second
+save replaces the sentence and restarts the clock, where a timer per save would let the
+first blank what the second had just written.
+
+**`#receipt:empty { display: none }` is what makes it cost nothing while it is
+silent**, and it is not tidiness: the bar sets a `gap`, so an empty `span` is still a
+flex item and still takes its gaps. Everywhere but the floor `#controls`' auto margin
+absorbs them; at 240px there is no free space left and they would come out of `#edited`
+instead — the width the sweep reads and the `flex-min` mutation is measured at.
+`checks.mjs` owns the cell as a clause, driving the page's own `save` listener and
+reading the cell's **emptiness** afterwards rather than the timer's length; `Save as…`
+is undrivable there, the stub's `dialog.save` answering `null`, so the window gate reads
+that half.
 
 **`#controls` holds the fit select and then `#theme`: the appearance the author
 chose.** It was the bar's first interactive control and is now its third, the two view
@@ -647,8 +679,8 @@ sentence — found by a mutation that falsified nothing, not by reading.
 `core:default`'s own words — the half a stub that merely omits it never tests. It also keeps
 **a log of every command the page sends**, because a page that did a thing itself and a page
 that asked Rust to are indistinguishable from the DOM. `checks.mjs`
-asserts thirteen clauses in Playwright's Chromium and WebKit, **both of which must pass, every
-clause a property and none a metric literal**, and is falsified first against ten broken copies
+asserts fourteen clauses in Playwright's Chromium and WebKit, **both of which must pass, every
+clause a property and none a metric literal**, and is falsified first against eleven broken copies
 of the page, each failing exactly the clause it owns. **Two mutations may own one clause
 without either being redundant**, and clause 3 is where that now stands: `flex-min` reaches
 the footer's half, the brand pushed out of a bar that holds one line, and `header-wraps`

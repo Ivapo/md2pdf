@@ -150,8 +150,15 @@ const invoke = async (name, args = {}) => {
     case 'edit':
       text = args.text
       return null
-    case 'open_document':
+    /* **A save answers its receipt**, which the page places in the footer and
+       clears on a timer of its own. `app/src/preview.rs:SAVED` is the word;
+       `save_as` composes the other sentence and is not answered here, `dialog.save`
+       below returning `null` so the page never reaches that command in this rig.
+       `mpdf-003` Phase 19. */
     case 'save':
+      return 'saved'
+
+    case 'open_document':
     case 'export':
     case 'discard':
     case 'create_file':

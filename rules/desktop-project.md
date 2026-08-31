@@ -19,7 +19,7 @@ covers: >
   panel it refreshes itself, the one
   fact this app remembers about a folder and where it refuses to keep it, and the
   second file beside it for the fact that is about no folder at all
-max_lines: 165
+max_lines: 180
 generated: 2026-08-28
 ---
 
@@ -98,10 +98,10 @@ compiles of one tree. **The walk obeys the confinement rule**: a link resolving
 outside the canonical root contributes nothing and is not descended into, and a
 directory already visited is not visited twice.
 
-**The walk and the three commands ask one question, and that is a correction.**
+**The walk and the four callers ask one question, and that is a correction.**
 `app/src/document.rs:confined` is the whole rule — resolve the path, require its
-target under the resolved root — and `Session::set_main`, `Session::set_edited`
-and `document::asset_bytes` all go through it. They used to ask something
+target under the resolved root — and `Session::set_main`, `Session::set_edited`,
+`document::asset_bytes` and `Preview::save_as` all go through it. They used to ask something
 stricter, that `document::relative` answer the same root-relative spelling back,
 and stricter was wrong in one direction: `descend` lists a link under its **own**
 name, so a `cover.jpg` pointing at `figures/cover.jpg` *inside* the project was a
@@ -109,6 +109,14 @@ row the panel offered and every command refused, while the compile rendered it.
 The path `confined` answers with is the join and not the resolution, so a read, a
 write and a title go through the link the author made rather than behind it, and
 `Preview::status` spells it with `document::spell` exactly as the row is spelled.
+
+**`Preview::save_as` asks it *after* its own write and not before**, which the rule's
+opening `is_file` forces: a `Save as…` names a file that does not exist yet, so asked
+first it would answer `None` for every one of them. What its answer decides there is
+not whether the bytes are written — `document::save_file` confines nothing — but
+whether the **pane follows them**, and `Preview::save_as` requires `document::spell`
+beside it, a canonicalized comparison alone saying *inside* under a symlinked root
+where no root-relative spelling exists. `mpdf-003` Phase 19.
 
 **A file being created canonicalizes to nothing, so a write asks a fourth
 question.** `app/src/document.rs:landing` is `confined`'s sibling: it

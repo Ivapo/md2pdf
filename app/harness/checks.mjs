@@ -27,7 +27,7 @@
 
    **The suite is falsified before it is trusted.** `--mutate <name>` serves a
    deliberately broken copy and judges that **exactly** the clause that owns it
-   fails; `--falsify` runs all nine. That is the gate's clause 3, run rather
+   fails; `--falsify` runs all eleven. That is the gate's clause 3, run rather
    than read.
 
    **`light` is the default colour scheme and it is written down**, because one
@@ -66,7 +66,8 @@ const OWNS = {
   'controls-auto-margin': 9,
   'marks-unlit': 10,
   'figure-unnamed': 11,
-  'save-as-mislabelled': 12
+  'save-as-mislabelled': 12,
+  'receipt-sticks': 13
 }
 
 /* **58 characters, and the length is asserted rather than trusted.** The
@@ -896,6 +897,64 @@ const theSaveMarkSaysWhatItDoes = async (browser, url) => {
   return errors
 }
 
+/* 13. **A save says what it did, and then stops saying it.**
+       `mpdf-003` Phase 19 gave the bar a fifth cell, and the sentence in it is
+       Rust's: `app/src/main.rs:save` answers it and `sayReceipt` places it. So
+       this drives the page's own `save` listener — the menu's event, since `⌘S`
+       has no button — and asserts the cell holds exactly what the stub answered.
+
+       **Both halves, and the second is the one that needs the wait.** A receipt
+       that appeared would pass a check written for the first half alone while the
+       bar carried a stale sentence for the rest of the session, which is what the
+       `receipt-sticks` mutation is. **It reads the cell's emptiness and never the
+       timer's length**: no interval is written here, and the wait is
+       `waitForFunction`'s own default, so the four seconds could move in the page
+       without touching this file.
+
+       **`Save as…` is deliberately not driven.** `stub.mjs`'s `dialog.save`
+       answers `null`, so `saveDocumentAs` returns before it reaches the command —
+       a rig that made that dialog answer would be testing a panel the app does
+       not have. The window gate reads that half. */
+const theSaveSaysWhatItDidAndThenStops = async (browser, url) => {
+  const page = await opened(browser, url)
+
+  const before = await page.evaluate(() => document.getElementById('receipt').textContent)
+
+  await page.evaluate(() => {
+    window.__harness.forget()
+    window.__harness.fire('save')
+  })
+
+  const said = await page
+    .waitForFunction(() => document.getElementById('receipt').textContent || null)
+    .then((held) => held.jsonValue())
+    .catch(() => '')
+
+  /* The boundary, for the reason `stub.mjs` keeps the log at all: a page that
+     worded its own receipt would look identical in the DOM. */
+  const asked = await page.evaluate(() => window.__harness.invokes().map((sent) => sent.name))
+
+  const cleared = await page
+    .waitForFunction(() => document.getElementById('receipt').textContent === '')
+    .then(() => true)
+    .catch(() => false)
+
+  const errors = await drainErrors(page)
+  await page.close()
+
+  note(`the cell: ${JSON.stringify(before)} → the save gave ${JSON.stringify(said)} → ${cleared ? 'empty again' : 'still there'}`)
+  note(`what it asked Rust for: ${asked.join(', ') || 'nothing'}`)
+
+  ok(
+    13,
+    'a plain save places the receipt Rust answered, and the cell is empty again after',
+    before === '' && said === 'saved' && asked.includes('save') && cleared,
+    `opened on ${JSON.stringify(before)}; the save gave ${JSON.stringify(said)} ` +
+      `after asking for [${asked.join(', ')}]; it cleared: ${cleared}`
+  )
+  return errors
+}
+
 /* ----------------------------------------------------------------- the run */
 
 const run = async ({ engine, headed, rev, doc, mutate }) => {
@@ -929,7 +988,8 @@ const run = async ({ engine, headed, rev, doc, mutate }) => {
       groupSitsBesideTheBrand,
       viewsWorkTheirPanes,
       cellNamesTheFigure,
-      theSaveMarkSaysWhatItDoes
+      theSaveMarkSaysWhatItDoes,
+      theSaveSaysWhatItDidAndThenStops
     ]) {
       gather(await check(browser, held.url))
     }
@@ -938,13 +998,13 @@ const run = async ({ engine, headed, rev, doc, mutate }) => {
     await held.close()
   }
 
-  /* 10. **Named and not merely counted**, and the `ResizeObserver` class counted
-         apart: that is the failure `mpdf-009` Phase 3 found twenty-one of in a
-         single run, and an unrelated throw must still be visible beside it.
-         **It stays last** — it is the only clause that accumulates across every
-         other one, so its number moves as clauses are added and theirs do not. */
+  /* **Named and not merely counted**, and the `ResizeObserver` class counted
+     apart: that is the failure `mpdf-009` Phase 3 found twenty-one of in a
+     single run, and an unrelated throw must still be visible beside it.
+     **It stays last** — it is the only clause that accumulates across every
+     other one, so its number moves as clauses are added and theirs do not. */
   ok(
-    13,
+    14,
     'no uncaught error reached the console through any of it',
     errors.total === 0,
     `${errors.total} uncaught, ${errors.loops} of them ResizeObserver` +

@@ -578,11 +578,16 @@ impl Preview {
 
         let landed = document::save_file(path, self.buffer.as_bytes())?;
 
-        // `document::save_file` writes `path` as given, so a *relative* one
-        // lands against the process working directory while `confined` joins it
-        // onto the root. The two then name different files, `confined` answers
-        // `None`, and the pane stays — the safe direction, and the one that
-        // file's own contract sentence points a caller at.
+        // **A relative `path` cannot move the pane, and that is stated rather
+        // than left to be discovered.** `document::save_file` writes it as given
+        // — against the process working directory — where `confined` joins it
+        // onto the root; and even where those name the same file, `spell` strips
+        // a prefix off a relative path and declines. The write still happens and
+        // the pane stays, which is the safe direction. No live caller sends one:
+        // the dialog answers absolute.
+        //
+        // A `None` root answers the same way, and cannot occur: the guard above
+        // requires `edited`, and `Session::open_at` sets the two together.
         let inside = self.root.as_deref().is_some_and(|root| {
             document::confined(root, path).is_some() && document::spell(root, &landed).is_some()
         });

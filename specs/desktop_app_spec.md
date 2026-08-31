@@ -100,7 +100,7 @@ phases:
     by: null
   - name: "Phase 19 — the pane stays in the project, and a save says so"
     reviewed: 2026-08-30
-    shipped: null
+    shipped: 2026-08-30
     cut: null
     by: null
 
@@ -4511,6 +4511,16 @@ work, so round 0 has more to do than usual and the scope says where to point it.
   author. **The dialog carries the matching `filters`**, the export already passing one,
   so the refusal is the floor rather than the first thing a reader meets.
 
+  > **CORRECTED 2026-08-30, by Phase 19.** *"The pane then holds the new file"* is true
+  > only **inside the project** now. Phase 18 made an outside destination reachable and
+  > moved the pane there with it; Phase 19 narrowed that back — a save outside the root
+  > writes the file and leaves the pane holding what it held, which makes it a copy, and
+  > a receipt in the footer says so. **The rest of the paragraph stands**, and the
+  > inside path is the one it describes, unchanged. **The inside set is also narrower
+  > than this paragraph knew**: `Preview::save_as` now asks `document::confined`, which
+  > canonicalizes and refuses an in-root symlink to an outside target where
+  > `document::landing` resolved only the parent and accepted it.
+
   **The pane then holds the new file, and it takes one method rather than two calls.**
   `Session::set_edited` **cannot** be composed with `Preview::save` to get there:
   `set_edited` calls `refused_while_dirty(SWITCHING)` and, when the buffer is dirty,
@@ -4780,6 +4790,16 @@ it is not the gesture that name denotes in any application they have used.**
   `main` does not move, `Preview::root` does not move, and the pane holds a file outside
   the project it is compiling.
 
+  > **CORRECTED 2026-08-30, by Phase 19, and it is the last clause that was reversed.**
+  > `main` and `Preview::root` still do not move — re-rooting is still rejected, on this
+  > paragraph's own argument. **The pane no longer holds a file outside the project**:
+  > `Preview::save_as` asks `document::confined` and `document::spell` after the write and
+  > moves `edited` only where both answer, so a save outside the root is a copy. The
+  > paragraph below on `edited_relative`'s fallback goes with it — the fallback covered a
+  > state that can no longer occur, and **that close-out is what manufactured the
+  > ambiguity Phase 19 was found by**: a footer cell renders the path's last segment, so
+  > a bare name said nothing about where the file was.
+
   **The bar must still name what the pane is holding, and without a fallback it stops.**
   `Preview::edited_relative` is `document::spell(root, edited)`, and `spell` is a bare
   `strip_prefix` — **guaranteed `None`** for a file outside the root. `Status::edited` would
@@ -4800,6 +4820,12 @@ it is not the gesture that name denotes in any application they have used.**
   watched**, `Session::arm` starting the watcher there, so an external edit will not redraw
   and the pane will not learn it moved underneath. The mitigation for both is re-rooting,
   which the paragraph above rejects.
+
+  > **CORRECTED 2026-08-30, by Phase 19.** *"The mitigation for both is re-rooting"* was
+  > wrong, and neither this phase nor its review round found the third option: **not
+  > moving the pane at all mitigates it completely**, the state that produces the
+  > asymmetry ceasing to exist. A file saved outside the root still has no row and is
+  > still unwatched — it is simply no longer a file the pane can be holding.
 
   **`Session::save_as`'s three duties are unchanged and one now does less.** It still
   compiles, still announces, still rebuilds the tree by hand — the rebuild simply finds

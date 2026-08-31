@@ -17,9 +17,9 @@ covers: >
   titles an open sets, the commands and the signal between them, the file I/O the
   app owns and the two read passes one closure serves, the fourth reader of a
   path the author did not name in a dialog, the first write to one and the first
-  delete of one, the second writer of a path the author did name and the
-  confinement it does not share, the spelling that goes absolute where it cannot
-  go relative, the three answers the
+  delete of one, the second writer of a path the author did name, the confinement
+  it does not share and the one its caller asks after the fact, the receipt the
+  two saves answer with and the field it deliberately is not, the three answers the
   asset list gives and the filter reads, the project this file hands to a rule of
   its own, the panel's status fields and the union built where no disk is
   read, the watch loop and its fourth answer and the two debounces it runs on,
@@ -38,7 +38,7 @@ covers: >
   facts a build enforces, and the server one build carries behind a feature,
   the capability it looks to want and does not, and the setter it offers where
   the page is refused one
-max_lines: 660
+max_lines: 685
 generated: 2026-08-28
 ---
 
@@ -334,6 +334,17 @@ the first write to such a path**, `write_override`'s being into Application
 Support: it makes an empty file and stops, `rules/desktop-project.md` has the
 three rules it obeys, and the row arrives by the watch rather than by a return.
 
+**`app/src/document.rs:save_file` is the second writer of a path the author *did*
+name in a dialog**, `export` being the first, and **it is the one write in this file
+that confines nothing**: `mpdf-003` Phase 18 dropped its `landing` call, so a
+`Save as…` goes wherever it is pointed. Its contract is therefore the path **as
+given** — a relative one would resolve against the process working directory and not
+the project — and the confinement question moved to its caller, where it is asked
+*after* the write: `preview::Preview::save_as` requires both
+`app/src/document.rs:confined` and `app/src/document.rs:spell` before it moves the
+pane, `confined` opening on `is_file` and so having nothing to answer before the file
+exists. `kind_of` stays, so a `.txt` is refused wherever it is aimed.
+
 **`app/src/document.rs:trash_file` is the first *destructive* one, and it moves
 to the Trash rather than unlinking.** There is no undo anywhere in this app —
 not for an edit, not for a save, not for an export — and the Trash is the
@@ -458,7 +469,13 @@ both. A `main` this app cannot read leaves `read_document`'s own sentence and th
 buffer, and `Preview::edit` takes what the author typed without compiling,
 because one keystroke is not a document. `Preview::save` writes the buffer to
 `edited`'s path and moves the last-saved text with it — which is what makes that
-save's own event mean nothing a moment later.
+save's own event mean nothing a moment later. **`Session::save` and
+`Session::save_as` answer a receipt rather than `()`**, `mpdf-003` Phase 19: the bare
+word `saved` for the first, and `saved as <name> in <folder>` for the second with the
+folder absolute and spelled as landed. **Composed in `Session` and not in the
+command**, which is forced — `main.rs` has no test module — and **riding the return
+and not `Status`**, a receipt being an event rather than state, so no field was added
+and the page's typedef block did not move.
 
 `Preview::compile` replaces the bytes on success and
 clears both marks; **on failure it keeps the bytes**, records the message and
@@ -498,12 +515,12 @@ paths are root-relative so the page can match them to a row, and **`edited` ride
 because the page cannot derive it from `main`** — they are equal at every open and
 differ from the first click. It is spelled with `document::spell` and not
 `document::relative`, a `canonicalize` here being two syscalls in front of every
-render. **`edited` is root-relative *where it can be*, and absolute where it
-cannot**: `Save as…` can put the pane outside the root since `mpdf-003` Phase 18,
-where `spell`'s `strip_prefix` answers nothing, so `Preview::edited_relative`
-falls back to the whole path rather than letting the field go null and blank the
-bar's cell. The page renders that cell as the path's last segment either way, and
-matches no row against an absolute one — correct, an outside file having none.
+render. **It is root-relative and can be nothing else**, which is a property of
+where the pane may go rather than of this function: `Preview::edited_relative` held
+an absolute fallback for the one release `Save as…` could put the pane outside the
+root, and `mpdf-003` Phase 19 removed the state instead — every path that moves the
+pane keeps it under the root, so `spell` cannot decline and a fallback nothing could
+test is not kept as insurance.
 
 ## The rule an external change runs
 

@@ -256,6 +256,26 @@ const MUTATIONS = {
     return page.replace(block, '        viewer.hidden = false\n')
   },
 
+  /* The receipt appears and never leaves. **The failure a clause reading only
+     "it appeared" would miss**, which is why that clause reads the cell's
+     emptiness afterwards and not the timer's length: with the re-arm dropped the
+     sentence is correct, placed in the right cell, and permanent — a bar that
+     says what the last save did for the rest of the session.
+
+     Both statements go, the `clearTimeout` with the `setTimeout` it was paired
+     with, because the clear alone would leave a timer nothing cancels and a
+     second save could then blank the first's sentence — a different defect, and
+     not this one. */
+  'receipt-sticks': (page) => {
+    const block =
+      '        clearTimeout(receiptClock)\n' +
+      '        receiptClock = setTimeout(() => {\n' +
+      "          receiptCell.textContent = ''\n" +
+      '        }, RECEIPT_MS)\n'
+    if (page.split(block).length !== 2) die('the mutation receipt-sticks found no single re-arm')
+    return page.replace(block, '')
+  },
+
   /* Puts the auto margin back where Phase 11 had it. **This changes nothing
      about `#brand`'s own rect** — an auto margin absorbs exactly the free space
      in total, so a last child with no right margin cannot move, which is what

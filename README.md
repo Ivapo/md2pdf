@@ -103,14 +103,17 @@ rebuild-on-change.
 **Type in the left pane and the page follows.** It redraws when you stop typing, and
 **the PDF is what the pane says, not what the file says** — so the page shows your
 unsaved work. `⌘S` writes the pane back to whichever file it is
-holding. **The floppy in the header, or `⇧⌘S`, is `Save as…`**: it writes the pane to a
-name you pick and then holds that file, so the next `⌘S` goes there. It saves **wherever you point
-it**, and it takes the same kinds the panel lists — `.md`, `.bib`, `.yml` and `.yaml`.
-**The window keeps compiling the project it had**: saving elsewhere moves the pane, not
-the document. A file saved outside the project is not in the list and is not watched, so
-editing it in another program will not redraw the page. If you save a file your document names, the page redraws with it;
-if you save the file you were editing under a new name, the page goes back to what the
-old one says on disk, because that is the file the document still names. **The bar along the foot of the window names whatever the pane is holding** — the
+holding, and the foot of the window says `saved` for a moment. **The floppy in the
+header, or `⇧⌘S`, is `Save as…`**: it saves **wherever you point it**, and it takes the
+same kinds the panel lists — `.md`, `.bib`, `.yml` and `.yaml`. **Where it lands decides
+whether the pane goes with it.** Inside the project, the pane holds the new file and the
+next `⌘S` goes there. Outside it, the file is written and **the pane stays where it
+was** — the save is a copy, and the bar says `saved as <name> in <folder>` so you can
+see which of the two just happened. **The window keeps compiling the project it had**
+either way. If you save a file your document names, the page redraws with it; if you
+save the file you were editing under a new name — inside the project — the page goes
+back to what the old one says on disk, because that is the file the document still
+names. **The bar along the foot of the window names whatever the pane is holding** — the
 file you are typing in, which once you have clicked another file in the list is not
 the file the page beside it comes from, or the picture, if you have clicked an image
 row to look at one. **That bar also carries the view and fit controls**: the panel and
