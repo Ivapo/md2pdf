@@ -1,5 +1,5 @@
 #import "template.typ": template, divider
-#show: template.with(title: "A Report Written Across Four Files", author: "Iva Po", columns: 2, date: none, equations: "plain", figures: "sectioned")
+#show: template.with(title: "A Report Written Across Four Files", author: "Iva Po", columns: 2, date: none, equations: "plain", figures: "sectioned", headings: "plain")
 
 = Introduction
 

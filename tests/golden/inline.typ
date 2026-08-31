@@ -1,5 +1,5 @@
 #import "template.typ": template, divider
-#show: template.with(title: none, author: none, columns: 2, date: none, equations: "plain", figures: "flat")
+#show: template.with(title: none, author: none, columns: 2, date: none, equations: "plain", figures: "flat", headings: "plain")
 
 = Inline constructs
 

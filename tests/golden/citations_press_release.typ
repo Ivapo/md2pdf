@@ -1,5 +1,5 @@
 #import "press-release.typ": template, divider
-#show: template.with(title: "Acme Cites Its Sources", author: "Iva Po", columns: 1, date: "22 August 2026", equations: "plain", figures: "flat")
+#show: template.with(title: "Acme Cites Its Sources", author: "Iva Po", columns: 1, date: "22 August 2026", equations: "plain", figures: "flat", headings: "plain")
 
 = Background
 

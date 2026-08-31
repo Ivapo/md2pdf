@@ -1,5 +1,5 @@
 #import "template.typ": template, divider
-#show: template.with(title: none, author: none, columns: 2, date: none, equations: "plain", figures: "sectioned")
+#show: template.with(title: none, author: none, columns: 2, date: none, equations: "plain", figures: "sectioned", headings: "plain")
 
 = The scheme
 

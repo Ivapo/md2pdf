@@ -63,6 +63,8 @@ const GROUPS_MD: &str = include_str!("../../tests/fixtures/groups.md");
 const GROUPS_TYP: &str = include_str!("../../tests/golden/groups.typ");
 const SECTIONED_FIGURES_MD: &str = include_str!("../../tests/fixtures/sectioned_figures.md");
 const SECTIONED_FIGURES_TYP: &str = include_str!("../../tests/golden/sectioned_figures.typ");
+const NUMBERED_HEADINGS_MD: &str = include_str!("../../tests/fixtures/numbered_headings.md");
+const NUMBERED_HEADINGS_TYP: &str = include_str!("../../tests/golden/numbered_headings.typ");
 const CITATIONS_MD: &str = include_str!("../../tests/fixtures/citations.md");
 const CITATIONS_TYP: &str = include_str!("../../tests/golden/citations.typ");
 const CITATIONS_PRESS_RELEASE_MD: &str =
@@ -283,7 +285,7 @@ fn the_generated_source_carries_the_title_and_the_author() {
 fn absent_frontmatter_gets_every_default() {
     assert!(
         md_to_typst(BASIC_MD, &[]).unwrap().contains(
-            "template.with(title: none, author: none, columns: 2, date: none, equations: \"plain\", figures: \"flat\")"
+            "template.with(title: none, author: none, columns: 2, date: none, equations: \"plain\", figures: \"flat\", headings: \"plain\")"
         ),
         "the defaults did not reach the template call"
     );
@@ -3966,6 +3968,114 @@ fn a_figures_value_outside_the_schema_is_an_error_that_lists_the_names() {
             }
         }
         other => panic!("expected a Frontmatter error, got {other:?}"),
+    }
+}
+
+// -- mpdf-005 Phase 8: a heading may carry its number -------------------------
+
+#[test]
+fn the_numbered_headings_fixture_matches_its_golden_file() {
+    assert_eq!(
+        md_to_typst(NUMBERED_HEADINGS_MD, &[]).unwrap(),
+        NUMBERED_HEADINGS_TYP
+    );
+}
+
+/// The fixture compiles, and under both looks.
+///
+/// The compile is a real assertion here rather than a smoke test, for the
+/// reason `the_sectioned_figures_fixture_compiles_to_a_pdf` records one level
+/// down: the number is built by a closure that compares `n.pos().len()` against
+/// `int(headings)`, and a look that reached for the depth wrongly — converting a
+/// name that is not a number, or indexing a level that is not there — fails here
+/// rather than printing a wrong number.
+#[test]
+fn the_numbered_headings_fixture_compiles_to_a_pdf() {
+    for (md, what) in [
+        (NUMBERED_HEADINGS_MD.to_string(), "the article look"),
+        (
+            NUMBERED_HEADINGS_MD.replace("headings: 2", "headings: 2\ntemplate: press-release"),
+            "the press-release look",
+        ),
+    ] {
+        let pdf = md_to_pdf(&md, &[]).unwrap_or_else(|e| panic!("{what} did not compile: {e}"));
+        assert!(pdf.starts_with(b"%PDF"), "{what} did not produce a PDF");
+    }
+}
+
+/// Both keys cross to the look, and the reference the page's number is read
+/// through survives the phase.
+///
+/// The *numbers* are deliberately not here and cannot be: the emitter writes no
+/// numbering at all, so `1.1 Background` and `Table 1.1` exist only in the
+/// compiled PDF. What a golden can hold is that the author's two asks reached
+/// the call and that the reference is still a `#ref`, which is what the by-eye
+/// read of one PDF per look is for. The depth crosses as the string it was
+/// written as, which is what keeps the conversion in the look.
+#[test]
+fn the_numbered_headings_golden_carries_each_form() {
+    for (form, what) in [
+        ("headings: \"2\"", "the depth the author set"),
+        ("figures: \"sectioned\"", "the scheme it composes with"),
+        ("#ref(<tab:one>)", "the reference that reads the number"),
+    ] {
+        assert!(
+            NUMBERED_HEADINGS_TYP.contains(form),
+            "the golden file does not carry {what} as `{form}`"
+        );
+    }
+}
+
+/// Numbering the headings withdraws no heading anchor.
+///
+/// **This is the assertion whose absence would let the phase silently empty
+/// every anchor list in the project**, and it is not inherited from
+/// `sectioned_numbering_withdraws_no_heading_anchor` by having passed once:
+/// that phase changed whether a heading advanced a counter, and this one
+/// changes what every heading *renders as*. `core/src/lib.rs:anchors_from`
+/// answers an *empty* vector when the walk's heading count and the compiled
+/// document's disagree, silently, taking `mpdf-003` Phase 6's scroll sync and
+/// `web/src/lib.rs:anchors` with it.
+///
+/// The fixture carries five headings — two `#`, two `##` and one `###`. The
+/// `###` is past the cap and carries no number, which is exactly the case a
+/// depth implemented by suppressing the heading *element* would have lost here
+/// rather than on the page.
+#[test]
+fn numbered_headings_withdraw_no_heading_anchor() {
+    let rendered = md_to_pdf_with_anchors(NUMBERED_HEADINGS_MD, &[]).unwrap();
+    assert_eq!(
+        rendered.anchors.len(),
+        5,
+        "the fixture's five headings did not come back: {:?}",
+        rendered.anchors
+    );
+}
+
+/// A value outside the set names the key, its line, and what it accepts.
+///
+/// It reads exactly as the `template`, `equations` and `figures` errors do,
+/// because it is the same mechanism. Both bad values are deliberate. `numbered`
+/// is the *other* numbering keys' valid name and the guess an author who knows
+/// them makes, and this schema has no synonym for `6` — so the error is where
+/// they are told the depth is the way to ask. `7` is the boundary, one past the
+/// six levels markdown has.
+#[test]
+fn a_headings_value_outside_the_schema_is_an_error_that_lists_the_names() {
+    for value in ["numbered", "7"] {
+        let md = format!("---\nheadings: {value}\n---\n\n# Heading\n");
+        match md_to_typst(&md, &[]) {
+            Err(Error::Frontmatter {
+                location: Location { file: None, line },
+                problem,
+            }) => {
+                assert_eq!(line, 2, "wrong line for {value}");
+                for needle in ["headings", "plain", "1", "6"] {
+                    assert!(problem.contains(needle), "problem was: {problem}");
+                }
+            }
+            other => panic!("expected a Frontmatter error for {value}, got {other:?}"),
+        }
     }
 }
 
