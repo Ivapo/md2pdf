@@ -2,6 +2,86 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 21 — Phase 20 only — 2026-08-30 — the same reviewer, resumed — **READY (converged)**
+
+Zero blocking. Round 20's blocker resolved, and three non-blocking findings folded in after
+the verdict because the close-out routes that prose into `rules/desktop-panes.md`.
+
+**The gate is what the two blockers changed, and it is the part that decided readiness.**
+The clause now drags **both ways**: narrowing carries the focus loss and WebKit's selection,
+widening carries the moved caret, and neither leg sees the other's defect. Its widening span
+is **derived from the pane's own geometry** — the midpoint between the current width and the
+`room - 160` ceiling — rather than chosen, a pixel span being both the metric literal this
+suite forbids and wrong twice over at 900×600. The reviewer verified the derived span live:
+the midpoint is hit exactly, the clamp is not reached, and the mutation isolates in **both**
+engines through two independent assertions.
+
+**One non-blocking finding went further than it was raised.** The reviewer noted a rightward
+selection appears before the clamp. Re-measuring with a span sweep at 900×600 in Chromium:
+30 and 60 select nothing; 88, 120 and 160 all select the same 21 characters **with the
+pointer still on the divider**; 200 reaches the clamp and selects those same 21. So the
+clamp is not the cause of the selection at all. **Three drafts of that paragraph were wrong
+in three different ways** — "nothing selectable", then the pointer hypothesis buried on
+short-span evidence, then the same hypothesis revived as the explanation. The settled
+position is that the phase claims **no mechanism**, records the measurements, and rests on
+the fix repairing all eight corners regardless. The other two: "the clamp is never reached
+at any viewport" scoped to the clause's own 900px viewport, since the midpoint construction
+degenerates on narrow ones; and the `covers:` phrase the close-out leaned on describes the
+pages' text layer, not the pane's, so the argument was rewritten to stand without it.
+
+**Numbers re-measured this episode and confirmed by both sides**: 14 `ok()` clauses and 11
+`MUTATIONS` today, going to 15 and 12; `OWNS`'s highest value 13, so no entry moves and the
+uncaught-error clause becomes 15; `rules/desktop-panes.md` 672/680 body lines; the clamp is
+`Math.min(Math.max(at.clientX - from, 120), room - 160)`; the ring is `outline-style: auto`
+at 3px in WebKit and `currentColor`; a mouse-clicked textarea matches `:focus-visible` in
+both engines and a script-focused button does not.
+
+### Round 20 — Phase 20 only — 2026-08-30 — the same reviewer, resumed — **NOT READY**
+
+One blocking. **The rightward column of the author's replacement table was measured at a
+span too short to see the clamp.** The author's reading was taken at 1100×700 with a 260px
+drag, where the `room - 160` ceiling is 738.6 and is never reached; the reviewer's 900×600
+with 200px does reach it. Both readings were correct and the author's generalized past its
+evidence.
+
+Accepted in full. **Two of the reviewer's three consequences were the best findings of the
+episode**: a widening drag moves the caret 65 → 279 at a span of 30px, with nothing selected
+and the pointer never leaving the divider — damage the author had filed as *healed* — and
+the gate's fourth assertion was not inert, only inert for the leg it was on. The author's
+own probe was also found to be pressing the mouse after its first move, so an earlier run
+of it had shown no drag at all; fixed before anything was trusted.
+
+### Round 19 — Phase 20 only — 2026-08-30 — fresh reviewer with repo access — **NOT READY**
+
+One blocking, nine non-blocking. First round of the episode.
+
+**Round 0 (episode: Phase 20 appended).** Produces no observable, and the phase argues it
+explicitly rather than assuming: nothing reaches the pipeline and no gate opens a PDF. The
+argument accepted — the observable is produced continuously while editing, and a swallowed
+keystroke after every drag and a moved caret are interruptions to producing it. It is the
+right thing to build: both defects were hit at the window, one reported and one found by
+probe.
+
+**Blocker — `#pages` holds "nothing selectable" is false.** `pdf.js` builds a `.textLayer`
+per page, 22 transparent spans of real text on the gate's own fixture, whose own comment
+says it "is there to be selected and copied"; `pointer-events: none` is on
+`.annotationLayer` and not on it. The phase then contradicted itself on this two paragraphs
+later. Accepted and retracted by name.
+
+**Rejection worth recording: the reviewer's measured consequence.** Its 776-character
+rightward selection came from a mirror probe of its own construction and did not reproduce
+against the real served page, where a rightward drag at that viewport selected nothing in
+either engine. The premise was accepted; the number was not.
+
+All nine non-blocking findings accepted: the count edits are four and not three; `covers:`
+needs the addition and never mentions the divider; `#files li .controls button:focus-visible`
+is a visibility rule and not an indicator, which the phase had overclaimed; the clause
+number and the 14→15 renumber stated; `String(document.getSelection()) === ''` as the
+operationalization; `rules/INDEX.md` regenerated in the same pass; the pre-existing
+`samples/showcase/showcase.md` edit named in the `git status` clause; and two prose
+imprecisions — the non-goal's `user-select` claim, and a quotation taken from `covers:`
+where the body's wording was meant.
+
 ### Round 18 — Phase 19 only — 2026-08-30 — the same reviewer, resumed — **READY (converged)**
 
 Zero blocking. Both of round 17's blockers resolved, and the predicate re-verified against

@@ -103,6 +103,11 @@ phases:
     shipped: 2026-08-30
     cut: null
     by: null
+  - name: "Phase 20 — the two defaults the page never named"
+    reviewed: 2026-08-30
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -5123,6 +5128,248 @@ file exactly as it names a project one.
   **Commit plan.** One push, three commits: the pane's confinement, the untouched dirty
   state and the removed fallback; the receipt, its sentences and its cell; then the harness
   clause, the rules and the README.
+
+### Phase 20 — the two defaults the page never named
+
+*Produces no observable, and here is the argument.* Nothing in this phase reaches the
+pipeline: the same markdown compiles to the same bytes, and no gate below opens a PDF.
+What it repairs is the surround — the gesture that resizes the pane the author writes in,
+and the chrome drawn around it. **The observable is produced continuously while editing,
+and both defects interrupt producing it**: one loses the keystroke after every drag, the
+other draws a border on the one pane whose design says it has none. A phase that made the
+author's own reading of the page worse would not be excused by leaving the PDF alone, and
+this is the same claim run forwards.
+
+Appended 2026-08-30, per §6.1. **The two halves score differently on step 0 and the phase
+says which is which** rather than dressing both as decisions. The drag is **code only** —
+no decision moved, the drag was never meant to do anything but resize, and the commit is
+its record. The ring is **a decision**: it removes a mark of focus and rests that on two
+other marks continuing to carry it, which is a thing to be able to look up. Step 2 then
+puts both here, because `mpdf-003` owns the text pane (Phase 4), the divider and the
+gutter's two marks (Phase 8).
+
+**It was found at the window, and the author's own framing is the finding.** The report was
+that dragging the bar "often" selected text, "specially when narrowing the editor panel",
+and — flagged as *maybe unrelated* — that the border highlight on the editor pane was not
+necessary. **They are related, and that is this phase's thesis**: both are engine defaults
+on the text pane that nothing in `app/dist/index.html` had ever spoken to. One file, no
+rule about either, and the engine supplying its own answer to both.
+
+- **Scope:** **`app/dist/index.html`** — one statement in the divider's `pointerdown`
+  handler and one CSS rule on `#text`; **`app/harness/checks.mjs`** — one clause;
+  **`app/harness/serve.mjs`** — one mutation.
+
+  **Pointer capture routes the events; it does not cancel the gesture the press already
+  started.** `setPointerCapture` is the first thing the handler does and it was mistaken
+  for the whole job. It guarantees the `pointermove`s and the `pointerup` come back to the
+  divider — which is all the resize needs — and it says nothing about the **default action**
+  of the press that opened the sequence. The default action of a press on a bare element is
+  to anchor a selection there, and the drag then sweeps that anchor across whatever it
+  passes over.
+
+  **The gesture damages the pane three different ways, and direction decides which one you
+  see.** Measured on the served page at `HEAD`, 900×600, caret set to offset 65, the text
+  layer settled at 22 spans, a five-step drag each way. **Span is a column** because the
+  first draft's table had none and was wrong for that reason:
+
+  | engine | direction | span | selection | caret | focus | pointer left the divider |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | Chromium | leftward | 30 and 200 | empty | 65 → 65 | `body` | no |
+  | WebKit | leftward | 30 and 200 | `"\n"` | 65 → 65 | `body` | no |
+  | Chromium | rightward | 30 | empty | **65 → 279** | `#text` | no |
+  | WebKit | rightward | 30 | empty | **65 → 279** | `#text` | no |
+  | Chromium | rightward | 200 | **21 chars** | 65 → 279/300 | `#text` | yes, at the clamp |
+  | WebKit | rightward | 200 | **21 chars** | 65 → 279/300 | `#text` | yes, at the clamp |
+
+  **Narrowing loses focus; widening moves the caret.** Leftward, focus leaves `#text` for
+  `body` in both engines and the caret's offset survives; WebKit additionally leaves a
+  one-character document selection, and since WebKit is the shipping engine family and
+  narrowing is the drag the author reported, **that one cell is exactly the one they sat in
+  front of**. Rightward, focus never leaves — which is why the first draft mistook it for
+  healthy — but **the author's place in the document is moved, 65 to 279, at a span of 30px
+  where nothing is selected and the pointer never leaves the divider.** That is the quietest
+  damage of the three: nothing highlights, nothing looks wrong, and the next keystroke lands
+  two hundred characters from where the author was.
+
+  **A widening drag also selects, past a span threshold, and the clamp does not explain
+  it.** Sweeping the span at 900×600 in Chromium: 30 and 60 leave nothing selected; 88, 120
+  and 160 all leave the same 21 characters — **with the pointer still on the divider at every
+  one of them**; 200 reaches the `room - 160` ceiling, the basis clamps, the divider stops
+  tracking and the pointer does land on `#pages`, and the selection is **still those same 21
+  characters**. So the clamp is not the cause. What the pages contribute is only that there
+  is something there to select at all: `pdf.js` builds a `.textLayer` per page, 22
+  transparent spans of real text on the gate's own fixture, whose own comment in this file
+  says it "is there to be selected and copied", with `pointer-events: none` on
+  `.annotationLayer` and **not** on it.
+
+  **Three drafts of this paragraph were wrong, each in a different way, and the record is
+  kept because the close-out routes this prose into `rules/desktop-panes.md`.** The first
+  said the pages held "nothing selectable" — false. The second declared the
+  pointer-departure hypothesis dead on a span too short to reach the clamp — right by
+  accident, wrong in evidence. The third revived it as the explanation for the long drag —
+  wrong, as the sweep above shows: the same selection appears with the pointer never leaving
+  the divider.
+
+  **So this phase claims no mechanism at all, and that is the settled position rather than a
+  placeholder.** Why the press costs focus one way and moves the caret the other, and why a
+  selection appears past a span threshold, is not established here. **The fix does not depend
+  on knowing**: cancelling the press's default action repairs every row, which is measured on
+  all eight corners — both engines, both directions, both spans — rather than reasoned.
+
+  **Two symptoms nobody reported, both found by the probe, and both worse than the one that
+  was.** The divider has no `tabindex`, so it cannot take focus itself; the unprevented press
+  moves focus off `#text` and onto `body` at the `mousedown`, before any movement at all —
+  and on a narrowing drag it is still there at the `pointerup`, so **the keystroke after the
+  drag goes nowhere** and the character is swallowed. On a widening drag focus returns, and
+  **the caret does not**: the author's offset is moved instead. A highlight is at least
+  visible; a lost keystroke and a moved caret are not, and between them they cover both
+  directions the author can drag.
+
+  **`down.preventDefault()`, and not `user-select: none`, and not a class on `body`.**
+  The selection and the focus move are both carried by the compatibility mouse events, and
+  preventing the `pointerdown` default is the one statement that suppresses exactly those.
+  It leaves the capture already taken, and it does not touch `pointermove` or `pointerup`,
+  which the drag runs on. `user-select: none` on the divider is a statement about what may
+  be selected *in the divider*, which was never the complaint, and it does not move focus
+  back. A `.dragging` class on `body` is two writes that must pair — and paired writes
+  across a gesture are a state this page would have to be able to unwind, for a defect that
+  needs no state at all.
+
+  **The ring is the engine's, and no rule in the file contradicted it.** `#text` sets
+  `border: 0` and is a direct flex child of `main` with no wrapper, so nothing in 4,400
+  lines draws an edge there — the border the author saw is `outline-style: auto`, measured
+  3px in the shipping engine family, painted by WKWebView whenever the textarea has focus,
+  which is nearly the whole time the app is open. **It is a border on the one pane whose
+  design says the divider is the only chrome between the two.**
+
+  **It is removed because it is the third mark of a fact already marked twice, and the only
+  one nobody chose.** A focused text field shows a caret, which is the platform's own focus
+  indicator and the only one that says *where* in the text the focus is; with `Lines` on the
+  pane marks the caret's line twice more, the gutter's number and the band behind it. The
+  ring adds no fourth thing to know.
+
+  **Removing a focus indicator is a thing to justify, so: `:focus` and `:focus-visible` are
+  the same selector here, measured.** A mouse-clicked textarea matches `:focus-visible` in
+  both engines — text-entry controls always do — while `#save`, focused by script, matches
+  `:focus` and not `:focus-visible`. So writing the rule the "safer" way would change
+  nothing at all for this control, and the plainer selector is not buying the ring's
+  removal at a keyboard reader's expense. **And the removal is scoped to `#text` alone**, so
+  every other control in the window keeps the engine's ring — including the row buttons,
+  which have no caret to carry the mark themselves. The file's one existing `:focus-visible`
+  rule is a **visibility** rule and not an indicator, said plainly because the first draft
+  cited it as one: `#files li .controls button:focus-visible` sets `visibility: visible` so a
+  keyboard-focused row control is drawn at all, and this phase does not touch it. The
+  standard is *remove the ring only where the control already carries the mark* — one
+  selector, one control, and that control is the only one in the window with a caret.
+
+  **Deliberately not in this phase.** No styled focus ring in the ring's place. No change to
+  the divider's width, its cursor, its colour or the 120px/160px clamps the drag holds to.
+  **No new `user-select` rule** — the file already has one, on `#lines`, and it is untouched:
+  the reader can still select the pane's text by hand, and the pages' text layer, selectable
+  by design, stays selectable.
+
+- **Exit gate:**
+
+  1. `bun app/typecheck.mjs` exits 0. **No Rust changes and no `Status` field**, so
+     `cargo test --workspace` is run and expected unchanged rather than credited.
+  2. `bun app/harness/checks.mjs` and `--webkit` each print **fifteen clauses, fifteen
+     passed** — one added: *a drag of the divider resizes the pane and leaves the pane's own
+     selection and its own focus alone.* **It is clause 14 and the uncaught-error clause
+     becomes 15**, by that file's own rule that the error clause stays last because it
+     accumulates across the others; **no `OWNS` value moves**, the highest in use being 13.
+
+     **It drags both ways, and neither leg is padding** — the table above is why. A
+     narrowing drag carries the focus loss and WebKit's selection; a widening one carries the
+     moved caret and keeps focus, so a clause that dragged only left would never see the
+     caret move and one that dragged only right would never see the focus loss. Each leg
+     starts with the caret set to a known offset and the text layer settled, and asserts:
+
+     - after **narrowing**: `document.activeElement` is `#text`, and
+       `String(document.getSelection()) === ''` — the string form, because the guilty WebKit
+       page leaves `"\n"`, which `isCollapsed` would also catch but which `rangeCount` would
+       not;
+     - after **widening**: the textarea's own `selectionStart`/`selectionEnd` are still the
+       offset the leg set, and the selection is still empty;
+     - after **each**: the flex basis moved, so neither leg can be passed by a page whose
+       divider does nothing.
+
+     **The widening leg's span is derived from the pane's own geometry, not chosen.** It
+     targets the midpoint between the current width and the `room - 160` ceiling, so at the
+     clause's own viewport — `opened()`'s `WIDTHS[0]`, which is 900 — the clamp is not
+     reached and the leg tests the gesture rather than the pointer wandering onto `#pages`.
+     **The construction is not claimed to hold at every viewport**: where `room - 160` falls
+     below the pane's current width the midpoint degenerates and the "widening" leg narrows
+     instead. A pixel span would be the metric literal this suite forbids, and at 900×600 it
+     would also be wrong twice over: 200px reaches the clamp, and 30px is below the span at
+     which a selection appears at all.
+  3. **A clause reading only `document.getSelection()` would pass in Chromium against the
+     very page this phase exists to fix**, and that is measured, not argued: dragged
+     leftward, WebKit leaves `"\n"` and **Chromium leaves nothing at all**. `--falsify`
+     requires the mutation to isolate its clause in *both* engines, so selection alone would
+     not carry it. **Two assertions do, and each carries it alone**: the focus loss and the
+     moved caret both reproduce in both engines. That redundancy is deliberate — it is what
+     stops this clause becoming engine-specific the way the first draft's nearly did.
+  4. `bun app/harness/checks.mjs --falsify` reports **twelve mutations, each isolating the
+     clause it owns**, in both engines. The one added is **`divider-selects`**, dropping
+     `down.preventDefault()` from the `pointerdown` handler and nothing else.
+  5. **No clause for the ring, and the phase says so rather than leaving the omission to be
+     noticed.** It is one declaration; its absence is a visible diff in a file the gate
+     already reads; and the property a clause would assert —
+     `getComputedStyle(text).outlineStyle === 'none'` — restates the rule rather than
+     testing a behaviour that could break some other way. What made the ring possible was
+     that *no* rule addressed it; there is now one. Clause 7 covers the reading.
+  6. `bun app/driver/drive.mjs` and `--falsify` pass, unchanged.
+  7. **The reading left to a person**, at the window and not in a driver, because a
+     synthesised drag is not a hand on a trackpad: put the caret mid-document, drag the
+     divider left past the middle and back right, and confirm nothing highlights, the caret
+     is still where it was, and typing goes into the pane. Then confirm no border is drawn
+     around the editor in **both** appearances, since the ring's colour is `--ink` and a
+     reader who checks only light has checked the easier one.
+  8. `git status` clean after a full run of clauses 2, 4 and 6. **One unrelated edit is
+     already in the tree** — `samples/showcase/showcase.md` — which nothing in this phase
+     causes and which must be committed or reverted before this clause can mean anything.
+
+- **Close-out:** **No earlier phase takes a dated note.** Neither default was ever a
+  decision this spec recorded — that is the phase's whole finding — so there is no shipped
+  claim to correct. Phase 4 said the pane is plain and Phase 8 gave the caret its two marks;
+  both stay true and the ring's removal is the second one being relied on, not contradicted.
+
+  **`rules/desktop-panes.md`**, and the close-out names the `covers:` line as well as the
+  body, because `covers:` is what `sync-rules` regenerates against. Today that phrase never
+  mentions the divider at all, and this file's only substantive account of the drag lives in
+  `rules/desktop-geometry.md` — correctly, since that account is about *where* the grab point
+  is measured. **The cancelled default is not geometry**: it is what the gesture does to the
+  pane's own selection and focus, which is `desktop-panes.md`'s subject. **That argument
+  stands on its own and not on a quotation**: `covers:`'s *"the text the reader can select"*
+  is about the pages' text layer, sitting beside the disk walk and `streamTextContent`, and
+  it is named here only so a later reader does not mistake it for the pane's. So: `covers:` gains a clause naming
+  the drag's cancelled default; the body gains that paragraph and, at the gutter's *"marks
+  the caret's line twice"* sentence — the body's wording, not the `covers:` phrase the first
+  draft quoted — the ring's absence, because that is where the argument for removing it
+  lives.
+
+  **What goes into the rule is the current state, not this phase’s two wrong turns.** The
+  measured table and the clamp’s account travel; the record of the first draft’s "nothing
+  selectable" and the second’s premature burial of the pointer hypothesis stays here, in the
+  spec, which is where a superseded reading belongs. A rule file says what is true now.
+
+  **The counts are four edits and not three**: `fourteen` and `eleven` appear in `covers:`
+  and again in the body. All four are in-place substitutions of the same length or shorter,
+  so they cost no lines. **The file has eight lines of headroom — 672 against
+  `max_lines: 680`, body lines as `spec-lint` counts them** — and the new paragraph and the
+  ring's sentence will not fit in eight. So this close-out raises the cap or trims, and does
+  not quietly exceed it.
+
+  **`rules/INDEX.md` is regenerated, not hand-edited** — it carries `covers:` verbatim, so
+  `spec-lint --write-index` runs in the same pass. **`rules/desktop-geometry.md` needs no
+  change**: the grab point taken from the text pane's own left edge, and the `clientX` bug
+  that put it there, are exactly what this phase does not touch.
+
+  **No `README.md` change.** Neither half is documented behaviour: nothing there promised a
+  focus ring, and nothing there described the drag as selecting text.
+
+  **Commit plan.** One push, two commits: the drag's cancelled default with its clause and
+  its mutation; then the ring, and the rules both halves move.
 
 <!--
 The review record is a sibling file, not a section: it lives at
