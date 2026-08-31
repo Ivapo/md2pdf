@@ -132,15 +132,49 @@
 
   // Where a listing sits. `figure` centres its body, which is what an image
   // and a table want and what code cannot have: the same `fn` would stand
-  // centred with a caption and flush left without one, in one document, and a
-  // multi-line block centres as a unit so its left edge lands wherever its
-  // longest line puts it. This rule returns a captioned listing to the
-  // position its uncaptioned twin holds, and the caption follows the body
-  // left with it — one consequence rather than a second rule. Scoped to `raw`
-  // because the argument is about how code is read and about nothing else; a
-  // group of listings takes it too, since Typst infers the kind through the
-  // `grid`.
+  // centred with a caption and at its own left edge without one, in one
+  // document, and a multi-line block centres as a unit so its left edge lands
+  // wherever its longest line puts it. This rule returns a captioned listing
+  // to the position its uncaptioned twin holds, and the caption follows the
+  // body left with it — one consequence rather than a second rule. Scoped to
+  // `raw` because the argument is about how code is read and about nothing
+  // else; a group of listings takes it too, since Typst infers the kind
+  // through the `grid`.
   show figure.where(kind: raw): set align(left)
+
+  // How far off the margin a block of code sits. Nothing above this line was
+  // wrong: this is legibility rather than a defect. A block that begins where
+  // the sentence above it begins is doing all its work with a fixed-width face
+  // and no other mark that it is a block.
+  //
+  // The inset is on `raw` and not on the `figure`, and that is the whole of why
+  // it does not undo the rule above. A rule on the figure reaches only a
+  // *captioned* listing, so the same code would stand at two edges in one
+  // document depending on whether it carries a number — the defect the rule
+  // above removes, reintroduced by the fix for something else. On
+  // `raw.where(block: true)` both twins move by the same 2em, and an inline
+  // `raw` span is untouched.
+  //
+  // The inset compounds with an enclosing indent, and that is wanted: a block
+  // inside a list item or a block quote sits 2em off *its own container's*
+  // edge, which is the same relation it has at the top level.
+  show raw.where(block: true): set block(inset: (left: 2em))
+
+  // A listing's caption goes with its body. The rule above cannot carry it —
+  // a caption is not a `raw` block, so it would sit at the margin under a block
+  // that had moved — which makes this a second rule with a second argument
+  // rather than a consequence of the first. The argument is that a caption
+  // names the thing above it and reads as detached from a block whose edge it
+  // does not share.
+  //
+  // The two `2em` are the same number in different units: the first resolves
+  // against the size in effect on the code, the second against the size in
+  // effect on the caption. They land on one edge here only because this look
+  // sizes both at 9pt. The contract a third look inherits is "the caption sits
+  // on the block's edge", not "both numbers are 2em" — a look that set
+  // its captions smaller than its code would misalign the two silently, by
+  // exactly the ratio.
+  show figure.caption.where(kind: raw): it => pad(left: 2em, it)
 
   // The label above the reference list. The emitter writes
   // `#bibliography(…, title: none)` and hands the words to the look, because

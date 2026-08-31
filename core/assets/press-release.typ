@@ -130,6 +130,35 @@
   // something rather than inheriting it.
   show figure.where(kind: raw): set align(left)
 
+  // How far off the margin a block of code sits, answered here as everything
+  // else is. Nothing above this line was wrong: this is legibility rather than
+  // a defect, and a press release that carries code at all carries little of
+  // it — a block wants a mark that it is one, and a fixed-width face is the
+  // only one it has otherwise.
+  //
+  // The inset is on `raw` and not on the `figure`, which is what keeps it from
+  // undoing the rule above: a figure rule reaches only a captioned listing, so
+  // the same code would stand at two edges in one document depending on
+  // whether it carries a number. On `raw.where(block: true)` both twins move
+  // by the same 2em, an inline `raw` span is untouched, and a block inside a
+  // list item or a block quote sits 2em off its own container's edge rather
+  // than off the page.
+  show raw.where(block: true): set block(inset: (left: 2em))
+
+  // A listing's caption goes with its body. The rule above cannot carry it —
+  // a caption is not a `raw` block — so this is a second rule with a second
+  // argument rather than a consequence of the first, and the argument is that
+  // a caption names the thing above it and reads as detached from a block
+  // whose edge it does not share. This look reaches the same answer the
+  // article look reaches, for the reason it reaches the same alignment.
+  //
+  // The two `2em` are the same number in different units: the first resolves
+  // against the size in effect on the code, the second against the size in
+  // effect on the caption. They land on one edge here only because this look
+  // sizes both at 9.5pt. The contract a third look inherits is "the caption
+  // sits on the block's edge", not "both numbers are 2em".
+  show figure.caption.where(kind: raw): it => pad(left: 2em, it)
+
   // The label above the reference list, answered here as everything else is.
   // The emitter writes `title: none` and passes the words over, because Typst's
   // own title is a real `heading`: the compiled document would carry one more
