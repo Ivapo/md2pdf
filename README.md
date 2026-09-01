@@ -353,8 +353,9 @@ A document that refers to its own formulas can number them, with `equations: num
 the frontmatter. The numbers run `(1)`, `(2)` down the page and land on the display form
 only, so an inline `$…$` never takes one. One `$$…$$` span is one equation whatever it
 holds: a multi-line `aligned` derivation is numbered once, against its lines, rather than
-once per line. Put `{#eq:name}` after the closing `$$` and you can point at that formula
-by name, the way you point at a figure — see the section below.
+once per line. Put `{#eq:name}` after the closing `$$`, on the fence or on a line below it,
+and you can point at that formula by name, the way you point at a figure — see the section
+below.
 
 A formula is **LaTeX**, and the dialect accepts a bounded subset of it — the Greek
 letters, the relations and operators, sums, products and integrals, `\frac`, `\sqrt`,
@@ -720,9 +721,10 @@ always meant.
 comes from what the caption sits under, so `{#pipeline}` on an image is a figure and so is
 `{#tab:pipeline}`. Names beginning `fn-` followed by digits are reserved for footnotes.
 
-Five things are errors, each naming the line: a reference to a name nothing declares, the
-same name declared twice, a character outside the set, a reserved name, and a reference to
-an equation in a document that did not number its equations. A name is checked here rather
+Six things are errors, each naming the line: a reference to a name nothing declares, the
+same name declared twice, a character outside the set, a reserved name, a reference to an
+equation in a document that did not number its equations, and a `{#name}` group that is a
+paragraph of its own with nothing above it to name. A name is checked here rather
 than left to the typesetter, which would otherwise report a name you never typed and no
 line at all:
 
@@ -731,8 +733,8 @@ $ md2pdf paper.md
 error: name error at line 24: nothing declares the name 'fig:piepline'
 ```
 
-**A display equation is named on its closing fence**, since it has no caption line to carry
-a name:
+**A display equation is named after its closing fence**, since it has no caption line to
+carry a name — on the fence itself, on the line below it, or in the paragraph below that:
 
 ```markdown
 $$
@@ -743,7 +745,8 @@ As [](#eq:pythagoras) shows, the two shorter sides settle the longest one.
 ```
 
 That reads *"As Equation 1 shows…"*. The group has to be the whole of what follows the
-closing `$$` — `$$…$$ {#eq:one} and more` is the prose it looks like — and an inline `$…$`
+closing `$$` — `$$…$$ {#eq:one} and more` is the prose it looks like — or the whole of a
+line below it, with nothing but blank lines between the fence and the name. An inline `$…$`
 takes no name, because only the block form is ever numbered.
 
 **Pointing at an equation needs `equations: numbered` in the frontmatter**, and `md2pdf`

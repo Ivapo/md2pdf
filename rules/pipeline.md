@@ -496,10 +496,13 @@ the two `'\n'` the paragraph arms pushed for a paragraph that is consumed rather
 printed. `core/src/emit.rs:Figure::live` verifies the point where it is spent rather than
 clearing it from the walk's other arms — same frame depth, same recorded call, only
 separator newlines after it — which holds because every write into a `bufs` frame that is
-not one of this file's five truncates is an append; `core/src/emit.rs:take_member`,
-`core/src/emit.rs:close_group`, `core/src/emit.rs:close_abstract` and
-`core/src/emit.rs:close_keywords` are the others — the count read *two* from Phase 5 until
-Phase 11 re-measured it, and nothing mechanical reads it. Its `captioned` flag is the one thing those three checks cannot supply: a
+not one of this file's five truncates is an append, one insert excepted since Phase 12;
+`core/src/emit.rs:take_member`, `core/src/emit.rs:close_group`,
+`core/src/emit.rs:close_abstract` and `core/src/emit.rs:close_keywords` are the other
+truncates — the count read *two* from Phase 5 until Phase 11 re-measured it, and nothing
+mechanical reads it. The insert is the equation label's, and it is narrower than it looks:
+it lands at the end of a *live* `Equation` record, so by that record's own liveness nothing
+but newlines stands after it in the frame, and no offset read afterwards points past it. Its `captioned` flag is the one thing those three checks cannot supply: a
 spliced region carries `#figure(…)`, which the content check accepts.
 
 The caption's content is walked as inline markdown into a frame on the same buffer stack a
@@ -634,7 +637,8 @@ paragraph's own end and the closer's start.
 **A caption line may end in a `{#name}` group, which names the figure that caption makes.**
 It becomes a Typst label written into the same string the record keeps —
 `#figure(…, caption: […]) <name>` — and the label has to ride that string rather than the
-buffer alone, or `Figure::live`'s content check fails and the second-caption refusal
+buffer alone, or `Figure::live`'s content check — `core/src/emit.rs:still_standing`'s, the
+one test a caption's record and an equation's share — fails and the second-caption refusal
 silently stops firing. The group leaves the caption, and that is not a substring removal
 of what stands in the buffer: `core/src/emit.rs:escape_into` has turned `{#fig-two}` into
 `{\#fig\-two}` by then. `core/src/emit.rs:caption_name` reads the name from `Caption.text`,
@@ -684,20 +688,37 @@ its first reference. An uncited definition reaches no page, so it declares nothi
 reference to a name only it carries is refused — which is what Typst would do with a label
 that reached no page.
 
-**A display equation takes a name too, and it rides the closing `$$`.** `$$…$$ {#eq:one}`
-becomes `$ … $ <eq:one>`, and the reference is `[](#eq:one)` unchanged. It needs no splice:
-the parser delivers the equation and then the group as the very next event, in one
-paragraph, so `core/src/emit.rs:Equation` records where the equation was written and the
-text arm writes the label there. Its liveness test is `Figure::live`'s with the
-trailing-separator allowance dropped, since a label is adjacent where a caption is a
-paragraph away — a soft break between the fence and the group is enough to leave it prose.
+**A display equation takes a name too, and it stands after the closing `$$`** — on the
+fence, on the line below it, or in the paragraph below that. `$$…$$ {#eq:one}` becomes
+`$ … $ <eq:one>`, and the reference is `[](#eq:one)` unchanged. `core/src/emit.rs:Equation`
+records where the equation was written and the text arm *inserts* the label at the record's
+own end — not an append, because a paragraph away the separator newlines already stand in
+the buffer and an append would put the label after the break; in the adjacent case that
+offset is the end of the buffer, so the bytes are Phase 4's. Its liveness test is
+`Figure::live`'s, and since Phase 12 literally so: `core/src/emit.rs:still_standing` is the
+one function both records call, and what bounds a name is that everything between the fence
+and the group is the newlines the paragraph arms push — a soft break, one blank line or two
+all name, and prose, a heading, a rule or an image between them kills the record. A `:::`
+opener retires the record as it retires a figure's, since it writes nothing for the tail
+test to see.
 
-**The group must be the whole of the run**, so `$$…$$ {#eq:one} and more` and
-`$$…$$ see {#eq:one}` are both the prose they were, and an inline `$…$` takes no name at
-all, because Typst numbers the block form alone and a name on a thing that cannot number
-can never be pointed at. `core/src/emit.rs:equation_name` is that finding rule;
+**The group must be the whole of the run** — the one on the fence, or the one a line or a
+paragraph below it — so `$$…$$ {#eq:one} and more` and `$$…$$ see {#eq:one}` are both the
+prose they were, and an inline `$…$` takes no name at all, because Typst numbers the block
+form alone and a name on a thing that cannot number can never be pointed at. `core/src/emit.rs:equation_name` is that finding rule;
 `core/src/emit.rs:check_name` holds the clauses it shares with a caption's name, where
 `core/src/emit.rs:caption_name` keeps its own rule of taking the *last* group on a line.
+
+**A paragraph that is nothing but a `{#name}` group, with no caption open and nothing live to
+name, is an `UnsupportedConstruct`** — `name group with nothing to name`, at the group's own
+line — where before Phase 12 it printed the group and a reference to it failed at the
+*reference's* line, naming neither. The unit is the paragraph and not the run, tested with
+`core/src/emit.rs:whole_paragraph` beside the text arm's own `opens`, the pair that keeps
+`:::` a delimiter in one position: `An inline $x + 1$ {#eq:inline}` stays prose, a tight list
+item's bare inlines stay prose, and a loose item's or a block quote's paragraph is refused.
+`core/src/emit.rs:bare_group` is the shape test `equation_name` shares, and it reads the shape
+and not the name, so `{#eq one}` alone takes this refusal where the same group under a live
+equation takes `check_name`'s own message.
 
 **Nothing is recorded while a caption is open**, which is what leaves a display span inside
 a caption unable to claim the caption's own name: `: See $$x = 1$$ {#fig:one}` names the

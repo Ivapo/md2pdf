@@ -69,7 +69,7 @@ phases:
     by: null
   - name: "Phase 12 — a name may stand on the line below"
     reviewed: 2026-09-01
-    shipped: null
+    shipped: 2026-09-01
     cut: null
     by: null
 
