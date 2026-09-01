@@ -2,6 +2,113 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 12 only — 2026-08-31 — the same three lenses, resumed — **READY**
+
+Verdict: `READY` from all three, zero blocking. **Converged.** Phase 12's `reviewed` is set to
+2026-08-31; `status` was already `accepted`.
+
+The single round-2 blocker verified resolved by all three independently, each measuring rather
+than taking the changelog: `grep -c 'core/src/frontmatter.rs:check_affiliations'` on the spec
+returns 0, and `spec-lint` reports 29 citations where it reported 30. Two lenses re-extracted
+**every** `file:symbol` citation in the document and resolved each against its file —
+`check_affiliations` is the only symbol this phase renames, so nothing else goes stale when it
+lands.
+
+The exit-gate lens re-ran the four changed or added rows of gate (3) against a rebuilt binary
+and got a real refusal from each, confirming all five refusals the code carries are covered.
+The cross-file lens verified §2's corrected counter-example empirically — a probe through
+`--emit-typst` returns the literal `\[\@smith2020\]`, so the fallback really does put wrong
+glyphs in a sentence, which is the mechanism a round-1 draft had backwards.
+
+Two non-blocking folded at convergence: gate (2)'s aside explaining the press release's extra
+space was an unverified causal guess and is now "measured, not explained, since the gate does
+not rest on why"; and gate (5) now names the one inherited `spec-lint` warning
+(`rules/desktop-geometry.md`'s `RULE_SOURCES_WITHOUT_GENERATED`) so an implementer does not
+chase it.
+
+### Round 2 — Phase 12 only — 2026-08-31 — the same three lenses, resumed with the author's changelog — **NOT READY**
+
+All three returned `NOT READY` with **the same single blocker, and it was the round-1 fix
+defeating itself** — the pattern the loop warns about, observed for the second episode running.
+
+Round 1's fix for the rename was to cite `core/src/frontmatter.rs` by **file** rather than by
+symbol, so nothing in an append-only document would go stale when `resolve_affiliations` lands.
+The close-out written in the same pass then used the full `file:symbol` form four paragraphs
+later. `spec-lint` raises `CIT_SYMBOL_ABSENT` at **error** severity and gate (5) requires it to
+run clean, so the phase could not pass its own gate, and the document being append-only meant
+the line could not be corrected afterwards. The scope's own paragraph telling an implementer
+the hazard was handled is what made it worse. Fixed by dropping the path; the citation count
+fell 30 → 29.
+
+All three confirmed every round-1 blocker resolved, with work rather than assent: one ran every
+row of gate (3) against the built binary, one computed the SHA-256 pair to show the unnamed
+digest was a real hazard, one re-swept the repo and confirmed no prose site remained missed.
+
+Seven non-blocking folded, three of them the same class the blocker was: **a fact this phase
+had checked and then miscounted.** The `.typ` census said "both use the word" where
+`core/assets/press-release.typ` uses it zero times; "round 1 rewrote three of them" was five;
+"seven sites" was eight. Also folded: §2's `check_citations` counter-example had its mechanism
+backwards — the escaped brackets are what the refusal *prevents*, not what it causes; gate (4)
+publishes SHA-1 hashes and now names the digest, since `shasum -a 256` yields a different pair a
+second person would read as a failure; gate (3) gained a row for the **fifth** refusal §2 had
+just promoted, and split an "either list, under none" row that was vacuous for the affiliation
+half, an empty element there presupposing the key; and gate (2)'s illustrative dump is now
+qualified as the article byline.
+
+### Round 1 — Phase 12 only — 2026-08-31 — a three-lens panel of fresh reviewers with repo access (correctness/grounding, exit-gate testability, cross-file consistency) — **NOT READY**
+
+**Round 0 (this episode — Phase 12 is its own, per §7.0):** *does this phase produce the
+observable, and is it the right one?* **Yes to both.** It produces a typeset PDF from a document
+that today does not compile at all, its byline setting the names their author wrote; and it is
+the right one because it narrows a refusal a real user hit on the shipped build rather than
+adding a capability nobody asked for.
+
+All three lenses returned `NOT READY`. Four distinct blockers, each raised by two or three of
+them independently.
+
+**Gate (3) named an input a correct build cannot refuse.** `^1` under one affiliation is valid
+today and stays valid — `core/src/frontmatter.rs:one_affiliation_makes_the_marker_optional`
+already asserts it — so the case as drafted was unwritable. **The boundary this phase moves is
+at zero, not one**; the row that actually guards it is `^2` under one, which is what fails an
+implementation over-narrowing to `count <= 1`.
+
+**Gate (5)'s diff enumeration was failed by a correct implementation of gate (1).** Gate (1)
+needs a checked-in assertion and every such assertion in this repo lives in
+`core/tests/golden_test.rs`, which gate (5)'s "and nothing else" excluded — along with the spec
+itself and the two indices the close-out regenerates. Gate (1) now names its file and the
+`include_str!`-plus-inline-assertion shape.
+
+**The rename broke a live `file:symbol` citation while gate (5) requires `spec-lint`.** The
+sharpest catch of the round: the scope said "is renamed to say so" without giving a name, and
+`rules/pipeline.md` cites the old one. The name is now given — `resolve_affiliations` — and the
+phase's own scope cites the file rather than the symbol.
+
+**"One code comment states the refusal absolutely" undercounted by three**, inside the one file
+the phase edits, with `fn author`'s doc the one that becomes **false** rather than merely stale.
+
+**§2's central argument was falsified.** A draft bounded the bend in the escape-and-reject
+decision by saying a marker "is not content: it is one end of a relation". The relation argument
+proves too much — a citation key with no `bibliography` is the same shape and
+`core/src/emit.rs:check_citations` **refuses** it — so the argument licensed dropping citations.
+The bound is now what the drop leaves on the page: dropping a marker removes no glyph a reader
+could misread, where the citation's fallback puts wrong glyphs in a sentence.
+
+Also folded: `samples/showcase/showcase.md` carries the same one-affiliation sentence and was
+unnamed, **with the `[14, 29, 68]` line-count trap Phase 11's own close-out had named at line 60
+before the showcase grew**; `rules/pipeline.md`'s *looks* paragraph is a third site in that file,
+and the one a reader consults for what becomes of a marker; the correction blamed the shipped
+error message for a reading that comes from §2's absolute bullet, the message having already
+been reworded by commit `ceb5145`; OQ-11's continuity carries its optional half and breaks its
+honouring half; and **the shipped code carries a fifth refusal this document had never
+counted** — `author: ^1`, an entry with no name before its `^` — recorded as a discrepancy
+rather than renumbered, since the tally has been wrong since Phase 11 shipped.
+
+**One rejection, recorded.** The cross-file lens asked for the `CORRECTED` block to sit beside
+refusal 1's bullet rather than ~50 lines below it. Not moved: §6.1's "beside the text it
+corrects" is satisfied within the `###` subsection, which is the precedent Phase 11 set in this
+same section, and inserting a pointer into Phase 11's shipped bullet would edit shipped prose in
+an append-only document to fix a navigation problem.
+
 ### Round 3 — Phase 11 only — 2026-08-31 — the two panel lenses that were NOT READY, resumed — **READY**
 
 Verdict: `READY` from both, zero blocking. **Converged.** Phase 11's `reviewed` is set to

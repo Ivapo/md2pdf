@@ -64,7 +64,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 12 — a marker with nothing to point at"
-    reviewed: null
+    reviewed: 2026-08-31
     shipped: null
     cut: null
     by: null
@@ -438,9 +438,15 @@ one is what a later reader re-derives.
 **Refusal 1 above is stated absolutely and should not be.** "A marker naming an affiliation
 the document does not carry" refuses `author: Iva Po^1` in a document with **no
 `affiliation` key at all** — a state an author reaches by commenting the key out while
-drafting, which is an ordinary move, and by writing the markers before the key. The error it
-raised named a line and stopped the build over markers that state nothing, and its own
-sentence read as though the schema required an affiliation. It does not.
+drafting, which is an ordinary move, and by writing the markers before the key. It stopped
+the build over markers that state nothing.
+
+**What the first user read it as is a fact about this bullet and not about the message**,
+and round 1 caught a draft of this block blaming the wrong one. The shipped sentence had
+already been reworded the same day to name both exits — *"add that key, or drop the
+markers"* — and it still produced the reading "so an affiliation is always required",
+because the bullet above is what the schema actually says and the bullet is absolute. A
+message cannot talk an author out of a rule.
 
 **The refusal now begins at one affiliation. With none, every marker is dropped and the
 document compiles.** The case is not that dropping is harmless — it is which failure each
@@ -448,26 +454,42 @@ answer leaves *visible*.
 
 - **The failure refusal 1 was written against is invisible**: `^3` among two real
   affiliations sets a superscript that points at nothing, in a byline where the other
-  superscripts point at something, and no reader scans a byline for that. That case is
-  untouched, and so is `^0`.
+  superscripts point at something, and no reader scans a byline for that. **That case is
+  untouched from one affiliation up, `^0` with it.** At zero, `^0` is cleared like every
+  other marker — round 1 caught a draft of this bullet claiming `^0` was untouched
+  everywhere, which the scope below contradicts and the scope is right.
 - **The failure a drop permits is self-evident**: an author who writes markers meaning to
   add the affiliations later, and forgets, gets a PDF with **no affiliation block anywhere**.
   That is not a defect a reader has to hunt for; it is the whole feature missing from the
   page. The cost is real and it is accepted, because it announces itself.
 
-**This bends §2's escape-and-reject decision and the bound is named rather than argued
-away.** A marker is dropped rather than named, which that decision forbids for *content*.
-The bound is that a marker is not content: it is one end of a **relation**, and at zero
-affiliations the relation has no other end, so a dropped marker takes nothing off the page
-that was ever going to reach it. A name still sets exactly as the author wrote it. That is
-the whole of the distinction, and a later phase that starts dropping *content* on this
-precedent has misread it.
+**This bends §2's escape-and-reject decision, and round 1 falsified the bound a draft of
+this block named.** That draft said a marker "is not content: it is one end of a
+**relation**, and at zero affiliations the relation has no other end." **The relation
+argument proves too much, and this dialect already ships the counter-example.** A citation
+key in a document with no `bibliography` is one end of a relation whose other end does not
+exist, and `core/src/emit.rs:check_citations` **refuses** it rather than dropping it — for
+the flattening reason. A separator that licenses dropping the marker licenses dropping the
+citation, and nothing in this project wants that.
 
-**It is also OQ-11's answer taken one step down, which is the continuity argument rather
-than a fresh one.** OQ-11 made the marker optional at exactly one affiliation, because there
-the relation is redundant. At zero the relation does not exist. A schema that lets an author
-omit a marker where it says nothing, and refuses one where it says nothing, is answering the
-same question two ways.
+**The separator that actually holds is what the drop leaves on the page.** Dropping a
+marker removes no glyph a reader could misread: `Iva Po^1` sets as `Iva Po`, which is a
+name, correctly typeset, and nothing on the page is wrong. A citation is refused because its fallback puts
+**wrong glyphs** in front of a reader — the escaped `\[\@smith2020\]` sitting in the
+sentence — which is the thing the refusal prevents rather than something it causes. Round 2
+caught a draft of this paragraph stating that mechanism backwards, as a hole in the sentence
+and as brackets reaching the page. **§2's rule is about what a silent drop puts in front of a
+reader, and here it puts nothing.** A later phase reaching for this
+precedent has to answer that question and not the relation one.
+
+**It is OQ-11's answer taken one step down in one respect and reversed in another, and both
+halves are written out.** OQ-11 made the marker optional at exactly one affiliation, because
+there the relation is redundant; at zero it does not exist, so a schema that lets an author
+omit a marker where it says nothing and refuses one where it says nothing is answering the
+same question two ways. **But OQ-11 also said a marker written anyway "is honoured and
+reaches the page, because the author wrote it", and at zero this phase does not honour it** —
+it cannot, there being nothing to point at. The continuity carries the optional half and
+breaks the honouring half, and round 1 caught a draft claiming only the first.
 
 **`core` clears the markers rather than the look ignoring them, and that is load-bearing.**
 What crosses the seam is the truth about the document: a document with no affiliations has
@@ -475,10 +497,20 @@ authors with no markers, so `--emit-typst` shows `markers: ()` and neither look 
 character. A look asked to ignore markers when `affiliation` is `none` would be a second
 place the rule lives, and the two would drift.
 
-**Still four refusals, and now two of them are scoped rather than one.** Refusal 2 begins at
-two affiliations, per OQ-11; refusal 1 begins at one. Refusals 3 and 4 — a marker that is not
-a number, and an empty element in either list — are unconditional, because both are faults in
-what the author *typed* rather than in a relation that may not exist.
+**Still four refusals in this document's telling, and now two of them are scoped rather than
+one.** Refusal 2 begins at two affiliations, per OQ-11; refusal 1 begins at one. Refusals 3
+and 4 — a marker that is not a number, and an empty element in either list — are
+unconditional, because both are faults in what the author *typed* rather than in a relation
+that may not exist. Both fire inside the line loop, before either scoped one can run.
+
+**The shipped code carries a fifth that this document has never counted, and round 1 found
+it.** `author: ^1` is an entry that is not empty and has no name, and
+`core/src/frontmatter.rs` raises *"key 'author' has an entry with no name before its '^'"*
+for it. That is a real refusal with a test of its own, landed by Phase 11 and covered by
+neither its refusal 4 nor its count. It is recorded here rather than renumbered: the tally
+has been wrong since Phase 11 shipped, this phase does not touch that arm, and a
+renumbering would make every earlier sentence in this section read against a list it never
+described.
 
 ## 3. Open questions
 
@@ -697,6 +729,15 @@ what the author *typed* rather than in a relation that may not exist.
   block's `above:`**, because the title block's `below:` also governs a title-only
   document's gap to its `divider`, and moving it fails the phase's own byte-identity case.
   Landed in Phase 10's scope, with §2 carrying both measurements.
+- **OQ-13** — does the affiliation list belong to the title block alone, or does a later
+  spec want it anywhere else? A footer, a running header and a first-page footnote are all
+  places published documents put one, and `mpdf-003`'s desktop app has a footer design
+  parked. Nothing in Phase 11 turns on the answer — the data crosses the seam either way
+  and a second site is a `show` rule over content the look already has — but it decides
+  whether the key is named for the title block or for the document, and a key named for
+  the wrong one is a rename later. Design call, and cheap to hold: the name chosen in
+  Phase 11 is `affiliation`, which is neutral between the two.
+
 - **OQ-14** — does `core` need a warning channel at all? Phase 12 drops a marker that points
   at nothing and says so nowhere, because the alternative on offer was an error and the
   author had already been stopped by one. A third answer exists — warn on stderr and
@@ -708,15 +749,6 @@ what the author *typed* rather than in a relation that may not exist.
   **Nothing in Phase 12 turns on the answer** — a warning is additive to a document that
   already compiles — but a second construct wanting one would make this a real question, and
   the first is the cheapest place to notice that. Design call, cheap to hold.
-- **OQ-13** — does the affiliation list belong to the title block alone, or does a later
-  spec want it anywhere else? A footer, a running header and a first-page footnote are all
-  places published documents put one, and `mpdf-003`'s desktop app has a footer design
-  parked. Nothing in Phase 11 turns on the answer — the data crosses the seam either way
-  and a second site is a `show` rule over content the look already has — but it decides
-  whether the key is named for the title block or for the document, and a key named for
-  the wrong one is a rename later. Design call, and cheap to hold: the name chosen in
-  Phase 11 is `affiliation`, which is neutral between the two.
-
 ## 4. Implementation phases
 
 Strictly sequential; each is one plan-mode pass. Each states the observable it
@@ -1711,14 +1743,26 @@ test lands on step 2 and the steps above it are worked rather than skipped.
 
 - **Scope: one condition and one clearing pass, in one function.**
 
-  `core/src/frontmatter.rs:check_affiliations` gains a zero arm. Where the document carries
-  **no** affiliation, every author's `markers` is emptied and the block is valid; where it
-  carries one or more, refusal 1 is exactly what it is today, `^0` included. The function
-  now resolves as well as refuses, so it takes `&mut Frontmatter` and is renamed to say so.
+  The cross-key check that `core/src/frontmatter.rs` runs after its line loop gains a zero
+  arm. Where the document carries **no** affiliation, every author's `markers` is emptied
+  and the block is valid; where it carries one or more, refusal 1 is exactly what it is
+  today, `^0` included. The function now resolves as well as refuses, so it takes
+  `&mut Frontmatter` and **is renamed from `check_affiliations` to `resolve_affiliations`**.
 
-  **The message added the same day is deleted with the case it named** — the sentence
-  beginning `key 'author' marks a name '^1'`, which existed only for a document this phase
-  makes valid. The marker-past-the-end message stays, since there the fix is a number.
+  **The new name is given rather than left to the implementer, because a rename moves a
+  `file:symbol` citation and gate (5) runs `spec-lint`, which errors on a symbol that is not
+  there.** Round 1 caught this: `rules/pipeline.md` cites the old name, the close-out below
+  now names that citation, and this phase's own scope deliberately cites the *file* rather
+  than the symbol so that nothing in an append-only document goes stale the moment the
+  rename lands.
+
+  **The message added the same day is deleted with the case it named** — the arm whose
+  literal is `key 'author' marks a name '^{marker}' and the document names no
+  'affiliation'; add that key, or drop the markers`, quoted as the source spells it because
+  round 1 caught a draft quoting a rendered instance that greps to nothing. The two rows
+  keyed to it in `core/src/frontmatter.rs:every_affiliation_refusal_names_its_own_line` —
+  the ones matching `names no 'affiliation'` and `drop the markers` — go with it. The
+  marker-past-the-end message stays, since there the fix is a number.
 
   **No `.typ` file changes and no golden moves.** `core` clears the markers, so what the
   looks receive is a document with no markers and no affiliations, which is a shape both
@@ -1727,62 +1771,151 @@ test lands on step 2 and the steps above it are worked rather than skipped.
 
   **`core/src/emit.rs` is untouched**, and so are `cli/src` and `app/src`.
 
-- **Exit gate:** five cases.
+- **Exit gate:** five cases. **Round 1 rewrote all five**, because one named an input a
+  correct build cannot refuse, one enumerated a diff a correct build cannot produce, one read
+  a property out of a dump that does not carry it, and two were underspecified against this
+  spec's own precedents — round 2 caught a draft of this sentence claiming three.
 
-  (1) **A document with markers and no `affiliation` key compiles**, where today it exits
-  non-zero. The fixture is named and checked in: `tests/fixtures/orphan_markers.md`, two
-  authors carrying `^1` and `^2` and no `affiliation` line — the shape an author reaches by
-  commenting the key out, which is how this was found. Its `--emit-typst` shows
-  `markers: ()` on **every** author and `affiliation: none`, which is the case that proves
-  `core` cleared them rather than a look ignoring them.
+  **The fixture is written out rather than described**, on Phase 10's rule that a second
+  person reproduces a probe rather than inventing it. `tests/fixtures/orphan_markers.md`
+  carries `title: Two Authors, No Lab` and `author: Iva Po^1; Someone Else^2`, no
+  `affiliation` line and no other key, then one `#` heading and one short paragraph.
+  **No name in it carries a digit of its own**, which is what makes gate (2) readable.
 
-  (2) **Its byline carries no superscript, in both looks**, read on one `pdftotext` run per
-  look over that fixture — the two-PDF form Phase 9 gate case (2) established. The names set
-  exactly as written. **This is the case that would catch a clearing pass that only emptied
-  the first author.**
+  (1) **The document compiles, where today it exits non-zero.** Its `--emit-typst` shows
+  `markers: ()` on **every** author and `affiliation: none`, and its compile starts with the
+  `%PDF` magic bytes. **The assertion is checked in, and the file it lands in is named:
+  `core/tests/golden_test.rs`**, beside `ONE_AFFILIATION_MD` and on the shape
+  `one_affiliation_carries_its_markers_or_leaves_them_out` already uses — an `include_str!`
+  constant and an inline assertion over `md_to_typst`, not a golden file, since a golden
+  would pin the whole document where what this phase changes is one argument. Round 1 caught
+  that the phase named no file and that gate (5) then forbade the only one that works.
+
+  (2) **The byline carries the names and nothing else, in both looks.** One `pdftotext` run
+  per look over that fixture — the second look a copy of the fixture carrying
+  `template: press-release`, the substitution Phase 11 gate (5) spelled out and this one
+  inherits. **The assertion is mechanical: the byline line reads exactly
+  `Iva Po, Someone Else`, with no digit anywhere on it.** A superscript reaches a
+  `pdftotext` dump as a bare ASCII digit glued to the name it rides — today's
+  `tests/fixtures/authors.md` dumps its **article** byline as
+  `Po, Iva1, Someone Else2, A Third Person1,2`, and its press-release byline the same but for
+  a space before the last marker — measured, not explained, since the gate does not rest on
+  why — so "no digit" is the readable form of "no superscript" in both, and it is readable only because the
+  fixture's names carry none. **Phase 10 and Phase 11's `-bbox` arithmetic is deliberately
+  not inherited**: a box dump reports where a run sits, not whether it is a superscript.
+  What is inherited from Phase 9 gate (2) is the two-PDF shape and nothing else.
+
+  **This case is what catches a clearing pass that empties only the first author**, since
+  both looks set `super()` per author with no guard on `affiliation`, so a surviving `^2`
+  would reach the byline as a digit.
 
   (3) **Every refusal that survives still fires and names its line**, as one test over
   `Error::Frontmatter` asserting `location.line` and `problem`, on
-  `core/src/frontmatter.rs:errors_name_the_key_and_the_line`'s shape: `^3` under two
-  affiliations; `^0` under two; `^1` under **one**, which is the boundary this phase moves and
-  the case a wrong condition would let through; a marker that is not a number, under an
-  affiliation **and** under none, since refusal 3 is unconditional; an empty element in either
-  list; and refusal 2 at two affiliations with no marker anywhere.
+  `core/src/frontmatter.rs:errors_name_the_key_and_the_line`'s shape. **The boundary this
+  phase moves is at zero and not at one**, which a draft of this case had wrong: `^1` under
+  one affiliation is valid today and stays valid, and
+  `core/src/frontmatter.rs:one_affiliation_makes_the_marker_optional` already asserts it. The
+  rows are: `^2` under **one** affiliation, which is refusal 1 at the new boundary and the
+  case that fails an implementation narrowing to `count <= 1`; `^3` under two; `^0` under
+  two; a marker that is not a number, asserted under an affiliation **and** under none; an
+  empty element in the **author** list under no affiliation, and one in the `affiliation`
+  list — which cannot be asserted "under none", since an empty element there presupposes the
+  key, and round 2 caught a draft claiming otherwise; **an entry with no name before its
+  `^`**, which §2 records as the fifth refusal this document had never counted and which is
+  enumerated here rather than left out, since omitting it right after promoting it would read
+  as an oversight; and refusal 2 at two affiliations with no marker anywhere. All of these
+  but refusals 1 and 2 fire in the line loop before any relation is known, and none may
+  become conditional.
 
   (4) **A document that carries an affiliation does not move.** `tests/fixtures/authors.md`
   compiles to a PDF byte-identical against `HEAD`, in both looks, compared as a hash — the
-  form Phase 10 gate case (3) and Phase 11 gate case (5) both used. This is what says the
-  narrowing reached only the zero case.
+  form Phase 10 gate case (3) and Phase 11 gate case (5) both used, with the press-release
+  copy made the way gate (2) above makes its own. **The hashes are published, because Phase
+  10's round 2 caught a case a second person could not reproduce**, and **the digest is named
+  because round 2 caught that publishing one without it is the same defect**: under `shasum`
+  with no flags, which is **SHA-1**, `98103556cc…` for the article and `57a161d3e9…` for the
+  press release, measured 2026-08-31 on the shipped build, before and after. A second person
+  reaching for `shasum -a 256` gets a different pair and would read a match as a failure.
 
-  (5) **`cargo test --workspace` passes with no golden re-blessed and no `.typ` file
-  touched** — `git diff --stat` naming `core/src/frontmatter.rs`, the new fixture, and the
-  close-out's prose, and nothing else. **`spec-lint` runs too**, which `cargo test` does not:
-  the close-out edits a rule with eleven lines of headroom.
+  (5) **`cargo test --workspace` passes and `spec-lint` exits zero with no error**, the
+  second because `cargo test` does not run it and this phase renames a cited symbol. **The
+  one warning it prints is inherited and is named here so an implementer does not chase it**:
+  `rules/desktop-geometry.md` carries `RULE_SOURCES_WITHOUT_GENERATED`, pre-existing and
+  untouched by this phase. **The diff names
+  `core/src/frontmatter.rs`, `core/tests/golden_test.rs`, `tests/fixtures/orphan_markers.md`,
+  the close-out's prose, this spec and the two regenerated indices — and nothing else**; in
+  particular no `.typ` file and no golden, which is what says the clearing happened in `core`
+  rather than in a look. Round 1 caught the earlier enumeration excluding the test file gate
+  (1) needs, the spec itself and the indices the close-out's own last paragraph regenerates.
+
+  **The shipped assertion in the blast radius is named rather than discovered**, as Phase 10
+  gate (4) and Phase 11 gate (8) each named theirs:
+  `core/tests/golden_test.rs:one_affiliation_carries_its_markers_or_leaves_them_out`, which
+  is the one test that fails an implementation over-narrowing refusal 1 to `count <= 1`.
 
 - **Close-out**, named line by line, since this phase's prose radius is again wider than its
-  code radius.
+  code radius. **Round 1 found eight sites a draft of it missed**, four of them inside the
+  one file the phase edits — the same undercount Phase 11's close-out recorded, recurring.
 
-  `rules/pipeline.md`: the refusals paragraph, whose first sentence states refusal 1
-  absolutely, and the sentence **"With exactly one affiliation the markers are optional"**,
-  which is now the middle of a three-way answer rather than the whole of it. The file has
-  **eleven lines of headroom against `max_lines: 1080`** and this phase adds one scoped
-  condition, so **no cap change is owed** — which is stated because the two phases before
-  this one both owed one.
+  `rules/pipeline.md`, three passages: the refusals paragraph, whose first sentence states
+  refusal 1 absolutely **and which carries the one `check_affiliations` citation outside this
+  file that the rename moves**; the site is named without its path deliberately, because a
+  `file:symbol` citation of a symbol this phase deletes would fail gate (5)'s own `spec-lint`
+  clause in an append-only document — round 2 caught a draft of this line doing exactly that,
+  four paragraphs after the scope explained why it must not; the sentence **"With exactly one affiliation the markers are
+  optional"**, now the middle of a three-way answer rather than the whole of it; and the
+  looks paragraph beginning **"Whether a marker reaches the page is the look's, read off the
+  data rather than off a key"**, which after this phase is incomplete in the direction §2
+  calls load-bearing — at zero affiliations the suppression is `core` clearing the data, not
+  the look reading it. The file has **eleven lines of headroom against `max_lines: 1080`**,
+  re-derived by all three round-1 lenses, and this phase adds one scoped condition to each of
+  three passages, so **no cap change is owed** — stated because the two phases before this
+  one both owed one.
 
-  `README.md`: the frontmatter section's refusal list — "So is a marker pointing at an
-  affiliation you did not write" — which is true only from one affiliation up.
+  `README.md`, two sentences in one paragraph: the refusal list — "So is a marker pointing at
+  an affiliation you did not write" — and **"With exactly **one** affiliation you may leave
+  the markers out and every author belongs to it"** one line above it, which frames the whole
+  as a two-step ladder this phase makes three.
 
-  `samples/authors.md`: its "What you may leave out" section, which is where an author would
-  look for this, and its own copy of the refusal list. **This sample is the close-out's real
-  work**, because it is the file that answers the question this phase came from.
+  `samples/authors.md`: its "What you may leave out" section and its own copy of the refusal
+  list. **This sample is the close-out's real work**, because it is the file that answers the
+  question this phase came from.
 
-  **One code comment states the refusal absolutely and is in the radius**:
-  `core/src/frontmatter.rs`'s comment above the marker check. `core/assets/*.typ` state
-  nothing about refusals and are untouched, which is the same fact as "no look changes".
+  **`samples/showcase/showcase.md` carries the same sentence and is named with its trap.**
+  Its "With exactly one affiliation you may leave the markers out and every author belongs to
+  it" is the third instance. **The correction must be line-count-neutral above line 68**:
+  `app/src/preview.rs:the_anchors_are_the_headings_of_whichever_file_the_pane_holds` pins
+  `[14, 29, 68]`, and a line added above the last of those collides with this phase's own
+  "`app/src` untouched" and with gate (5)'s file set. Phase 11's close-out named this trap at
+  line 60; the showcase has since grown and the bound moved with it.
 
-  **`web/index.html` states no refusal about markers** and does not move — checked rather
-  than assumed, because Phase 11's close-out found six prose sites where a draft had named
-  five.
+  **Four code sites state the refusal absolutely or describe what becomes of a marker, all in
+  `core/src/frontmatter.rs`**, where a draft named one: the comment above the marker check;
+  the renamed function's own doc comment, which says it is "the two refusals that read both
+  list keys at once" and is now two refusals and a clearing pass; **`fn author`'s doc
+  comment, which is the one that becomes false rather than merely stale** — it says a
+  saturated digit run is refused as "the marker naming an affiliation the document does not
+  carry", which at zero affiliations it no longer is, and it names the pre-rename symbol; and
+  `Author`'s own doc comment, whose "empty where the author wrote none — which the schema
+  permits at exactly one affiliation" now enumerates one of two ways `markers` comes to be
+  empty. A fifth sits in the test module, on
+  `every_affiliation_refusal_names_its_own_line`, stating the four refusals absolutely.
+
+  `core/tests/golden_test.rs`: the doc comment on
+  `one_affiliation_carries_its_markers_or_leaves_them_out`, which opens with the same
+  one-affiliation sentence. The file is in the diff for gate (1) regardless.
+
+  **`web/index.html` states no refusal about markers** and does not move — checked by two
+  round-1 lenses rather than assumed. **`core/assets/*.typ` are untouched**, which a draft
+  argued from the false premise that they state nothing about refusals.
+  `core/assets/template.typ` uses the word twice — about a `show` rule and about the
+  title-block guard — `core/assets/press-release.typ` not at all, and neither instance is
+  about markers; round 2 corrected the attribution to both files. **Their `marked` comments
+  are a knowing carry-forward**: each says the markers are optional "at exactly one
+  affiliation", which after this phase enumerates one of two ways `markers` comes to be
+  empty — the same class as `Author`'s doc comment above. They stay, because gate (5)'s "no
+  `.typ` file touched" is what says the clearing happened in `core` rather than in a look,
+  and that is worth more than the sentence.
 
   **`specs/INDEX.md` and `rules/INDEX.md` regenerated**, never hand-edited — the spec's
   rollup goes `done` → `partial` as this phase is appended and back to `done` when it lands.
