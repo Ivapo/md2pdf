@@ -26,10 +26,11 @@ covers: >
   the LaTeX subset a formula may hold and the prelude
   it compiles against, the bundled looks and the call contract they meet, the equation numbering
   the author asks for and the look formats, the figure numbering a document may
-  section by, the depth a document numbers its headings to, the heading anchors a
+  section by, the depth a document numbers its headings to, the several authors one
+  key carries and the affiliation each of their markers points at, the heading anchors a
   compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 1020
+max_lines: 1080
 generated: 2026-08-31
 ---
 
@@ -725,14 +726,46 @@ not be a heading.
 
 ## The frontmatter
 
-Nine keys, all optional: `title` and `author`, strings; `date`, a free string the template
-typesets verbatim; `columns`, `1` or `2`; `template`, the look, `article` or
-`press-release`; `equations`, `plain` or `numbered`; `figures`, `flat` or `sectioned`;
-`headings`, `plain` or a depth `1`–`6`; and `bibliography`, a path. An absent block is
-valid, and `core/src/frontmatter.rs:Frontmatter::default` gives the article look, no title
-block, no date, two columns, no equation numbers, flat figure numbers, unnumbered headings
-and no bibliography. Eight of them reach the look: `core/src/emit.rs:header` always names
-all seven arguments and the selected file.
+Ten keys, all optional: `title`, a string; `author` and `affiliation`, lists; `date`, a
+free string the template typesets verbatim; `columns`, `1` or `2`; `template`, the look,
+`article` or `press-release`; `equations`, `plain` or `numbered`; `figures`, `flat` or
+`sectioned`; `headings`, `plain` or a depth `1`–`6`; and `bibliography`, a path. An absent
+block is valid, and `core/src/frontmatter.rs:Frontmatter::default` gives the article look,
+no title block, no author, no affiliation, no date, two columns, no equation numbers, flat
+figure numbers, unnumbered headings and no bibliography. Nine reach the look:
+`core/src/emit.rs:header` always names all eight arguments and the selected file.
+
+`author` and `affiliation` are lists inside one line, because `core/src/frontmatter.rs:parse`
+refuses an indented line outright and a YAML list is therefore not available.
+`core/src/frontmatter.rs:entries` splits on `;` and trims every element, so `Po, Iva` stays one
+person where a comma-split would silently make two. There is no `authors` and no `affiliations` —
+this schema has no synonyms — and a one-name document is a one-element list whose page does not
+move.
+
+An affiliation is a *relation* between the two lists rather than a third string, so the marker
+rides the name: `author: Iva Po^1; Someone Else^2; A Third Person^1, 2` against `affiliation:
+Anthropic, San Francisco; MIT, Cambridge`. `core/src/frontmatter.rs:author` splits a name from its
+markers at the **first** `^`, then splits the markers on `,` and trims each; a marker is a non-
+empty run of ASCII digits indexing `affiliation` in written order, from 1.
+`core/src/frontmatter.rs:Author` is what crosses, and `core/src/frontmatter.rs:Listed` keeps each
+key's own line — the second key a line is kept for, because two of the refusals are cross-key and
+`affiliation` may sit above or below `author`.
+
+Four refusals, each an `Error::Frontmatter` naming the line of the key the author would have to
+edit. A marker naming an affiliation the document does not carry, on the `author` line — Typst
+cannot catch that one, because by then it is a number in a list and a superscript pointing at
+nothing is what would ship. An `affiliation` whose relation is unstated, on the `affiliation` line,
+which begins at **two** entries; `core/src/frontmatter.rs:check_affiliations` runs both of those
+after the line loop. A marker that is not a number, so `A^B^1` is refused naming `B^1` rather than
+guessed into a name `A^B`. And an empty element in **either** list, since `affiliation: MIT;`
+leaves a blank a `^2` would point at without tripping the first.
+
+**With exactly one affiliation the markers are optional**, and a document that writes none is valid
+— every author belongs to it. That is what makes one lab and several authors writable without a
+lone `¹` on every name, and it is why the second refusal begins at two. A document that then gains
+a second is *refused* until its author writes the markers, so the page cannot move behind them. An
+author with no marker beside marked ones is deliberately not refused: three authors from one lab
+and a fourth from none is a real document.
 
 `bibliography` is the one key that names a *file*, and the only one that carries a line —
 `core/src/lib.rs:BibliographyRef` holds both, because a bibliography is never
@@ -754,8 +787,8 @@ and `core/src/frontmatter.rs:Equations::from_name`, `Figures::from_name` and
 `Headings::from_name` each resolve one exactly as `Template::from_name` resolves the look.
 The closed set is what makes a further scheme of the *same* question a new name rather than
 a further key — a per-chapter figure restart without a prefix is `figures`' third name and
-not a key of its own. A key is added where the question is different: `headings` is the
-ninth, and it asks how deep the *headings* number, which no name of `figures` could say.
+not a key of its own. A key is added where the question is different: `headings` asks
+how deep the *headings* number, which no name of `figures` could say.
 The author decides whether a document numbers its display equations, whether a figure
 number carries its section and how deep its headings number; the look decides what each
 looks like and where it sits.
@@ -822,17 +855,29 @@ count — and the emitter passes the frontmatter through and adds no styling of 
 third look is a third `.typ` file and one enum variant.
 
 Every look exports `template` and `divider`, and its `template` takes `title`, `author`,
-`columns`, `date`, `equations`, `figures` and `headings` before the trailing `doc`. That is
-the contract, because `core/src/emit.rs:header` names all seven on every call; a look
-missing one would fail the compile with an error naming neither the document nor the key. No
-golden file pins it, so a test in `core/tests/golden_test.rs` reads each look's source and
+`affiliation`, `columns`, `date`, `equations`, `figures` and `headings` before the trailing
+`doc`. That is the contract, because `core/src/emit.rs:header` names all eight on every
+call; a look missing one would fail the compile with an error naming neither the document
+nor the key. No golden file pins it, so a test in `core/tests/golden_test.rs` reads each look's source and
 asserts it — two needles for `equations`, the parameter and `math.equation`; two for
-`figures`, the parameter and `counter(figure.where(kind:`; and two for `headings`, the
-parameter and `int(headings)` — because the parameter alone is satisfied by a look that
-takes it and ignores it. `headings`' second needle is the conversion rather than the
+`figures`, the parameter and `counter(figure.where(kind:`; two for `headings`, the
+parameter and `int(headings)`; and two for `affiliation`, the parameter and `super(` —
+because the parameter alone is satisfied by a look that takes it and ignores it. `headings`' second needle is the conversion rather than the
 comparison: `n.pos().len() <=` is carried by a look that hardcoded its own depth and never
-read the key. Each pair leaves the *format* off the list: `(1)` against `1.`, and `1.1`
-against anything else, is each look's own call.
+read the key. `affiliation`'s second is the superscript a marker is rendered as, which no
+look can carry while printing the names alone. Each pair leaves the *format* off the list:
+`(1)` against `1.`, `1.1` against anything else, and how far beneath the names an
+affiliation sits, is each look's own call.
+
+`author` and `affiliation` cross as Typst *arrays* — `author`'s elements as `(name: "…", markers:
+(…))` dictionaries, through `core/src/emit.rs:typst_authors_or_none` and
+`core/src/emit.rs:typst_affiliations_or_none`, neither of them
+`core/src/emit.rs:typst_string_or_none`, which renders one literal from an `Option<&str>`.
+`core/src/emit.rs:typst_array` gives a one-element array its trailing comma, because `("Iva Po")`
+is a parenthesized string and not an array at all, and an absent key crosses as `none` rather than
+`()`, because both looks guard the title block on the keys being `none`. What crosses is the
+relation and never the typography: joining the names into one string here would hand a look a
+rendered decision it is supposed to make.
 
 Both looks answer `equations` with
 `set math.equation(numbering: if equations == "numbered" { "(1)" } else { none })`, at the
@@ -938,17 +983,27 @@ the source could be.
 
 The article's title block uses `place(scope: "parent", float: true)`, which lifts it out of
 the column grid so it spans the page; Typst supports that scope only together with `float`.
-The date sets beneath the author. The press release sets its dateline above a flush-left
-title, over a `divider` rule, and runs in one column. Either look omits its title block when
-`title`, `author` and `date` are all absent — the date joins that test, because a key the
-author wrote that reached no page would vanish.
+The authors run on one line, comma-separated, each name carrying its markers as one `super()`; the
+affiliations set directly beneath them, one to a line, each behind the number that points at it;
+the date sets beneath the block. The press release sets its dateline above a flush-left title over
+a `divider`, in one column, so its masthead reads date, title, authors, affiliations. Either look
+omits its title block when `title`, `author`, `affiliation` and `date` are all absent — each joins
+that test, because a key the author wrote that reached no page would vanish.
+
+**Whether a marker reaches the page is the look's, read off the data rather than off a key.** Both
+compute it the same way, `author.any(one => one.markers.len() > 0)`, and apply the one answer to
+the names and the affiliations together, so a one-affiliation document that wrote no marker prints
+none rather than a `¹` for a relation its author did not need to state. Each look answers the
+typography for itself — the article sets its affiliations italic, the press release upright, the
+byline above them being already italic there.
 
 **How far apart that block sets its lines is a value, and no needle pins it** — the rule that
 keeps a caption's separator and a listing's inset off the needle lists. Each look picks its
-own: a `v()` per join in the article, `above:` on the press release's author block, which
-sits there because the title block's `below:` also governs a title-only document's gap to its
-`divider`. Lowering either would put the author back into the title's descenders and nothing
-in the suite would say so. The joins are read by hand, with `pdftotext -bbox`, and they are
+own: a `v()` per run in the article, carried on the run rather than on its index since which
+of the four are present varies, and `above:` on each of the press release's author and
+affiliation blocks, which sits there because the title block's `below:` also governs a
+title-only document's gap to its `divider`. Lowering any of them would put one run back into
+the descenders of the one above and nothing in the suite would say so. The joins are read by hand, with `pdftotext -bbox`, and they are
 the joins *between* keys: a wrapping headline sets its own two lines tighter, deliberately.
 
 Both looks carry `show table.cell.where(y: 0): strong`, which sets a table's header row in

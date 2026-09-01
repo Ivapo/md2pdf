@@ -252,8 +252,9 @@
               if marked { [#super(str(index))#name] } else { [#name] }
             }).join(linebreak()))))
         }
-        // The date sits under the block, set smaller. It is typeset exactly as
-        // the author wrote it.
+        // The date sits under the block, beneath the affiliations where a
+        // document carries them, set smaller. It is typeset exactly as the
+        // author wrote it.
         if date != none {
           written.push((0.9em, text(size: 10pt, date)))
         }

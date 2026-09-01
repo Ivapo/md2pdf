@@ -25,13 +25,13 @@ this folder reaches outside it — the bibliography sits beside this file and th
 four figures beside the sections that draw them, which is the only shape a path
 may take. A document and the files it names travel as one folder.
 
-## The frontmatter, all nine keys
+## The frontmatter, nine of the ten keys
 
-The block at the top of this file carries every key there is, and all nine are
-optional. Delete the whole block and the PDF still compiles: it arrives with no
-title block, two columns, no numbers on anything, and no reference list.
+The block at the top of this file carries nine of the ten, and all ten are
+optional. The tenth is `affiliation`, which samples/authors.md carries instead.
+Delete the whole block and the PDF still compiles, with no title block at all.
 
-`title`, `author` and `date` become the block at the top of the first page.
+`title`, `author` and `date` become the block at the top of the first page, and
 `date` is your text and nothing else — md2pdf never reads a clock, so this file
 makes the same PDF on every machine and on any day.
 

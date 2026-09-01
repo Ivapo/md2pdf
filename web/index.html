@@ -413,17 +413,20 @@ a page is what markdown has never had.
 
 <div class="row">
 <div class="head">
-<h3>Eight frontmatter keys decide the look</h3>
+<h3>Nine frontmatter keys decide the look</h3>
 <button type="button" class="load" disabled>load it ▸</button>
 </div>
 <p class="says">A leading <code>---</code> block picks one of two looks, one or two
-columns, and whether display formulas are numbered. <code>date</code> is your text and
-nothing else — <code>md2pdf</code> never reads a clock.</p>
+columns, and whether display formulas are numbered. <code>author</code> takes several names
+separated by <code>;</code>, and a <code>^</code> after one points at an
+<code>affiliation</code>. <code>date</code> is your text and nothing else —
+<code>md2pdf</code> never reads a clock.</p>
 <div class="cols">
   <div class="col"><span class="cap">md2pdf</span>
 <script type="text/markdown" data-example="frontmatter" data-expect="ok">---
 title: A Minimal Example
-author: Iva Po
+author: Iva Po^1; Someone Else^2
+affiliation: Anthropic, San Francisco; MIT, Cambridge
 date: 10 August 2026
 template: article
 columns: 1
@@ -474,7 +477,7 @@ reader's eye already is.</p>
 <h3>A citation earns a reference list</h3>
 <button type="button" class="load" disabled>load it ▸</button>
 </div>
-<p class="says">A ninth frontmatter key names a bibliography — a Hayagriva
+<p class="says">A tenth frontmatter key names a bibliography — a Hayagriva
 <code>.yml</code> or a BibLaTeX <code>.bib</code>, the file you already have — and
 <code>[@key]</code> cites it. This page carries one: <code>refs.yml</code>, beside the
 diagram.</p>

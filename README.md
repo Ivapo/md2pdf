@@ -40,8 +40,8 @@ anywhere, and there is no server to send it to.
 
 Locally, **`samples/showcase/` is one document that uses every construct in the dialect** —
 every inline and block form, captions, groups, names and cross-references, both forms of
-math, footnotes, and citations against the fake bibliography beside it, under all nine
-frontmatter keys, and written across six files because that is a construct too. It is the
+math, footnotes, and citations against the fake bibliography beside it, under nine of the
+ten frontmatter keys, and written across six files because that is a construct too. It is the
 fastest way to see the whole surface set on a page:
 
 ```console
@@ -731,12 +731,13 @@ bibliography that does not parse, and one whose extension is neither `.yml`, `.y
 
 ## Frontmatter
 
-A leading `---` block controls the layout. It takes nine keys, all optional:
+A leading `---` block controls the layout. It takes ten keys, all optional:
 
 ```markdown
 ---
 title: A Minimal Example
-author: Iva Po
+author: Iva Po^1; Someone Else^2      # ';' separates them, '^' points at an affiliation
+affiliation: Anthropic; MIT           # ';' separates them too
 date: 10 August 2026        # a free string, typeset as you wrote it
 template: article           # article or press-release
 columns: 1                  # 1 or 2
@@ -751,11 +752,27 @@ bibliography: refs.yml      # a Hayagriva .yml/.yaml or BibLaTeX .bib file
 
 | Name | The look | Columns without a `columns` key |
 | --- | --- | :---: |
-| `article` | the default: a centred title block, and the date under the author | 2 |
+| `article` | the default: a centred title block, the affiliations under the authors | 2 |
 | `press-release` | a dateline above a flush-left title, over a rule | 1 |
 
 Each look brings its own column count, so a press release is a single column without
 saying so. A `columns` key of your own beats it.
+
+`author` takes several names, separated by `;` — never a comma, because `Po, Iva` is an
+ordinary way to write one person's name. A `^` after a name points at an `affiliation`, and
+`affiliation` is a `;`-separated list too, numbered from 1 in the order you wrote it:
+
+```markdown
+author: Iva Po^1; Someone Else^2; A Third Person^1, 2
+affiliation: Anthropic, San Francisco; MIT, Cambridge
+```
+
+There is no `authors` and no `affiliations` — one key, several values. With exactly **one**
+affiliation you may leave the markers out and every author belongs to it; from two up, an
+`affiliation` nobody points at is an error. So is a marker pointing at an affiliation you
+did not write, a marker that is not a number, and an empty entry in either list. An author
+with no marker beside authors that have one is fine: a fourth author from no lab is a real
+document.
 
 `date` is your text and nothing else. `md2pdf` never reads a clock, so the same file
 makes the same PDF on every machine and on any day.
@@ -785,10 +802,10 @@ nothing gets no heading numbers and reads exactly as it did before. There is no 
 two numbering keys compose: under `figures: sectioned` and `headings: 2` a document reads
 *1.1 Background* and *Table 1.2* on the same page.
 
-Without `title`, `author` and `date` together, the PDF gets no title block. Without the
-frontmatter altogether, it gets every default.
+Without `title`, `author`, `affiliation` and `date` together, the PDF gets no title block.
+Without the frontmatter altogether, it gets every default.
 
-A key outside the nine, a `columns` value other than `1` or `2`, or a `template`,
+A key outside the ten, a `columns` value other than `1` or `2`, or a `template`,
 `equations`, `figures` or `headings` value outside its set, is an error that names the key
 and its line:
 
@@ -813,8 +830,11 @@ the emitter do not need to know.
 
 A third look is a third `.typ` file plus one name in `core/src/frontmatter.rs`. It has one
 contract to meet: export `template` and `divider`, and let `template` take `title`,
-`author`, `columns`, `date`, `equations`, `figures` and `headings` before its trailing
-document argument. `md2pdf` names all seven on every call.
+`author`, `affiliation`, `columns`, `date`, `equations`, `figures` and `headings` before its
+trailing document argument. `md2pdf` names all eight on every call. `author` arrives as an
+array of `(name, markers)` dictionaries and `affiliation` as an array of strings: what
+crosses is the relation between the two lists, and every question of how it looks — that a
+marker is a superscript, that the names run on one line — is the look's own.
 
 Everything else a look decides, it decides over Typst's own elements with `show` and `set`
 rules, taking no argument at all. A table's header row, a code block's font, a figure's

@@ -16,11 +16,12 @@ it again, and the same text runs across the full width of the page instead.
 
 # What the frontmatter controls
 
-The block at the top of this file carries four of the eight keys, and all
-eight are optional. The title and the author become the block centred at the top of
+The block at the top of this file carries four of the ten keys, and all
+ten are optional. The title and the author become the block centred at the top of
 the first page. That block spans every column, whatever the column count is,
 because it is placed outside the column grid rather than inside the first
-column. A date key joins them there, set beneath the author line.
+column. An affiliation key sets directly beneath the authors there, and a date
+key beneath the block.
 
 The template key picks the look, and takes article or press-release. This file
 names none, so it gets the article look you are reading. The press-release
@@ -36,12 +37,13 @@ is why the two display formulas further down carry a number each. Leave it out
 and you get plain, so nothing is numbered and the page reads as it did before
 the key existed. You decide whether; the look decides what a number looks like.
 
-The three keys this file leaves out are date, figures and bibliography. The
-document under samples/showcase names all eight at once, and uses every
-construct the dialect carries besides — including being written across several
-files, which this one is not.
+The six keys this file leaves out are affiliation, date, template, figures,
+headings and bibliography. The document under samples/showcase names nine of the
+ten at once, and uses every construct the dialect carries besides — including
+being written across several files, which this one is not; the file beside this
+one, samples/authors.md, carries the tenth.
 
-A key outside those eight is an error rather than a silent omission. So is a
+A key outside those ten is an error rather than a silent omission. So is a
 columns value of 3, a template name outside the two, and an equations or
 figures name outside its own two. The tool names
 the key and the line, and exits with code 1, because a PDF that quietly

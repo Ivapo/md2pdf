@@ -60,7 +60,7 @@ phases:
     by: null
   - name: "Phase 11 — several authors, and the affiliation each belongs to"
     reviewed: 2026-08-31
-    shipped: null
+    shipped: 2026-08-31
     cut: null
     by: null
 

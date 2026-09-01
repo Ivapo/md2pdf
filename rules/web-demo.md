@@ -123,7 +123,7 @@ check here.
 The page carries three groups and **twelve examples**: syntax an ordinary renderer passes
 through as text (a caption over a table, over a listing and over an image, a `:::` group, a
 `{#name}` and the `[](#name)` that points at it, display math), things markdown has no way
-to say (the eight frontmatter keys that decide the look, a footnote, a citation and the
+to say (the nine frontmatter keys that decide the look, a footnote, a citation and the
 reference list it earns), and three refusals — raw HTML, a task list, and a LaTeX command
 off the accepted list. Twenty-three constructs are supported, so the page is a chosen few
 and links out to the README for the rest.
