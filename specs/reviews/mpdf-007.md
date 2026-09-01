@@ -2,6 +2,126 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 5 only — 2026-09-01 — the same three lenses, resumed — **READY**
+
+Verdict: `READY` from all three, zero blocking. **Converged at round three, at the cap.**
+Phase 5's `reviewed` is set to 2026-09-01; `status` was already `accepted`.
+
+**Both round-2 blockers verified resolved against the files.** The hash set is the two
+citation fixtures, one per look, both unchanged sources under this phase — gate (1) keeps the
+new records in `author_date.yml` for exactly that reason — and the two wrong builds are
+covered from both sides: a look writing `harvard-cite-them-right` unconditionally moves the
+numeric page and fails the hash, a look writing `"ieee"` unconditionally fails the contract
+test's needle pair. The four citation refusals count the same in the scope, gate (3), the
+`rules/pipeline.md` paragraph and the README paragraph.
+
+**Re-derived once more and unchanged**: the widened census — `[+@` nowhere, `[-@` only at
+the README's refusal sentence and the two test tables; the `samples/article.md` phrases,
+three of which wrap and were found with a multiline scan; `golden_test.rs`'s "the call
+contract stays at eight" beside "Neither is a ninth parameter", which the phase falsifies
+outright and names; 32 / 34 / 48; `1 1` on twenty-eight rows; 31 / 46 / 85; the single
+inherited lint warning.
+
+One non-blocking folded: "the two Pandoc forms it lists" tightened to "two of the three",
+since the locator stays.
+
+**What this episode's record is for.** Round 1's five blockers were all enumeration gaps —
+a test tree hidden behind a true "untouched" sentence, a gate demanding what the scope never
+built, a look no case exercised, count sentences in files the phase edits anyway, and a
+close-out that contradicted itself on a count. Round 2's two were both introduced by round
+1's folds: merging a group into the showcase made its hash undiscriminating, and adding a
+fourth refusal kind left one of two close-out paragraphs on the old count. **A fix can
+introduce a blocker**, which the loop file says in so many words, and both times the lens
+that had not proposed the fix was the one that caught it.
+
+### Round 2 — Phase 5 only — 2026-09-01 — the same three lenses, resumed with the author's changelog — **NOT READY**
+
+Verdict: correctness `READY`, exit-gate `NOT READY`, consistency `NOT READY`, one new blocker
+each. **All five round-1 blockers verified resolved against the files by all three.**
+
+**Blocker 6, exit-gate: gate (2)'s showcase hash could not pass on a correct build.** The
+phase moves the showcase's *content* — the textual mark, the merged group, the reworded
+sentence — so its page differs whatever the look does, and the hash fails right and wrong
+builds alike. Latent in round 1, made certain by the merge fold, and the reviewer said so.
+Folded: the showcase leaves the hash set; the two citation fixtures, unchanged sources one
+per look, carry the promise, which is what the `rules/pipeline.md` method hashes anyway.
+
+**Blocker 7, consistency: the README close-out recounted "Eight things are errors" to seven
+while the scope and the `rules/pipeline.md` paragraph count the not-a-key refusal as a
+fourth kind** — the two close-out paragraphs disagreed with each other. The correctness
+lens raised the same as non-blocking. Folded: eight and four, the two Pandoc forms replaced
+by `[+@a; @b]` and `[@a; b]`.
+
+Non-blocking, folded: `samples/article.md`'s "all ten are optional", "A key outside those
+ten" and "an equations or figures name outside its own two", and `golden_test.rs`'s "the
+call contract stays at eight", named; §2's census widened to `core/tests/` and `cli/tests/`,
+which step 1 already relied on.
+
+Numbers the panel re-derived: `git show --numstat 2bcb441` is twenty-eight rows of `1 1` and
+one added file; `grep -n '^#' samples/showcase/showcase.md` returns exactly 31, 46, 85; the
+new parse order traces through today's error precedence, `cite_key` raising inside the walk
+before `check_citations` runs after it, so the CLI's `[+@a; @b]` row fails on the right
+needle. **A note that is not a finding**: the working tree carries an uncommitted edit to
+`samples/showcase/sections/mathematics.md` that is not this phase's; measured through the
+built binary, its PDF is six pages and byte-identical, so it does not move gate (5)'s
+baseline.
+
+### Round 1 — Phase 5 only — 2026-09-01 — three fresh lenses (correctness/grounding, exit-gate testability, cross-file consistency) — **NOT READY**
+
+Verdict: `NOT READY` from all three. **Round 0, asked once for this episode: yes.** The
+observable is the typeset PDF; today a document can write only the parenthetical mark, and
+after this phase a sentence reads "Postigo (2026)" and a parenthesis "(Claude and Knuth,
+2025)", with the list alphabetical. The warrant is a reader arriving from natbib who cannot
+cite inside a sentence at all, plus an open question this spec had carried since Phase 1.
+
+**Five blockers, deduplicated across the lenses; every one accepted and none rejected.**
+
+1. **A third site asserts the two refusals the phase inverts**, and all three lenses found
+   it: `cli/tests/cli_test.rs:each_refused_citation_exits_non_zero_and_names_its_payload`
+   drives `[@a; @b]` and `[-@k]` through the binary and asserts their sentences on stderr.
+   "`cli/src` untouched" is true and hid `cli/tests`, the shape Phase 4's round 1 blocked on
+   one directory over. Folded into step 1, scope and gate (3): the multi-key row becomes
+   `[+@a; @b]` with the new needle, the suppressed-author row leaves, the doc comment moves.
+2. **Gate (5) asked the showcase for a merged parenthesis the scope never put there**
+   (correctness, exit-gate). The section's four citations are each separated by prose, so
+   nothing merged. Folded: two adjacent citations become one `[@a; @b]` group.
+3. **The press-release look was never asserted under `author-date`** (exit-gate): the
+   fixture is article, the hash is numeric, the showcase is article, so a look setting
+   `"ieee"` unconditionally passed every case. Folded: the contract test gains a pair of
+   needles per look — the `citations` parameter and `harvard-cite-them-right` — on that
+   test's own recorded rule that a parameter alone is satisfied by a look that ignores it.
+4. **Eight "ten keys" sentences across the showcase, its README and `samples/article.md`
+   were unnamed, and `[32, 47, 86]` was derived on an assumption the fold itself breaks**
+   (consistency): the showcase's frontmatter section describes every key, so it gains a
+   paragraph, and the third heading moves by more than one line. Folded: every sentence
+   named by its words on `mpdf-001`'s tenth-key precedent, and the literal is re-read off the
+   edited file with `grep -n '^#'` rather than derived.
+5. **The close-out contradicted itself on the constructs count** (consistency): "falls a
+   further one behind" against a `rules/pipeline.md` list that was not named. Folded: the
+   count does not move — a form of a construct is not a construct, and a key was never
+   counted — so the lede stays three behind, and the two rule sentences are named as true.
+
+**Non-blocking, all folded.** The "`-@` is not decoration" sentence re-attributed from
+`cite_key` to `citation_reference`; `cite_key`'s parse given an order so no piece is guessed
+— a `,` first, then the sigil, then the split, each piece non-empty and beginning `@`, with
+`[@a; b]` joining the refusal table; the forty-eight re-keyed to `golden_test.rs` with
+`messages_test.rs` named as where it is recorded, and the no-bibliography `[+@k]` row sent
+to the existing table so the count holds; gate (4)'s documents name a bibliography;
+`git diff --numstat -- tests/golden` as the "nowhere else" instrument; the hand-measure
+precedent cited to `rules/pipeline.md` rather than to phases this spec does not have; the
+bibliography fixture renamed `author_date.yml` away from the unrelated `authors.md`;
+"re-blessed twenty-nine" corrected to twenty-eight and one added; three further
+`rules/pipeline.md` sentences, both looks' header comments, `citation_reference`'s and
+`header`'s docs, five test doc comments, the README's "Eight things are errors" and its
+refused-values list, the web page's "Nine frontmatter keys" heading, and dated notes on
+both "nothing else" sentences. **One left standing**: §1's "with numbered marks in the body"
+describes Phase 1's instance and stays true under the default.
+
+Numbers the panel re-derived, all unchanged: 32 `_matches_its_golden_file`, 34 goldens all
+carrying `template.with`, 48 `Err(Error::` sites in `golden_test.rs`, headings at 31/46/85
+under a twelve-line frontmatter, 1140 text items, `rules/pipeline.md` at 1209/1215, and 29
+golden files in `mpdf-005` Phase 8's `2bcb441`.
+
 ### Round 2 — Phase 4 only — 2026-08-23 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, three non-blocking, all three folded. Converged in two
