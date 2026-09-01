@@ -67,6 +67,7 @@ fn emit_typst_prints_the_golden_file() {
         ("equation_names.md", "equation_names.typ"),
         ("plain_equation_names.md", "plain_equation_names.typ"),
         ("groups.md", "groups.typ"),
+        ("abstract.md", "abstract.typ"),
         ("sectioned_figures.md", "sectioned_figures.typ"),
         ("numbered_headings.md", "numbered_headings.typ"),
         ("table.md", "table.typ"),

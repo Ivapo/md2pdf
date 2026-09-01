@@ -4,9 +4,11 @@
 //! nothing was watching.** `mpdf-008` gave every line-carrying variant a
 //! `Location` so a message could name the file the author wrote it in, and a
 //! document that names no section must still print, character for character, the
-//! sentence it printed before that type existed. Forty-three assertions in
-//! `golden_test.rs` reach these variants and every one of them destructures the
-//! fields — none produces a `Display` string at all — so before this file the
+//! sentence it printed before that type existed. **Forty-six** places in
+//! `golden_test.rs` — `grep -c "Err(Error::"`, the instrument written down so a
+//! later reader re-derives the number rather than trusting it — reach these
+//! variants, and every one of them destructures the fields — none produces a
+//! `Display` string at all — so before this file the
 //! repo's only byte-exact `Display` assertion was
 //! `page_examples_test.rs:every_refusal_prints_the_sentence_beside_it`, which
 //! covers three rows across two of the nine.

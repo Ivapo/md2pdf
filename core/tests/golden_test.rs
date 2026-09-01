@@ -75,6 +75,16 @@ const AUTHORS_MD: &str = include_str!("../../tests/fixtures/authors.md");
 const AUTHORS_TYP: &str = include_str!("../../tests/golden/authors.typ");
 const ONE_AFFILIATION_MD: &str = include_str!("../../tests/fixtures/one_affiliation.md");
 const ORPHAN_MARKERS_MD: &str = include_str!("../../tests/fixtures/orphan_markers.md");
+const ABSTRACT_MD: &str = include_str!("../../tests/fixtures/abstract.md");
+const ABSTRACT_TYP: &str = include_str!("../../tests/golden/abstract.typ");
+/// A master whose first named section is the whole of the abstract.
+///
+/// The case no single-file fixture can state: "first" is first in the joined
+/// stream, so a first-block test written against the master rather than against
+/// what `mpdf-008` joined would refuse this document.
+const ABSTRACT_SECTIONS_MD: &str = include_str!("../../tests/fixtures/abstract_sections.md");
+const SECTION_ABSTRACT_MD: &str = include_str!("../../tests/fixtures/sections/abstract.md");
+const SECTION_INTRO_MD: &str = include_str!("../../tests/fixtures/sections/intro.md");
 
 /// Every bundled look, by the name the `template` key selects it with. **Six
 /// tests read these**: the call contract `mpdf-001` Phase 9 fixed, and the five
@@ -1442,10 +1452,19 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 
 /// Every bundled look meets the call contract the emitter writes.
 ///
-/// `header` names all eight arguments on every call and imports both names, so a
-/// look missing one would fail the compile with an error naming neither the
-/// document nor the key. Golden files pin emitter output only, so the
-/// templates' side of the contract needs an artifact of its own.
+/// `header` names all eight arguments on every call, and imports two of the
+/// three exported names on every document and the third on a document that
+/// opened an abstract, so a look missing one would fail the compile with an
+/// error naming neither the document nor the key. Golden files pin emitter
+/// output only, so the templates' side of the contract needs an artifact of its
+/// own.
+///
+/// **`abstract` joins the export needles rather than taking a test of its own**,
+/// where a caption, a gutter and a listing's inset each took one: those are
+/// `show` rules crossing no argument, and this is a name the import line names.
+/// It is *not* a ninth parameter — the call contract stays at eight — and what
+/// the label looks like, and whether a look sets one at all, is each look's own
+/// call, which is why the word `Abstract` is deliberately not a needle.
 ///
 /// `equations` brings a second needle with it, `math.equation`: the parameter
 /// alone would be satisfied by a look that took the argument and ignored it,
@@ -1487,6 +1506,7 @@ fn every_bundled_template_meets_the_call_contract() {
         for needle in [
             "#let template(",
             "#let divider(",
+            "#let abstract(",
             "title:",
             "author:",
             "affiliation",
@@ -4879,4 +4899,255 @@ fn markers_with_nothing_to_point_at_are_cleared() {
 
     let pdf = md_to_pdf(ORPHAN_MARKERS_MD, &[]).unwrap();
     assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+// -- mpdf-005 Phase 10: the abstract a paper opens with ----------------------
+
+/// The fixture matches its golden, and the golden carries the widened import.
+///
+/// The import is the load-bearing half. `header` names `abstract` only for a
+/// document that opened one, which is what keeps every shipped golden file
+/// byte-identical — the suite reads all thirty of them, so an implementation
+/// that widened it unconditionally fails here and there at once.
+#[test]
+fn the_abstract_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(ABSTRACT_MD, &[]).unwrap(), ABSTRACT_TYP);
+    assert!(
+        ABSTRACT_TYP.starts_with("#import \"template.typ\": template, divider, abstract\n"),
+        "the golden does not carry the widened import line"
+    );
+    // Two paragraphs and one call over both of them: the block collects what
+    // stands between the delimiters rather than only the first block of it.
+    assert_eq!(
+        ABSTRACT_TYP.matches("#abstract[").count(),
+        1,
+        "the golden does not carry exactly one abstract"
+    );
+}
+
+#[test]
+fn the_abstract_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(ABSTRACT_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// The abstract takes no number and withdraws no anchor.
+///
+/// **This is the case that fails a look spelling the label as a `heading`**, and
+/// the only one that does: the string `Abstract` is on the page either way, so
+/// the read-by-eye case passes such a look too. `anchors_from` returns an empty
+/// vector on any mismatch between the headings the walk counted and the headings
+/// the compiled document carries — silently, by design — so one heading the
+/// markdown never wrote withdraws every anchor in the document and takes the
+/// desktop pane's scroll sync with it.
+///
+/// The fixture's `figures: sectioned` and `headings: 2` are what make the other
+/// half of that defect visible, read by eye once: its `#` heading sets `1` and
+/// its captioned table `Table 1.1`, where a heading-shaped label sets `2` and
+/// `Table 2.1`.
+#[test]
+fn an_abstract_withdraws_no_heading_anchor() {
+    let rendered = md_to_pdf_with_anchors(ABSTRACT_MD, &[]).unwrap();
+    assert_eq!(
+        rendered.anchors.len(),
+        1,
+        "the abstract moved the heading count: {:?}",
+        rendered.anchors
+    );
+}
+
+/// An abstract may be a section file of its own.
+///
+/// `mpdf-008` joins before the walk begins, so the first block of the document
+/// is the first block of the *stream* and a section file carrying nothing else
+/// is where an abstract most naturally lives. This is the case a first-block
+/// test written against the master would refuse.
+#[test]
+fn an_abstract_may_be_written_in_its_own_section_file() {
+    let sections = vec![
+        section("sections/abstract.md", SECTION_ABSTRACT_MD),
+        section("sections/intro.md", SECTION_INTRO_MD),
+    ];
+    let source = md_to_typst(ABSTRACT_SECTIONS_MD, &sections).unwrap();
+    assert!(
+        source.contains("#abstract["),
+        "the abstract did not survive the join: {source}"
+    );
+
+    let pdf = md_to_pdf(ABSTRACT_SECTIONS_MD, &sections).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// Every abstract refusal names its construct and its line.
+///
+/// **Sixteen rows over eight refusals and one message.** The arithmetic is the
+/// eight, plus two more for the frame refusal, one more for the not-first-block
+/// one, the three pairings the nesting message covers, and one each for the two
+/// refusals whose second half is a construct of its own rather than a second
+/// spelling — the image, which the block guard cannot see, and the citation.
+///
+/// **The three frame rows do not fail independently, and that is not what makes
+/// them three.** A list item and a block quote both fail `bufs.len() == 1`; only
+/// the footnote definition reaches `Mode::Document`. The row is right because an
+/// implementation carrying the first two conditions alone passes it **by
+/// compiling**, which is the strongest discrimination available and does not
+/// depend on what literal the implementation chose.
+///
+/// **The footnote row's definition must be cited.** `Notes::enter` refuses an
+/// uncited definition with its own message *before* the stored error is
+/// re-raised, so a row whose `[^1]` is never referenced asserts
+/// `footnote definition that no reference cites` instead — measured, not
+/// assumed.
+///
+/// **The not-first-block row is asserted twice** and the two do not differ in
+/// mechanism: `step`'s heading arm pushes its newline, `=`s and space at
+/// `Start`, so a content check catches the heading exactly as it catches the
+/// paragraph. They are kept because they are free; the frame rows are the ones
+/// that discriminate.
+#[test]
+fn each_abstract_refusal_names_its_construct_and_its_line() {
+    for (md, construct, line, what) in [
+        (
+            "::: abstract\n\nOne.\n\n:::\n\n::: abstract\n\nTwo.\n\n:::\n",
+            "second abstract in one document",
+            7,
+            "a second abstract in one document",
+        ),
+        (
+            "Body.\n\n::: abstract\n\nOne.\n\n:::\n",
+            "abstract that is not the document's first block",
+            3,
+            "an abstract under a paragraph",
+        ),
+        (
+            "# H\n\n::: abstract\n\nOne.\n\n:::\n",
+            "abstract that is not the document's first block",
+            3,
+            "an abstract under a heading",
+        ),
+        (
+            "- ::: abstract\n\n  One.\n\n  :::\n",
+            "abstract inside a list item, a block quote or a footnote definition",
+            1,
+            "an abstract inside a list item, whose frame is empty where the document's is not",
+        ),
+        (
+            "> ::: abstract\n>\n> One.\n>\n> :::\n",
+            "abstract inside a list item, a block quote or a footnote definition",
+            1,
+            "an abstract inside a block quote, on the same frame reasoning",
+        ),
+        (
+            "A note.[^1]\n\n[^1]: The note.\n\n    ::: abstract\n\n    One.\n\n    :::\n",
+            "abstract inside a list item, a block quote or a footnote definition",
+            5,
+            "an abstract inside a cited footnote definition, which a frame test alone admits",
+        ),
+        (
+            "::: abstract\n\nOne.\n\n## Nope\n\n:::\n",
+            "block inside an abstract that is not a paragraph",
+            5,
+            "a heading inside an abstract",
+        ),
+        (
+            "::: abstract\n\n![a](dot.png)\n\n:::\n",
+            "image inside an abstract",
+            3,
+            "a standalone image, which is a paragraph at the event level",
+        ),
+        (
+            "::: abstract\n\n$$a^2$$\n\n:::\n",
+            "display equation inside an abstract",
+            3,
+            "a display equation, which is an inline event inside a paragraph",
+        ),
+        (
+            "::: abstract\n\nAs [@key] says.\n\n:::\n",
+            "citation inside an abstract",
+            3,
+            "a citation, which is inline text",
+        ),
+        (
+            "::: abstract\n\n:::\n",
+            "abstract with no text",
+            1,
+            "an empty abstract, which would set a label over nothing",
+        ),
+        (
+            "::: abstract\n\n: A caption.\n\n:::\n",
+            "caption line inside an abstract",
+            3,
+            "a `: ` line inside an abstract, which has nowhere to put one",
+        ),
+        (
+            "::: abstract\n\nOne.\n",
+            "abstract the document never closes",
+            1,
+            "an abstract the document never closes, told about an abstract",
+        ),
+        (
+            ":::\n\n![a](dot.png)\n\n::: abstract\n\n:::\n",
+            "abstract inside a figure group",
+            5,
+            "an abstract opened inside a group",
+        ),
+        (
+            "::: abstract\n\nOne.\n\n::: table\n\n:::\n",
+            "figure group inside an abstract",
+            5,
+            "a group opened inside an abstract",
+        ),
+        (
+            "::: abstract\n\nOne.\n\n::: abstract\n\n:::\n",
+            "abstract inside an abstract",
+            5,
+            "an abstract opened inside an abstract, which is nesting and not a second one",
+        ),
+    ] {
+        match md_to_typst(md, &[]) {
+            Err(Error::UnsupportedConstruct {
+                construct: found,
+                location:
+                    Location {
+                        file: None,
+                        line: found_line,
+                    },
+            }) => {
+                assert_eq!(found, construct, "for {what}");
+                assert_eq!(found_line, line, "for {what}");
+            }
+            other => panic!("expected `{construct}` for {what}, got {other:?}"),
+        }
+    }
+}
+
+/// The reservation is one word, and the marker's other positions are unmoved.
+///
+/// **`abstract` is the only word the dialect reads.** Every other one still
+/// opens the figure group it always did, which is what holds the narrowing to
+/// the single word the census found unused — and a `: ` line standing where
+/// nothing captionable does is still the ordinary prose it has been since
+/// Phase 1, now with an abstract above it.
+#[test]
+fn the_dialect_reads_one_word_and_leaves_the_rest_alone() {
+    let group = md_to_typst(
+        "::: table\n\n![a](dot.png)\n\n![b](dot.png)\n\n: Two tables' worth.\n\n:::\n",
+        &[],
+    )
+    .unwrap();
+    assert!(
+        group.contains("#figure(grid(columns: 2,"),
+        "a word the dialect does not read stopped opening a group: {group}"
+    );
+    assert!(
+        !group.contains("abstract"),
+        "a group grew an abstract: {group}"
+    );
+
+    let after = md_to_typst("::: abstract\n\nOne.\n\n:::\n\n: Just prose.\n", &[]).unwrap();
+    assert!(
+        after.ends_with(": Just prose.\n"),
+        "a `: ` line under no construct stopped being prose: {after}"
+    );
 }
