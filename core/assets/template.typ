@@ -200,8 +200,16 @@
   // A document with none of the four keys gets no title block at all. The date
   // and the affiliations join that test for the same reason: a key the author
   // wrote that reached no page would vanish, which is what the dialect refuses.
+  //
+  // **`clearance` was 1.6em and is 1.834em, and the reason is down-page from
+  // here**: it is the third of the three numbers that set the front matter's
+  // rhythm, and the only one that can lift the gap between this block and an
+  // abstract. Measured 2026-09-01, it puts 11.00 pt between the two, and 12.39 pt
+  // between this block and the body of a paper carrying no front-matter block at
+  // all, where 1.6em read 10.05. `#let abstract` below carries the working, since
+  // the three numbers are only legible together.
   if title != none or author != none or affiliation != none or date != none {
-    place(top + center, scope: "parent", float: true, clearance: 1.6em, {
+    place(top + center, scope: "parent", float: true, clearance: 1.834em, {
       set par(justify: false)
       align(center, {
         // Whether the markers reach the page at all, read off the data rather
@@ -319,20 +327,34 @@
 // 15.21 pt inside and 9.30 pt out — the same defect, mirrored. Equal values make
 // all four shapes read alike, and `keywords` below carries this same 1.6em.
 //
-// **1.6em is the title block's own clearance**, so the front matter runs on one
-// rhythm: 10.72 pt from the title block to the abstract, 11.66 pt from there to
-// the keywords, 10.30 pt out to the body. It was 2em, which put 15.66 pt inside
-// the front matter — the value having been tuned when the abstract was the last
-// block in the stack, and inherited unchanged when Phase 11 put another under it.
+// **The front matter is a header, so the gap inside it is the smallest of the
+// three.** Measured 2026-09-01: 11.00 pt from the title block to the first
+// front-matter block, 10.30 pt between the two of them, and 11.00 pt out to the
+// body. It read 10.72 / 11.66 / 10.30 when the two blocks merely shared a
+// clearance — the widest gap on the page sitting *inside* the thing that gap is
+// meant to bind together — and 10.72 / 15.66 / 14.30 before that.
 //
-// **What no static pair of values reaches is a boundary wider than the internal
-// gap**, which is worth writing down because it looks like arithmetic and is not:
-// the same clearance measures ~1.4 pt more to another float than to a body
-// heading, that being what a float's box and a heading's box leave above their
-// text. So with equal values the internal gap is always the slightly wider one.
-// 1.4 pt is invisible where the 5.4 pt this replaces was not. Going lower was
-// measured and refused: 1.5em puts the boundary at 9.30 pt and 1.2em at 7.66,
-// against the ~8 pt that read glued to the text when this was first tuned.
+// **Three gaps, three numbers, and none of the three is free of the others**,
+// which is why this is written out rather than left as tuned values. A float's
+// clearance is the gap below itself, so, in points:
+//
+//   title -> first  =  title clearance  -  the pull
+//   internal        =  this clearance   -  4.34  -  the pull
+//   -> body         =  this clearance   -  5.70
+//
+// The 4.34 and 5.70 are what a float's box and a heading's box leave above their
+// own text; their 1.36 pt difference is why **equal clearances can never put the
+// boundary above the internal gap**, and it is what the pull below exists to
+// beat. Read the other way, with the title block's clearance held still, asking
+// the boundary to exceed the internal gap by 0.70 pt *forces* the title gap to
+// 8.66 pt — not a preference but the only value left. Lifting it back to 11.00 is
+// what moved the title block's own clearance, and that number is spent on every
+// paper carrying no front matter at all: this look chose that knowingly, and the
+// title block's own comment records what it cost there.
+//
+// Going lower here was measured and refused: 1.5em puts the boundary at 9.30 pt
+// and 1.2em at 7.66, against the ~8 pt that read glued to the text when this was
+// first tuned.
 //
 // **The label is styled text and never a `heading`**, on the reference list's
 // own reasoning one section up and for one more reason besides: a heading here
@@ -344,13 +366,18 @@
   top + center,
   scope: "parent",
   float: true,
-  clearance: 1.6em,
+  clearance: 1.67em,
   block(width: 80%, {
     // `place(top + center)` sets the alignment its content inherits, so the
     // paragraphs would centre their last lines without this. The label is the
     // one thing here that is centred, and it says so.
     set align(left)
     set text(size: 9pt)
+    // **The pull, and it acts on the gap *above* this block only.** Shortening
+    // the content lifts its text and its own box bottom together, so whatever
+    // follows keeps the gap the clearance gave it. That is the one lever that
+    // separates two gaps a single clearance would otherwise set as one.
+    v(-2.06pt)
     block(width: 100%, above: 0em, below: 0.7em,
       align(center, text(size: 1.15em, weight: "bold", "Abstract")))
     body
@@ -383,12 +410,15 @@
   top + center,
   scope: "parent",
   float: true,
-  clearance: 1.6em,
+  clearance: 1.67em,
   block(width: 80%, {
     // `place(top + center)` sets the alignment its content inherits, so a
     // one-line list would centre itself without this.
     set align(left)
     set text(size: 9pt)
+    // The abstract's own pull, for the reason recorded there. Both blocks carry
+    // it, so which of the two the author wrote first changes nothing.
+    v(-2.06pt)
     text(weight: "bold", style: "italic", "Keywords: ")
     terms.join(", ")
   }),
