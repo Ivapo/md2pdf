@@ -8,6 +8,7 @@ columns: 1
 equations: numbered
 figures: sectioned
 headings: 2
+citations: author-date
 bibliography: refs.bib
 ---
 
@@ -43,10 +44,10 @@ this folder reaches outside it — the bibliography sits beside this file and th
 four figures beside the sections that draw them, which is the only shape a path
 may take. A document and the files it names travel as one folder.
 
-## The frontmatter, all ten keys
+## The frontmatter, all eleven keys
 
-The block at the top of this file carries every key there is, and all ten are
-optional. Delete the whole block and the PDF still compiles: it arrives with no
+The block at the top of this file carries every key there is, and all eleven
+are optional. Delete the whole block and the PDF still compiles: it arrives with no
 title block, two columns, no numbers on anything, and no reference list.
 
 `title`, `author`, `affiliation` and `date` become the block at the top of the
@@ -77,7 +78,15 @@ paragraph reads *1.1* and why the third-level headings under *Headings* carry
 no number at all. `bibliography` names the file the citations at the end are
 resolved against.
 
-You say *whether* in all four cases, and for `headings` you say *how deep* as
+`citations: author-date` makes every mark name its source rather than number
+it — *Arden and Vance (2021)* inside a sentence, *(Quill, 2019)* in a
+parenthesis — and sets the list at the end alphabetically, which is why the
+citations section reads the way it does. Leave the key out and you get
+`numeric`: the *[1]* an article usually carries, with the list in the order
+the marks were cited. Which author-date style that is belongs to the look, and
+the key never names one.
+
+You say *whether* in all five cases, and for `headings` you say *how deep* as
 well: there is no `headings: numbered`, because a depth is the part a yes-or-no
 key cannot say. The look says *how*: what a number looks like, what word stands
 before it, and what punctuation follows.

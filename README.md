@@ -41,7 +41,7 @@ anywhere, and there is no server to send it to.
 Locally, **`samples/showcase/` is one document that uses every construct in the dialect** —
 every inline and block form, the abstract it opens with and the keywords beside it, captions,
 groups, names and cross-references, both forms of math, footnotes, and citations against the
-fake bibliography beside it, under all ten frontmatter keys, and written across six files
+fake bibliography beside it, under all eleven frontmatter keys, and written across six files
 because that is a construct too. It is the fastest way to see the whole surface set on a page:
 
 ```console
@@ -785,8 +785,10 @@ reference does.
 
 ## Citing sources
 
-Name a bibliography file in the frontmatter and cite a key with `[@key]`. The reference
-list is set at the end of the document:
+Name a bibliography file in the frontmatter and cite a key with `[@key]` — or with
+`[+@key]` for a citation that reads in the sentence, `[-@key]` for the year alone, and
+`[@a; @b]` for two sources in one parenthesis. The reference list is set at the end of the
+document:
 
 ````markdown
 ---
@@ -810,8 +812,11 @@ directly:
   publisher: Addison-Wesley
 ```
 
-The mark and the numbering are Typst's, and the look decides what the label above the list
-says and how it is set. Nothing is fetched: no key is resolved against anything on the
+The marks are numbered, `[1]`, unless the frontmatter says `citations: author-date`, under
+which a sentence written `As [+@knuth1986] showed, the method holds [@lamport1994]` reads
+*As Knuth (1986) showed, the method holds (Lamport, 1994)* and the list is alphabetical.
+The mark is Typst's; the look decides which author-date style answers the key, and what
+the label above the list says and how it is set. Nothing is fetched: no key is resolved against anything on the
 network. The file is read for its keys before anything is typeset, so a key it does not
 hold is named where you cited it rather than reported by the compiler.
 
@@ -820,9 +825,11 @@ load-bearing in ordinary text — an email address is the everyday case — so `
 `@thing` reach the page as you typed them, and so do `[see @k]` and `[a@b.com]`.
 
 Eight things are errors, and each names the line you wrote it on. Four are about the
-citation: Pandoc's `[@a; @b]`, `[@k, p. 33]` and `[-@k]` are not in this dialect and are
-named rather than guessed at, and a citation in a document that names no bibliography is
-an error rather than text on the page:
+citation: Pandoc's locator `[@k, p. 33]` is not in this dialect and is named rather than
+guessed at; a form on a group, `[+@a; @b]`, is refused because a form names one source; a
+piece that is not a key, `[@a; b]`, is refused rather than written into the call; and a
+citation in a document that names no bibliography is an error rather than text on the
+page:
 
 ```
 error: citation error at line 7: '@smith2020' is cited and the frontmatter names no bibliography
@@ -849,7 +856,7 @@ bibliography that does not parse, and one whose extension is neither `.yml`, `.y
 
 ## Frontmatter
 
-A leading `---` block controls the layout. It takes ten keys, all optional:
+A leading `---` block controls the layout. It takes eleven keys, all optional:
 
 ```markdown
 ---
@@ -862,6 +869,7 @@ columns: 1                  # 1 or 2
 equations: numbered         # numbered or plain
 figures: sectioned          # sectioned or flat
 headings: 2                 # plain, or a depth from 1 to 6
+citations: author-date      # numeric or author-date
 bibliography: refs.yml      # a Hayagriva .yml/.yaml or BibLaTeX .bib file
 ---
 ```
@@ -922,12 +930,18 @@ nothing gets no heading numbers and reads exactly as it did before. There is no 
 two numbering keys compose: under `figures: sectioned` and `headings: 2` a document reads
 *1.1 Background* and *Table 1.2* on the same page.
 
+`citations: author-date` makes every mark name its source — *Knuth (1986)* in a sentence,
+*(Knuth, 1986)* in a parenthesis — and sets the reference list alphabetically. `numeric`
+is the default, so a file that says nothing gets the `[1]` it always did, with the list in
+cited order. You say *whether* the marks name their authors; the look says *how* — which
+author-date style answers, and both bundled looks answer with Harvard cite-them-right.
+
 Without `title`, `author`, `affiliation` and `date` together, the PDF gets no title block.
 Without the frontmatter altogether, it gets every default.
 
-A key outside the ten, a `columns` value other than `1` or `2`, or a `template`,
-`equations`, `figures` or `headings` value outside its set, is an error that names the key
-and its line:
+A key outside the eleven, a `columns` value other than `1` or `2`, or a `template`,
+`equations`, `figures`, `headings` or `citations` value outside its set, is an error that
+names the key and its line:
 
 ```console
 $ md2pdf paper.md
@@ -950,9 +964,9 @@ the emitter do not need to know.
 
 A third look is a third `.typ` file plus one name in `core/src/frontmatter.rs`. It has one
 contract to meet: export `template`, `divider`, `abstract` and `keywords`, and let
-`template` take `title`, `author`, `affiliation`, `columns`, `date`, `equations`, `figures`
-and `headings` before its trailing document argument. `md2pdf` names all eight on every
-call, and imports `abstract` and `keywords` separately, each for a document that opened one.
+`template` take `title`, `author`, `affiliation`, `columns`, `date`, `equations`, `figures`,
+`headings` and `citations` before its trailing document argument. `md2pdf` names all nine on
+every call, and imports `abstract` and `keywords` separately, each for a document that opened one.
 `author` arrives as an
 array of `(name, markers)` dictionaries and `affiliation` as an array of strings: what
 crosses is the relation between the two lists, and every question of how it looks — that a
@@ -963,9 +977,10 @@ rules, taking no argument at all. A table's header row, a code block's font, a f
 caption, the space between a group's members and how far off the margin a block of code
 sits all reach a look that way — which is why neither a caption nor a group widened the
 call at all. Neither front-matter block does either: they are the third and fourth exported
-names beside `divider`, not a ninth and tenth argument. An argument is added only where the *author* has something to ask for, which is
-what `equations`, `figures` and `headings` are: the three questions a look cannot answer on
-its own, because the answer is a fact about the document rather than about the house style.
+names beside `divider`, not arguments. An argument is added only where the *author* has something to ask for, which is
+what `equations`, `figures`, `headings` and `citations` are: the four questions a look cannot
+answer on its own, because the answer is a fact about the document rather than about the
+house style.
 
 ## Licence
 

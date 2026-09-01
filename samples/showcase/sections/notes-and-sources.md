@@ -12,13 +12,18 @@ and in any of its files, and it may hold more than one paragraph[^long].
 ## Citations
 
 Name a bibliography in the frontmatter and cite a key with `[@key]`. The list
-at the end is set from the file, and the mark and the numbering are the
-typesetter's [@quill2019].
+at the end is set from the file, and the mark is the typesetter's: this
+document says `citations: author-date` at the top, so a mark names its source
+and the list runs alphabetically [@quill2019]. Leave the key out and the same
+sentence ends in a number in brackets, with the list in the order you cited.
 
-The brackets are required, because an unbracketed `@` is load-bearing in
-ordinary text. Markers and the documents that hold them have been argued over
-before [@arden2021], as has the business of numbering things that move
-[@olsson2023], and a caption is a subject of its own [@harlow2024].
+A citation may read in the sentence: `[+@key]` puts the name in the prose and
+the year in parentheses, so as [+@arden2021] argued, markers and the documents
+that hold them are worth arguing over. Two sources may share one parenthesis,
+with a `;` between their keys, which is how a caption as a subject of its own
+and the business of numbering things that move stand together here
+[@harlow2024; @olsson2023]. The brackets are required, because an unbracketed
+`@` is load-bearing in ordinary text.
 
 Nothing is fetched. No key is resolved against anything on the network, and the
 file is read for its keys before anything is typeset — so a key it does not

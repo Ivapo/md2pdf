@@ -50,8 +50,8 @@ covers: >
   asserts as properties and the twelve broken pages that falsify them, the second
   rig that drives the shipped binary instead and which of the three kinds of
   claim belongs where, and the seven defects none of them reaches
-max_lines: 720
-generated: 2026-08-28
+max_lines: 725
+generated: 2026-09-01
 ---
 
 # Desktop panes
@@ -133,10 +133,12 @@ not, so it rejects with *"undefined is not a function"* from inside the minified
 bundle, which names nothing useful. `TextLayer`'s constructor takes the stream
 itself and drives it with `getReader()` and `read()`, so handing it
 `page.streamTextContent()` obeys the rule by construction rather than by
-remembering it. The showcase carries 1140 text items across its six pages —
-re-measured 2026-09-01 through the vendored `app/dist/pdfjs/`, served with the PDF
-to a browser, which is the engine that produced the number. Nothing in
-`cargo test` reads it, so it is a phase that edits the showcase that moves it.
+remembering it. The showcase carries 1184 text items across its six pages —
+re-measured 2026-09-01 by `mpdf-007` Phase 5 through the vendored `app/dist/pdfjs/`,
+served with the PDF to a browser, which is the engine that produced the number; the
+unedited source read 1140 under both binaries, so the whole delta is that phase's
+showcase edit. Nothing in `cargo test` reads it, so it is a phase that edits the
+showcase that moves it.
 
 **Only a link carrying an internal destination is rendered**, filtered before the
 layer is built. An external one has no element, no `href` and nothing to
@@ -144,9 +146,13 @@ activate, so *refused* is something a second person can check rather than a
 behaviour observed not to happen — `mpdf-003` §1.1, no servers and no network,
 ever. The same filter needs no second rule for a markdown link *with text*
 pointing at a figure: it reaches the PDF as a `/URI`, `pdf.js` refuses it on its
-protocol, and it arrives with `url` and `dest` both null. The showcase's twenty
-internal links are seven cross-references *plus* the footnote marks, their return
-arrows and the citation marks, so the filter delivers a document navigable three
+protocol, and it arrives with `url` and `dest` both null. The showcase's sixteen
+internal links are seven cross-references *plus* the footnote marks and their return
+arrows: Typst attaches a citation's destination to the element its renderer tags as
+the entry, which a numeric `[1]` is and an author-date mark is not, so
+`citations: author-date` took the count from twenty when `mpdf-007` Phase 5 gave the
+showcase that key — measured 2026-09-01, four marks and four links fewer. Under
+`numeric` the marks link too, and the filter delivers a document navigable three
 ways rather than one.
 
 **The link service is three methods written here, not a port.**

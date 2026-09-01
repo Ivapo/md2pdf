@@ -31,7 +31,7 @@ phases:
     by: null
   - name: "Phase 5 — a citation reads in the sentence, and the marks may be author-date"
     reviewed: 2026-09-01
-    shipped: null
+    shipped: 2026-09-01
     cut: null
     by: null
 

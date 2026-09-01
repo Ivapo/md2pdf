@@ -22,8 +22,9 @@ covers: >
   the two words on an opener the dialect reads, the abstract one opens and the keywords
   the other does,
   the name a caption or a display equation declares and
-  the reference that points at it, the citation the broken-link callback claims, the
-  reference list it earns and the four ways the bibliography channel refuses,
+  the reference that points at it, the citation the broken-link callback claims and the
+  scheme its marks follow, the reference list it earns and the four ways the bibliography
+  channel refuses,
   the extension table the crate re-exports and why,
   the LaTeX subset a formula may hold and the prelude
   it compiles against, the bundled looks and the call contract they meet, the equation numbering
@@ -32,7 +33,7 @@ covers: >
   key carries and the affiliation each of their markers points at, the heading anchors a
   compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 1215
+max_lines: 1240
 generated: 2026-09-01
 ---
 
@@ -746,7 +747,7 @@ reference is a link only where a matching reference definition exists, and a cit
 has one, so without help `See [@smith2020] ok.` parses to five text runs and no `Tag::Link`
 at all. `core/src/emit.rs:parser` builds every walk with
 `Parser::new_with_broken_link_callback` over `core/src/emit.rs:citation_reference`, which
-claims a reference beginning `@` or `-@` and hands the reference itself back as the
+claims a reference beginning `@`, `+@` or `-@` and hands the reference itself back as the
 destination — never an empty string, which the link arm refuses. Every other broken
 reference returns `None` and stays exactly the text it was, so `[see @k]`, `[a@b.com]`,
 `a[0]` and an unmatched bracket pair all print as they always did. **This dialect has no
@@ -766,11 +767,22 @@ same escaper a URL uses. It is checked against no character set, which is where 
 from `core/src/emit.rs:check_name`: a figure name is authored inside this dialect, and a
 citation key is authored in a file the author often did not write and cannot change.
 
-`core/src/emit.rs:cite_key` refuses three payloads Pandoc spells and this dialect does not
-read, each an `Error::Citation` naming the line: `[@a; @b]`, `[@k, p. 33]` and `[-@k]`.
-The suppressed-author form is why the callback claims `-@` as well as `@` — under an
-`@`-only predicate it would stay text runs the emitter never sees, and would print as
-`\[\-\@k\]`, a refusal the dialect promises and the parse could not deliver.
+`core/src/emit.rs:cite_key` reads the payload into a form and its keys, in one fixed order
+so that no shape is guessed at: a `,` anywhere is the locator, refused first; then a leading
+`+` is the prose form and a leading `-` the year form; then the rest splits on `;`, each
+piece trimmed, and each piece must be `@` and a key; last, a form over more than one key is
+refused. `[@k]` is `#cite(label("k"))` as it always was; `[+@k]` is
+`#cite(label("k"), form: "prose")`, natbib's `\citet`, *Postigo (2026)* in the sentence; and
+`[-@k]` is `form: "year"`, Pandoc's suppressed author, *2026* alone. `[@a; @b]` is the two
+calls adjacent with no byte between, which Typst merges into one parenthesis with the
+style's own separator, `(Claude and Knuth, 2025; Postigo, 2026)`. Three payloads are
+refused, each an `Error::Citation` naming the line: the locator `[@k, p. 33]`, which nothing
+has asked for; a form on a group, `[+@a; @b]`, because Typst's merged prose group is not a
+sentence and "a form names one source" is the rule an author can hold; and a piece that is
+not a key, `[@a; b]`. The two forms are why the callback claims `+@` and `-@` beside `@` —
+under an `@`-only predicate `[+@k]` and `[-@k]` would stay text runs the emitter never sees
+and would print as `\[\+\@k\]`, which is what the first did until `mpdf-007` Phase 5. A
+sigil counts only glued to its at-sign: `[+ @k]` is text.
 
 **A citation in a document that names no bibliography is refused, not printed.**
 `core/src/emit.rs:check_citations` names the earliest one, because mapping only where the
@@ -834,16 +846,27 @@ with nothing on the page to show for it. So the label above the list is the look
 as styled text by a `show bibliography:` rule that both bundled looks carry, and it must
 not be a heading.
 
+**The scheme the marks follow is the author's, and the style that answers it is the
+look's.** `citations` crosses as `header`'s ninth argument, and each bundled look answers it
+with one `set bibliography(style: …)` in `equations`' ternary-in-argument shape:
+`harvard-cite-them-right` under `author-date`, chosen on the merged group — it separates two
+sources with a semicolon where Elsevier Harvard uses the comma it also puts between author
+and year — and `ieee` by name under `numeric`, Typst's own default, so the numeric page is
+provably the page it always was. `cite`'s own `style` defaults to the bibliography's, so the
+marks and the list take the one rule. Under `numeric` the forms still render — `form:
+"prose"` reads *I. Postigo [1]* — so they need no refusal.
+
 ## The frontmatter
 
-Ten keys, all optional: `title`, a string; `author` and `affiliation`, lists; `date`, a
+Eleven keys, all optional: `title`, a string; `author` and `affiliation`, lists; `date`, a
 free string the template typesets verbatim; `columns`, `1` or `2`; `template`, the look,
 `article` or `press-release`; `equations`, `plain` or `numbered`; `figures`, `flat` or
-`sectioned`; `headings`, `plain` or a depth `1`–`6`; and `bibliography`, a path. An absent
+`sectioned`; `headings`, `plain` or a depth `1`–`6`; `citations`, `numeric` or
+`author-date`; and `bibliography`, a path. An absent
 block is valid, and `core/src/frontmatter.rs:Frontmatter::default` gives the article look,
 no title block, no author, no affiliation, no date, two columns, no equation numbers, flat
-figure numbers, unnumbered headings and no bibliography. Nine reach the look:
-`core/src/emit.rs:header` always names all eight arguments and the selected file.
+figure numbers, unnumbered headings, numeric citation marks and no bibliography. Ten reach
+the look: `core/src/emit.rs:header` always names all nine arguments and the selected file.
 
 `author` and `affiliation` are lists inside one line, because `core/src/frontmatter.rs:parse`
 refuses an indented line outright and a YAML list is therefore not available.
@@ -902,9 +925,10 @@ naming the key and the line. `core/src/frontmatter.rs:parse` holds no
 applies to it unchanged — `bibliography: figures/../refs.bib` is accepted and
 `bibliography: ../refs.bib` is not.
 
-`equations`, `figures` and `headings` are names against closed sets rather than booleans,
-and `core/src/frontmatter.rs:Equations::from_name`, `Figures::from_name` and
-`Headings::from_name` each resolve one exactly as `Template::from_name` resolves the look.
+`equations`, `figures`, `headings` and `citations` are names against closed sets rather than
+booleans, and `core/src/frontmatter.rs:Equations::from_name`, `Figures::from_name`,
+`Headings::from_name` and `Citations::from_name` each resolve one exactly as
+`Template::from_name` resolves the look.
 The closed set is what makes a further scheme of the *same* question a new name rather than
 a further key — a per-chapter figure restart without a prefix is `figures`' third name and
 not a key of its own. A key is added where the question is different: `headings` asks
@@ -976,18 +1000,21 @@ third look is a third `.typ` file and one enum variant.
 
 Every look exports `template`, `divider`, `abstract` and `keywords`, and its `template`
 takes `title`,
-`author`, `affiliation`, `columns`, `date`, `equations`, `figures` and `headings` before the
-trailing `doc`. That is the contract, because `core/src/emit.rs:header` names all eight on
+`author`, `affiliation`, `columns`, `date`, `equations`, `figures`, `headings` and
+`citations` before the trailing `doc`. That is the contract, because
+`core/src/emit.rs:header` names all nine on
 every call and imports the first two names on every document, the third on one that opened
 an abstract and the fourth on one that opened a keywords block; a look missing one would
 fail the compile with an error naming neither the document nor the key. **The export list is
-four and the call is eight** — both front-matter blocks cross as functions beside `divider`
-rather than as ninth and tenth arguments, so the call contract has not moved since
-`mpdf-001` Phase 11.
+four and the call is nine** — both front-matter blocks cross as functions beside `divider`
+rather than as arguments, and the call stood at eight from `mpdf-001` Phase 11 until
+`citations` made it nine in `mpdf-007` Phase 5.
 No golden file pins it, so a test in `core/tests/golden_test.rs` reads each look's source and
 asserts it — one needle per exported name; two needles for `equations`, the parameter and `math.equation`; two for
 `figures`, the parameter and `counter(figure.where(kind:`; two for `headings`, the
-parameter and `int(headings)`; and two for `affiliation`, the parameter and `super(` —
+parameter and `int(headings)`; two for `affiliation`, the parameter and `super(`; and two
+for `citations`, the parameter and `harvard-cite-them-right`, the style name only a look
+that maps the scheme can carry —
 because the parameter alone is satisfied by a look that takes it and ignores it. `headings`' second needle is the conversion rather than the
 comparison: `n.pos().len() <=` is carried by a look that hardcoded its own depth and never
 read the key. `affiliation`'s second is the superscript a marker is rendered as, which no
@@ -1051,15 +1078,17 @@ wrote, measured as byte-identical PDFs across the trees either side of the phase
 documents — `figures: sectioned`, `figures: flat`, and no block at all — which come to two
 hashes rather than three, because `flat` is the resolved default.
 
-**Only the third takes `equations`' ternary-in-argument shape, and the difference is the
-rule kind rather than a style.** A `set` carries its condition in its argument because a
+**Only the third takes `equations`' ternary-in-argument shape — the bibliography's `set`
+under `citations` is its fourth taker — and the difference is the rule kind rather than a
+style.** A `set` carries its condition in its argument because a
 `set` inside a scoped `if` dies with the block; a `show` rule has no such form, so the
 second rule's branch sits inside the closure and the rule itself is installed
 unconditionally. Under `flat` all three are inert, measured as byte-identical PDFs across
 the trees either side of the phase rather than asserted in-suite: `header` writes the
 *resolved* default on every call, so "no key" and `figures: flat` emit identical Typst and
 a sibling of `the_two_forms_of_the_default_compile_to_the_same_bytes` could only catch a
-wrong default in `frontmatter.rs`.
+wrong default in `frontmatter.rs`. The same instrument held `citations`: the two citation
+fixtures, one per look, hash identically either side of `mpdf-007` Phase 5.
 
 A caption crosses no argument at all, and neither does a group. Each look carries
 `set figure.caption(…)`, `show figure: set block(…)`, `show figure.caption: …`,
