@@ -2,6 +2,110 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 11 only — 2026-09-01 — the same three lenses, resumed — **READY**
+
+Verdict: `READY` from all three, zero blocking. **Converged at the cap**, the fifth time this
+spec has. Phase 11's `reviewed` is set to 2026-09-01; `status` was already `accepted`.
+
+**Both round-2 blockers verified resolved against the files.** The truncate count was
+re-measured independently by the lens that raised it: **four** `.truncate(` calls in
+`core/src/emit.rs` — `splice_caption`, `take_member`, `close_group`, `close_abstract` — so
+`rules/pipeline.md`'s "this file's two truncates" has been wrong **since Phase 5**, before this
+phase touched anything, and a keywords closer makes five. It is named as already-stale rather
+than as this phase's arithmetic. The three look-file prose claims are named in a paragraph of
+their own, and the recorded call on the sharpest of them is to **correct the reason and not
+re-tune the number**: a keywords float makes `template.typ`'s `clearance: 2em` an internal
+front-matter gap rather than the front-matter/body boundary its comment records, and which gap
+should be largest is a look's own call that no gate here reads.
+
+**The gate lens's blocker closed with a measurement that also validated the fix's shape.**
+`join(` appears three times in each look already, inside `#let template`, above both files'
+exports — so the whole-file needle passed on an unmodified tree and the slice-scoped one is
+clean.
+
+**Two corrections this round ran against the author.** Gate (8) claimed an over-cap rule file
+is an error; `spec-lint` emits `RULE_OVER_CAP` as a **warning**, with the comment "setting a cap
+does not require rewriting a rule to fit it", so the gate is recast as one-warning-not-two and
+the cap raises rest on the numbers. And refusal 6 cannot draw its nine names from
+`core/src/emit.rs:describe`, which collapses seven of them into two strings and carries a
+doc-comment invariant that would break.
+
+Four non-blocking folded at convergence, three of them internal contradictions the fold itself
+had introduced: gate (3) still required a nesting row's opener to stand first, which the
+closer-side refusal 5 was chosen to retire; the close-out's opening still carried the severity
+gate (8) had just corrected; the ten `rules/pipeline.md` passages had been counted as eleven by
+naming one paragraph twice; and refusal 5's blank-line test needed saying that it runs on the
+*trimmed* region, since the region ends in two separator newlines and a raw test would refuse
+every well-formed block.
+
+### Round 2 — Phase 11 only — 2026-09-01 — the same three lenses, resumed with the author's changelog — **NOT READY**
+
+Verdict: `NOT READY`. Correctness returned `READY`; the other two returned `NOT READY` with one
+blocker each, both newly found rather than re-raised.
+
+**The gate lens found gate (5)'s look half vacuous.** `BUNDLED_TEMPLATES` needles are
+whole-file `contains`, and both looks already carry `join(` three times for the author block —
+so the needle passed before the phase was implemented at all, and would pass a look that
+hardcoded `terms.at(0) + ", " + terms.at(1)`. Scoping it to the slice at `#let keywords(`
+closed it.
+
+**The consistency lens found the close-out short in two places.** `rules/pipeline.md` carries a
+*twin* of the code comment the close-out names — "The dispatch is therefore three-state", the
+same sentence one file over, read by nothing mechanical — plus two adjacent counts. And **both
+look files carry front-matter prose**, which a draft had treated as gaining code rather than as
+carrying claims: the two-floats sentence, the `clearance` rationale, and the press release's
+"the first thing in the body".
+
+**One round-2 fix introduced an error the author caught by re-measuring in the same pass** —
+the pattern the loop warns about. The changelog claimed gate (1) pins the hyphen *unescaped*
+inside the brackets; `-` is in `SPECIAL`, so the walk escapes it, and the golden reads
+`([cross\-references], [C\# and C\+\+], …)` — one backslash each, unquoted. Corrected in the
+file before the reviewers judged it, and both lenses confirmed the corrected bytes are what the
+emitter produces.
+
+Nine non-blocking folded, including refusal 5's detection site: both event-level placements
+refuse a *well-formed* block — `Start` counting catches the closer's paragraph, `End` counting
+the opener's — so the closer is the only site that works, which incidentally made gate (3)'s
+five nesting rows reachable unconditionally.
+
+### Round 1 — Phase 11 only — 2026-09-01 — three fresh lenses (correctness/grounding, exit-gate testability, cross-file consistency) — **NOT READY**
+
+Verdict: `NOT READY` from all three. **Round 0, asked once for this episode: yes.** The
+observable is the typeset PDF and the phase puts a list of index terms on the first page that no
+markdown in this dialect can ask for. The warrant is convention rather than a defect — no page
+is currently wrong, which is Phase 9's weaker footing — but the requirement is real in the
+venues the article look serves and OQ-20 pre-committed to answering the family question at
+exactly this word.
+
+**The blocker all three lenses converged on, and it changed the design: the terms cannot cross
+as Typst string literals.** The closer reads a region the walk has *already* markup-escaped, and
+`-` is in `SPECIAL` — measured, `cross-references; C# and C++; a_b` reaches the buffer as
+`cross\-references; C\# and C\+\+; a\_b`. Quoted, those are not string escapes at all;
+escaped a second time they compound. **A hyphenated keyword is the common case.** The terms now
+cross as an array of **content**, on `splice_caption`/`close_group`'s precedent rather than
+`typst_authors_or_none`'s, with **no escape running in this phase at all** — which also makes
+OQ-21's widening a change to one refusal rather than to the crossing.
+
+**And the gate could not have caught it**: the fixture's only special character was a comma,
+which nothing escapes. It now carries a hyphen and a `#`, with the exact bytes written into
+gate (1) and the two wrong builds it discriminates against named.
+
+**Three more blockers, each found by two lenses or traced by one.** A `: ` line inside keywords
+was not refused in the sole-paragraph shape — `attaches` is false, so it fell through to
+`escape_into` and was emitted as a term — which became a ninth refusal. "Nothing about the
+marker or the dispatch is rewritten" contradicted the code: the dispatch gains a dimension, arms
+and a table lookup. And the close-out named none of the code sites where Phase 10 had named
+five, none of the user-facing statements of the abstract's old position rule, and not
+`samples/showcase/sections/figures.md` — **the same file and the same sentence Phase 10's own
+close-out missed**, which is why this round's fold names the pattern rather than just the file.
+
+**Step 1 was one finding short.** The phase narrows a permission — `::: keywords` is a legal
+figure-group opener today, on a census that finds the word nowhere — and it also **widens** the
+abstract's shipped first-block refusal, which a draft did not say. Refusal 6 was allotted one
+gate row for seven constructs against the shipped abstract table's sixteen; it now names nine
+spellings, each with a row, and gate (3) went from nineteen rows to twenty-eight.
+
+
 ### Round 3 — Phase 10 only — 2026-08-31 — the same three lenses, resumed — **READY**
 
 Verdict: `READY` from all three, zero blocking. **Converged at the cap**, the fourth time this

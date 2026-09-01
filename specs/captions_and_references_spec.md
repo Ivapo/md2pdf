@@ -9,7 +9,7 @@ note: >
   for a multi-member figure also carries the front matter a paper opens with: the
   abstract, and the keywords it is indexed by.
 status: accepted
-last_updated: 2026-09-02
+last_updated: 2026-09-01
 
 phases:
   - name: "Phase 1 — a captioned figure"
@@ -63,7 +63,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 11 — the keywords a paper is indexed by"
-    reviewed: null
+    reviewed: 2026-09-01
     shipped: null
     cut: null
     by: null
@@ -383,7 +383,7 @@ arbitrary Typst.
   question this obviously raises — whether `abstract` is the first of a family — and
   records why the second such word, not the first, is where it becomes real.
 
-  **CORRECTED 2026-09-02, on drafting Phase 11: the bound is two words, and the
+  **CORRECTED 2026-09-01, on drafting Phase 11: the bound is two words, and the
   paragraph above is the state Phase 10 shipped rather than the state that stands.**
   `keywords` joins `abstract`, so the dialect reads two and every other word is still
   the author's own. Both states are written out because the wrong one is what a later
@@ -530,7 +530,7 @@ the page inside a float — a mistyped marker reaching the reader, which is the
 direction the rule *does* run in. The collision window gains one position and the
 census still finds it empty.
 
-**WIDENED again 2026-09-02, on drafting Phase 11: two positions, on one rule.** A `: `
+**WIDENED again 2026-09-01, on drafting Phase 11: two positions, on one rule.** A `: `
 line inside `::: keywords` is refused for the abstract's reason and one more of its
 own — that block holds a single paragraph of terms, so a second paragraph is already
 named whatever it opens with. The body rule is untouched for the third time, and the
@@ -1079,95 +1079,138 @@ offsets, which is the property that makes `em` the right unit for the first rule
 
 ### The terms are the author's and the separator is the look's, measured (decision, recorded)
 
-**APPENDED 2026-09-02**, on OQ-20 becoming real and per §6.1 step 2. Phase 10 reserved one
-word and OQ-20 recorded that the family question "becomes real at the second word, not the
-first". Phase 11 is that second word, so the question is answered here rather than deferred
-again.
+**APPENDED 2026-09-01**, on OQ-20 becoming real and per §6.1 step 2. Phase 10 reserved one word
+and OQ-20 recorded that the family question "becomes real at the second word, not the first".
+Phase 11 is that second word, so the question is answered here rather than deferred again.
 
 **Keywords are metadata and not prose, and the obvious home for metadata was measured and
 rejected.** A list of index terms has no sentences; it is the same kind of thing as `author`
 and `affiliation`, so an eleventh frontmatter key is what a reader reaches for first. **It
-cannot be placed.** Measured 2026-09-02 by probing `core/assets/template.typ` and compiling
-through the CLI, then reverting — the technique every phase since Phase 5 has used:
+cannot be placed.** Measured 2026-09-01 over `tests/fixtures/abstract.md` and
+`samples/showcase/showcase.md` by probing `core/assets/template.typ` and compiling through the
+CLI, then reverting — the technique every phase since Phase 5 has used:
 
 | where the look issues the float | where it lands |
 |---|---|
-| inside `#let template`, before `doc` | **above** the abstract, between it and the title block |
-| inside `#let template`, after `doc` | **page 6** of a six-page document, and page 1 of a one-page one |
+| inside `#let template`, before `doc` | between the title block and the abstract, **whatever the author wrote** |
+| inside `#let template`, after `doc` | **page 6** of the six-page showcase, and page 1 of a one-page fixture |
 
-The abstract is a float the *body* issues, so anything a look places from its own arguments
-is either ahead of it or on the last page — and a one-page probe passes the second row, which
-is why the six-page reading is the one recorded. A frontmatter key could reach the right place
-only by the emitter passing it into the abstract's own call, which couples a key to a
-construct and has no answer at all for a document with keywords and no abstract. **So the
-terms live in the body, and the delimiter is already there.**
+**Row 1 is rejected for the reason a float has to be, and not for landing above the
+abstract** — round 1 was right that the earlier wording presupposed an ordering this design
+then declines to impose. A look placing the terms from its own arguments places them at a
+fixed point in its own template, so their position on the page is the *look's* and cannot
+follow what the author wrote: keywords written above an abstract and keywords written below
+one land in the same place. That is source order and page order coming apart, which is what
+`mpdf-004` Phase 3's property forbids, and it is the same defect whichever way round the
+author would have preferred. Row 2 fails outright, and a one-page probe passes it, which is
+why the six-page reading is the one recorded.
+
+A frontmatter key could reach the right place only by the emitter passing it into the
+abstract's own call, which couples a key to a construct and has no answer at all for a
+document with keywords and no abstract. **So the terms live in the body, and the delimiter is
+already there.**
 
 **`::: keywords` holds exactly one paragraph, and its terms are separated by `;`.**
 
 ```markdown
 ::: keywords
 
-typesetting; markdown; Typst
+typesetting; markdown; figure numbering, sectioned
 
 :::
 ```
 
 **`;` is the corpus's own separator for a list whose members may hold commas**, not a new
 convention: `mpdf-001` chose it for `author` and `affiliation` because `Po, Iva` and
-`Anthropic, San Francisco` each carry one. A keyword may too — *figure numbering, sectioned*
-— so the same reasoning lands on the same character, and an author who has written a
-frontmatter list has already met it.
+`Anthropic, San Francisco` each carry one. A keyword may too — *figure numbering, sectioned* —
+so the same reasoning lands on the same character, and an author who has written a frontmatter
+list has already met it.
 
-**The emitter splits and crosses an array; the look owns everything visible.** The call is
-`#keywords(("typesetting", "markdown", "Typst"))`, on
-`core/src/emit.rs:typst_authors_or_none`'s own rule — what crosses this seam is structure and
-never typography. `core/src/emit.rs:typst_array` already gives a one-element array its
-trailing comma, so nothing new is written to build one. **The label, the separator on the
-page, the type size and the alignment are each look's own**, which is the answer OQ-20 asked
-for and the reason gate (5) reads the two looks against each other rather than against a
-literal.
+**The terms cross as an array of *content*, and this is the correction round 1 forced.** The
+call is
 
-**A term is plain text, and this is a closed rule rather than a simplification.** The emitter
-splits on `;`, and the split has to run over something. Over the *emitted markup* a `;` can
-stand inside `#raw("a;b")` from inline code, inside a link's URL, or inside a `$…$` span, so
-the split would break a term at a semicolon the author never wrote as a separator. Over the
-*source* instead, the markdown in a term would be escaped and reach the page as literal
-characters — the silent flattening `mpdf-001` §2 exists to refuse. So text and soft breaks are
-what a keywords block may hold, and emphasis, inline code, a link, a formula, a footnote, an
-image and a citation are each named at the author's own line. OQ-21 carries the widening, and
-widening a refusal never moves a document that already compiles.
+```
+#keywords(([typesetting], [markdown], [figure numbering, sectioned]))
+```
+
+**A draft of this section said string literals, on `typst_authors_or_none`'s precedent, and
+that is the wrong precedent and would not have compiled.** `core/src/emit.rs:typst_string`'s
+own doc comment is the measurement that refutes it: a string literal "interprets only `\` and
+`"`, and escaping the markup set inside one would put the backslashes into the PDF". The
+region the closer reads has **already** been escaped for markup mode by
+`core/src/emit.rs:escape_into` at the `Event::Text` arm, and `-` is in
+`core/src/emit.rs:SPECIAL` — so measured 2026-09-01 through the shipped pipeline, the
+paragraph `cross-references; C# and C++; a_b` reaches the buffer as
+`cross\-references; C\# and C\+\+; a\_b`. Put in quotes those are unknown string escapes;
+escaped a second time they compound to `cross\\\-references`. **A hyphenated keyword is the
+common case, not an edge**, which is what makes this a defect rather than a wrinkle.
+
+**Content is right because the buffer is already content.** `core/src/emit.rs:splice_caption`
+and `core/src/emit.rs:close_group` both wrap a buffered, already-escaped region in `[…]` —
+a caption is exactly this, over one item instead of several — so **no second escape runs at
+all**, and the seam this rests on is the caption's rather than the frontmatter's. Three
+consequences fall out: `[` and `]` are in `SPECIAL`, so a term cannot close its own bracket; a
+soft break inside a term is a newline in markup, which reads as a space and which a string
+literal could not have held; and **OQ-21's widening becomes a change to one refusal rather
+than to this crossing**, because a term carrying emphasis is already `#emph[…]` in the buffer
+by the time the closer sees it. `core/src/emit.rs:typst_array` still builds the array, its
+one-element trailing comma included.
+
+**A term is plain text, and this is a closed rule rather than a simplification.** The split
+runs on `;` over the buffered region, and `;` is not in `SPECIAL`, so it is a character the
+escape pass never touches. What makes the split *safe* is the plain-text rule: with markup
+permitted, a `;` could stand inside `#raw("a;b")` from inline code, inside a link's URL or
+inside a `$…$` span, and the split would break a term at a semicolon the author never wrote as
+a separator. So text and soft breaks are what a keywords block may hold, and emphasis,
+strikethrough, inline code, a link, a formula, a footnote, an image, a citation and a **hard
+break** are each named at the author's own line — the hard break because
+`core/src/emit.rs:step` writes it as a `\` and a newline, which would land inside a term, and
+because Phase 10 *permitted* one inside an abstract, so the divergence is the author's to be
+told about. OQ-21 carries the widening, and widening a refusal never moves a document that
+already compiles.
 
 **Both front-matter blocks must precede the body, and their order between themselves is the
 author's.** Phase 10 required the abstract to be first because both looks lift it out of the
 flow, so source order and page order would otherwise disagree. The same reasoning covers two
-blocks and stops there: **floats stack in the order they are issued**, measured 2026-09-02
-over three of them — title block, abstract, keywords, in source order, the abstract's last
-line ending at y 231.53, the keywords line at y 247.20–257.46, and the body heading at
-y 271.76. So keywords above an abstract typeset above it, which is the author's own order
-rather than a mistake to name, and **no ordering refusal exists**. What is refused is body
-content above either.
+blocks and stops there: **floats stack in the order they are issued**, measured 2026-09-01
+over `tests/fixtures/abstract.md` with a probe issuing a third float after the abstract's —
+the title block, then the abstract ending at y 231.53, then the keywords line at
+y 247.20–257.46, then the body heading at y 271.76, in source order with no overlap. So
+keywords above an abstract typeset above it, which is the author's own order rather than a
+mistake to name, and **no ordering refusal exists**. What is refused is body content above
+either.
+
+**That widens a shipped refusal, and §4's step 1 says so rather than leaving it to be
+found.** Phase 10's abstract had to be the document's *first block*; under the front-matter
+rule it may follow keywords. Widening a refusal breaks no document that compiles, which is why
+this is a phase and not a supersession. **What moves is the prose and not the message**, which
+round 2 corrected: `rules/pipeline.md`'s "It must be the document's first block" and its
+user-facing twins all stop being accurate and are named in the close-out, while the refusal's
+own string — `abstract that is not the document's first block` — stays true wherever it still
+fires, since body content or a second abstract above one does mean it is not the first block.
+**The literal does not move**, and `core/tests/golden_test.rs`' shipped rows for it do not
+either.
 
 **The mechanism generalises and the namespace does not**, which is OQ-20's answer stated as
-code. Phase 10's first-block test reads "the document body holds only newlines".
-Phase 11 replaces it with "the document body holds only newlines *past where the front matter
-ends*", a single new `Walk` field that each front-matter closer advances — so both constructs
-read one test and a third would read it too. `core/src/emit.rs:RESERVED` grows from a
-one-element set to a two-entry table of word to construct. **What does not generalise is the
-cost**: every reserved word still buys its own look export, its own refusals and its own gate
-rows, so a third is a phase and not a configuration. Two members are enough to see the shape
-and not enough to justify an open namespace.
+code. Phase 10's first-block test reads "the document body holds only newlines". Phase 11
+replaces it with "the document body holds only newlines *past where the front matter ends*", a
+single new `Walk` field that each front-matter closer advances — so both constructs read one
+test and a third would read it too. `core/src/emit.rs:RESERVED` grows from a one-element set to
+a two-entry table of word to construct. **What does not generalise is the cost**: every
+reserved word still buys its own look export, its own refusals and its own gate rows, so a
+third is a phase and not a configuration. Two members are enough to see the shape and not
+enough to justify an open namespace.
 
-**Two traps repeat from Phase 10 and are recorded so a third look does not rediscover them.**
-`place(top + center, …)` sets the alignment its content inherits, so a keywords line centres
-itself unless the look says otherwise — measured, and the same trap Phase 10 hit with the
-abstract's paragraphs. And **a look closure captures the scope it is written in**: were a
-look's `abstract` to call its `keywords`, the second would have to be defined above the
-first, which is the note `core/assets/press-release.typ` already carries about `divider` — and which
-was measured here rather than taken from that comment: a `#let keywords` written after
-`#let template` fails with **`unknown variable: keywords`**, naming the look's own identifier.
-In the shipped design the *body* issues both calls, so no look-internal ordering constraint
-exists at all — recorded because both probes that measured anything here had to create one,
-and a reader of either would carry the constraint away with it.
+**Two traps repeat from Phase 10 and are recorded so a third look does not rediscover them**,
+and both were met while probing rather than reasoned about. `place(top + center, …)` sets the
+alignment its content inherits, so a keywords line centres itself unless the look says
+otherwise — the same trap Phase 10 hit with the abstract's paragraphs. And **a look closure
+captures the scope it is written in**: a `#let keywords` written *after* `#let template` fails
+a document that reaches it with **`unknown variable: keywords`**, measured 2026-09-01, and the
+message names the look's own identifier rather than anything the author wrote. In the shipped
+design the *body* issues both calls, so no look-internal ordering constraint exists at all —
+recorded because both probes that measured anything here had to create one, and a reader of
+either would carry the constraint away with it.
 
 ## 3. Open questions
 
@@ -1744,7 +1787,7 @@ and a reader of either would carry the constraint away with it.
   and it blocks nothing** — widening a refusal never moves a document that already compiles.
 
 - **OQ-20 — ~~is `abstract` the first of a family, and where does that become a real
-  question?~~ RESOLVED (2026-09-02), on drafting Phase 11 and at exactly the word this
+  question?~~ RESOLVED (2026-09-01), on drafting Phase 11 and at exactly the word this
   question named: yes, it is a family of *front-matter blocks*, and the answer is that the
   mechanism generalises while the namespace does not.** Phase 11 reserves `keywords`, so
   `core/src/emit.rs:RESERVED` becomes a two-entry table of word to construct and Phase 10's
@@ -1773,15 +1816,25 @@ and a reader of either would carry the constraint away with it.
   the worst place to design one. **Blocks nothing.**
 
 - **OQ-21 — may a keyword carry inline markup?** *(design call)* Phase 11 refuses everything
-  but text and soft breaks inside `::: keywords`, and §2 records why it is a closed rule
-  rather than a simplification: the emitter splits on `;`, and a `;` can stand inside
-  `#raw("a;b")`, a link's URL or a `$…$` span, so a split over emitted markup would break a
-  term at a separator the author never wrote. The refusal is the part that might be wrong. A
-  species name set in italics and a formula in a chemistry keyword are both real, and the way
-  in is to split at the *event* level — accumulating text events and breaking on `;` as they
-  arrive — which keeps a construct's own markup inside one term because a construct's events
-  are nested inside it. That is a mechanism Phase 11 does not need and a later phase can
-  take. **Blocks nothing**: widening a refusal never moves a document that already compiles.
+  but text and soft breaks inside `::: keywords`, and §2 records why the split on `;` is only
+  safe under that rule: with markup permitted, a `;` could stand inside `#raw("a;b")` from
+  inline code, inside a link's URL or inside a `$…$` span, and the split would break a term at
+  a separator the author never wrote. **What the refusal does *not* rest on any more is the
+  crossing**, and round 1 is why: the terms cross as an array of *content* built over the
+  region the walk already escaped, so a term carrying emphasis is already `#emph[…]` by the
+  time the closer sees it and needs nothing done to it. **So the way in is narrower than a
+  draft of this question thought** — not a new mechanism, but a split that respects nesting:
+  breaking on `;` only at the top level of the run, which is where an inline construct's own
+  events are already nested inside it. A species name in italics and a formula in a chemistry
+  keyword are both real. **Blocks nothing**: widening a refusal never moves a document that
+  already compiles.
+
+  **The hard break is the one member of the refused set that may want to stay refused**, and it
+  is separated here because the reasons differ. Phase 10 *permits* one inside an abstract, and
+  `core/src/emit.rs:step` writes it as a `\` and a newline — which inside a term is a line
+  break in the middle of an index term, a thing no venue asks for. Emphasis is a widening
+  someone will want; this is likelier a permanent refusal, and a later phase should not sweep
+  the two together.
 
 - **OQ-22 — does the front-matter framework admit a block that belongs at the *end*?** *(design
   call)* OQ-20's own examples were `::: keywords` and `::: acknowledgements`, and only the
@@ -1845,7 +1898,7 @@ only a look — Phase 6 was the first, and this one moves the very edge Phase 6 
 this takes a right page and makes it easier to read. That is a weaker warrant than any phase
 before it has run on, and round 0 is the place to test it.
 
-**A tenth and an eleventh were appended 2026-08-31 and 2026-09-02**, both on §2's `:::`
+**A tenth and an eleventh were appended 2026-08-31 and 2026-09-01**, both on §2's `:::`
 decisions and per §6.1 step 2. **Neither is about a caption or a reference**, which is the
 tension both state rather than bury: this spec is named *captions-and-references* and it owns
 the `:::` delimiter, so an amendment to that delimiter's own dispatch is a phase here while a
@@ -3835,9 +3888,9 @@ worked rather than skipped.
 *Produces the observable: yes — a PDF whose first page carries, under the abstract and above
 the body, the terms the paper is indexed by, set the way its look sets a list of terms. Like
 Phase 10's the observable is a shape rather than a treatment: no markdown in this dialect can
-currently ask for a list of terms that is not a bullet list and not body.*
+currently ask for a list of terms that is neither a bullet list nor body.*
 
-**Drafted 2026-09-02**, on §2's separator decision and per §6.1 step 2. The ordered test lands
+**Drafted 2026-09-01**, on §2's separator decision and per §6.1 step 2. The ordered test lands
 on step 2 and the steps above it are worked rather than skipped.
 
 - **Step 0 — a decision, not only code?** Yes, and it is a decision this spec asked itself to
@@ -3845,20 +3898,30 @@ on step 2 and the steps above it are worked rather than skipped.
   first"; this is the second word, so the phase both reserves it and answers the question. It
   also takes a design call the answer does not settle — that the **look** owns the separator
   between two terms — which §2 records and gate (5) reads.
-- **Step 1 — does it remove or contradict shipped work?** **It narrows a shipped permission,
-  and nothing built is un-built** — the same shape as Phase 10, one word over, and with the
-  same load-bearing census. Measured 2026-09-02: `::: keywords` is a **legal figure-group
-  opener today**, so `::: keywords` over two images with a caption compiles and reads
-  *Figure 1*, and this phase changes what that document means. **The census says no document
-  does**: the string `keyword` appears nowhere in `tests/fixtures/`, `tests/golden/`,
+- **Step 1 — does it remove or contradict shipped work?** **It narrows one shipped permission
+  and widens one shipped refusal, and nothing built is un-built.**
+
+  **The narrowing** is Phase 10's shape one word over, with the same load-bearing census.
+  Measured 2026-09-01: `::: keywords` is a **legal figure-group opener today**, so
+  `::: keywords` over two images with a caption compiles and reads *Figure 1*, and this phase
+  changes what that document means. The narrower phrasing is the only true one — `::: keywords`
+  over a *paragraph* is already `uncaptionable`'s refusal — and **the census says no document
+  does either**: the string `keyword` appears nowhere in `tests/fixtures/`, `tests/golden/`,
   `samples/`, `README.md`, `rules/`, `web/index.html` or `core/assets/`, in any case.
 
-  **The precedent is Phase 10's and it is now a second instance rather than a first**, which is
-  worth saying because a pattern of narrowing permissions on repo-local censuses is the thing
-  that would eventually catch someone out. Nothing but the census stands between this phase and
-  a document that opened a group `::: keywords`, and a census speaks only for this repository.
-  Two such narrowings is where the corpus should start counting; OQ-20's resolution is what
-  stops there being a third by configuration rather than by decision.
+  **The widening is the abstract's own first-block rule**, and round 1 was right that a draft
+  of this step did not name it. §2's front-matter rule lets an abstract follow keywords, where
+  today it must be the document's first block — so a document that errors today will compile.
+  **That direction is the safe one** and is the argument OQ-19 and OQ-21 both run on: widening
+  a refusal never moves a document that already compiles. What it does move is two statements
+  of the old rule, and the close-out names both.
+
+  **The precedent is Phase 10's and this is now a second instance rather than a first**, which
+  is worth saying because a pattern of narrowing permissions on repo-local censuses is the
+  thing that would eventually catch someone out. Nothing but the census stands between this
+  phase and a document that opened a group `::: keywords`, and a census speaks only for this
+  repository. Two such narrowings is where the corpus should start counting; OQ-20's resolution
+  is what stops there being a third by configuration rather than by decision.
 - **Step 2 — the subject.** **The `:::` delimiter's own dispatch**, which this spec invented in
   Phase 5 and which Phase 10 established is a phase here rather than a spec of its own. The
   distinction OQ-15 draws holds unchanged: this adds nothing to what a group can do and changes
@@ -3873,217 +3936,374 @@ on step 2 and the steps above it are worked rather than skipped.
   look.**
 
   **`::: keywords` opens the block and a bare `:::` closes it**, on Phase 5's delimiter and
-  Phase 10's three-state dispatch, both unchanged. `core/src/emit.rs:RESERVED` becomes a
-  two-entry table of word to construct; `core/src/emit.rs:group_marker` already returns the
-  word, so **nothing about the marker or the dispatch is rewritten** — this is the phase that
-  spends what Phase 10 built, and if it needs to reshape either, Phase 10's seam was chosen
-  wrongly.
+  Phase 10's dispatch. **What is reused and what is edited is stated exactly, because a draft
+  of this scope said "nothing about the marker or the dispatch is rewritten" and all three
+  round-1 lenses read the code and found that false.** `core/src/emit.rs:group_marker` is
+  untouched — it already returns the word. `core/src/emit.rs:RESERVED` becomes a two-entry
+  table of word to construct, and the `:::` arm of `core/src/emit.rs:step` **gains a
+  dimension**: its tuple carries a third open-slot state, a bare `:::` must close keywords, the
+  five new nesting pairings become arms, and the local that names what is being opened becomes
+  a lookup against the table rather than the hardcoded `"abstract"` it is today.
+  `core/src/emit.rs:Marker`'s doc comment, which says a bare `:::` "closes whichever of the two
+  is open", moves with it. **That is spending Phase 10's seam rather than reshaping it** — no
+  construct's behaviour changes and no shipped message moves — and the distinction is what the
+  earlier wording collapsed.
 
   **The block holds exactly one paragraph, of text and soft breaks only.** §2 records why the
-  plain-text rule is closed rather than convenient: the split runs on `;`, and over emitted
-  markup a `;` inside `#raw("a;b")`, a link's URL or a `$…$` span would break a term at a
-  separator the author never wrote, while over the source the markdown would reach the page as
-  literal characters. OQ-21 carries the widening.
+  plain-text rule is closed rather than convenient, and names the hard break among what it
+  refuses. OQ-21 carries the widening.
 
-  **The emitter splits, trims and escapes each term, and writes an array.** The call is
-  `#keywords(("typesetting", "markdown", "Typst"))`, built with
-  `core/src/emit.rs:typst_array`, which already gives a one-element array its trailing comma.
-  **`core/src/emit.rs:escape_into` runs per term and not over the paragraph**, because a term
-  is what reaches the page as a unit; `;` is not in `SPECIAL`, so the split is over characters
-  the escape pass never touches either way.
+  **The terms cross as an array of content**, `#keywords(([a], [b], [c]))`, built with
+  `core/src/emit.rs:typst_array` over the buffered region the walk already escaped — the
+  caption's own mechanism, over several items instead of one. §2 carries the measurement that
+  refuted the string-literal draft, and the rule an implementer needs is one sentence: **no
+  escape runs in this phase at all.** `core/src/emit.rs:escape_into` has already run at the
+  `Event::Text` arm, and running it again, or wrapping the result in quotes, is the defect
+  gate (1) and gate (4) are built to catch.
 
   **The closer is `close_abstract`'s sibling and not its branch.** It truncates back to the
   opener's `start` and writes the call over the region, on the arithmetic §2 recorded for the
   abstract and `close_group` before it. What differs is only what it does with the region: the
   abstract wraps it, and this one reads it, splits it and discards it.
 
+  **Where the two new guards sit is load-bearing and is stated, because a draft left it to be
+  discovered at the gate.** The single-paragraph guard and the plain-text guard both run
+  **below** the `:::` dispatch in `core/src/emit.rs:step`. Above it, a `::: table` written
+  inside a keywords block would be refused as non-text rather than as
+  `figure group inside keywords`, and five of gate (3)'s rows would assert the wrong string.
+  **The second-paragraph half of that hazard is covered twice over and round 2 said so**: if
+  refusal 5 counts `Start(Tag::Paragraph)`, which is the natural implementation, it fires
+  regardless of where the guard sits — so gate (3)'s rule that a nesting row's opener stands
+  first in the block is what actually makes those rows reachable, and this placement rule is
+  what makes the *plain-text* guard correct. Both instructions are right under either
+  implementation; only the reason overlaps.
+
   **The position rule is generalised rather than copied**, which is OQ-20's answer as code.
   Phase 10's first-block test asks whether the document body holds only newlines; a new `Walk`
   field records where the front matter ends, each front-matter closer advances it, and the test
   becomes whether the body holds only newlines *past* it. Phase 10's own refusal is then this
-  same test with the field still at zero, so the abstract's behaviour is unchanged and is now
-  expressed once. **Their order between themselves is the author's** — §2 measured that floats
-  stack in issue order, so keywords above an abstract typeset above it — so there is no
-  ordering refusal, and body content above either is what is named.
+  same test with the field still at zero, so **every shipped refusal row and
+  `tests/golden/abstract.typ` stand unchanged** — what changes is that an abstract may now
+  follow keywords, which is step 1's widening and not a behaviour any existing case reads.
 
   **The import gains a fourth name, per construct rather than per phase.**
   `core/src/emit.rs:header` writes `template, divider`, adds `abstract` for a document that
   opened one, and adds `keywords` for a document that opened one — **two independent flags and
-  not one**, which is the distinction gate (2) is built to catch: a document with an abstract
-  and no keywords must import three names and not four, or Phase 10's own fixture's golden
-  moves. The call contract stays at eight arguments; this is a fourth exported *function*.
+  not one**, which gate (2) reads in both directions.
 
   **Both looks render the terms and neither refuses them**, on Phase 10's rule that a look
   declining content the author wrote is the vanishing §2 forbids. Each answers the typography
-  for itself, and that is what gate (5) reads. **The article look**: a parent-scoped float
-  stacking after the abstract's, at the same 80% measure, a bold `Keywords` run-in, terms
-  joined with a comma. **The press release**: the terms under the standfirst, in its own voice
-  and with the label its own call — it withheld the abstract's label because a press release
-  has a lede rather than an abstract, and *keywords* is a word it may equally decline while
-  still printing what the author wrote.
+  for itself. **The article look**: a parent-scoped float stacking after the abstract's, at the
+  same 80% measure, a bold `Keywords` run-in, terms joined with a comma. **The press release**:
+  the terms under the standfirst, in its own voice, with the label its own call.
 
   **The label is styled text and never a `heading`**, for the reason Phase 10 measured rather
   than a second time on trust: `core/src/lib.rs:anchors_from` returns an empty vector on any
   mismatch between the headings the walk counted and the headings the compiled document
-  carries, so a heading here withdraws every anchor in the document, takes a section number
-  under `headings: N` and restarts every counter under `figures: sectioned`. Gate (6) is what
-  sees it, and it is the same case Phase 10's gate (5) is.
+  carries. Gate (6) is what sees it.
 
-  **Two traps §2 records are the look author's, not the emitter's**, and both were met while
-  probing rather than reasoned about: `place(top + center, …)` sets the alignment its content
-  inherits, so each look chooses its terms' alignment rather than inheriting one; and a look
-  closure captures the scope it is written in, so a `#let keywords` written *after*
-  `#let template` fails a document that reaches it with **`unknown variable: keywords`** —
-  measured 2026-09-02, and the message names the look's own identifier rather than anything the
-  author wrote. The shipped design issues both calls from the body, so no look-internal
-  ordering constraint exists at all; a look that grows one has this to find.
+  **Two traps §2 records are the look author's, not the emitter's**: the alignment a
+  parent-scoped float's content inherits, and the closure scope a `#let` is written in. The
+  shipped design issues both calls from the body, so no look-internal ordering constraint
+  exists; a look that grows one has this to find.
 
-  **Eight refusals, each naming the author's line**, mirroring the abstract's so that a reader
-  of one reads the other.
+  **Nine refusals, each naming the author's line**, mirroring the abstract's so that a reader
+  of one reads the other. **Round 1 raised the count from eight**: the `: ` line had no row of
+  its own and was not caught by the rule the draft claimed caught it.
 
   1. **A second `::: keywords` in one document.**
   2. **Keywords with body content above them.** Tested after (1) and after (3), on Phase 10's
-     own ordering argument: once the first block closes its call stands in the buffer, and a
-     block opened in a frame of its own satisfies this test too.
+     own ordering argument.
   3. **Keywords opened in a frame or a walk of its own** — inside a list item, a block quote,
-     or a footnote definition. **Three conditions and not two**, exactly as Phase 10's is, and
-     for the same measured reason: `core/src/emit.rs:collect_definitions` runs every footnote
-     definition through a fresh `Walk::new()`, where the body is empty *and* `bufs.len() == 1`,
-     so `Mode::Document` is read too.
-  4. **A block inside keywords that is not a paragraph.**
+     or a footnote definition. **Three conditions and not two**, exactly as Phase 10's is:
+     `core/src/emit.rs:collect_definitions` runs every footnote definition through a fresh
+     `Walk::new()`, where the body is empty *and* `bufs.len() == 1`, so `Mode::Document` is
+     read too.
+  4. **A block inside keywords that is not a paragraph**, which reuses the abstract's guard.
   5. **A second paragraph inside keywords.** The abstract collects every paragraph and this
-     block holds one, so this is the refusal that has no counterpart above — and it is what a
-     `: ` line inside keywords is caught by, since that line is a paragraph before it is a
-     marker.
-  6. **Anything but text and soft breaks inside keywords** — emphasis, inline code, a link, a
-     formula, a footnote, an image, a citation. §2 records why, and OQ-21 records the way in.
+     block holds one. **The site is the closer, and round 2 measured why the two event-level
+     placements both fail**: counting `Start(Tag::Paragraph)` counts the closing `:::`
+     paragraph and counting `End` counts the opener's, so a well-formed
+     `::: keywords` / term / `:::` is refused as a second paragraph either way. At the closer
+     the region can be tested for a blank line, which is where refusal 7 already looks — **on
+     the region *trimmed* of its separator newlines**, since by then it ends in two of them,
+     from the term paragraph's own end and the closer's start, and a raw test would refuse
+     every well-formed block. `core/src/emit.rs:close_abstract` already trims before its
+     emptiness check, and §2 calls this arithmetic "the one detail an implementer will
+     otherwise rediscover", which is why the clause is here rather than left to gate (1).
+     **That also settles the ordering question two lenses raised from opposite sides**: tested
+     at the closer, this refusal cannot fire on a nested opener at all, so gate (3)'s five
+     nesting rows are reachable whatever else moves.
+  6. **Anything but text and soft breaks inside keywords.** Nine named spellings — emphasis,
+     strikethrough, inline code, a link, a formula, a footnote, an image, a citation and a hard
+     break — and **each takes a gate row of its own**, on the shipped abstract table's
+     precedent: its image, display equation and citation each earned a message rather than
+     sharing one, which is why that table is sixteen rows and not the fourteen its own phase
+     counted. A single message covering nine constructs is the implementation this refusal
+     exists to fail. **The names cannot come from `core/src/emit.rs:describe`, and round 2
+     named it because an implementer will reach for it**: that function answers
+     `"markdown construct"` for an emphasis and `"supported construct"` for inline code, a
+     formula and a hard break, so it would collapse seven of the nine — and its doc comment
+     makes a load-bearing claim that a construct the walk *handles* is deliberately absent from
+     it. The nine names are this guard's own mapping, mechanical but a larger diff than "no
+     mechanism" suggests.
   7. **An empty keywords block, and an empty term.** `a;;b`, a leading `;` and a trailing `;`
-     are each a term with no text, which would set a separator with nothing on one side of it.
-     **The empty block is the one that would otherwise reach Typst**, and what it reaches it
-     with was measured rather than assumed: `#keywords(())` **compiles**, because an empty
-     array's `join` is `none`, and prints **the look's label with nothing after it**. That is
-     not a silent drop — it is Phase 1's bare *"Figure 1:"* one construct along, the same
-     refusal for the same reason, and it is why this one is in `core` rather than left to a
-     look that has no way to tell an empty list from a list it should decline.
-  8. **Keywords never closed.** `core/src/emit.rs:Walk::unclosed` and
-     `core/src/emit.rs:escaped_frame` already build their sentence through
-     `core/src/emit.rs:never_closed`, so this is a third argument to an existing helper and not
-     a third literal — the payoff for Phase 10 having refused to reuse its first.
+     are each a term with no text. **The empty block is the one that would otherwise reach
+     Typst**, and what it reaches it with was measured rather than assumed: `#keywords(())`
+     **compiles**, because an empty array's `join` is `none`, and prints **the look's label
+     with nothing after it**. That is not a silent drop — it is Phase 1's bare *"Figure 1:"*
+     one construct along, the same refusal for the same reason, and it is why this one is in
+     `core` rather than left to a look that has no way to tell an empty list from a list it
+     should decline.
+  8. **A `: ` line inside keywords.** **Round 1's catch, traced rather than argued**: a draft
+     claimed refusal 5 caught it, and it does not. `::: keywords` / `: A caption.` / `:::` puts
+     the marker in the block's *only* paragraph, where `caption_marker` matches but `attaches`
+     is false — no group is open and no `Figure` is live — so the line falls through to
+     `escape_into` and the closer emits it as a term. The abstract has a dedicated guard for
+     exactly this and keywords needs the same one; the cheapest correct implementation extends
+     that guard to both constructs rather than writing a second.
+  9. **Keywords never closed.** `core/src/emit.rs:never_closed` already composes the sentence
+     from a construct name, so this is a third **value** for its `what` parameter and not a
+     third literal — the payoff for Phase 10 having refused to reuse its first.
+     `core/src/emit.rs:escaped_frame` needs nothing: refusal 3 pins a keywords block to the top
+     level, so there is no frame under it to pop, which is the argument that helper's own doc
+     comment already makes about the abstract.
 
   **The nesting message gains five pairings and no mechanism**, which is the other payoff:
   `core/src/emit.rs:nested` already composes `{inner} inside {outer}`, so `keywords inside an
   abstract`, `abstract inside keywords`, `keywords inside keywords`, `keywords inside a figure
   group` and `figure group inside keywords` are five gate rows against one unchanged function.
 
-  **`core/src/frontmatter.rs` is untouched, and so are `cli/src` and `app/src`.** No key — §2
-  measures that a key cannot be placed — no schema change, no CLI flag.
+  **`core/src/frontmatter.rs` is untouched, and so are `cli/src` and `app/src`** — except the
+  one pin the close-out names. No key, no schema change, no CLI flag.
 
 - **Exit gate:** eight cases.
 
-  **The fixture is written out rather than described**, on `mpdf-001` Phase 10's rule that a
-  second person reproduces a probe rather than inventing it. `tests/fixtures/keywords.md`
-  carries `title: A Paper With Keywords`, `author: Iva Po`, **`figures: sectioned`** and
-  **`headings: 2`**, then a `::: abstract` block of two paragraphs, then a `::: keywords` block
-  of **four** terms — four rather than two, because two terms cannot show that a separator
-  stands *between* terms rather than after each — **one of them carrying a comma**, which is
-  what makes `;` the separator rather than a preference, then one `#` heading, one short
-  paragraph and one captioned table.
+  **The fixtures are written out rather than described**, on `mpdf-001` Phase 10's rule that a
+  second person reproduces a probe rather than inventing it. **Four documents, and round 1
+  named three of them as missing.**
 
-  (1) **The fixture matches a checked-in golden and compiles.** `tests/golden/keywords.typ`
-  pins the emitted `#keywords((…))`, the four terms as four array elements with the comma-
-  carrying one intact, and the import line at **four names**. `md_to_pdf` returns bytes
-  starting `%PDF`.
+  `tests/fixtures/keywords.md` carries `title: A Paper With Keywords`, `author: Iva Po`,
+  **`figures: sectioned`** and **`headings: 2`**, then a `::: abstract` block of two
+  paragraphs, then a `::: keywords` block of **four** terms — four rather than two, because two
+  cannot show that a separator stands *between* terms rather than after each — then one `#`
+  heading, one short paragraph and one captioned table. **Three of the four terms are chosen
+  against a named failure, and this is round 1's blocking catch**: one carries a **comma**
+  (`figure numbering, sectioned`), which is what makes `;` the separator rather than a
+  preference; one carries a **hyphen** (`cross-references`); and one carries a **`#`**
+  (`C# and C++`). The last two are the only characters here in `core/src/emit.rs:SPECIAL`, and
+  without them **every gate case passes a build whose escape is wrong** — a comma is not
+  escaped, so the draft's fixture could not reach the phase's single most delicate operation.
 
-  (2) **No shipped golden file moves, and the two flags are independent.** All thirty-one
-  existing goldens are byte-identical — `tests/golden/abstract.typ` among them, which is the
-  one that fails an implementation importing `keywords` for every document that has an
-  abstract, and the reason this case is not the same case Phase 10's gate (2) was.
+  `tests/fixtures/keywords_alone.md` carries keywords and **no abstract**.
+  `tests/fixtures/keywords_first.md` carries keywords **above** an abstract.
+  `tests/fixtures/keywords_sections.md` is a master naming `sections/keywords.md` first and
+  `sections/intro.md` second and carrying no body of its own, on
+  `tests/fixtures/abstract_sections.md`'s own shape.
+
+  (1) **The fixture matches a checked-in golden, and the golden is where the escape is
+  pinned.** `tests/golden/keywords.typ` pins the import line at **four names** and the call as
+  **four array elements of content**. **The exact bytes are written out, because a draft of
+  this gate got them wrong in the direction that matters and re-measuring caught it**: the
+  walk escapes `-` as well as `#`, both being in `SPECIAL`, so the golden reads
+
+  ```
+  #keywords(([cross\-references], [C\# and C\+\+], [figure numbering, sectioned], [markdown]))
+  ```
+
+  — **one backslash each, inside brackets, unquoted**, which is the region exactly as the walk
+  left it. Two neighbours are what this discriminates against and neither is subtle:
+  `("cross\-references", …)` is the string-literal draft, where those escapes are not string
+  escapes at all; and `[cross\\\-references]` is the second `escape_into` pass. `md_to_pdf`
+  returns bytes starting `%PDF`. **A second golden, `tests/golden/keywords_alone.typ`, pins a
+  three-name import** — `template, divider, keywords` — which is gate (2)'s other direction.
+
+  (2) **No shipped golden file moves, and the two flags are independent in both directions.**
+  All **thirty-one** existing goldens are byte-identical — `tests/golden/abstract.typ` among
+  them, which is the one that fails an implementation importing `keywords` for every document
+  that has an abstract. `tests/golden/keywords_alone.typ` is the reverse: a document with
+  keywords and no abstract must not import `abstract`, which moves no shipped golden and so
+  needs a golden of its own. Round 1 found the reverse direction ungated.
 
   (3) **Every refusal fires and names its line**, as one table over
   `Error::UnsupportedConstruct` asserting `location` and `construct`, on
-  `core/tests/golden_test.rs`' shape. **Nineteen rows**: the eight refusals, plus two more for
-  refusal 3, plus one more for refusal 2, plus three more for refusal 7's leading, embedded and
-  trailing empty term, plus the five pairings the nesting message covers. **The footnote row's
-  definition must be cited**, or `core/src/emit.rs:Notes::enter` refuses the uncited definition
-  first and the row asserts the wrong string — the detail Phase 10 measured and recorded, which
-  is why it is not rediscovered here.
+  `core/tests/golden_test.rs`' shape. **Twenty-eight rows**, and the arithmetic is spelled out
+  because this is the fourth phase running in which a count here moved without its sentence
+  following: the nine refusals, plus two more for refusal 3, plus one more for refusal 2, plus
+  three more for refusal 7's leading, embedded and trailing empty term, plus **eight** more for
+  refusal 6's nine named spellings, plus the five pairings the nesting message covers.
+  **The footnote row's definition must be cited**, or `core/src/emit.rs:Notes::enter` refuses
+  the uncited definition first and the row asserts the wrong string — Phase 10's measurement,
+  reused rather than rediscovered. **Each nesting row's nested opener stands first in the
+  block**, since a nested opener written after a term is a second paragraph and refusal 5 would
+  claim it.
 
-  (4) **The terms reach the page in both looks**, one `pdftotext` run per look over the fixture,
-  the press-release copy made by the `template: press-release` substitution. Each dump carries
-  all four terms, in the author's order, above the body heading, with the comma-carrying term
-  unbroken.
+  (4) **The terms reach the page in both looks, unescaped.** One `pdftotext` run per look over
+  the fixture, the press-release copy made by the `template: press-release` substitution. Each
+  dump carries all four terms in the author's order above the body heading, the comma-carrying
+  term unbroken, and **`cross-references` and `C# and C++` reading with no backslash on the
+  page** — the same defect as gate (1)'s, read where a reader would meet it rather than in the
+  source. This is the half of the pair that a golden cannot see: a golden pins the bytes the
+  emitter wrote, and whether those bytes *typeset* as the author's own characters is a question
+  only the page answers.
 
-  (5) **The separator is the look's, and this is the case the phase's design call rests on.**
-  The two dumps are read against each other and **differ in what stands between two terms**.
-  An implementation that wrote the separator in `core` passes every other case here, gate (4)
-  included, and fails only this one. The separator *values* are deliberately not asserted —
-  that is each look's own call, the same way `(1)` against `1.` is for an equation and a
-  caption's separator is for a figure.
+  (5) **The separator is `core`'s to not write, and each look's to choose.** Two checks, and
+  round 1 rewrote both, then round 2 corrected how the first is expressed. `md_to_typst` over
+  the fixture carries the four terms as **four bracket groups delimited by `], [`** — and the
+  check is that structure and **not a scan for separator characters**, because the array's own
+  syntax *is* a comma and a space and one of this fixture's terms contains a comma. That is the
+  property, and it fails an emitter that joined the terms itself into one element. And each look's **own keywords
+  definition** carries a `join(`, over `core/tests/golden_test.rs:BUNDLED_TEMPLATES`, which is
+  where the separator is applied. **The needle is scoped to the slice beginning at
+  `#let keywords(` and not to the whole file, and round 2 is why: both looks already carry
+  `join(` three times each for the author block**, so a whole-file needle passes today, on an
+  unmodified tree, with no keywords code in either look — and would still pass a look that
+  wrote `terms.at(0) + ", " + terms.at(1)`, which is the exact defect it exists to catch. **The two looks are deliberately not required to differ**, which is
+  round 1's finding rejected in one direction and accepted in the other: a draft asserted their
+  `pdftotext` dumps disagree, and Phase 6 and Phase 9 both recorded that two looks agreeing is
+  not the seam collapsing — so a gate that forces disagreement would make house style a
+  correctness property. The separator *values* stay off the needle list for the reason `(1)`
+  against `1.` does.
 
-  (6) **Keywords acquire no number and withdraw no anchor.** Over
-  `tests/fixtures/keywords.md`: the captioned table reads **`Table 1.1`** and not `Table 2.1`,
-  its `#` heading reads **`1`** and not `2`, and `core/src/lib.rs:anchors_from` returns a
-  **non-empty** list. This is the case that fails a look spelling the label as a `heading`,
-  and it is Phase 10's gate (5) run over the second construct rather than a new argument.
+  (6) **Keywords acquire no number and withdraw no anchor.** Over `tests/fixtures/keywords.md`:
+  `core/src/lib.rs:anchors_from` returns a **non-empty** list, which is a `cargo test`; and the
+  captioned table reads **`Table 1.1`** and not `Table 2.1` with its `#` heading reading **`1`**
+  and not `2`, which is **read by eye once with `pdftotext`**, no Rust suite here shelling out
+  to it. The split is named because round 1 found the draft silent on it, and it is Phase 10's
+  own split over the second construct.
 
-  (7) **The position rule holds in the three shapes a single fixture cannot state.** Keywords
-  with **no abstract above them** compile and stack under the title block; keywords **above** an
-  abstract compile and typeset in that order, which is the author's own and not a refusal; and
-  keywords in **a section file of their own** work, `mpdf-008` having joined before the walk
-  begins. The third is the case that fails a front-matter test written against the master
-  rather than against the joined stream, and the second is the case that fails an
-  implementation that ordered the two constructs for the author.
+  (7) **The position rule holds in the three shapes one fixture cannot state**, each with the
+  document named above. `keywords_alone.md` compiles and stacks under the title block;
+  `keywords_first.md` compiles and typesets in the author's order, which is the case that fails
+  an implementation that ordered the two constructs for the author; and
+  `keywords_sections.md` works, `mpdf-008` having joined before the walk begins, which is the
+  case that fails a front-matter test written against the master rather than the joined stream.
+
+  **Nothing here gates the spacing, and that is a judgement rather than an omission.** Round 2
+  observed that an implementer could reintroduce the "glued to the text" defect the article
+  look's own comment records and still pass all eight cases. Delegating typography to the look
+  is this spec's rule from Phase 1 onward and no phase here has ever gated a gap; what made the
+  observation worth recording is that a *stale rationale* turns a free choice into a trap, which
+  is why that comment is corrected in the close-out rather than a gate added here.
 
   (8) **`cargo test --workspace` passes and `spec-lint` exits zero with no error.** **The one
   warning it prints is inherited and is named so an implementer does not chase it**:
   `rules/desktop-geometry.md` carries `RULE_SOURCES_WITHOUT_GENERATED`, pre-existing and
-  untouched.
+  untouched. **A rule file over its `max_lines` is a *warning*, not an error**, which round 2
+  corrected — `spec-lint` records that "setting a cap does not require rewriting a rule to fit
+  it". The two raises are still owed on the numbers, and the reason is those numbers rather
+  than this gate: an unraised cap would show up here as a **second** warning, against the one
+  this gate names.
 
-  **Two shipped assertions move and are named rather than discovered.**
+  **Three shipped assertions move and are named rather than discovered.**
   `core/tests/golden_test.rs:every_bundled_template_meets_the_call_contract` gains one needle,
-  `#let keywords(`, and nothing about its shape changes.
+  `#let keywords(`. `core/tests/golden_test.rs:the_dialect_reads_one_word_and_leaves_the_rest_alone`
+  keeps passing — it probes `::: table` — but its **name and doc comment assert a narrowing that
+  no longer holds**, so both move. And
   `app/src/preview.rs:the_anchors_are_the_headings_of_whichever_file_the_pane_holds` pins
-  `[24, 39, 78]` over `samples/showcase/showcase.md`, and the close-out adds lines above the
-  last of them.
+  `[24, 39, 78]` over `samples/showcase/showcase.md`; the close-out adds lines **above the
+  first** of them, so **all three move**, and so does that test's doc comment, which names the
+  frontmatter and the abstract block the pinned lines sit below.
 
 - **Close-out.**
 
-  **`rules/pipeline.md` owes a second cap raise**, and it is named here rather than discovered:
-  the file stands at **1132 of `max_lines: 1145`**, thirteen lines of headroom, measured
-  2026-09-02. A construct with eight refusals cannot land in thirteen lines, so the cap moves
-  as part of the diff exactly as it did for Phase 10.
+  **Two rule files owe a cap raise**, both named here rather than discovered at gate (8), where
+  an overflow is an error. `rules/pipeline.md` stands at **1132 of `max_lines: 1145`** and
+  `rules/web-demo.md` at **243 of 245**, measured 2026-09-01.
 
-  The passages, **six**: the dialect list and its count sentence, twenty-five to twenty-six;
-  the `:::` section, whose "the dialect reads exactly one word on an opener" is the sentence §2
-  corrects and here is simply made true, plus the reserved-word table and the front-matter
-  position rule; the export contract, three names to four; the looks paragraph, which gains
-  what each look does with a list of terms; the Math section's already-qualified "the block is
-  written wherever the span sits", which gains a second refusing position; and `covers:`.
+  **`rules/pipeline.md`, eleven passages.** The dialect list and its count, twenty-five to
+  twenty-six; the `:::` section, whose **"The dialect reads exactly one word on an opener"** is
+  **made false** by this phase and corrected — a draft of this close-out said "made true",
+  carrying Phase 10's own wording over to a sentence Phase 10 had written; the reserved-word
+  table and the front-matter position rule; **"Nine group shapes are errors"**, which the fifth
+  nesting pairing takes to ten and to three messages; **"Eight abstract shapes are errors"**,
+  which keywords-inside-an-abstract takes to nine; **"It must be the document's first block"**,
+  which step 1's widening makes inaccurate; the export contract, three names to four; and the
+  looks paragraph. `covers:` gains the construct.
 
-  **`rules/web-demo.md`'s count moves**, and `web/index.html`'s lede **goes a third behind**.
-  It stays a logged gap with its line named, on Phase 10's argument unchanged: an abstract row
-  and now a keywords row are real work under `mpdf-006`'s own gate, every claim on that page
-  being a snippet the workspace suite compiles. **That the gap has widened twice is itself
-  worth the line** — a logged gap that keeps growing is a phase of `mpdf-006` waiting to be
-  drafted, not a note to re-write a third time.
+  **Three more in that file, all found by round 2, all in the section this phase is already
+  rewriting, and one of them already stale before this phase.** *"The dispatch is therefore
+  three-state"* is the rules-file twin of the code comment named below — the same sentence one
+  file over, and nothing in `cargo test` or `spec-lint` reads either. *"Not one of this file's
+  two truncates is an append"* is the stale one: there are **four** in `core/src/emit.rs`
+  today — `splice_caption`, `take_member`, `close_group` and `close_abstract` — so the count has
+  been wrong since Phase 5, and a keywords closer makes five. *"The second and third non-append
+  writes in the file"* moves with it. **A count that was already wrong before the phase touching
+  it is the defect this corpus keeps rediscovering**, and correcting it here costs less than
+  logging it.
 
-  `README.md`, **four sites and a section of its own**: the dialect list; the `:::` opener-word
-  sentence, which Phase 10 made read "one word" and this makes read two; the third-look
-  contract in both the `## Styling` prose and its export list; and a
+  **`rules/web-demo.md`, two passages**: the construct count, and the "the page's own lede is
+  two behind" paragraph, which goes to three. `web/index.html` stays a **logged gap with its
+  line named**, on Phase 10's argument unchanged — an abstract row and now a keywords row are
+  real work under `mpdf-006`'s own gate. **That the gap has widened twice is itself worth the
+  line**: a logged gap that keeps growing is a phase of `mpdf-006` waiting to be drafted, not a
+  note to re-write a third time.
+
+  **`README.md`, eight sites and a section of its own.** The dialect list. **Both** opener-word
+  sentences — the group section's "`md2pdf` reads one word after the opener" and the abstract
+  section's "the one word `md2pdf` reads after the opener" — where a draft named one. **Both**
+  error-count sentences, "Nine things are errors" in the group section and "Eight things are
+  errors" in the abstract section. The abstract section's **"It has to be the document's first
+  block, and there may be only one"**, which step 1's widening makes wrong. The third-look
+  contract in both the `## Styling` prose and its export list. **"`samples/abstract.md` is one
+  construct on its own"** in "Try it", which the sample's own edit makes two — round 2's catch,
+  at a site Phase 10's close-out had named for the same file. And a
   `## The keywords a paper is indexed by` section, on Phase 10's argument that a construct with
-  a syntax and eight refusals gets one or the phase ships no user-facing documentation of its
+  a syntax and nine refusals gets one or the phase ships no user-facing documentation of its
   own subject.
 
-  **Both samples, and the showcase is not skipped this time.** `samples/abstract.md` gains
-  keywords under its abstract, which is where a reader who came from "Try it" will look for
-  them. `samples/showcase/showcase.md` gains them too, and **the pin moves with them** —
-  Phase 10 skipped the showcase to keep `app/src` out of its diff and its close-out named the
-  cost; the four "every construct" claims are true again only while the showcase carries every
-  construct, so skipping twice would falsify them twice. `app/src/preview.rs`'s `[24, 39, 78]`
-  moves, and **the page count is measured rather than assumed**: the showcase must still
-  compile to 6 pages with its last section on the sixth, or `tests/gates/mpdf-009-phase5.js`'s
-  `k.length === 6` and `tests/gates/mpdf-010-phase2.js`'s reasoning about a heading on the
-  sixth page both break. Neither is inside `cargo test`.
+  **Eight code sites state the old rule or the old contract, where a draft named none** — and
+  Phase 10 named five, which is the omission round 1 measured against. In
+  `core/src/emit.rs`: `RESERVED`'s "**One entry, and the shape is the point** … `abstract` is
+  the only word the dialect reads"; `group_marker`'s "the dialect reads exactly **one** of
+  them"; `Marker`'s "closes whichever of **the two** is open"; `nested`'s "one message over
+  **four** pairings"; `Walk::unclosed`'s "**Only one of the two** can be open at a time"; and
+  the `:::` arm's inline "**The dispatch is three-state**". And the third-look contract in
+  **both** look headers, which state it in **different words** — `core/assets/template.typ`
+  "exports `divider` and `abstract` beside `template`" against
+  `core/assets/press-release.typ` "the same three names" — the trap Phase 10 recorded and this
+  phase re-enters, since an implementer grepping either quote finds one file.
+
+  **Three claims inside the two look files, and one of them voids a rationale tuned two commits
+  ago.** Round 2 found all three and a draft of this close-out named none, having treated the
+  looks as gaining code rather than as carrying prose. `core/assets/template.typ` says **"The
+  two floats stack in source order, the title block first"** — three floats now — and,
+  load-bearingly, records the reason for its `clearance: 2em` as **"the abstract is the boundary
+  between the front matter and the body, so that gap is the larger of the two"**. A keywords
+  float stacking under the abstract makes that clearance an *internal* front-matter gap, so the
+  measured argument for the value stops describing what the value does. **The number is not
+  necessarily wrong and the reason certainly is**, so this phase corrects the reason rather than
+  re-tuning the number: which gap should be largest is a look's own call, and no gate here reads
+  it. `core/assets/press-release.typ` says the emitter's `#abstract[…]` is **"the first thing in
+  the body, so the standfirst lands under that rule by standing where it stands"** — false under
+  `keywords_first.md`, and that look uses no float machinery at all, so source order is the only
+  thing placing either block.
+
+  **Every user-facing statement of the abstract's old position rule**, which step 1's widening
+  makes wrong and which a draft of this close-out left standing: `samples/abstract.md`'s
+  "before anything else in the document" and its "**First, and once.**" section, and
+  `samples/showcase/showcase.md`'s "the only construct in the dialect that has to come first".
+
+  **`samples/showcase/sections/figures.md`'s opener-word sentence** — "md2pdf reads one word
+  after the opener, `abstract`, and every other one is yours". **This is the same file, the
+  same sentence and the same class of omission Phase 10's close-out missed**, found then by a
+  later pass and now by round 1; naming it here is the cheapest place the corpus has to stop
+  the pattern repeating a third time.
+
+  **Both samples gain keywords, and the showcase's history is stated correctly** — a draft said
+  Phase 10 skipped the showcase and that skipping twice would falsify the claims twice, which
+  round 1 falsified: Phase 10's close-out named a later pass, that pass ran, the showcase
+  carries `::: abstract` and the pin already moved to the `[24, 39, 78]` this phase cites. So
+  the claims stand unqualified today and skipping once would falsify them once. There are
+  **five** of them, not four — `samples/showcase/showcase.md` carries a second inside the
+  abstract itself. `samples/abstract.md` gains keywords under its abstract, where a reader who
+  came from "Try it" will look. `samples/showcase/showcase.md` gains them too, **the pin moves
+  with them**, and **the page count is measured rather than assumed**: the showcase must still
+  compile to 6 pages with its last section on the sixth, or
+  `tests/gates/mpdf-009-phase5.js`'s `k.length === 6` and `tests/gates/mpdf-010-phase2.js`'s
+  reasoning about a heading on the sixth page both break. Neither is inside `cargo test`.
+  `samples/showcase/README.md`'s file table names what the master carries and gains keywords
+  beside the abstract.
 
   **`rules/desktop-panes.md` owes a re-measurement, and this is the second phase running to
   owe it.** That file states the showcase PDF's text-item count and the coordinates its
