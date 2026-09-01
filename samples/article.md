@@ -38,10 +38,11 @@ and you get plain, so nothing is numbered and the page reads as it did before
 the key existed. You decide whether; the look decides what a number looks like.
 
 The six keys this file leaves out are affiliation, date, template, figures,
-headings and bibliography. The document under samples/showcase names nine of the
-ten at once, and uses every construct the dialect carries besides — including
-being written across several files, which this one is not; the file beside this
-one, samples/authors.md, carries the tenth.
+headings and bibliography. The document under samples/showcase names all ten at
+once, and uses every construct the dialect carries besides — including being
+written across several files, which this one is not. The file beside this one,
+samples/authors.md, is the short version: three authors and two labs, nothing
+else.
 
 A key outside those ten is an error rather than a silent omission. So is a
 columns value of 3, a template name outside the two, and an equations or

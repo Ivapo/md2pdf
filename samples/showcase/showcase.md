@@ -1,6 +1,7 @@
 ---
 title: Everything the Dialect Carries
-author: Ivan Postigo
+author: Postigo, Ivan^1; A Second Author^2; A Third^1, 2
+affiliation: The Typesetting Works, Madrid; A Second Lab, Cambridge
 date: 23 August 2026
 template: article
 columns: 1
@@ -25,15 +26,22 @@ this folder reaches outside it — the bibliography sits beside this file and th
 four figures beside the sections that draw them, which is the only shape a path
 may take. A document and the files it names travel as one folder.
 
-## The frontmatter, nine of the ten keys
+## The frontmatter, all ten keys
 
-The block at the top of this file carries nine of the ten, and all ten are
-optional. The tenth is `affiliation`, which samples/authors.md carries instead.
-Delete the whole block and the PDF still compiles, with no title block at all.
+The block at the top of this file carries every key there is, and all ten are
+optional. Delete the whole block and the PDF still compiles: it arrives with no
+title block, two columns, no numbers on anything, and no reference list.
 
-`title`, `author` and `date` become the block at the top of the first page, and
-`date` is your text and nothing else — md2pdf never reads a clock, so this file
-makes the same PDF on every machine and on any day.
+`title`, `author`, `affiliation` and `date` become the block at the top of the
+first page. `date` is your text and nothing else — md2pdf never reads a clock,
+so this file makes the same PDF on every machine and on any day.
+
+`author` and `affiliation` are both lists, separated by `;` and never by a
+comma: the first name above is `Postigo, Ivan`, which is one person. A `^`
+after a name points at an affiliation, numbered from 1 in the order you wrote
+them, and a name may point at more than one — the third author above writes
+`^1, 2` and reads with both numbers as a single superscript. With exactly one
+affiliation you may leave the markers out and every author belongs to it.
 
 `template` picks the look and takes `article` or `press-release`. This file
 names the first; change that one word and convert again to read all of this in
