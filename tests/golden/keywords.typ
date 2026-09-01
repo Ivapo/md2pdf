@@ -1,0 +1,30 @@
+#import "template.typ": template, divider, abstract, keywords
+#show: template.with(title: "A Paper With Keywords", author: ((name: "Iva Po", markers: ()),), affiliation: none, columns: 2, date: none, equations: "plain", figures: "sectioned", headings: "2")
+
+#abstract[
+The terms a paper is indexed by are metadata rather than prose, and the obvious
+home for metadata is a frontmatter key. That home was measured and rejected: a
+look placing the terms from its own arguments places them at a fixed point in
+its own template, so keywords written above an abstract and keywords written
+below one would land in the same place, whatever the author wrote.
+
+So the terms live in the body, between a pair of #raw(":::") lines with the word
+#raw("keywords") after the opener, and one paragraph of them separated by #raw(";"). The
+semicolon is this project's own separator for a list whose members may hold
+commas, which the frontmatter's #raw("author") and #raw("affiliation") keys already use for
+exactly that reason, and a term such as the third below carries one.
+]
+
+#keywords(([cross\-references], [C\# and C\+\+], [figure numbering, sectioned], [markdown]))
+
+= Introduction
+
+The keywords above take no number and restart no counter, so the table below is
+the first table of the first section rather than the second.
+
+#figure(table(
+  columns: 2,
+  align: (auto, center),
+  table.header([Construct], [Counter]),
+  [a table], [its own],
+), caption: [The only table this paper shows, and the first of its section.]) <tab:one>

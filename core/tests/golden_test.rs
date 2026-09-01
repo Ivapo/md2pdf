@@ -85,6 +85,24 @@ const ABSTRACT_TYP: &str = include_str!("../../tests/golden/abstract.typ");
 const ABSTRACT_SECTIONS_MD: &str = include_str!("../../tests/fixtures/abstract_sections.md");
 const SECTION_ABSTRACT_MD: &str = include_str!("../../tests/fixtures/sections/abstract.md");
 const SECTION_INTRO_MD: &str = include_str!("../../tests/fixtures/sections/intro.md");
+const KEYWORDS_MD: &str = include_str!("../../tests/fixtures/keywords.md");
+const KEYWORDS_TYP: &str = include_str!("../../tests/golden/keywords.typ");
+/// A document that opens keywords and no abstract.
+///
+/// The other direction of the import test: a golden of its own is what says the
+/// two flags are independent, since a document with keywords and no abstract
+/// moves no shipped golden and so nothing else would notice.
+const KEYWORDS_ALONE_MD: &str = include_str!("../../tests/fixtures/keywords_alone.md");
+const KEYWORDS_ALONE_TYP: &str = include_str!("../../tests/golden/keywords_alone.typ");
+/// Keywords written *above* an abstract, which is the author's own order.
+///
+/// The case that fails an implementation that ordered the two constructs for
+/// the author: floats stack in the order they are issued, so what is written
+/// first is set first.
+const KEYWORDS_FIRST_MD: &str = include_str!("../../tests/fixtures/keywords_first.md");
+/// A master whose first named section is the whole of the keywords block.
+const KEYWORDS_SECTIONS_MD: &str = include_str!("../../tests/fixtures/keywords_sections.md");
+const SECTION_KEYWORDS_MD: &str = include_str!("../../tests/fixtures/sections/keywords.md");
 
 /// Every bundled look, by the name the `template` key selects it with. **Six
 /// tests read these**: the call contract `mpdf-001` Phase 9 fixed, and the five
@@ -1453,18 +1471,19 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 /// Every bundled look meets the call contract the emitter writes.
 ///
 /// `header` names all eight arguments on every call, and imports two of the
-/// three exported names on every document and the third on a document that
-/// opened an abstract, so a look missing one would fail the compile with an
-/// error naming neither the document nor the key. Golden files pin emitter
-/// output only, so the templates' side of the contract needs an artifact of its
-/// own.
+/// four exported names on every document, the third on a document that opened
+/// an abstract and the fourth on one that opened a keywords block, so a look
+/// missing one would fail the compile with an error naming neither the document
+/// nor the key. Golden files pin emitter output only, so the templates' side of
+/// the contract needs an artifact of its own.
 ///
-/// **`abstract` joins the export needles rather than taking a test of its own**,
-/// where a caption, a gutter and a listing's inset each took one: those are
-/// `show` rules crossing no argument, and this is a name the import line names.
-/// It is *not* a ninth parameter — the call contract stays at eight — and what
-/// the label looks like, and whether a look sets one at all, is each look's own
-/// call, which is why the word `Abstract` is deliberately not a needle.
+/// **`abstract` and `keywords` join the export needles rather than taking a test
+/// of their own**, where a caption, a gutter and a listing's inset each took
+/// one: those are `show` rules crossing no argument, and these are names the
+/// import line names. Neither is a ninth parameter — the call contract stays at
+/// eight — and what a label looks like, and whether a look sets one at all, is
+/// each look's own call, which is why the words `Abstract` and `Keywords` are
+/// deliberately not needles.
 ///
 /// `equations` brings a second needle with it, `math.equation`: the parameter
 /// alone would be satisfied by a look that took the argument and ignored it,
@@ -1507,6 +1526,7 @@ fn every_bundled_template_meets_the_call_contract() {
             "#let template(",
             "#let divider(",
             "#let abstract(",
+            "#let keywords(",
             "title:",
             "author:",
             "affiliation",
@@ -4907,8 +4927,11 @@ fn markers_with_nothing_to_point_at_are_cleared() {
 ///
 /// The import is the load-bearing half. `header` names `abstract` only for a
 /// document that opened one, which is what keeps every shipped golden file
-/// byte-identical — the suite reads all thirty of them, so an implementation
-/// that widened it unconditionally fails here and there at once.
+/// byte-identical — the suite reads all thirty-three of them, so an
+/// implementation that widened it unconditionally fails here and there at once.
+/// The count read thirty when this test was written and the directory held
+/// thirty-one; re-measured with `ls tests/golden | wc -l`, which is the
+/// instrument, so a later reader checks it rather than trusting it.
 #[test]
 fn the_abstract_fixture_matches_its_golden_file() {
     assert_eq!(md_to_typst(ABSTRACT_MD, &[]).unwrap(), ABSTRACT_TYP);
@@ -5122,15 +5145,19 @@ fn each_abstract_refusal_names_its_construct_and_its_line() {
     }
 }
 
-/// The reservation is one word, and the marker's other positions are unmoved.
+/// The reservation is two words, and the marker's other positions are unmoved.
 ///
-/// **`abstract` is the only word the dialect reads.** Every other one still
-/// opens the figure group it always did, which is what holds the narrowing to
-/// the single word the census found unused — and a `: ` line standing where
-/// nothing captionable does is still the ordinary prose it has been since
-/// Phase 1, now with an abstract above it.
+/// **`abstract` and `keywords` are the only words the dialect reads.** Every
+/// other one still opens the figure group it always did, which is what holds
+/// the two narrowings to the two words the census found unused — and a `: `
+/// line standing where nothing captionable does is still the ordinary prose it
+/// has been since Phase 1, now with a front-matter block above it.
+///
+/// The name and this comment moved at Phase 11: the assertions did not, because
+/// `::: table` is what they probe and a second reserved word leaves it exactly
+/// where it was.
 #[test]
-fn the_dialect_reads_one_word_and_leaves_the_rest_alone() {
+fn the_dialect_reads_its_reserved_words_and_leaves_the_rest_alone() {
     let group = md_to_typst(
         "::: table\n\n![a](dot.png)\n\n![b](dot.png)\n\n: Two tables' worth.\n\n:::\n",
         &[],
@@ -5141,8 +5168,8 @@ fn the_dialect_reads_one_word_and_leaves_the_rest_alone() {
         "a word the dialect does not read stopped opening a group: {group}"
     );
     assert!(
-        !group.contains("abstract"),
-        "a group grew an abstract: {group}"
+        !group.contains("abstract") && !group.contains("keywords"),
+        "a group grew a front-matter block: {group}"
     );
 
     let after = md_to_typst("::: abstract\n\nOne.\n\n:::\n\n: Just prose.\n", &[]).unwrap();
@@ -5150,4 +5177,417 @@ fn the_dialect_reads_one_word_and_leaves_the_rest_alone() {
         after.ends_with(": Just prose.\n"),
         "a `: ` line under no construct stopped being prose: {after}"
     );
+}
+
+// -- mpdf-005 Phase 11: the keywords a paper is indexed by -------------------
+
+/// The fixture matches its golden, and the golden is where the escape is pinned.
+///
+/// **The bytes are the point of this case.** The closer reads a region the walk
+/// has *already* markup-escaped, so the terms cross as an array of **content**
+/// and no escape runs in this phase at all. Two wrong builds are what the
+/// assertion below discriminates against, and neither is subtle:
+/// `("cross\-references", …)` is the string-literal draft, where those escapes
+/// are not string escapes at all and the compile fails; and
+/// `[cross\\\-references]` is a second `escape_into` pass, which puts the
+/// backslashes on the page.
+///
+/// A hyphen is the common case rather than an edge — `-` and `#` are both in
+/// `SPECIAL` — which is why the fixture carries `cross-references` and
+/// `C# and C++` and a comma-carrying term beside them.
+#[test]
+fn the_keywords_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(KEYWORDS_MD, &[]).unwrap(), KEYWORDS_TYP);
+    assert!(
+        KEYWORDS_TYP
+            .starts_with("#import \"template.typ\": template, divider, abstract, keywords\n"),
+        "the golden does not carry the four-name import line"
+    );
+    assert!(
+        KEYWORDS_TYP.contains(
+            "#keywords(([cross\\-references], [C\\# and C\\+\\+], \
+             [figure numbering, sectioned], [markdown]))"
+        ),
+        "the golden does not carry the four terms as escaped content"
+    );
+}
+
+#[test]
+fn the_keywords_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(KEYWORDS_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// The two import flags are independent, in both directions.
+///
+/// `abstract.typ` is the one shipped golden that fails an implementation
+/// importing `keywords` for every document that has an abstract, and every other
+/// golden fails one that widens the list unconditionally. **The reverse
+/// direction moves no shipped golden at all**, which is why a document with
+/// keywords and no abstract needs a golden of its own.
+#[test]
+fn a_document_with_keywords_and_no_abstract_imports_neither_the_other_way() {
+    assert_eq!(
+        md_to_typst(KEYWORDS_ALONE_MD, &[]).unwrap(),
+        KEYWORDS_ALONE_TYP
+    );
+    assert!(
+        KEYWORDS_ALONE_TYP.starts_with("#import \"template.typ\": template, divider, keywords\n"),
+        "the golden does not carry the three-name import line"
+    );
+    assert!(
+        !KEYWORDS_ALONE_TYP.contains("abstract"),
+        "a document with no abstract imported one: {KEYWORDS_ALONE_TYP}"
+    );
+    assert!(
+        !ABSTRACT_TYP.contains("keywords"),
+        "a document with no keywords imported them: {ABSTRACT_TYP}"
+    );
+}
+
+/// The terms cross as separate elements, and the separator is never written here.
+///
+/// **The check is the array's structure and not a scan for separator
+/// characters**, and the fixture is why: the array's own syntax *is* a comma and
+/// a space, and one of these four terms contains a comma. Four bracket groups
+/// delimited by `], [` is the property, and it fails an emitter that joined the
+/// terms itself into one element.
+#[test]
+fn the_emitter_writes_the_terms_as_elements_and_joins_nothing() {
+    let source = md_to_typst(KEYWORDS_MD, &[]).unwrap();
+    let call = source
+        .split_once("#keywords(")
+        .expect("the fixture opens a keywords block")
+        .1
+        .split_once("))")
+        .expect("the call closes")
+        .0;
+    assert_eq!(
+        call.matches("], [").count(),
+        3,
+        "four terms did not reach the call as four elements: {call}"
+    );
+    assert!(
+        !call.contains('"'),
+        "the terms crossed as string literals rather than as content: {call}"
+    );
+}
+
+/// The separator between two terms is each look's own, applied with `join`.
+///
+/// **The needle is scoped to the slice beginning at `#let keywords(`, and that
+/// is the whole of what makes this case mean anything**: both looks already
+/// carry `join(` three times each for the author block, so a whole-file needle
+/// passes on a tree with no keywords code in either look — and would still pass
+/// a look that wrote `terms.at(0) + ", " + terms.at(1)`, which is the exact
+/// defect this exists to catch.
+///
+/// **The two looks are deliberately not required to differ.** Phase 6 and Phase
+/// 9 both recorded that two looks agreeing is not the seam collapsing, so a
+/// check that forced disagreement would make house style a correctness property.
+/// The separator *values* stay off the needle list for the reason `(1)` against
+/// `1.` does.
+#[test]
+fn every_bundled_look_joins_the_terms_itself() {
+    for (file, source) in BUNDLED_TEMPLATES {
+        let definition = source
+            .split_once("#let keywords(")
+            .unwrap_or_else(|| panic!("{file} does not export keywords"))
+            .1;
+        assert!(
+            definition.contains("join("),
+            "{file} does not join the terms inside its own keywords definition"
+        );
+    }
+}
+
+/// Keywords take no number and withdraw no anchor.
+///
+/// The label is styled text in both looks and never a `heading`. One spelled as
+/// a heading typesets one `core` never counted, and `anchors_from` returns an
+/// **empty vector** on that mismatch — silently, taking the desktop pane's
+/// scroll sync with it and leaving nothing on the page to show for it. It would
+/// also restart every counter under `figures: sectioned`, which the fixture's
+/// own `Table 1.1` is read by eye for.
+#[test]
+fn keywords_withdraw_no_heading_anchor() {
+    let rendered = md_to_pdf_with_anchors(KEYWORDS_MD, &[]).unwrap();
+    assert_eq!(
+        rendered.anchors.len(),
+        1,
+        "the keywords moved the heading count: {:?}",
+        rendered.anchors
+    );
+}
+
+/// Keywords may stand above an abstract, and the order is the author's.
+///
+/// **Phase 11 widened Phase 10's refusal rather than replacing it.** The
+/// position rule is now "everything above a front-matter block is front matter",
+/// so either may follow the other, and the floats stack in the order they are
+/// issued. This is the case that fails an implementation that ordered the two
+/// constructs for the author.
+#[test]
+fn keywords_may_stand_above_an_abstract() {
+    let source = md_to_typst(KEYWORDS_FIRST_MD, &[]).unwrap();
+    let keywords = source
+        .find("#keywords(")
+        .expect("the document has keywords");
+    let r#abstract = source
+        .find("#abstract[")
+        .expect("the document has an abstract");
+    assert!(
+        keywords < r#abstract,
+        "the emitter reordered the two blocks: {source}"
+    );
+
+    let pdf = md_to_pdf(KEYWORDS_FIRST_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// Keywords may be a section file of their own.
+///
+/// `mpdf-008` joins before the walk begins, so the front matter is the front
+/// matter of the *stream*. This is the case a position test written against the
+/// master would refuse.
+#[test]
+fn keywords_may_be_written_in_their_own_section_file() {
+    let sections = vec![
+        section("sections/keywords.md", SECTION_KEYWORDS_MD),
+        section("sections/intro.md", SECTION_INTRO_MD),
+    ];
+    let source = md_to_typst(KEYWORDS_SECTIONS_MD, &sections).unwrap();
+    assert!(
+        source.contains("#keywords("),
+        "the keywords did not survive the join: {source}"
+    );
+
+    let pdf = md_to_pdf(KEYWORDS_SECTIONS_MD, &sections).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// Every keywords refusal names its construct and its line.
+///
+/// **Twenty-nine rows over nine refusals and one message.** The arithmetic is
+/// the nine, plus two more for the frame refusal, one more for the
+/// body-content-above one, three more for the leading, embedded and trailing
+/// empty term, eight more for the nine spellings the plain-text rule refuses,
+/// the five pairings the nesting message covers — and **one more than the
+/// phase's own count, which said twenty-eight**: a formula is one spelling and
+/// *two* events, `InlineMath` and `DisplayMath`, so it is two call sites and a
+/// row that covered one would leave the other unguarded. The count is written
+/// here rather than carried over, because a count whose sentence no longer adds
+/// up is this corpus's recurring defect.
+///
+/// **Each of the nine spellings takes a row of its own**, on the abstract
+/// table's own precedent: a single message covering nine constructs is the
+/// implementation this refusal exists to fail. The names cannot come from
+/// `describe`, which answers `"markdown construct"` for an emphasis and
+/// `"supported construct"` for inline code, a formula and a hard break.
+///
+/// **The footnote row's definition must be cited**, or `Notes::enter` refuses
+/// the uncited definition first and the row asserts the wrong string —
+/// Phase 10's measurement, reused rather than rediscovered. It is cited from
+/// inside the block, which is also the only place a document with keywords in
+/// its front matter has to cite it from.
+///
+/// **Each nesting row's nested opener stands first in the block**, since a
+/// nested opener written after a term is a second paragraph — and although the
+/// second-paragraph refusal is tested at the closer and so cannot fire on an
+/// opener at all, a row that depended on that would be pinning an implementation
+/// detail rather than a message.
+#[test]
+fn each_keywords_refusal_names_its_construct_and_its_line() {
+    for (md, construct, line, what) in [
+        (
+            "::: keywords\n\na\n\n:::\n\n::: keywords\n\nb\n\n:::\n",
+            "second keywords block in one document",
+            7,
+            "a second keywords block in one document",
+        ),
+        (
+            "Body.\n\n::: keywords\n\na\n\n:::\n",
+            "keywords with body content above them",
+            3,
+            "keywords under a paragraph",
+        ),
+        (
+            "# H\n\n::: keywords\n\na\n\n:::\n",
+            "keywords with body content above them",
+            3,
+            "keywords under a heading",
+        ),
+        (
+            "- ::: keywords\n\n  a\n\n  :::\n",
+            "keywords inside a list item, a block quote or a footnote definition",
+            1,
+            "keywords inside a list item, whose frame is empty where the document's is not",
+        ),
+        (
+            "> ::: keywords\n>\n> a\n>\n> :::\n",
+            "keywords inside a list item, a block quote or a footnote definition",
+            1,
+            "keywords inside a block quote, on the same frame reasoning",
+        ),
+        (
+            "A note.[^1]\n\n[^1]: The note.\n\n    ::: keywords\n\n    a\n\n    :::\n",
+            "keywords inside a list item, a block quote or a footnote definition",
+            5,
+            "keywords inside a cited footnote definition, which a frame test alone admits",
+        ),
+        (
+            "::: keywords\n\na\n\n## Nope\n\n:::\n",
+            "block inside keywords that is not a paragraph",
+            5,
+            "a heading inside keywords",
+        ),
+        (
+            "::: keywords\n\na\n\nb\n\n:::\n",
+            "second paragraph inside keywords",
+            1,
+            "a second paragraph inside keywords, caught at the closer",
+        ),
+        (
+            "::: keywords\n\n*a*; b\n\n:::\n",
+            "emphasis inside keywords",
+            3,
+            "emphasis inside keywords",
+        ),
+        (
+            "::: keywords\n\n~~a~~; b\n\n:::\n",
+            "strikethrough inside keywords",
+            3,
+            "strikethrough inside keywords",
+        ),
+        (
+            "::: keywords\n\n`a`; b\n\n:::\n",
+            "inline code inside keywords",
+            3,
+            "inline code inside keywords, whose content could hold the separator",
+        ),
+        (
+            "::: keywords\n\n[a](https://example.com); b\n\n:::\n",
+            "link inside keywords",
+            3,
+            "a link inside keywords, whose URL could hold the separator",
+        ),
+        (
+            "::: keywords\n\n$x$; b\n\n:::\n",
+            "formula inside keywords",
+            3,
+            "an inline formula inside keywords",
+        ),
+        (
+            "::: keywords\n\n$$x$$; b\n\n:::\n",
+            "formula inside keywords",
+            3,
+            "a display formula inside keywords",
+        ),
+        (
+            "::: keywords\n\na[^1]; b\n\n:::\n\n[^1]: The note.\n",
+            "footnote inside keywords",
+            3,
+            "a footnote reference inside keywords, its definition cited from there",
+        ),
+        (
+            "::: keywords\n\n![a](dot.png); b\n\n:::\n",
+            "image inside keywords",
+            3,
+            "an image inside keywords",
+        ),
+        (
+            "::: keywords\n\n[@one]; b\n\n:::\n",
+            "citation inside keywords",
+            3,
+            "a citation inside keywords, which is a link until its end event",
+        ),
+        (
+            "::: keywords\n\na\\\nb\n\n:::\n",
+            "hard break inside keywords",
+            3,
+            "a hard break inside keywords, which an abstract permits",
+        ),
+        (
+            "::: keywords\n\n:::\n",
+            "keywords with no terms",
+            1,
+            "an empty keywords block, which Typst would otherwise set as a bare label",
+        ),
+        (
+            "::: keywords\n\n;a\n\n:::\n",
+            "keywords with an empty term",
+            1,
+            "a leading separator",
+        ),
+        (
+            "::: keywords\n\na;;b\n\n:::\n",
+            "keywords with an empty term",
+            1,
+            "an embedded empty term",
+        ),
+        (
+            "::: keywords\n\na;\n\n:::\n",
+            "keywords with an empty term",
+            1,
+            "a trailing separator",
+        ),
+        (
+            "::: keywords\n\n: A caption.\n\n:::\n",
+            "caption line inside keywords",
+            3,
+            "a `: ` line inside keywords, which `attaches` would otherwise let through",
+        ),
+        (
+            "::: keywords\n\na\n",
+            "keywords the document never closes",
+            1,
+            "keywords the document never closes",
+        ),
+        (
+            "::: abstract\n\n::: keywords\n\n:::\n",
+            "keywords inside an abstract",
+            3,
+            "keywords opened inside an abstract",
+        ),
+        (
+            "::: keywords\n\n::: abstract\n\n:::\n",
+            "abstract inside keywords",
+            3,
+            "an abstract opened inside keywords",
+        ),
+        (
+            "::: keywords\n\n::: keywords\n\n:::\n",
+            "keywords inside keywords",
+            3,
+            "keywords opened inside keywords",
+        ),
+        (
+            "::: table\n\n::: keywords\n\n:::\n",
+            "keywords inside a figure group",
+            3,
+            "keywords opened inside a figure group",
+        ),
+        (
+            "::: keywords\n\n::: table\n\n:::\n",
+            "figure group inside keywords",
+            3,
+            "a figure group opened inside keywords",
+        ),
+    ] {
+        match md_to_typst(md, &[]) {
+            Err(Error::UnsupportedConstruct {
+                construct: found,
+                location:
+                    Location {
+                        file: None,
+                        line: found_line,
+                    },
+            }) => {
+                assert_eq!(found, construct, "for {what}");
+                assert_eq!(found_line, line, "for {what}");
+            }
+            other => panic!("expected `{construct}` for {what}, got {other:?}"),
+        }
+    }
 }
