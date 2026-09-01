@@ -466,20 +466,32 @@ pub(crate) fn parse(block: &str, first_line: usize) -> Result<Frontmatter> {
 /// `author` line the marker was written on and for the second the `affiliation`
 /// line whose relation is unstated.
 fn check_affiliations(out: &Frontmatter) -> Result<()> {
-    let count = out.affiliation.as_ref().map_or(0, |listed| listed.list.len());
+    let count = out
+        .affiliation
+        .as_ref()
+        .map_or(0, |listed| listed.list.len());
 
     // A marker naming an affiliation the document does not carry. Typst cannot
     // catch this: by the time it sees one it is a number in a list, and the
     // failure it would ship is a superscript pointing at nothing.
+    //
+    // A document with *no* affiliation at all gets its own sentence, naming both
+    // ways out. It is the commonest way to meet this error — an `affiliation`
+    // line commented out or not yet written — and "the document carries 0" reads
+    // as though an affiliation were always required, which is the opposite of
+    // what the schema says.
     if let Some(authors) = &out.author {
         for marker in authors.list.iter().flat_map(|author| &author.markers) {
             if *marker == 0 || *marker > count {
-                return Err(problem(
-                    authors.location.line,
-                    format!(
-                        "key 'author' points at affiliation {marker},                          and the document carries {count}"
+                let problem = match count {
+                    0 => format!(
+                        "key 'author' marks a name '^{marker}' and the document names no 'affiliation'; add that key, or drop the markers"
                     ),
-                ));
+                    _ => format!(
+                        "key 'author' points at affiliation {marker}, and 'affiliation' carries {count}"
+                    ),
+                };
+                return Err(self::problem(authors.location.line, problem));
             }
         }
     }
@@ -499,7 +511,7 @@ fn check_affiliations(out: &Frontmatter) -> Result<()> {
             return Err(problem(
                 listed.location.line,
                 format!(
-                    "key 'affiliation' carries {count} entries                      and no author names one with '^'"
+                    "key 'affiliation' carries {count} entries and no author points at one with '^'; a marker is optional only where there is exactly one"
                 ),
             ));
         }
@@ -931,12 +943,25 @@ mod tests {
             // A marker pointing past the affiliations the document carries, and
             // the `^0` that points before them.
             ("affiliation: One; Two\nauthor: A^1; B^3\n", 3, "carries 2"),
-            ("author: A^1\n", 2, "carries 0"),
-            ("affiliation: One; Two\nauthor: A^0; B^1\n", 3, "affiliation 0"),
+            ("author: A^1\n", 2, "names no 'affiliation'"),
+            ("author: A^1\n", 2, "drop the markers"),
+            (
+                "affiliation: One; Two\nauthor: A^0; B^1\n",
+                3,
+                "affiliation 0",
+            ),
             // Two affiliations and no marker anywhere: the relation is unstated.
             // The `affiliation` line is named, not the `author` line.
-            ("author: A; B\naffiliation: One; Two\n", 3, "no author names one"),
-            ("affiliation: One; Two\nauthor: A; B\n", 2, "no author names one"),
+            (
+                "author: A; B\naffiliation: One; Two\n",
+                3,
+                "no author points at one",
+            ),
+            (
+                "affiliation: One; Two\nauthor: A; B\n",
+                2,
+                "no author points at one",
+            ),
             // A marker that is not a number. `A^B^1` splits at the *first* `^`,
             // so what is refused is `B^1` rather than a guessed name `A^B`.
             ("author: A^x\n", 2, "not 'x'"),
@@ -947,7 +972,11 @@ mod tests {
             // the look as a nameless author or a blank affiliation a `^2` could
             // then point at.
             ("author: Iva Po;\n", 2, "key 'author' has an empty entry"),
-            ("author: A^1\naffiliation: MIT;\n", 3, "key 'affiliation' has an empty entry"),
+            (
+                "author: A^1\naffiliation: MIT;\n",
+                3,
+                "key 'affiliation' has an empty entry",
+            ),
             ("author: ^1\n", 2, "no name before its '^'"),
         ] {
             match parse(block, 2) {

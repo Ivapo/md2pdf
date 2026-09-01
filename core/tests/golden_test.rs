@@ -4797,7 +4797,10 @@ fn one_affiliation_carries_its_markers_or_leaves_them_out() {
         "author: Iva Po; Someone Else",
         "author: Iva Po^1; Someone Else^1",
     );
-    assert_ne!(marked, ONE_AFFILIATION_MD, "the substitution matched nothing");
+    assert_ne!(
+        marked, ONE_AFFILIATION_MD,
+        "the substitution matched nothing"
+    );
 
     for look in ["", "template: press-release\n"] {
         let unmarked = ONE_AFFILIATION_MD.replacen("---\n", &format!("---\n{look}"), 1);
