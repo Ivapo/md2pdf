@@ -6,7 +6,7 @@ note: >
   bibliography file, the caller supplies it as bytes beside the images, `[@key]` becomes a
   citation, and Typst renders both the marks and the list.
 status: accepted
-last_updated: 2026-08-23
+last_updated: 2026-09-01
 
 phases:
   - name: "Phase 1 — a cited source reaches the reference list"
@@ -27,6 +27,11 @@ phases:
   - name: "Phase 4 — the browser carries a bibliography of its own"
     reviewed: 2026-08-23
     shipped: 2026-08-23
+    cut: null
+    by: null
+  - name: "Phase 5 — a citation reads in the sentence, and the marks may be author-date"
+    reviewed: null
+    shipped: null
     cut: null
     by: null
 
@@ -122,6 +127,16 @@ contradict* it. §2 below is where that is spent.
   *refusal* under §2, not literal text, so that document does change and should. A
   document that names a bibliography and cites nothing gains the list and its label —
   the promise is about documents that do neither.
+
+  **WIDENED 2026-09-01, on drafting Phase 5: the promise holds for the PDF and not for
+  the Typst.** A `citations` frontmatter key crosses to the look as a ninth argument that
+  `core/src/emit.rs:header` writes on every call at its resolved default, exactly as
+  `headings` did when `mpdf-005` Phase 8 re-blessed twenty-nine goldens in one commit —
+  so every document's generated Typst gains `citations: "numeric"` on its `template.with`
+  line. What stays byte for byte is the *page*: the look answers `numeric` with the style
+  Typst already defaults to, and Phase 5's gate hashes the PDFs either side of the phase
+  to hold it. The sentence above was written before the dialect had a key that reaches
+  the look through this spec, and "the Typst it emits today" is the half it over-promised.
 - **Pandoc's prefix form is out of reach, and stated rather than discovered.** `[see @k]`
   and a bracketed email `[a@b.com]` stay literal text: §2's callback fires on a reference
   beginning `@` or `-@` and nothing else. This dialect has no prefix form, so they print
@@ -193,6 +208,13 @@ it.
 > line — but it too runs inside `emit`, which never sees asset bytes, so the check itself
 > lands beside `collect` where the bytes are. Phase 2's scope carries the corrected
 > version.
+
+**WIDENED 2026-09-01, on drafting Phase 5: `[@key]` gains two bracketed siblings and the
+bare form stays out.** `[+@key]` is the textual citation and `[-@key]` the year alone, both
+claimed by the same callback on the same argument this section makes for `-@`. Nothing
+above moves: the brackets are still what keeps `a@b.com` text, and the bare form is still
+refused by the measurement recorded here. The decision section appended at the end of §2
+carries the argument and the measurements.
 
 ### `[@key]` is not a link until a scoped callback makes it one (decision, recorded)
 
@@ -384,6 +406,82 @@ than one that lies.
 > **the page's asset channel is singular in four places.** Phase 4's scope carries the
 > corrected version.
 
+### The mark may read in the sentence, the scheme is the author's and the style is the look's, measured (decision, recorded)
+
+**APPENDED 2026-09-01**, on OQ-2 and OQ-3 being taken together, and per §6.1 step 2.
+
+**A citation may name its source inside the sentence, natbib's `\citet`, and the dialect
+spells it `[+@key]`.** Today every citation is parenthetical — `[@key]` is `#cite(label("key"))`
+and nothing else — so *"As (Postigo, 2026) showed"* is the only sentence an author can
+write. Typst's `cite` takes a `form`, and `form: "prose"` is the textual mark; it also takes
+`form: "year"`, which is what Pandoc's `[-@key]` has always meant. Both are one argument on
+the call the emitter already writes, so the mechanism costs nothing and the whole question
+is the spelling.
+
+**The bare `@key` that Pandoc and Quarto use stays out, and `+` is the sigil, mirroring
+the `-` the callback already claims.** The section above measured why an unbracketed `@`
+cannot be a citation — `a@b.com` — and the parse gives the emitter no event for a bare
+`@key` at all: reading it would mean a second, hand-written scanner over text runs beside
+`pulldown-cmark`, which is the thing the callback design refused. Inside the brackets the
+callback already fires on `-@`, and `core/src/emit.rs:cite_key`'s doc comment records that
+`-@` "is not decoration". A third prefix is the same class: `is_citation` gains `+@`, and
+`[-@key]` stops being refused by name and lands as the year. Measured 2026-09-01 through
+the shipped binary, `[+@k]` reaches the page today as `\[\+\@k\]` — literal text, so no
+shipped document changes meaning — and a census of `tests/`, `samples/`, `web/` and
+`README.md` finds `[+@` nowhere and `[-@` only in the sentences that say it is refused.
+
+**The multiple-key form lands too, and it is Typst's own merge and not a mechanism.**
+`[@a; @b]` was refused by name because Phase 1 would not guess. Measured 2026-09-01 through
+the crate's own `TypstWorld`: two `#cite` calls with nothing or only whitespace between
+them are merged into one parenthesis — `(Claude and Knuth, 2025; Postigo, 2026)` — and a
+word or a comma between them keeps them apart. So `[@a; @b]` emits the two calls adjacent,
+and `[@a] [@b]` already renders the same page. **A form on a group is refused**, `[+@a; @b]`
+and `[-@a; @b]` alike: natbib's `\citet{a,b}` exists, but Typst's merged prose group reads
+`Claude and Knuth (2025), Postigo (2026)` with a comma, which is not a sentence, and the
+rule "a form names one source" is the one an author can hold. The locator, `[@k, p. 33]`,
+stays refused: Typst's `supplement` renders it — measured, `(Postigo, 2026, p. 33)` — but
+nothing asked for it, and OQ-3 resolves into this phase with that half left open.
+
+**The style is a frontmatter key that names the scheme, and the look names the CSL.**
+`citations: author-date`, against a default `numeric` that is today's output. That is the
+dialect's own precedent three keys deep — `equations: numbered`, `figures: sectioned`,
+`headings: 2` — and `core/src/frontmatter.rs:Equations`' doc comment is the argument in its
+own words: *the author decides whether; the look decides how*. The alternative, a
+`citation-style:` key carrying Typst's CSL name, was weighed and loses: it puts Typst's
+style catalogue into the dialect, makes every look promise every style, and §1.2 already
+says no style beyond what Typst ships is in the dialect. The key crosses to the look as a
+ninth argument on `core/src/emit.rs:header`'s call, and the look answers with one `set
+bibliography(style: …)` in the ternary-in-argument shape `rules/pipeline.md` records for
+`equations`. **Measured 2026-09-01** in a look function of that shape under the emitter's
+own `#bibliography("refs.yml", title: none)` call: the marks and the list take the style,
+and `#cite`'s own `style` defaults to the bibliography's, so no per-call argument is needed.
+Under `numeric` the look sets `"ieee"` by name, which is Typst's default, so the page is
+byte for byte the page it is today.
+
+**Which author-date style is the look's, and it was chosen on the merged group.** Measured
+2026-09-01 through the crate's Typst 0.15.1, one to four authors, parenthetical and prose:
+
+| style | one, two, three authors | two sources merged |
+|---|---|---|
+| `harvard-cite-them-right` | (Postigo, 2026) · (Postigo and Claude, 2026) · (Postigo, Claude and Knuth, 2026); "et al." from four | (Claude and Knuth, 2025; Postigo, 2026) |
+| `elsevier-harvard` | same, "et al." from three | (Claude and Knuth, 2025, Postigo, 2026) |
+| `apa` | `&` for "and" | semicolons |
+| `chicago-author-date` | no comma before the year; "et al." from four | semicolons |
+
+Every style renders the prose form as *Postigo (2026)* and the year form as *2026*. No
+bundled style matches natbib's `plainnat` on both counts, so the choice is which departure
+costs less: Elsevier Harvard separates merged sources with the same comma it puts between
+author and year, so a two-source group is one run of names and years the eye cannot split,
+on every paper that cites two things at once; Harvard cite-them-right spells a third author
+out and shortens from four. **Both bundled looks answer `author-date` with
+`harvard-cite-them-right`**, on the precedent that both write `(1)` for `equations`; it is
+one string in each look, and a second scheme name would be one line in `frontmatter.rs`.
+
+**Under `numeric` the new forms still render, so they need no refusal.** Measured with
+`ieee`: `form: "prose"` reads *I. Postigo [1]* and `form: "year"` reads *2026* — which is
+what natbib does in its numeric mode too. The form is the citation's and the style is the
+document's, and the two do not have to agree for the page to make sense.
+
 ## 3. Open questions
 
 - **OQ-1 — does `core` parse the bibliography to name an unknown key, or map Typst's
@@ -409,14 +507,24 @@ than one that lies.
   *wording*, which a version bump moves silently, and it leaves the collision message of
   §2 with no route at all, since that one needs the key set rather than a message.
 - **OQ-2 — which citation style, and is it frontmatter's or the look's?** *(design call)*
-  Typst's default is IEEE-numeric. `equations: numbered` is precedent for a frontmatter
-  key that selects a rendering, and `template:` is precedent for the look owning one.
+  ~~Typst's default is IEEE-numeric. `equations: numbered` is precedent for a frontmatter
+  key that selects a rendering, and `template:` is precedent for the look owning one.~~
+  **RESOLVED 2026-09-01, on drafting Phase 5: both, split the way every numbering key is
+  split.** The frontmatter names the *scheme* — `citations: numeric | author-date`, the
+  first the default — and the look names the CSL style that answers it, which both bundled
+  looks take as `harvard-cite-them-right`. §2's appended decision carries the measurement
+  the style was chosen on and the alternative it refused.
 - **OQ-3 — do the locator and suppressed-author forms land at all?** *(needs-input)*
-  `[@key, p. 33]` and `[-@key]` are Pandoc's and Typst has `#cite(<k>, supplement: …)`
+  ~~`[@key, p. 33]` and `[-@key]` are Pandoc's and Typst has `#cite(<k>, supplement: …)`
   and `form: "year"`. Phase 1 refuses them by name rather than guessing — **both are
   within the callback's reach, measured in round 2**, which is what makes "refuses by
   name" something the parse can actually deliver. Whether a later phase adds them is not
-  this spec's to assume.
+  this spec's to assume.~~ **RESOLVED 2026-09-01 in one half, on drafting Phase 5: the
+  suppressed-author form lands as the year, with Pandoc's meaning, and the multiple-key
+  form lands beside it as Typst's own merge; the locator stays refused by name**, because
+  nothing has asked for it — `supplement` renders it, measured, so it is one argument away
+  when something does. The phase was asked for by a reader arriving from natbib, which is
+  the input this question waited on.
 - **OQ-4 — `.bib`, `.yml`, or both?** *(deferred by evidence)* Typst 0.15.1 reads both
   and the emitter writes one string either way, so **the question does not discriminate**
   — there is nothing to decide until something costs different. Both are accepted.
@@ -857,3 +965,196 @@ consumers" is this case exactly.
   ten lines of headroom against 195 used, so unlike Phases 2 and 3 the cap may not need
   to move; that is checked rather than assumed. `README.md` needs nothing — it documents
   the dialect and the CLI, and the demo's row count is not a fact it carries. One push.
+
+### Phase 5 — a citation reads in the sentence, and the marks may be author-date
+
+*Produces the observable: **yes** — a PDF whose sentence reads "As Postigo (2026) showed,
+the method holds (Claude and Knuth, 2025)" and whose reference list is alphabetical, where
+today the same document reads "[1]" and "[2]" and the textual spelling prints as literal
+text.*
+
+**Drafted 2026-09-01**, on §2's appended decision and per §6.1 step 2. The ordered test
+lands on step 2, and the steps above it are worked rather than skipped.
+
+- **Step 0 — a decision, not only code?** Yes, three: a frontmatter key, two spellings, and
+  a style. Each is recorded in §2.
+- **Step 1 — does it remove or contradict shipped work?** **It inverts two shipped
+  refusals, and both were placeholders by their own words.**
+  `core/tests/golden_test.rs:each_refused_citation_names_the_authors_line` asserts that
+  `[@a; @b]` and `[-@k]` are refused by name, and `rules/pipeline.md`'s citation section says
+  `cite_key` "refuses three payloads". Phase 1's own scope wrote those refusals "rather than
+  guessing", and OQ-3 said in so many words that "whether a later phase adds them is not
+  this spec's to assume" — a refusal-by-name is a reservation, and this is the phase it was
+  reserved for. Nothing built is un-built: `[@key]` names exactly what it named, the bare
+  form stays out, and the locator stays refused. **It also widens one §1.2 promise**, and
+  step 1's rule is a dated note in place rather than silence: "emits exactly the Typst it
+  emits today" was written before this spec had a key that reaches the look, and every such
+  key moves the `template.with` line of every golden — twenty-nine files in
+  `mpdf-005` Phase 8's one re-bless. The note narrows the promise to the page, and gate (2)
+  is what holds it there.
+- **Step 2 — the subject.** Citations, which this spec owns, and a frontmatter key that
+  serves them, which rides the spec whose subject it serves — `figures` and `headings` both
+  rode `mpdf-005`. `mpdf-001` owns no part of it.
+- **Step 3 is not reached.**
+
+- **Scope: one key, one argument, two spellings, one merge, one style — and the showcase.**
+
+  **`core/src/frontmatter.rs` gains its eleventh key, on `Equations`' exact shape.** A
+  `Citations` enum with `Numeric` first, as the default, and `AuthorDate`; `name()`,
+  `from_name` and `names()` as its three siblings have them; the `"citations"` arm of
+  `core/src/frontmatter.rs:parse` refusing a value outside the set with
+  `key 'citations' takes numeric or author-date, not '…'`, the sentence
+  `core/src/frontmatter.rs:Equations` already shapes. The module doc's "ten keys" and "two
+  of the ten" move to eleven.
+
+  **`core/src/emit.rs:header` writes a ninth argument, always, at the resolved default.**
+  `citations: "numeric"` after `headings`, on the rule `rules/pipeline.md` records — "header
+  writes the *resolved* default on every call, so 'no key' and `figures: flat` emit
+  identical Typst". Every golden's `template.with` line moves and nothing else in any of them
+  does; the re-bless is gate (2).
+
+  **`core/src/emit.rs:is_citation` claims `+@`**, beside `@` and `-@`, and stays the one
+  predicate the callback and `core/src/emit.rs:wrote_citation` both read.
+  **`core/src/emit.rs:cite_key` becomes a parse of the payload into a form and its keys**:
+  a leading `+` is the prose form, a leading `-` the year form, neither the normal form;
+  the rest splits on `;`, each piece trimmed and stripped of its own `@`. A form over more
+  than one key is refused at its line — *"puts a form on several sources, and a form names
+  one"*, or words an implementer prefers, asserted by needle — and a `,` anywhere keeps
+  the locator refusal it has. Every key joins `core/src/emit.rs:Names::cited` with the
+  group's line, so a key the bibliography does not hold is still named at the line its
+  bracket sits on, and `check_citations` needs no change: its message names `@key` and
+  that is still the key's name.
+
+  **The write is the one call it is today, with a `form:` where the form is not normal, and
+  the calls of a group adjacent with nothing between.** `[+@k]` is
+  `#cite(label("k"), form: "prose")`, `[-@k]` is `#cite(label("k"), form: "year")`, and
+  `[@a; @b]` is `#cite(label("a"))#cite(label("b"))` — nothing between, because that is the
+  form the measurement in §2 merged and a space would be a byte the author did not write.
+  `crate::md_to_html` follows `is_citation` and renders `<a href="+@k">+@k</a>`, which is
+  as honest as the `@k` it renders today; the page's blessed column does not move because
+  the page's row does not.
+
+  **Both looks take `citations: "numeric"` and answer it with one `set`.** In
+  `core/assets/template.typ:template` and `core/assets/press-release.typ:template`, beside
+  the `show bibliography:` rule each already carries: `set bibliography(style: if citations
+  == "author-date" { "harvard-cite-them-right" } else { "ieee" })` — the ternary-in-argument
+  shape, because a `set` inside a scoped `if` dies with the block, which `rules/pipeline.md`
+  records for `equations`. `"ieee"` by name rather than `auto`, so the numeric page is
+  provably the default's page rather than assumed to be. The "References" label and its
+  rule are untouched.
+
+  **The showcase takes the key, and the phase names what that costs.** `samples/showcase/`
+  is "one document that uses every construct in the dialect … under all ten frontmatter
+  keys" (`README.md`), so an eleventh key it does not carry makes that sentence false.
+  `samples/showcase/showcase.md` gains `citations: author-date`, and
+  `samples/showcase/sections/notes-and-sources.md` gains one textual citation and reworks
+  "the mark and the numbering are the typesetter's", which reads wrong under author-date.
+  Three measured numbers move with it and each is named so the implementer owes them
+  knowingly: the frontmatter block grows by one line, so the master's headings move from
+  lines 31, 46 and 85 to 32, 47 and 86, which
+  `app/src/preview.rs:the_anchors_are_the_headings_of_whichever_file_the_pane_holds` pins
+  by literal; `rules/desktop-panes.md` records **1140 text items across six pages**,
+  re-measured through the vendored `app/dist/pdfjs/` by Phase 11 of `mpdf-005`, and its own
+  sentence says "it is a phase that edits the showcase that moves it"; and
+  `tests/gates/mpdf-009-phase5.js` asserts the six pages by hand. The alternative — leaving
+  the showcase numeric and rewording the README to "ten of its eleven keys" — was weighed
+  and loses, because the showcase's one promise is the whole surface.
+
+  **What is deliberately not touched.** `core/src/bibliography.rs` and the key set it reads;
+  `core/src/emit.rs:check_citations`; the callback's refusals of `[see @k]`, `[a@b.com]` and
+  the bare `@thing`; `cli/src`; `app/src` beyond the one literal above; `web/`. No new
+  crate, no CLI flag.
+
+- **Exit gate:** six cases.
+
+  (1) **A new fixture matches a new golden, and the golden pins the three forms and the
+  merge.** `tests/fixtures/author_date.md` carries `citations: author-date` and names
+  `tests/fixtures/authors.yml`, a new file holding four records of one, two, three and four
+  authors — new rather than added to `refs.yml`, so `citations.md`'s golden and the
+  both-formats test keep their key set. The fixture cites every shape: `[@one]`, `[+@two]`,
+  `[-@one]`, `[@three; @one]`, `[+@four]` and the collapsed `[@two][]`, each in a sentence
+  written to read under author-date. `tests/golden/author_date.typ` shows
+  `citations: "author-date"` on its `template.with` line, `#cite(label("two"), form: "prose")`,
+  `#cite(label("one"), form: "year")`, and `#cite(label("three"))#cite(label("one"))` with no
+  byte between; its `#bibliography("authors.yml", title: none)` call is the shape Phase 1's
+  is. `md_to_pdf` returns bytes starting `%PDF`. **The page is measured by hand and recorded
+  in the test's doc comment**, on Phase 7's and Phase 9's precedent that the suite reads no
+  PDF text: `pdftotext` shows *Claude and Knuth (2025)*, *2026*, and one merged parenthesis
+  with a semicolon. **The wrong build this discriminates against**: one that passes the
+  form as `#cite`'s `style` argument compiles and renders the wrong mark, and fails the
+  golden's needle.
+
+  (2) **Every shipped golden moves in its `template.with` line and nowhere else, and the
+  PDFs under the default do not move at all.** Thirty-four goldens gain `citations:
+  "numeric"` — `grep -c '_matches_its_golden_file'` reads thirty-two today and thirty-three
+  after, and `ls tests/golden | wc -l` thirty-four then thirty-five, the instruments named
+  rather than the arithmetic — and the `template.with` literal at
+  `core/tests/golden_test.rs:absent_frontmatter_gets_every_default` gains the argument. **The PDF half is hand-measured
+  and recorded**: `md_to_pdf` of `citations.md`, `citations_press_release.md` and the
+  showcase *without* its new key, hashed either side of the phase, byte-identical — the
+  method `rules/pipeline.md` records for `figures` and `headings`. That is the §1.2 promise
+  in the form the note narrows it to, and a look that wrote `auto` instead of `"ieee"`
+  would still pass it, which is why `"ieee"` is by name in scope rather than left to a gate.
+
+  (3) **The refusals move as the scope says.** In
+  `core/tests/golden_test.rs:each_refused_citation_names_the_authors_line` the `[@a; @b]` and
+  `[-@k]` rows leave, the locator row stays, and three rows join: `[+@a; @b]`, `[-@a; @b]`
+  and `[+@k, p. 33]`, each at its line — so the table's one `Err(Error::` site stays one and
+  `core/tests/messages_test.rs`' **forty-eight** does not move, checked with
+  `grep -c "Err(Error::"`. `citations: apa` is refused in `core/src/frontmatter.rs`' own
+  tests, a sibling of `an_equations_name_outside_the_set_lists_the_names_it_accepts`
+  naming the key and both accepted names. And `[+@k]` in a document naming no bibliography
+  is refused as `'@k' is cited and the frontmatter names no bibliography`, at its line.
+
+  (4) **The forms are emitted, not read off the golden**, in one new test: `[+@k]`, `[-@k]`,
+  `[@a; @b]`, `[@a;@b]` and `[@a ; @b]` — the last two emitting what the first of the three
+  does — and `[@k][]` still emitting `#cite(label("k"))`, all in a document with **no**
+  `citations` key, which is what says the form is the citation's and the style the
+  document's. `the_callback_claims_a_citation_and_nothing_else` keeps every row and gains
+  one: `[+ @k]`, a plus not glued to its at-sign, stays text.
+
+  (5) **The showcase compiles to six pages, its marks read author-date, and the numbers it
+  moves are re-taken.** `pdftotext` shows a merged parenthesis with a semicolon and
+  *Table 3.1* still, which is the regression half; the app test's literal moves to
+  `[32, 47, 86]`; the text-item count is re-measured through the vendored `pdf.js` and
+  written into `rules/desktop-panes.md` with the date; the six-page gate is run by hand.
+
+  (6) **`cargo test --workspace` passes and `spec-lint` exits zero with no error.** The one
+  warning is inherited and named so an implementer does not chase it:
+  `rules/desktop-geometry.md`'s `RULE_SOURCES_WITHOUT_GENERATED`.
+
+- **Close-out.**
+
+  **`rules/pipeline.md` owes a cap raise, and the number is measured.** It stands at
+  **1209 of `max_lines: 1215`**, six lines of headroom against an edit of roughly twenty:
+  the citation section's `[@key]` paragraph gains its two siblings and the merge;
+  "`cite_key` refuses three payloads" becomes one payload and one new refusal; the
+  frontmatter section's "Ten keys" becomes eleven, its list gains `citations`, and "Nine
+  reach the look … all eight arguments" becomes ten and nine; the templates section's
+  "Only the third takes `equations`' ternary-in-argument shape" gains the bibliography
+  `set` as a fourth taker. The `covers:` line gains "the scheme the marks follow" beside the
+  citation clause. `max_lines` moves to **1240**, with that reason.
+
+  **`README.md`, five sites by their words.** *"Name a bibliography file in the frontmatter
+  and cite a key with `[@key]`"* gains the two siblings and a rendered sentence; *"The mark
+  and the numbering are Typst's"* gains the key; *"Four are about the citation: Pandoc's
+  `[@a; @b]`, `[@k, p. 33]` and `[-@k]`"* becomes the locator and the form-on-a-group; the
+  frontmatter block *"It takes ten keys, all optional"* gains `citations: author-date`
+  and a paragraph beside `equations:`' on the *whether/how* split; *"A key outside the
+  ten"* becomes eleven; and *"under all ten frontmatter keys"* in the showcase paragraph
+  becomes eleven, true once the showcase takes the key.
+
+  **`rules/desktop-panes.md`**: the re-measured count, with the date, as gate (5) says.
+
+  **`web/index.html`: a logged gap, on Phase 4's own precedent.** The citation row's prose,
+  *"`[@key]` cites it"*, stays true; the lede's *"Twenty-three constructs are supported"*
+  falls a further one behind, and `rules/web-demo.md`'s *"the nine frontmatter keys that
+  decide the look"* describes the page and stays true of it. A logged gap that keeps
+  growing is a phase of `mpdf-006` waiting to be drafted, as Phase 11 of `mpdf-005` said.
+
+  **`CLAUDE.md` and the status artifact: none needed.** The observable sentence is
+  untouched and this repository keeps no status artifact.
+
+  `specs/INDEX.md` and `rules/INDEX.md` regenerated, never hand-edited — this spec's rollup
+  goes `done` → `partial` as the phase is appended and back to `done` when it lands. One
+  push.
