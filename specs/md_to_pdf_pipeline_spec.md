@@ -5,7 +5,7 @@ note: >
   The core .md → .pdf pipeline: pulldown-cmark parses, a hand-written emitter maps
   events to Typst markup, and embedded Typst compiles the PDF, behind a CLI.
 status: accepted
-last_updated: 2026-08-10
+last_updated: 2026-08-31
 
 phases:
   - name: "Phase 1 — end-to-end pipeline behind a CLI"
@@ -51,6 +51,16 @@ phases:
   - name: "Phase 9 — the look the frontmatter chooses"
     reviewed: 2026-08-10
     shipped: 2026-08-10
+    cut: null
+    by: null
+  - name: "Phase 10 — the title block gets its air back"
+    reviewed: 2026-08-31
+    shipped: null
+    cut: null
+    by: null
+  - name: "Phase 11 — several authors, and the affiliation each belongs to"
+    reviewed: null
+    shipped: null
     cut: null
     by: null
 
@@ -200,6 +210,172 @@ code block, a link — is an error: the CLI exits non-zero and names the first
 unsupported construct and its line. Silently dropping or flattening content
 would ship a PDF that lies about its source; a named error is the honest
 failure, and support arrives construct by construct in later phases or specs.
+
+### The title block's spacing is too small, measured (decision, recorded)
+
+**APPENDED 2026-08-31**, and **substantially corrected the same day by Phase 10's review
+round 1, which falsified the mechanism a draft of this section asserted.** Both states are
+written out, because the wrong one is the one a later reader will re-derive.
+
+§2's styling decision above gives `template.typ` the title block, and both bundled looks
+have written a spacing value into it since Phase 9. **The value is too small and the lines
+overlap** — a defect rather than a taste question, which is said first because everything
+else here follows from it.
+
+**Measured 2026-08-31 through the shipped pipeline**, on `mpdf-005` Phases 7–9's own method:
+a probe carrying `title`, `author` and `date`, compiled through the CLI and read with
+`pdftotext -bbox`, which reports each line's own box rather than the grid `-layout` invents.
+Boxes in points, article look:
+
+| line | box top | box bottom | separation from the line above |
+|---|---|---|---|
+| title, 17pt | 66.63 | 86.01 | |
+| author, 11pt | 83.24 | 95.78 | **−2.78** |
+| date, 10pt | 94.71 | 106.11 | **−1.07** |
+
+**The boxes overlap**, which is why the author rides up into the title's descenders. The
+press-release masthead has the same defect by its own route — its title is a
+`block(below: 0.5em)` and its author the block beneath — and measures **−2.03**.
+
+**The cause is not what a draft of this section claimed, and the correction is the whole
+reason this phase is a number per look rather than a rewrite.** That draft said the
+`v(0.4em, weak: true)` was *discarded* at a paragraph boundary, and prescribed a structural
+change — drop the `linebreak()`s, add `set par(spacing: 0pt)`, give each gap an explicit
+non-weak `v()`. Round 1 falsified the safety net that claim implied, and re-measuring to
+answer it falsified the claim itself. Under the **shipped** shape, varying only the value:
+
+| `v(…, weak: true)` | 0pt | 2pt | 0.4em (= 4pt, shipped) |
+|---|---|---|---|
+| author box top | 79.24 | 81.24 | 83.24 |
+
+**Weak spacing applies in full, linearly, slope exactly 1, with no threshold and no
+collapse.** And the prescribed structure measures **identically at the same values** —
+79.24 at `v(0pt)` and 81.24 at `v(2pt)` — so it buys nothing at all. Six points across the
+two shapes fit one line, and the round's own independent readings (`0.8em` → +1.22,
+`2em` → +16.00 of movement) sit on it.
+
+**So the value is the bug, and the arithmetic says exactly how small it is.** `0.4em`
+resolves against the block's **10pt body** and not against the 17pt title — the trap the
+shipped value was already in, and `mpdf-005` Phase 9's coupling in a second place — so the
+look asks for 4pt where the runs need **6.78pt** to clear zero between title and author and
+**5.07pt** between author and date. Those two thresholds are the linear fit above read at
+zero, and round 1 derived the second independently as "≈0.51em".
+
+**What the rejected "obvious fix" actually measured, recorded because the draft read it
+backwards.** Dropping the `linebreak()`s and making the spacing non-weak measured **+17.62**
+and **+12.13**, and the draft took that as the fix overshooting its value. It is not
+overshoot: without the `linebreak()`s each run becomes its own paragraph, so Typst's default
+paragraph spacing lands *on top of* the value written. That is an argument for **keeping**
+the `linebreak()`s, which is what the phase now does. **The sign is accounted for and the
+exact size is not**: measured against the structural shape at the same 4pt value the
+difference is **+20.4pt** where `par.spacing` defaults to 1.2em = 12pt, so something beyond
+the default is in the sum. Recorded rather than chased, because the shape is rejected on the
+equivalence measurement above and nothing turns on the remainder.
+
+**Neither look needs a different *shape*, and the two need different *sites*** — measured
+rather than assumed, and OQ-12's answer, resolved in review rather than deferred to build.
+
+- **The article look's three runs share one `v` inside a `for` loop**, so one value cannot
+  serve two joins that want different amounts. The fix splits the value by index and raises
+  both: measured at `1.8em` and `0.9em` the separations become **+11.22** and **+3.93**.
+- **The press release's masthead is three sibling blocks**, and the spacing goes on the
+  **author block's `above:`** rather than the title block's `below:`. That is not a style
+  preference: the title's `below:` also governs the gap between a *title-only* document's
+  headline and its `divider`, which the gate forbids moving, and round 1 measured that route
+  failing at `1.4em` for exactly that reason. Measured on the author block instead,
+  `above: 1.0em` takes the **−2.03** to **+3.47** and leaves a title-only press release
+  byte-identical.
+
+**A wrapping headline's internal leading is not this defect and is not touched, and this
+is true of both looks rather than only the obvious one.** The press-release look sets
+`par(leading: 0.35em)` for a title that wraps, deliberately, and Phase 9 recorded why: two
+lines of one headline measure **−2.90** apart. **The article look does the same thing
+without a special rule** — a wrapped title measures **−1.92** between its own two lines,
+under the shipped look and under the fix alike. Both are negative separations that are
+correct, and together they are why the gate below is scoped to the joins *between* the three
+keys rather than to every consecutive pair of boxes: the scoping is load-bearing in both
+looks, not just where a leading was set by hand.
+
+**The values are the look's**, on the seam every phase since Phase 2 has used, and there is
+no frontmatter key: the author says what the title block says and the look says how far
+apart it says it. The two bundled looks are free to disagree, and here they must, because
+one is a centred float over two columns and the other a flush-left masthead over one.
+
+**`mpdf-004` Phase 3's property is bent, and the bound is named rather than argued away.**
+"No document's typeset output changes unless its author asks" cannot hold: every document
+that carries a title block moves, and there is no key to condition the fix on — the same
+bound `mpdf-005` Phase 6 recorded, reached from the same direction. What moves is a defect,
+and an author who did not ask for the fix did not ask for the overlap either.
+
+### Several authors, and the affiliation each of them belongs to (decision, recorded)
+
+**APPENDED 2026-08-31.** `author` has been one free string since Phase 2 and OQ-3 fixed the
+schema around it. A document with two authors has had nowhere to put the second.
+
+**The constraint is the parser and it is a deliberate one.**
+`core/src/frontmatter.rs:parse` refuses an indented line outright — *"nested keys are not
+supported"* — so a YAML list is not available without reopening a decision the schema rests
+on. A list is therefore a separator inside one line, and the whole design follows from that.
+
+**`author` takes the list; there is no `authors` key.** `mpdf-005` Phase 8 wrote the rule
+down while refusing `numbered` beside `6`: **this schema has no synonyms**. `author` and
+`authors` would be exactly that, with the added trap that a document writing the wrong one
+gets silence rather than an error. A one-name document is a one-element list, and its page
+does not move.
+
+**The separator is `;`.** A comma is what an author reaches for and it is refused:
+`author: Po, Iva` is an ordinary way to write one person's name, and a comma-split turns
+that person into two silently — the failure this project's §2 rule exists to prevent.
+BibTeX's ` and ` was weighed and is the better-known convention; it fails the same way for
+a rarer name, and it reads as prose where a list is meant, so a reader who has never seen
+this dialect has to be told it is a list. A semicolon tells them.
+
+**The marker rides the name, because nothing else in a flat schema carries the relation.**
+
+```
+author: Iva Po^1; Someone Else^2; A Third Person^1,2
+affiliation: Anthropic, San Francisco; MIT, Cambridge
+```
+
+An affiliation is a *relation* between two lists, not a third string, and one line per key
+leaves the marker as the only place to put it. `^1` is chosen over `(1)` because it says on
+the page what it means in the source, and because a parenthesis inside a name is commoner
+than a caret. `affiliation` is singular for the reason `author` is: one key, several
+values, no synonyms.
+
+**What crosses the seam is structure and not typography**, which is the whole of why this
+does not widen into a paper template. `core` hands the look a list of names each with its
+markers, and a list of affiliations; the look decides that a marker is a superscript
+number, that affiliations set smaller and italic, one to a line, and that the authors run
+on one line separated by commas. **Measured 2026-08-31**, in a probe with the two lists as
+literal defaults on `core/assets/template.typ`: `super()` renders both the single and the
+multiple marker — `A Third Person` reading `¹˒²` — with no package, no import, and nothing
+added to `core/src/lib.rs:TypstWorld`.
+
+**The call contract changes an argument's type, and that is the real cost of this phase.**
+`author` has crossed as a string since Phase 2 and would cross as an array. `mpdf-005`
+Phase 8 added a *seventh argument*, which is additive and costs a third look one parameter;
+this changes one that exists, so a third look written against the shipped contract breaks.
+The mitigation is honest rather than clever: **no third look exists**, the contract is
+stated in exactly two places — `rules/pipeline.md` and `README.md` — and the alternative is
+worse. That alternative is `core` joining the names back into one string, which puts
+"comma or one per line" in the emitter and hands a look a rendered decision it is supposed
+to make; that is the seam collapsing, and every phase since Phase 2 has held it.
+
+**Three refusals, each naming the author's own line**, on `mpdf-004` §2's rule that the
+error names what the author typed:
+
+- **A marker naming an affiliation the document does not carry.** `^3` under two
+  affiliations is a mistake with a silent failure mode — a superscript pointing at nothing —
+  and Typst cannot catch it, because by then it is a number in a list.
+- **An `affiliation` key with no marker anywhere.** The relation is unstated and no rendering
+  of it is a guess worth making.
+- **A marker that is not a number**, which is a typo in the one position where a typo would
+  otherwise reach the page as text.
+
+**Not refused, deliberately: an author with no marker in a document that has affiliations.**
+A paper with three authors from one lab and a fourth from none is a real document, and
+refusing it would break something nobody asked to have broken.
 
 ## 3. Open questions
 
@@ -374,6 +550,39 @@ failure, and support arrives construct by construct in later phases or specs.
   explicitly. A press-release author therefore writes nothing and gets a
   single column, which is the point of choosing a look. Landed in Phase 9's
   scope.
+
+- **OQ-11** — with exactly one affiliation, does the marker appear at all? Most
+  published templates drop it: one affiliation over any number of authors needs no
+  relation, and a lone `¹` on every name is noise that says nothing. Against that, a
+  document that gains a second affiliation would then see every marker appear at once,
+  which is a page moving for a reason its author did not write. Two places could answer
+  it and they are not equivalent — the **look**, which would make it typography and let
+  the two bundled looks disagree, or the **schema**, which would make it a fact about the
+  document and refuse a marker the single-affiliation case does not need. Design call.
+  Blocks nothing in Phase 10; blocks Phase 11's gate case for the one-affiliation
+  document, which cannot state what it reads.
+- **OQ-12** — ~~do the two looks need the *same* structural fix for the spacing, or only
+  the same property? The article look's title block is a centred run inside one `align`;
+  the press release's is three sibling `block`s in a masthead, and the measured **−2.03**
+  has a different cause. One fix may not serve both, and a phase that assumes it does would
+  ship a look whose numbers landed by luck. Measurement, and Phase 10's scope carries it.~~
+  **RESOLVED (2026-08-31), in Phase 10's review round 1: neither look needs a *structural*
+  fix, and the two need different *sites*.** The question presupposed a structural change
+  the round measured to be a no-op — weak spacing applies linearly with no collapse, so the
+  shipped shape and the prescribed one are identical at equal values. What is left is a
+  value per join, and the sites differ: the article's three runs share one `v` in a `for`
+  loop, so the value splits by index; the press release's spacing goes on the **author
+  block's `above:`**, because the title block's `below:` also governs a title-only
+  document's gap to its `divider`, and moving it fails the phase's own byte-identity case.
+  Landed in Phase 10's scope, with §2 carrying both measurements.
+- **OQ-13** — does the affiliation list belong to the title block alone, or does a later
+  spec want it anywhere else? A footer, a running header and a first-page footnote are all
+  places published documents put one, and `mpdf-003`'s desktop app has a footer design
+  parked. Nothing in Phase 11 turns on the answer — the data crosses the seam either way
+  and a second site is a `show` rule over content the look already has — but it decides
+  whether the key is named for the title block or for the document, and a key named for
+  the wrong one is a rename later. Design call, and cheap to hold: the name chosen in
+  Phase 11 is `affiliation`, which is neutral between the two.
 
 ## 4. Implementation phases
 
@@ -993,6 +1202,222 @@ like.
   existing one, which would lose the coverage the article sample carries. The
   corpus check repeats over both samples and the README: all three convert
   without error, or the gap is named in the review record. One push.
+
+### Phase 10 — the title block gets its air back
+*Produces the observable: yes — a PDF whose author and date stand clear of the title
+instead of overlapping it, in both bundled looks.*
+
+**Drafted 2026-08-31**, on §2's spacing measurement above, and appended per §6.1 step 2.
+The ordered test lands on step 2 and the steps above it are worked rather than skipped.
+
+- **Step 0 — a decision, not only code?** Yes. §2's styling decision gives the look the
+  title block, and both looks have carried a spacing value since Phase 9. What changes is
+  the value each look asks for — which is a look's own decision, taken here because the one
+  it has been asking for lands the three lines on top of one another.
+- **Step 1 — does it remove or contradict shipped work? No, and the measurement is what
+  says so.** No phase is removed and no capability un-built: the same three keys reach the
+  same block in the same order. What moves is where the lines sit. **`mpdf-004` Phase 3's
+  property is bent** — every document carrying a title block moves — and §2 carries the
+  bound: there is no key to condition the fix on, which is `mpdf-005` Phase 6's bound
+  reached from the same direction, and what moves is a defect rather than a preference.
+- **Step 2 — the subject.** The title block, which §2 assigns to the look and this spec has
+  owned since Phase 2. So a phase, not a spec.
+
+- **Scope: a value per join in the two look files, and deliberately not a rewrite.**
+
+  `core/assets/template.typ`'s title block **keeps its `linebreak()`s and keeps
+  `weak: true`**, and changes what it asks for: one `v(0.4em, …)` shared by both joins
+  becomes a value chosen per join — `1.8em` between title and author and `0.9em` between
+  author and date, measured at **+11.22** and **+3.93**. **The structural rewrite a draft of
+  this phase prescribed is not in scope and would be a no-op**, per §2: the two shapes
+  measure identically at equal values, and dropping the `linebreak()`s adds Typst's
+  paragraph spacing on top of whatever the look asks for.
+
+  `core/assets/press-release.typ` puts `above: 1.0em` on the **author block**, measured at
+  **+3.47**. **Not on the title block's `below:`** — that value also governs a title-only
+  document's gap to its `divider`, which gate (3) forbids moving, and round 1 measured that
+  route failing at `1.4em` for exactly that reason. This is OQ-12's resolution rather than
+  an open question the implementer inherits.
+
+  **Every number above is a look's own call and none is a contract.** They are recorded so a
+  second person can reproduce the gate, not so a third look must match them; the thresholds
+  that matter — 6.78pt, 5.07pt, and zero for the press release — are in §2.
+
+  **No `core/src` file changes and no golden moves.** A golden pins emitter output, and the
+  emitter writes no spacing — the seam §2 drew in Phase 2 and every look-only phase since
+  has used. `cli/src` and `app/src` are untouched. **The look call contract is unchanged at
+  seven**: nothing new crosses it, because a `v()` is a look talking to itself.
+
+- **Exit gate:** five cases, and the first is the phase. **The probe is named**, because
+  round 1 was right that a by-eye read and a measurement over two different scratch
+  documents are two verdicts rather than one.
+
+  **The probe**, used by cases (1) and (2), and written out so a second person reproduces it
+  rather than invents it: a document whose frontmatter carries `title`, `author` and `date`
+  and nothing else, whose title is long enough to wrap in the press-release look at 20pt,
+  followed by one `#` heading and one short paragraph. It is rendered twice — once in the
+  default look and once in a copy carrying `template: press-release` — the two-PDF read
+  Phase 9 gate case (2) established and every look-only phase since has used.
+
+  (1) **Read by eye, one PDF per look.** The author stands clear of the title and the date
+  clear of the author, in both looks, and the press release's wrapping headline still sets
+  tight against itself.
+
+  (2) **The overlap is gone, as arithmetic rather than a reading.** In one `pdftotext -bbox`
+  run per look over that same probe, **each join between two of the three keys is separated
+  by a positive number**. That is title→author and author→date in the article look, and
+  date→title and title→author in the press release, whose masthead puts its date first —
+  **four joins, not three**, which round 2 caught the enumeration dropping. §2 measured
+  **−2.78**, **−1.07** and **−2.03** today and **+11.22**, **+3.93** and **+3.47** under the
+  values the scope names; the press release's date→title join is **+2.58** and is not
+  touched by this phase, since the fix sits on the author block below it.
+
+  **The pairs are the joins between keys and not every consecutive pair of boxes**, which
+  round 1 caught and which is the difference between a gate a correct fix passes and one it
+  cannot. A press-release headline that wraps sets its own two lines **−2.90** apart under
+  `par(leading: 0.35em)`, deliberately and since Phase 9; a gate reading every consecutive
+  pair would fail a correct fix and invite an implementer to undo that leading.
+
+  **This case catches a value raised on one join and not the other, and it is honest that it
+  catches nothing subtler.** §2 killed the discriminator a draft of this gate claimed — that
+  a value raised without a structural change "still collapses to nothing" — by measuring the
+  two shapes identical. The fix is a number, so the gate is the measurement.
+
+  (3) **A document that carries only `title` is byte-identical, in both looks**, compared as
+  a PDF hash against the same document built from `HEAD`. **The document is named for the
+  reason the probe above is** — round 2 caught this case publishing two hashes a second
+  person could not reproduce: frontmatter carrying `title` and nothing else, then one `#`
+  heading and one short paragraph, rendered in each look. **This is the case that bounds the
+  press-release fix and the reason its spacing sits on the author block**: the title block's
+  own `below:` governs a title-only document's gap to its `divider`, and round 1 measured
+  that route moving the hash at `1.4em`. Measured under the scope's values, both looks
+  unchanged: `54d9134121…` for the article and `ceeb79ea11…` for the press release, before
+  and after.
+
+  (4) **`cargo test --workspace` passes with no golden re-blessed and no `core/src` file
+  touched** — `git diff --stat` naming the two `.typ` files and the close-out's prose, and
+  nothing else. **The three shipped geometric assertions in the blast radius are named**, the
+  last on round 1's catch: `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`,
+  which pins pagination over `samples/article.md`;
+  `core/tests/long_document_test.rs:the_fixtures_are_the_lengths_phase_5_measures_against`,
+  which pins `tests/fixtures/long.md` at exactly 71 pages **and a cross-reference on page 64
+  at fraction 0.620 ± 0.01**, over a document carrying all three keys — the tightest such
+  assertion in the suite and the one a reader would most want named; and the showcase's six
+  pages, pinned by the hand-run `tests/gates/mpdf-009-phase5.js` rather than by the suite, so
+  it is measured and reported even though no gate here can fail on it.
+
+  (5) **Nothing in the suite pins this fix afterwards, and that is stated rather than
+  papered over.** Every look-only phase before this one left a `BUNDLED_TEMPLATES` needle;
+  this one leaves none, because what it changes is a **value**, and a value is not a needle
+  in this corpus — the same rule that keeps a caption's separator, a group's gutter and a
+  listing's inset length off the needle lists. The regression round 1 feared, an edit
+  restoring `linebreak()` and weak spacing, is now known to be **harmless**: §2 measures the
+  two shapes identical. The regression that would matter is someone lowering the value, which
+  no needle can see and which case (2) catches only while it is run. **The gate case is
+  therefore to record this in `rules/pipeline.md`** — that the title block's spacing is
+  unpinned and why — so the next person to touch it is told rather than left to find out.
+
+- **Close-out: one line owed and nothing corrected, with the census here rather than left
+  to the implementer to repeat.** `rules/pipeline.md`'s template section states the block's
+  *mechanism* — the article's `place(scope: "parent", float: true)`, the date beneath the
+  author, the press release's dateline above a flush-left title over a `divider` — and the
+  README's look table says the same in a row each, as does `web/index.html`'s "A centred
+  title block". **Not one of them states a distance**, which is what this phase changes, so
+  every sentence in all three survives the fix verbatim. **What is owed is the line gate (5)
+  names**: `rules/pipeline.md` gains the note that the title block's spacing is a value no
+  needle pins, so the next person to touch it is told rather than left to find out.
+  **That file has two lines of headroom** — 1008 body lines against its own
+  `max_lines: 1010`, which `.spec-lint.yaml` enforces — so the note plus its blank line
+  lands it at exactly the cap. **The close-out raises `max_lines` to 1020 rather than
+  trimming**, and the reason is that a rule sitting at exactly its cap is one the next phase
+  cannot touch without an unrelated edit; `mpdf-005` Phase 9 already trimmed this file twice
+  to stay under it.
+  `samples/` moves on the page and that is the point; no sample's prose describes its own
+  title block, and `samples/*.pdf` is gitignored so no committed artifact goes stale.
+  **Neither index moves** — the rollup stays `partial` while Phase 11 is unshipped — so the
+  spec's `shipped` date is the rest of the paperwork. One push.
+
+### Phase 11 — several authors, and the affiliation each belongs to
+*Produces the observable: yes — a PDF whose title block carries three authors on one line
+with superscript markers, and the two affiliations those markers point at beneath them.*
+
+**Drafted 2026-08-31**, on §2's authors decision above, and appended per §6.1 step 2.
+
+- **Step 0 — a decision, not only code?** Yes, two. OQ-3 fixed the frontmatter schema with
+  `author` as one free string, and §2's styling decision fixed what the look does with it.
+- **Step 1 — does it remove or contradict shipped work?** **No shipped document moves, and
+  one shipped *contract* does — which is the honest answer rather than the comfortable
+  one.** A document writing `author: Iva Po` is a one-element list and compiles to the same
+  page. But `author` crosses the seam as an array where it crossed as a string, so the look
+  contract Phase 9 stated changes an argument's type rather than gaining one. §2 carries
+  the argument and the mitigation: no third look exists, and the alternative collapses the
+  seam. **Seven of the twenty-nine shipped goldens are re-blessed** — the seven whose
+  `template.with` line carries a non-`none` author — which is a deliberate sweep of the
+  kind Phase 9 performed on the same line, and the gate names the count so a wrong one is
+  visible.
+- **Step 2 — the subject.** The frontmatter schema and the title block, which Phase 9 says
+  in its own words this spec owns both of. So a phase, not a spec.
+
+- **Scope: the schema, the call, and both looks.**
+
+  `core/src/frontmatter.rs` — `author` becomes a list of names each carrying its markers,
+  split on `;`, with `^` separating a name from its markers and `,` separating markers from
+  each other. A new `affiliation` key takes a `;`-separated list. Three refusals, each
+  naming the author's line, per §2: a marker naming an affiliation the document does not
+  carry, an `affiliation` key with no marker anywhere, and a marker that is not a number.
+  **An author with no marker in a document that has affiliations is not refused**, per §2.
+
+  `core/src/emit.rs:header` writes both as Typst arrays. **`core/src/lib.rs:Error` needs no
+  new variant**: all three refusals are `Frontmatter`, which already carries a line and a
+  problem string, and which is what every other schema refusal in this spec uses.
+
+  `core/assets/template.typ` and `core/assets/press-release.typ` each render the two lists
+  for themselves: the marker as a superscript, the authors on one line, the affiliations
+  beneath. **Measured in §2 to need no package**, and each look picks its own size, its own
+  separator between names and its own emphasis, on the seam.
+
+  **`core/src/sections.rs` and `core/src/bibliography.rs` are untouched**, and so are
+  `cli/src` and `app/src` — neither wrapper reads the schema, which every phase in this
+  corpus has checked as a diff since `mpdf-004`.
+
+- **Exit gate:** six cases.
+
+  (1) **The phase itself, read by eye, one PDF per look**, over a document with three
+  authors and two affiliations where the third author belongs to both. The markers point at
+  the right affiliations and the multiple marker reads as one superscript.
+
+  (2) **Every refusal names its own line**, as three tests over `Error::Frontmatter`,
+  asserting the line and the problem string rather than the message's full text — the shape
+  `core/src/frontmatter.rs`'s own tests already use.
+
+  (3) **A one-name document is unchanged, byte for byte**, over `--emit-typst` and a
+  compiled PDF hash. **This is the case that holds the phase's central claim** and the one
+  an implementer who reaches for an `authors` key passes while failing everything the
+  schema's no-synonyms rule is for.
+
+  (4) **The seven goldens re-blessed are exactly seven**, checked as a diff naming them, and
+  each changes on its `template.with` line alone. The other twenty-two carry `author: none`
+  and must not move.
+
+  (5) **Both looks carry the contract**, by needles over
+  `core/tests/golden_test.rs:BUNDLED_TEMPLATES`, and
+  `every_bundled_template_meets_the_call_contract` gains `affiliation` beside the seven it
+  names today.
+
+  (6) **`cargo test --workspace` passes**, and `samples/` gains a document that carries two
+  authors, because a schema key with no sample is a key the corpus check cannot see.
+
+- **Close-out**, named line by line because this phase's prose radius is wider than its code
+  radius: `rules/pipeline.md`'s frontmatter section — the key count and the schema table —
+  its template section's call-contract argument list, and **line 941's "The date sets
+  beneath the author"**, which stops being the whole order once an affiliation sits between
+  them. `README.md`'s frontmatter documentation, its `## Styling` contract sentence, and
+  **its look table, whose `article` row reads "the date under the author"** for the same
+  reason.
+  `web/index.html` if the page states the schema's keys; `rules/web-demo.md` records that
+  the page's examples are compiled, so a new key with no example is a choice rather than an
+  omission and the close-out says which. `samples/` gains the two-author document case (6)
+  names. **`specs/INDEX.md` and `rules/INDEX.md` regenerated**, never hand-edited. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

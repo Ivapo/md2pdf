@@ -2,6 +2,86 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 10 only — 2026-08-31 — same reviewer, resumed with the author's changelog — **READY**
+
+Verdict: `READY`, zero blocking, five non-blocking, all five folded at convergence. **Both
+round-1 blockers resolved against the files**, and the round re-derived every number in a
+scratch clone rather than reading the changelog.
+
+**The round added a fourth point to the equivalence sweep and it holds.** Author box top
+under the shipped shape at `v(0pt)` / `v(2pt)` / `v(0.4em)` / `v(6pt)`: **79.2352**,
+**81.2352**, **83.2352**, **85.2352** — slope exactly 1. The structural shape measures
+identically at `0pt`, `2pt` and `6pt`, date line included. The reviewer withdrew its own
+round-1 model ("collapses against the line advance, excess applies") as a two-point fit.
+
+Everything else reproduced: `1.8em`/`0.9em` → **+11.22 / +3.93** on both a short and a
+wrapping title; press-release `above: 1.0em` → **+3.47** either way, date→title unchanged at
+**+2.58**; the 5.07pt threshold exactly; gate (3) byte-identical in both looks and for a
+no-key document; `cargo test` green with no golden re-blessed, both named geometric
+assertions passing, showcase 6 pages and samples 3 and 1. On `samples/article.md` itself the
+join goes **−2.78 → +11.22**.
+
+The five folded: gate (3) published two hashes over a document it never named, now named as
+the case-(2) probe is; the owed `rules/pipeline.md` line lands that file at exactly its
+`max_lines: 1010` from 1008, so the close-out now **raises the cap to 1020** rather than
+trimming a third time; gate (2)'s general clause said "each join" and its enumeration listed
+three where the press release has **four** (date→title dropped); §2 attributed the wrapping
+effect to the press release's hand-set `par(leading: 0.35em)` when the article look shows it
+too at **−1.92**, so the join-scoping is load-bearing in both; and §2's account of the
+rejected shape explains the sign but not the size — **+20.4pt** measured where `par.spacing`
+defaults to 12pt — now recorded as unexplained rather than implied. One truncation
+corrected: the title→author threshold is **6.78pt**, not 6.77.
+
+Gate (5)'s disposal — the fix is a value, a value is not a needle here, so the gap is
+disclosed in `rules/pipeline.md` rather than tested — was checked against the four
+`BUNDLED_TEMPLATES` tests whose own doc comments say the same, and accepted.
+
+**Converged.** Phase 10's `reviewed` is set to 2026-08-31; `status` was already `accepted`.
+
+### Round 1 — Phase 10 only — 2026-08-31 — fresh general-purpose reviewer with repo access — **NOT READY**
+
+**Round 0 (this episode — one appended phase; Phase 11 is a second episode and gets its
+own):** *does this produce the observable, and is it the right one?* **Yes to both.** A PDF
+whose author and date stand clear of the title, and the warrant is a measured defect rather
+than a want — which is a stronger footing than `mpdf-005` Phase 9 ran on. Asked for
+directly, the precedent `mpdf-006` OQ-3 and `mpdf-007` OQ-6 set.
+
+Verdict: `NOT READY`, **two blocking**, six non-blocking. The round reproduced all seven
+published numbers, built a working prototype, and confirmed the close-out census, the "no
+golden moves" claim and that the numbers are look properties rather than probe artifacts —
+so this phase does not repeat `mpdf-005` Phase 9's re-gridding mistake.
+
+1. **[BLOCKING] Gate (2)'s discriminating claim was false.** It said a value raised without
+   the structural change "still collapses to nothing and still measures negative"; the
+   reviewer changed only the value — `0.4em` → `0.8em`, `linebreak()` and `weak: true`
+   intact — and measured **+1.22** and **+2.93**, an implementation that passed every case.
+2. **[BLOCKING] Gate (2) was keyed to an unnamed scratch document, and a realistic
+   press-release headline made it unsatisfiable.** A wrapping title sets its own two lines
+   **−2.90** apart under the `par(leading: 0.35em)` Phase 9 chose deliberately, so "every
+   consecutive pair of boxes is positive" fails a correct fix and invites undoing that
+   leading.
+
+**Chasing the first blocker falsified the phase's whole mechanism, which is the sharpest
+thing this episode produced and it came from the author's re-measurement rather than the
+round.** §2 claimed the weak spacing was *discarded* at a paragraph boundary and prescribed a
+structural rewrite. Varying only the value under the shipped shape gives author box top
+**79.24 / 81.24 / 83.24** at `v(0pt)` / `v(2pt)` / `v(0.4em)` — linear, slope 1, no
+threshold — and the prescribed structure measures **identically** at the same values. **The
+rewrite was a no-op and the value was the whole bug.** The phase was rebuilt around that:
+scope is now a value per join, `1.8em`/`0.9em` in the article and `above: 1.0em` on the
+press release's author block, with the thresholds (6.78pt, 5.07pt) recorded.
+
+Four of the six non-blocking were folded in the same pass. Two changed the design rather
+than the prose: gate (3)'s byte-identity bound means the press-release spacing **cannot**
+sit on the title block's `below:` — that value also governs a title-only document's gap to
+its `divider` and moves the hash at `1.4em` — which resolved **OQ-12** by measurement; and
+`core/tests/long_document_test.rs:the_fixtures_are_the_lengths_phase_5_measures_against`
+(71 pages, a cross-reference on page 64 at fraction 0.620 ± 0.01, over a document carrying
+all three keys) joined gate (4) as the tightest shipped assertion in the blast radius.
+**One was accepted as a disclosure and rejected as a test**: nothing in the suite will pin
+this fix, because a value is not a needle in this corpus, so gate (5) states the gap and the
+close-out records it in `rules/pipeline.md`.
+
 ### Implementation note — Phase 9 — 2026-08-10 — the sweep held, and one stale claim was left standing
 
 Not a review round. Phase 9 shipped as reviewed, with three things worth
