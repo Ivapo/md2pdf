@@ -2,6 +2,88 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 12 only — 2026-09-01 — the same three lenses, resumed — **NOT READY (escalated at the cap)**
+
+Verdict: correctness `READY`, exit-gate `READY`, consistency `NOT READY` with one blocker. **Both
+round-2 blockers verified resolved against the files by all three.** The cap is reached, so the
+phase's `reviewed` is **not** set and the outstanding item goes to the human.
+
+**The one blocking finding is real, is fixed, and is unverified by a reviewer.** The close-out had
+claimed that *"the group is a paragraph away from the equation rather than adjacent to it"* is
+"nowhere in" `core/tests/golden_test.rs:a_marker_line_after_a_display_equation_is_still_prose`,
+and struck the item on that basis. **The sentence is in that test**, as an inline comment wrapping
+across two source lines, which is precisely why `grep -rn "paragraph away"` returns nothing from
+that file. Confirmed with a multiline scan. The comment is owed an edit and the assertion is not.
+The item is restored, the instrument is named, and the same wrap is recorded as the reason
+`grep -cF` returns zero for two other sentences this close-out quotes — so a quoted sentence here
+locates a site and is not itself a search string.
+
+**The severity split is 2:1 and is recorded rather than resolved by the author.** The two READY
+lenses raised the same finding as non-blocking prose, on the ground that it changes neither what is
+built nor what the gate catches; the consistency lens called it blocking because the close-out
+instructs an implementer not to fix a comment that is stale. Both readings are defensible and the
+author did not adjudicate the severity down to avoid the cap.
+
+**One instrument failed three times in this episode and the record says so**, because it is the
+transferable finding: a line-based grep over a phrase that may wrap. It struck a correct close-out
+item at round 2, it produced the round-1 README mis-attribution that round 2 then reversed, and it
+under-reports two of this close-out's own quotations.
+
+Non-blocking folded at the cap: the code-site count, which read four, then seven, then six, and is
+eight with the restored item; gate (5)'s residual discrimination, which over-claimed by one variant
+(a run-scoped refusal that kept `caption.is_none()` leaves the case green, and gate (4)'s inline row
+is what catches run-scoping in every variant); and `rules/pipeline.md`'s split into five passages
+that change and one that is checked and does not.
+
+### Round 2 — Phase 12 only — 2026-09-01 — the same three lenses, resumed with the author's changelog — **NOT READY**
+
+Verdict: `NOT READY` from all three. **All three converged independently on one blocker, and it was
+the author's own round-1 fix.**
+
+**Rescoping the refusal from a run to a paragraph invalidated the case that justified it, and the
+measurement was carried over unre-taken.** `core/src/emit.rs:step`'s caption-marker arm sets
+`*para = None` before pushing the caption's frame — *"a caption is not a paragraph"* — so `opens` is
+false for every run inside a caption and `caption.is_none()` is unreachable. Measured by building
+the refusal with no caption test at all: the showcase compiles and `{#tab:kinds}` still leaves the
+page. Three claims fell with it — the guard's load-bearing status, gate (5)'s discrimination, and
+the census, which had counted groups alone on a *line* and found one where the rule's own unit
+finds **zero**. The census moved in the safe direction: the narrowing touches nothing that ships.
+
+**The exit-gate lens found the sharper one.** Gate (3)'s row 6 is the only case in the phase that
+reaches the `:::`-opener retirement, and it tests it only if its document carries a live equation
+*before* the opener — without one, a bare `::: figure` / `{#eq:one}` errors under every build and
+the row passes green with the scope item unbuilt. The document is now written out with that
+reasoning attached.
+
+**Round 2 also reversed a round-1 fix**, which is why the record keeps both: round 1 placed a README
+site in `## Background`, the author accepted it, and round 2 found `## Background` is sample text
+*inside* the fenced example at 256–308. The original attribution was right.
+
+### Round 1 — Phase 12 only — 2026-09-01 — three fresh lenses (correctness/grounding, exit-gate testability, cross-file consistency) — **NOT READY**
+
+Verdict: correctness `NOT READY`, consistency `NOT READY`, exit-gate `READY`. **Round 0, asked once
+for this episode: yes.** The observable is the typeset PDF; today a document naming an equation on
+the line below typesets the literal `{#eq:one}` and its reference fails, and after this phase that
+page carries a numbered equation and a sentence reading "Equation 1". The warrant is an
+inconsistency *inside* the shipped dialect — a caption's name already may stand on a continuation
+line, and does so in the corpus — plus a silent drop this project's own rules forbid.
+
+**Four blockers.** The `:::` opener retires `*figure` and not `*equation`, so the widened tail test
+reaches across a block boundary and the insert lands before `Group.start` — measured, and the
+author's own trace corrected the finding's framing: the message is identical before and after, so it
+is a stale offset and a wrong message rather than a regression. The refusal, scoped to a whole
+*run*, refused `An inline $x + 1$ {#eq:inline}`, which **Phase 4 decided stays prose** and which this
+phase's own gate (4) asserted stays prose — the phase contradicting itself. The append-to-insert
+change falsified the "every write into a `bufs` frame is an append" invariant stated in both
+`core/src/emit.rs:Figure`'s struct doc and `rules/pipeline.md`, neither named. And the close-out
+edited `samples/showcase/sections/mathematics.md` without naming `rules/desktop-panes.md`'s 1140
+text items or the hand-run six-page gate — resolved by *declining* the edit, since three sentences
+are incomplete rather than false and now all take the same call.
+
+**The run-to-paragraph fix introduced its own consequence**, folded rather than left: a tight list
+item has no paragraph, so `- {#fig:one}` stays prose where a loose item's and a block quote's are
+refused. Fourteen further non-blocking findings folded.
+
 ### Round 3 — Phase 11 only — 2026-09-01 — the same three lenses, resumed — **READY**
 
 Verdict: `READY` from all three, zero blocking. **Converged at the cap**, the fifth time this
