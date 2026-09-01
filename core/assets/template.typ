@@ -4,12 +4,15 @@
 // change to the parser or the emitter.
 //
 // The emitter names every argument on every call, so every bundled look takes
-// title, author, columns, date, equations, figures and headings. That is the
-// contract a third look has to meet. The defaults below are the fallback for a
-// hand-written call; core/src/frontmatter.rs holds the ones a document actually
-// gets.
+// title, author, affiliation, columns, date, equations, figures and headings.
+// That is the contract a third look has to meet. `author` arrives as an array of
+// `(name, markers)` dictionaries and `affiliation` as an array of strings, both
+// `none` where the document wrote the key out: what crosses is the relation
+// between the two lists, and every question of how one looks is answered below.
+// The defaults are the fallback for a hand-written call; core/src/frontmatter.rs
+// holds the ones a document actually gets.
 
-#let template(title: none, author: none, columns: 2, date: none, equations: "plain", figures: "flat", headings: "plain", doc) = {
+#let template(title: none, author: none, affiliation: none, columns: 2, date: none, equations: "plain", figures: "flat", headings: "plain", doc) = {
   set page(paper: "a4", margin: 2.5cm, columns: columns)
   set text(font: "Libertinus Serif", size: 10pt, lang: "en")
   set par(justify: true, leading: 0.65em)
@@ -191,30 +194,26 @@
 
   // The title block spans every column. `scope: "parent"` is what lifts it out
   // of the column grid, and Typst supports that only together with `float`.
-  // A document with none of the three keys gets no title block at all. The
-  // date joins that test, because a key the author wrote that reached no page
-  // would vanish, which is what the dialect refuses.
-  if title != none or author != none or date != none {
+  // A document with none of the four keys gets no title block at all. The date
+  // and the affiliations join that test for the same reason: a key the author
+  // wrote that reached no page would vanish, which is what the dialect refuses.
+  if title != none or author != none or affiliation != none or date != none {
     place(top + center, scope: "parent", float: true, clearance: 1.6em, {
       set par(justify: false)
       align(center, {
-        let written = ()
-        if title != none {
-          written.push(text(size: 17pt, weight: "bold", title))
-        }
-        if author != none {
-          written.push(text(size: 11pt, author))
-        }
-        // The date sits under the author, set smaller. It is typeset exactly
-        // as the author wrote it.
-        if date != none {
-          written.push(text(size: 10pt, date))
-        }
-        // How far apart the three runs stand. The runs share one `v` inside
-        // this loop, so one value cannot serve two joins that want different
-        // amounts; the value is chosen per index instead.
+        // Whether the markers reach the page at all, read off the data rather
+        // than off a key. The schema makes them optional at exactly one
+        // affiliation, so a document that wrote none belongs entirely to it and
+        // a lone superscript on every name would say nothing. This one answer
+        // governs both runs: markers appear on the names and on the
+        // affiliations together, or on neither.
+        let marked = author != none and author.any(one => one.markers.len() > 0)
+
+        // Each run, with the gap that stands above it. The gap rides the run
+        // rather than its index, because which of the four are present varies
+        // and an index cannot tell the affiliations from the date.
         //
-        // The `em` resolves against this block's 10pt body and never against
+        // The `em`s resolve against this block's 10pt body and never against
         // the 17pt title. That is how the value shipped since Phase 9 came to
         // ask for 4pt where the title-to-author join needs 6.78pt and the
         // author-to-date join 5.07pt just to clear zero: under 4pt the boxes
@@ -224,12 +223,45 @@
         // defect. Weak spacing applies here in full and linearly, with no
         // threshold and no collapse, so the shape was never discarding
         // anything; and dropping the `linebreak()`s would make each run its own
-        // paragraph and land Typst's paragraph spacing on top of whatever this
-        // line asks for.
-        for (index, line) in written.enumerate() {
+        // paragraph and land Typst's paragraph spacing on top of whatever these
+        // lines ask for.
+        let written = ()
+        if title != none {
+          written.push((0em, text(size: 17pt, weight: "bold", title)))
+        }
+        // The authors run on one line, separated by commas, each name followed
+        // by its own markers as a superscript. A name carrying two of them
+        // reads as one superscript rather than two, which is what joining
+        // before the call to `super` buys.
+        if author != none {
+          written.push((1.8em, text(size: 11pt, author.map(one => {
+            if marked and one.markers.len() > 0 {
+              [#one.name#super(one.markers.map(str).join(","))]
+            } else {
+              [#one.name]
+            }
+          }).join(", "))))
+        }
+        // The affiliations sit directly beneath the authors, one to a line,
+        // smaller and italic, each behind the number that points at it. They
+        // set closer to the names above them than the block's other joins,
+        // because they belong to that line rather than standing beside it.
+        if affiliation != none {
+          written.push((1.0em, text(size: 9pt, style: "italic",
+            affiliation.enumerate(start: 1).map(((index, name)) => {
+              if marked { [#super(str(index))#name] } else { [#name] }
+            }).join(linebreak()))))
+        }
+        // The date sits under the block, set smaller. It is typeset exactly as
+        // the author wrote it.
+        if date != none {
+          written.push((0.9em, text(size: 10pt, date)))
+        }
+        for (index, run) in written.enumerate() {
+          let (gap, line) = run
           if index > 0 {
             linebreak()
-            v(if index == 1 { 1.8em } else { 0.9em }, weak: true)
+            v(gap, weak: true)
           }
           line
         }

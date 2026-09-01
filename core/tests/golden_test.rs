@@ -71,6 +71,9 @@ const CITATIONS_PRESS_RELEASE_MD: &str =
     include_str!("../../tests/fixtures/citations_press_release.md");
 const CITATIONS_PRESS_RELEASE_TYP: &str =
     include_str!("../../tests/golden/citations_press_release.typ");
+const AUTHORS_MD: &str = include_str!("../../tests/fixtures/authors.md");
+const AUTHORS_TYP: &str = include_str!("../../tests/golden/authors.typ");
+const ONE_AFFILIATION_MD: &str = include_str!("../../tests/fixtures/one_affiliation.md");
 
 /// Every bundled look, by the name the `template` key selects it with. **Six
 /// tests read these**: the call contract `mpdf-001` Phase 9 fixed, and the five
@@ -277,7 +280,7 @@ fn the_generated_source_carries_the_title_and_the_author() {
         "the title is missing"
     );
     assert!(
-        typst_source.contains("author: \"Iva Po\""),
+        typst_source.contains("author: ((name: \"Iva Po\", markers: ()),)"),
         "the author is missing"
     );
 }
@@ -287,7 +290,7 @@ fn the_generated_source_carries_the_title_and_the_author() {
 fn absent_frontmatter_gets_every_default() {
     assert!(
         md_to_typst(BASIC_MD, &[]).unwrap().contains(
-            "template.with(title: none, author: none, columns: 2, date: none, equations: \"plain\", figures: \"flat\", headings: \"plain\")"
+            "template.with(title: none, author: none, affiliation: none, columns: 2, date: none, equations: \"plain\", figures: \"flat\", headings: \"plain\")"
         ),
         "the defaults did not reach the template call"
     );
@@ -1438,7 +1441,7 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 
 /// Every bundled look meets the call contract the emitter writes.
 ///
-/// `header` names all seven arguments on every call and imports both names, so a
+/// `header` names all eight arguments on every call and imports both names, so a
 /// look missing one would fail the compile with an error naming neither the
 /// document nor the key. Golden files pin emitter output only, so the
 /// templates' side of the contract needs an artifact of its own.
@@ -1465,6 +1468,14 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 /// `int(headings)` checks that the key reaches it. The `1.1` pattern stays off
 /// the list for the same reason the other two formats do.
 ///
+/// `affiliation` brings its own pair on that same precedent, and the second is
+/// `super(` — the superscript a marker is rendered as, which is the one call no
+/// look can carry while ignoring the relation. The parameter alone would be
+/// satisfied by a look that took both lists and printed the names alone. What a
+/// marker looks like past being a superscript — its separator, whether the
+/// affiliations set italic, how far beneath the names they sit — stays off the
+/// list for the reason the three formats do.
+///
 /// These needles join the contract test rather than taking one of their own,
 /// where a caption, a gutter and a listing's alignment each took one: those
 /// cross no argument at all, and this is a call-contract parameter, which is
@@ -1477,6 +1488,8 @@ fn every_bundled_template_meets_the_call_contract() {
             "#let divider(",
             "title:",
             "author:",
+            "affiliation",
+            "super(",
             "columns:",
             "date:",
             "equations",
@@ -4697,7 +4710,7 @@ fn a_key_repeated_across_two_frontmatter_blocks_names_its_own_line() {
     let merged = "---\ntitle: Master\n---\n\nSome text.\n\n---\nauthor: Someone\n---\n";
     let source = md_to_typst(merged, &[]).unwrap();
     assert!(
-        source.contains("title: \"Master\", author: \"Someone\""),
+        source.contains("title: \"Master\", author: ((name: \"Someone\", markers: ()),)"),
         "{source}"
     );
 }
@@ -4734,6 +4747,85 @@ fn every_bundled_template_insets_a_listing() {
     for (file, source) in BUNDLED_TEMPLATES {
         for needle in ["raw.where(block: true)", "figure.caption.where(kind: raw)"] {
             assert!(source.contains(needle), "{file} does not carry `{needle}`");
+        }
+    }
+}
+
+// -- mpdf-001 Phase 11: several authors, and their affiliations ----------------
+
+/// The fixture that carries the whole grammar, against its golden file.
+///
+/// Four things are pinned here that nothing else in the suite says. The
+/// comma'd name `Po, Iva` survives as **one** element, which is the schema's
+/// sharpest call — a comma is an ordinary way to write one person's name, so
+/// the separator is a `;`. The markers written `^1, 2`, with the space an
+/// author actually types, reduce to two numbers. A one-element array carries
+/// its trailing comma, because `("Iva Po")` is a parenthesized string and not
+/// an array at all. And an author naming two affiliations keeps both, in
+/// written order.
+#[test]
+fn the_authors_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(AUTHORS_MD, &[]).unwrap(), AUTHORS_TYP);
+}
+
+#[test]
+fn the_authors_fixture_compiles() {
+    let pdf = md_to_pdf(AUTHORS_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// With exactly one affiliation the markers are optional, and a document that
+/// writes none is valid.
+///
+/// This is the case OQ-11 said its gate could not state. The schema answers by
+/// making the marker optional rather than by refusing it: one lab and several
+/// authors is the commonest real paper, and refusing the unmarked form would
+/// leave its author only the lone superscript on every name that says nothing.
+///
+/// Both forms are read, and in both looks. The marked twin is inline rather
+/// than a second fixture, because what separates the two is one character in
+/// the frontmatter and a fixture would say nothing the substitution does not.
+///
+/// **What the source shows is that the markers are absent, not that the page is
+/// bare.** Whether a marker reaches the page is the look's, read off exactly
+/// this data — so an empty `markers` on every author is the fact the looks
+/// branch on, and the PDFs are read by eye beside it.
+#[test]
+fn one_affiliation_carries_its_markers_or_leaves_them_out() {
+    let marked = ONE_AFFILIATION_MD.replace(
+        "author: Iva Po; Someone Else",
+        "author: Iva Po^1; Someone Else^1",
+    );
+    assert_ne!(marked, ONE_AFFILIATION_MD, "the substitution matched nothing");
+
+    for look in ["", "template: press-release\n"] {
+        let unmarked = ONE_AFFILIATION_MD.replacen("---\n", &format!("---\n{look}"), 1);
+        let marked = marked.replacen("---\n", &format!("---\n{look}"), 1);
+
+        let source = md_to_typst(&unmarked, &[]).unwrap();
+        assert!(
+            source.contains(
+                "author: ((name: \"Iva Po\", markers: ()), (name: \"Someone Else\", markers: ()))"
+            ),
+            "an unmarked author reached the look with a marker: {source}"
+        );
+        assert!(
+            source.contains("affiliation: (\"Anthropic, San Francisco\",)"),
+            "the one affiliation is missing its trailing comma: {source}"
+        );
+
+        let source = md_to_typst(&marked, &[]).unwrap();
+        assert!(
+            source.contains(
+                "author: ((name: \"Iva Po\", markers: (1,)), (name: \"Someone Else\", markers: (1,)))"
+            ),
+            "a marker the author wrote did not reach the look: {source}"
+        );
+
+        for document in [&unmarked, &marked] {
+            let pdf = md_to_pdf(document, &[]).unwrap();
+            assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
         }
     }
 }

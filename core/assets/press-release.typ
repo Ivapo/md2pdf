@@ -3,9 +3,11 @@
 // does, and the parser and the emitter know nothing about either.
 //
 // The emitter names every argument on every call, so this file takes the same
-// seven the article look takes. It sets only what the frontmatter supplied and
-// prints no fixed text of its own: the look is this file's job, and the words
-// on the page are the author's.
+// eight the article look takes — `author` an array of `(name, markers)`
+// dictionaries and `affiliation` an array of strings, the relation between the
+// two crossing as structure and every question of how it looks answered here. It
+// sets only what the frontmatter supplied and prints no fixed text of its own:
+// the look is this file's job, and the words on the page are the author's.
 
 // A thematic break, and the rule under the masthead below. The emitter calls
 // this by name on every look, so every look exports it.
@@ -17,7 +19,7 @@
 
 // `divider` is defined above because a Typst closure captures the scope it is
 // written in. The masthead calls it, so it has to exist by this line.
-#let template(title: none, author: none, columns: 1, date: none, equations: "plain", figures: "flat", headings: "plain", doc) = {
+#let template(title: none, author: none, affiliation: none, columns: 1, date: none, equations: "plain", figures: "flat", headings: "plain", doc) = {
   // A press release runs in one column by convention, and the frontmatter
   // resolves the count to 1 where the document left the key out. An author who
   // writes `columns: 2` still gets two.
@@ -174,9 +176,14 @@
   // The masthead. The dateline sits above the title, where a press release
   // carries it, and the title is set flush left rather than centred, which is
   // what separates this look from the article's on the page. A document that
-  // wrote none of the three keys gets no masthead at all.
-  if title != none or author != none or date != none {
+  // wrote none of the four keys gets no masthead at all.
+  if title != none or author != none or affiliation != none or date != none {
     block(width: 100%, {
+      // Whether the markers reach the page, read off the data as the article
+      // look reads it: at exactly one affiliation the schema makes them
+      // optional, and a document that wrote none belongs entirely to it.
+      let marked = author != none and author.any(one => one.markers.len() > 0)
+
       // The date is typeset exactly as the author wrote it. Nothing here
       // parses it, reformats it, or changes its case.
       if date != none {
@@ -199,7 +206,26 @@
       // 1.0em here wins over the title's 0.5em and the two boxes stop
       // overlapping, which under the shipped values they did by 2.03pt.
       if author != none {
-        block(above: 1.0em, text(size: 10.5pt, style: "italic", author))
+        block(above: 1.0em, text(size: 10.5pt, style: "italic", author.map(one => {
+          if marked and one.markers.len() > 0 {
+            [#one.name#super(one.markers.map(str).join(","))]
+          } else {
+            [#one.name]
+          }
+        }).join(", ")))
+      }
+      // The affiliations, directly beneath the authors and one to a line. They
+      // set smaller and upright where the article look sets them italic, and
+      // that is this look answering for itself rather than disagreeing: the
+      // byline above them is already italic here, so italic would not tell the
+      // two runs apart. The gap sits on this block's `above:`, as the byline's
+      // does, and for the same reason — the block above it owns a `below:` that
+      // a title-only document also depends on.
+      if affiliation != none {
+        block(above: 0.75em, text(size: 9pt,
+          affiliation.enumerate(start: 1).map(((index, name)) => {
+            if marked { [#super(str(index))#name] } else { [#name] }
+          }).join(linebreak())))
       }
       divider()
     })

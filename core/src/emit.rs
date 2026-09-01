@@ -26,7 +26,7 @@ use pulldown_cmark::{
 use typst::syntax::{PathError, VirtualPath};
 use unicase::UniCase;
 
-use crate::frontmatter::{self, Equations, Frontmatter};
+use crate::frontmatter::{self, Author, Equations, Frontmatter, Listed};
 use crate::math;
 use crate::sections::Sources;
 use crate::{BibliographyRef, Error, ImageRef, Location, Result};
@@ -2701,9 +2701,18 @@ fn align_name(align: &Alignment) -> &'static str {
 ///
 /// Every argument is named on every call, including the ones the frontmatter
 /// left out, so that same output shows the layout the document actually gets.
-/// A bundled look therefore accepts all seven, and one missing an argument
+/// A bundled look therefore accepts all eight, and one missing an argument
 /// would fail the compile with an error naming neither the document nor the
 /// key.
+///
+/// `author` and `affiliation` cross as Typst *arrays*, and `author`'s elements
+/// as dictionaries, because what crosses this seam is structure and never
+/// typography: the look decides that a marker is a superscript, that the names
+/// run on one line, and how far the affiliations sit beneath them. Joining the
+/// names back into one string here would hand a look a rendered decision it is
+/// supposed to make. An absent `author` crosses as `none` and never as `()`,
+/// because both looks guard the whole title block on the keys being `none` and
+/// an empty array is not.
 ///
 /// `equations`, `figures` and `headings` cross as Typst strings rather than
 /// through `typst_string_or_none`: the schema resolves each to a name on every
@@ -2723,10 +2732,11 @@ fn header(front: &Frontmatter, math: bool) -> String {
     format!(
         "#import \"{}\": template, divider\n\
          {prelude}\
-         #show: template.with(title: {}, author: {}, columns: {}, date: {}, equations: {}, figures: {}, headings: {})\n",
+         #show: template.with(title: {}, author: {}, affiliation: {}, columns: {}, date: {}, equations: {}, figures: {}, headings: {})\n",
         front.template.file(),
         typst_string_or_none(front.title.as_deref()),
-        typst_string_or_none(front.author.as_deref()),
+        typst_authors_or_none(front.author.as_ref()),
+        typst_affiliations_or_none(front.affiliation.as_ref()),
         front.columns,
         typst_string_or_none(front.date.as_deref()),
         typst_string(front.equations.name()),
@@ -2741,6 +2751,64 @@ fn typst_string_or_none(value: Option<&str>) -> String {
     match value {
         Some(value) => typst_string(value),
         None => String::from("none"),
+    }
+}
+
+/// Render the authors as a Typst array of dictionaries, or `none`.
+///
+/// Each element is `(name: "…", markers: (…))`, so the look reads the relation
+/// off a field rather than off a position. A dictionary rather than a pair also
+/// keeps `--emit-typst` legible: the second half of an author is a list of
+/// numbers, and nothing but its name says what they index.
+fn typst_authors_or_none(authors: Option<&Listed<Author>>) -> String {
+    match authors {
+        None => String::from("none"),
+        Some(authors) => {
+            let written: Vec<String> = authors
+                .list
+                .iter()
+                .map(|author| {
+                    let markers: Vec<String> =
+                        author.markers.iter().map(usize::to_string).collect();
+                    format!(
+                        "(name: {}, markers: {})",
+                        typst_string(&author.name),
+                        typst_array(&markers)
+                    )
+                })
+                .collect();
+            typst_array(&written)
+        }
+    }
+}
+
+/// Render the affiliations as a Typst array of strings, or `none`.
+///
+/// Not through `typst_string_or_none`: that renders one literal from an
+/// `Option<&str>`, and a list-valued key needs the array-or-`none` beside it.
+fn typst_affiliations_or_none(affiliations: Option<&Listed<String>>) -> String {
+    match affiliations {
+        None => String::from("none"),
+        Some(affiliations) => {
+            let written: Vec<String> = affiliations
+                .list
+                .iter()
+                .map(|name| typst_string(name))
+                .collect();
+            typst_array(&written)
+        }
+    }
+}
+
+/// Render already-written Typst expressions as an array literal.
+///
+/// A one-element array needs its trailing comma. `("Iva Po")` is a
+/// parenthesized string and not an array at all, so a one-author document would
+/// hand the look a value it could neither map nor index.
+fn typst_array(written: &[String]) -> String {
+    match written {
+        [only] => format!("({only},)"),
+        _ => format!("({})", written.join(", ")),
     }
 }
 

@@ -1,9 +1,13 @@
 //! Parses the leading YAML frontmatter block.
 //!
-//! The schema is nine keys, so this is a hand-written parser over a documented
+//! The schema is ten keys, so this is a hand-written parser over a documented
 //! YAML subset rather than a dependency. It follows the same policy the emitter
 //! applies to markdown: anything outside the subset is an error that names the
 //! offending key and its line, never a guess.
+//!
+//! Two of the ten take a *list*, and the parser refusing an indented line is why
+//! they take it inside one: a list is a `;`-separated value rather than YAML's
+//! own nesting.
 
 use crate::emit::portable_path;
 use crate::{BibliographyRef, Error, Location, Result};
@@ -203,11 +207,47 @@ impl Headings {
     }
 }
 
+/// One author, and the affiliations they belong to.
+///
+/// The markers ride the name because nothing else in a flat schema carries the
+/// relation. An affiliation is a relation between two lists rather than a third
+/// string, and one `key: value` pair per line leaves the name itself as the only
+/// place to write the join.
+///
+/// `markers` indexes [`Frontmatter::affiliation`] in written order, from 1, and
+/// is empty where the author wrote none — which the schema permits at exactly
+/// one affiliation, and which the look reads to decide whether a marker reaches
+/// the page at all.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Author {
+    pub name: String,
+    pub markers: Vec<usize>,
+}
+
+/// A list-valued key, and the line the document wrote it on.
+///
+/// The line is kept for the reason [`crate::BibliographyRef`] keeps one, reached
+/// from a different direction: two of the four refusals below are *cross-key*,
+/// and `affiliation` may sit above or below `author`, so neither can be checked
+/// until the whole block is read. By then the line loop is over and the line is
+/// only here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Listed<T> {
+    pub list: Vec<T>,
+    pub location: Location,
+}
+
 /// The keys a document may carry.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Frontmatter {
     pub title: Option<String>,
-    pub author: Option<String>,
+    /// The authors, in written order, each with the affiliations it names.
+    pub author: Option<Listed<Author>>,
+    /// The affiliations the markers index, in written order.
+    ///
+    /// Singular for the reason `author` is: this schema has no synonyms, so one
+    /// key takes several values rather than a second key spelling the plural.
+    pub affiliation: Option<Listed<String>>,
     pub columns: u8,
     pub template: Template,
     pub date: Option<String>,
@@ -248,6 +288,7 @@ impl Default for Frontmatter {
         Self {
             title: None,
             author: None,
+            affiliation: None,
             columns: Template::Article.columns(),
             template: Template::Article,
             date: None,
@@ -300,7 +341,33 @@ pub(crate) fn parse(block: &str, first_line: usize) -> Result<Frontmatter> {
         match key {
             // An empty value means the key is absent, so the template omits it.
             "title" => out.title = non_empty(value),
-            "author" => out.author = non_empty(value),
+            // A list, and the one whose elements carry a relation of their own.
+            // An empty value means the key is absent, exactly as it does for a
+            // string key: `author:` and nothing else names nobody.
+            "author" => {
+                out.author = match non_empty(value) {
+                    Some(value) => Some(Listed {
+                        list: entries(&value, key, line)?
+                            .iter()
+                            .map(|entry| author(entry, line))
+                            .collect::<Result<Vec<_>>>()?,
+                        location: Location::at(line),
+                    }),
+                    None => None,
+                }
+            }
+            // The other list. Each element is a whole affiliation, commas and
+            // all — `Anthropic, San Francisco` is one place, which is exactly
+            // why the separator is a `;`.
+            "affiliation" => {
+                out.affiliation = match non_empty(value) {
+                    Some(value) => Some(Listed {
+                        list: entries(&value, key, line)?,
+                        location: Location::at(line),
+                    }),
+                    None => None,
+                }
+            }
             // The date is a free string that the template typesets verbatim.
             // Nothing here parses it or formats it, and no clock is read.
             "date" => out.date = non_empty(value),
@@ -387,7 +454,124 @@ pub(crate) fn parse(block: &str, first_line: usize) -> Result<Frontmatter> {
     // An explicit count wins. An absent one takes the selected look's
     // convention, so a press release is single-column without saying so.
     out.columns = columns.unwrap_or(out.template.columns());
+    check_affiliations(&out)?;
     Ok(out)
+}
+
+/// The two refusals that read both list keys at once.
+///
+/// They cannot run inside the loop above, because `affiliation` may sit below
+/// `author` — the shape `columns` and `template` already take. Each names the
+/// line of the key the author would have to edit, which for the first is the
+/// `author` line the marker was written on and for the second the `affiliation`
+/// line whose relation is unstated.
+fn check_affiliations(out: &Frontmatter) -> Result<()> {
+    let count = out.affiliation.as_ref().map_or(0, |listed| listed.list.len());
+
+    // A marker naming an affiliation the document does not carry. Typst cannot
+    // catch this: by the time it sees one it is a number in a list, and the
+    // failure it would ship is a superscript pointing at nothing.
+    if let Some(authors) = &out.author {
+        for marker in authors.list.iter().flat_map(|author| &author.markers) {
+            if *marker == 0 || *marker > count {
+                return Err(problem(
+                    authors.location.line,
+                    format!(
+                        "key 'author' points at affiliation {marker},                          and the document carries {count}"
+                    ),
+                ));
+            }
+        }
+    }
+
+    // An `affiliation` key whose relation to the authors is unstated. This
+    // begins at *two*: with exactly one affiliation the markers are optional and
+    // every author belongs to it, so the commonest real paper — one lab, several
+    // authors — is written without a lone marker on every name.
+    if count >= 2 {
+        let marked = out
+            .author
+            .iter()
+            .flat_map(|authors| &authors.list)
+            .any(|author| !author.markers.is_empty());
+        if !marked {
+            let listed = out.affiliation.as_ref().expect("count is above zero");
+            return Err(problem(
+                listed.location.line,
+                format!(
+                    "key 'affiliation' carries {count} entries                      and no author names one with '^'"
+                ),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Split a list-valued key on `;`, trimming every element.
+///
+/// An empty element is refused rather than dropped. `author: Iva Po;` splits to
+/// a second, empty element, and `affiliation: MIT;` leaves a blank second
+/// affiliation that a `^2` would then point at without tripping the check above.
+/// Either would reach the look as a dangling separator, which is the silent
+/// flattening this dialect exists to forbid.
+fn entries(value: &str, key: &str, line: usize) -> Result<Vec<String>> {
+    value
+        .split(';')
+        .map(str::trim)
+        .map(|entry| match entry.is_empty() {
+            true => Err(problem(
+                line,
+                format!("key '{key}' has an empty entry; ';' separates them"),
+            )),
+            false => Ok(entry.to_string()),
+        })
+        .collect()
+}
+
+/// Split one author into the name and the markers riding it.
+///
+/// The split is at the *first* `^`, so `A^B^1` is refused by the marker rule
+/// naming `B^1` rather than guessed into a name `A^B`: a `^` inside a name is
+/// rarer than a typo in a marker, and this dialect refuses rather than guesses.
+///
+/// A digit run too long for a `usize` saturates rather than raising here. It
+/// cannot index any list, so `check_affiliations` refuses it as the marker
+/// naming an affiliation the document does not carry, which is what it is.
+fn author(entry: &str, line: usize) -> Result<Author> {
+    let Some((name, markers)) = entry.split_once('^') else {
+        return Ok(Author {
+            name: entry.to_string(),
+            markers: Vec::new(),
+        });
+    };
+
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(problem(
+            line,
+            format!("key 'author' has an entry with no name before its '^': '{entry}'"),
+        ));
+    }
+
+    let markers = markers
+        .split(',')
+        .map(str::trim)
+        .map(|marker| {
+            match !marker.is_empty() && marker.bytes().all(|byte| byte.is_ascii_digit()) {
+                true => Ok(marker.parse::<usize>().unwrap_or(usize::MAX)),
+                false => Err(problem(
+                    line,
+                    format!("key 'author' takes a number after '^', not '{marker}'"),
+                )),
+            }
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(Author {
+        name: name.to_string(),
+        markers,
+    })
 }
 
 fn problem(line: usize, problem: impl Into<String>) -> Error {
@@ -420,12 +604,21 @@ mod tests {
         assert_eq!(parse("", 2).unwrap(), Frontmatter::default());
     }
 
+    /// Every name a block writes, in order, with the markers dropped.
+    fn names(out: &Frontmatter) -> Vec<&str> {
+        out.author
+            .iter()
+            .flat_map(|authors| &authors.list)
+            .map(|author| author.name.as_str())
+            .collect()
+    }
+
     #[test]
     fn quotes_comments_and_blank_lines_are_handled() {
         let block = "# a comment\ntitle: \"A Quoted Title\"\n\nauthor: 'Iva Po'\n";
         let out = parse(block, 2).unwrap();
         assert_eq!(out.title.as_deref(), Some("A Quoted Title"));
-        assert_eq!(out.author.as_deref(), Some("Iva Po"));
+        assert_eq!(names(&out), ["Iva Po"]);
     }
 
     #[test]
@@ -654,6 +847,117 @@ mod tests {
     fn the_date_is_kept_as_it_was_written() {
         let out = parse("date: 10 August 2026\n", 2).unwrap();
         assert_eq!(out.date.as_deref(), Some("10 August 2026"));
+    }
+
+    /// The list splits on `;`, every element is trimmed, and a name keeps its
+    /// own commas.
+    ///
+    /// `Po, Iva` is the case the separator was chosen for: a comma is an
+    /// ordinary way to write one person's name, and splitting on one would turn
+    /// that person into two silently.
+    #[test]
+    fn the_author_list_splits_on_semicolons_and_trims() {
+        for block in [
+            "author: Po, Iva; Someone Else\n",
+            "author:   Po, Iva  ;Someone Else  \n",
+        ] {
+            let out = parse(block, 2).unwrap();
+            assert_eq!(names(&out), ["Po, Iva", "Someone Else"], "for {block}");
+        }
+    }
+
+    /// A name splits from its markers at the first `^`, and the markers trim.
+    ///
+    /// `^1, 2` with the space is what an author actually types, and it is the
+    /// same document as `^1,2`.
+    #[test]
+    fn markers_ride_the_name_and_index_from_one() {
+        let block = "author: A^1; B^2; C^1, 2\naffiliation: One; Two\n";
+        let out = parse(block, 2).unwrap();
+        let markers: Vec<&[usize]> = out
+            .author
+            .as_ref()
+            .unwrap()
+            .list
+            .iter()
+            .map(|author| author.markers.as_slice())
+            .collect();
+        assert_eq!(markers, [&[1][..], &[2][..], &[1, 2][..]]);
+    }
+
+    /// At exactly one affiliation the markers are optional, and a document that
+    /// writes none is valid.
+    ///
+    /// This is OQ-11's resolution, and it is what makes the commonest real paper
+    /// — one lab, several authors — writable without a lone marker on every
+    /// name. A marker written anyway is honoured, because the author wrote it.
+    #[test]
+    fn one_affiliation_makes_the_marker_optional() {
+        for block in [
+            "author: A; B\naffiliation: One Lab\n",
+            "author: A^1; B^1\naffiliation: One Lab\n",
+            "author: A^1; B\naffiliation: One Lab\n",
+        ] {
+            assert!(parse(block, 2).is_ok(), "refused: {block}");
+        }
+    }
+
+    /// An author with no marker, under two affiliations, is deliberately not
+    /// refused.
+    ///
+    /// Three authors from one lab and a fourth from none is a real document, and
+    /// refusing it would break something nobody asked to have broken.
+    #[test]
+    fn an_unmarked_author_beside_marked_ones_is_accepted() {
+        let block = "author: A^1; B^2; C\naffiliation: One; Two\n";
+        assert!(parse(block, 2).is_ok());
+    }
+
+    /// Every refusal the two list keys add names the line the author would have
+    /// to edit.
+    ///
+    /// The four are: a marker naming an affiliation the document does not carry;
+    /// an `affiliation` key whose relation is unstated, which begins at *two*;
+    /// a marker that is not a number; and an empty element, in **either** list.
+    ///
+    /// The line each names is the key the author would edit rather than the key
+    /// the check happens to read, which is why the second names `affiliation`
+    /// where the other three name the key the fault is written in. Both are
+    /// asserted, on `errors_name_the_key_and_the_line`'s shape.
+    #[test]
+    fn every_affiliation_refusal_names_its_own_line() {
+        // (block, the line the error names, a fragment of the sentence)
+        for (block, line, needle) in [
+            // A marker pointing past the affiliations the document carries, and
+            // the `^0` that points before them.
+            ("affiliation: One; Two\nauthor: A^1; B^3\n", 3, "carries 2"),
+            ("author: A^1\n", 2, "carries 0"),
+            ("affiliation: One; Two\nauthor: A^0; B^1\n", 3, "affiliation 0"),
+            // Two affiliations and no marker anywhere: the relation is unstated.
+            // The `affiliation` line is named, not the `author` line.
+            ("author: A; B\naffiliation: One; Two\n", 3, "no author names one"),
+            ("affiliation: One; Two\nauthor: A; B\n", 2, "no author names one"),
+            // A marker that is not a number. `A^B^1` splits at the *first* `^`,
+            // so what is refused is `B^1` rather than a guessed name `A^B`.
+            ("author: A^x\n", 2, "not 'x'"),
+            ("author: A^B^1\n", 2, "not 'B^1'"),
+            ("author: A^\n", 2, "not ''"),
+            ("author: A^1,\n", 2, "not ''"),
+            // An empty element, in either list. A dangling separator would reach
+            // the look as a nameless author or a blank affiliation a `^2` could
+            // then point at.
+            ("author: Iva Po;\n", 2, "key 'author' has an empty entry"),
+            ("author: A^1\naffiliation: MIT;\n", 3, "key 'affiliation' has an empty entry"),
+            ("author: ^1\n", 2, "no name before its '^'"),
+        ] {
+            match parse(block, 2) {
+                Err(Error::Frontmatter { location, problem }) => {
+                    assert_eq!(location.line, line, "wrong line for {block:?}");
+                    assert!(problem.contains(needle), "problem was: {problem}");
+                }
+                other => panic!("expected a Frontmatter error for {block:?}, got {other:?}"),
+            }
+        }
     }
 
     #[test]
