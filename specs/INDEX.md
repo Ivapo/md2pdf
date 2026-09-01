@@ -11,7 +11,7 @@
 - **[math](math_spec.md)** — `mpdf-004` · accepted · done
   LaTeX math in markdown becomes typeset math in the PDF: the dialect allows a closed list of LaTeX commands, mitex converts them in process, and a command outside the list is an error naming the command and its line.
 - **[captions-and-references](captions_and_references_spec.md)** — `mpdf-005` · accepted · partial
-  Figures, tables, listings and equations gain captions, numbers and cross-references: the emitter wraps them in Typst's `figure`, the looks decide what a caption and a number look like, and a reference that names one stays true when another is inserted above it.
+  Figures, tables, listings and equations gain captions, numbers and cross-references: the emitter wraps them in Typst's `figure`, the looks decide what a caption and a number look like, and a reference that names one stays true when another is inserted above it. The `:::` delimiter this spec invented for a multi-member figure also carries the abstract a paper opens with.
 - **[web-demo](web_demo_spec.md)** — `mpdf-006` · accepted · done
   The published browser demo becomes the project's front door: the page says what the dialect adds to markdown, every claim it makes is a snippet the workspace suite compiles, and one click sets that snippet as a PDF in the reader's own browser.
 - **[citations-and-bibliography](citations_spec.md)** — `mpdf-007` · accepted · done

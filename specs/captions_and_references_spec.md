@@ -5,7 +5,8 @@ note: >
   Figures, tables, listings and equations gain captions, numbers and
   cross-references: the emitter wraps them in Typst's `figure`, the looks decide
   what a caption and a number look like, and a reference that names one stays
-  true when another is inserted above it.
+  true when another is inserted above it. The `:::` delimiter this spec invented
+  for a multi-member figure also carries the abstract a paper opens with.
 status: accepted
 last_updated: 2026-08-31
 
@@ -56,7 +57,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 10 — the abstract a paper opens with"
-    reviewed: null
+    reviewed: 2026-08-31
     shipped: null
     cut: null
     by: null
@@ -500,6 +501,23 @@ error names what the author typed:
 is ordinary prose, unchanged, per the rule above. Refusing it would break a
 document that never asked for a caption, which is the direction this project's
 §2 rule does not run in.
+
+**WIDENED 2026-08-31, by Phase 10's round 1, which caught this sentence going
+uncorrected while its sibling one section up got a dated block.** The rule above is
+about a `: ` line in the *body*, and it is unchanged there: a document that opens a
+paragraph with `: ` where nothing captionable stands is untouched, as it has been
+since Phase 1. **Inside `::: abstract` it is refused**, because that construct has
+nowhere to put a caption and letting the line through would print a bare `: ` onto
+the page inside a float — a mistyped marker reaching the reader, which is the
+direction the rule *does* run in. The collision window gains one position and the
+census still finds it empty.
+
+**Round 1 also corrected the mechanism a draft of Phase 10 gave for that refusal.**
+The draft said Phase 5's group "would silently take it as a caption".
+`core/src/emit.rs:step`'s caption arm attaches on `group.is_some() || figure.live(…)`,
+and Phase 10 makes the abstract a *sibling* of `Group` rather than a `Group` — so a
+`: ` line inside an abstract is ordinary prose under the shipped code, and the
+refusal is new code rather than a correction of group behaviour.
 
 ### Where the caption attaches, and why it is not `write_image` (decision, recorded)
 
@@ -1596,8 +1614,18 @@ offsets, which is the property that makes `em` the right unit for the first rule
   three are not equivalent and a later phase should not treat them as one: a list needs
   nothing, an equation drags `equations: numbered` into a block that is not a section, and a
   citation reaches `check_citations` from a position no reference list is guaranteed to
-  follow. **Blocks nothing in Phase 10**, and the first author who asks is better evidence than
-  this question is.
+  follow.
+
+  **CORRECTED 2026-08-31 by round 1, which found this question's own risk argument
+  inverted.** Of the three, **only the list is a block**. A display equation arrives as
+  `Event::DisplayMath` and a citation as inline text, both *inside* a paragraph, so Phase 10's
+  refusal — a block that is not a paragraph — **already permits both**. They are not deferred
+  and refused; they are shipped and allowed, and a numbered equation inside an abstract
+  consumes `math.equation`'s counter from inside a float with nothing gating it. That is a
+  live question about Phase 10 rather than a later one, and it is answered there rather than
+  here: the phase now refuses a display equation and a citation inside an abstract by name,
+  which is what makes this question about *widening* again. **What is left open is the list,
+  and it blocks nothing** — widening a refusal never moves a document that already compiles.
 
 - **OQ-20 — is `abstract` the first of a family, and where does that become a real question?**
   *(design call)* `::: keywords` and `::: acknowledgements` are the same mechanism with a
@@ -3205,7 +3233,16 @@ worked rather than skipped.
   `::: table`, `::: figure` and every other word stay the author's convention and stay unread,
   and the census finds no document using `::: abstract` for anything. **The prose is the part
   that is now actively misleading, and it is corrected in place** rather than in a sibling
-  file the reader never reaches — §6.1's third sub-case, and §2 carries the dated block.
+  file the reader never reaches — §6.1's third sub-case, and §2 carries two dated blocks: the
+  opener-word decision, and the `: `-line decision this phase also narrows.
+
+  **The precedent is not quite symmetric, and round 1 was right to say so.** `mpdf-001` Phase
+  12 narrowed a **refusal**, which cannot break a document that compiles today; this narrows a
+  **permission**, which can. Nothing but a repo-local census stands between this phase and a
+  document that opened a two-image group `::: abstract`, and a census speaks only for this
+  repository. That is a real difference in kind and it is what the census is load-bearing for —
+  it is not a weaker version of Phase 12's argument, it is a different one that happens to
+  land the same way.
 - **Step 2 — the subject.** **The `:::` delimiter, which this spec invented in Phase 5 and
   which no other spec has standing over.** The tension is worth stating because a reader will
   feel it: this spec is named *captions-and-references*, and an abstract has neither. What
@@ -3214,14 +3251,26 @@ worked rather than skipped.
   construct, which is the sprawl §6.1 opens by forbidding. `mpdf-001` was weighed and loses:
   it owns the frontmatter schema and the title block, and this phase adds no key and changes
   no template argument.
+
+  **OQ-15 says "a shared carrier is not a shared subject", and round 1 was right that a draft
+  of this bullet argued past it.** That question records that a `:::` *feature* taken up later
+  "is a spec of its own rather than a phase here", and it is not overruled: the line it draws
+  is between a feature **carried on** the delimiter — OQ-15's arrangement and nesting, which
+  add a capability to groups — and an amendment to **the delimiter's own dispatch**, which is
+  what this phase is. Phase 10 changes which construct a paragraph opens; it adds nothing to
+  what a group can do. A later `::: columns` that laid out its members would be OQ-15's case
+  and would take its own spec.
 - **Step 3 is not reached.** OQ-20 records why the abstract is not designed as one kind under
   a reserved front-matter framework: a namespace with one member is a guess about the second.
 
 - **Scope: one reserved word, one buffered block, one exported function per look.**
 
-  **`::: abstract` opens an abstract and a bare `:::` closes it**, on Phase 5's delimiter
-  unchanged — the same whole-paragraph rule, the same frame rule, the same
-  `core/src/emit.rs:Walk::unclosed` refusal for one left open. `core/src/emit.rs:group_marker`
+  **`::: abstract` opens an abstract and a bare `:::` closes it**, on Phase 5's delimiter and
+  its whole-paragraph rule unchanged. **Two things it does not inherit unchanged**, corrected
+  here because a draft's summary promised the reuse plan the refusals then abandoned:
+  `core/src/emit.rs:Walk::unclosed` gains a second literal rather than reusing its first
+  (refusal 8), and the frame rule gains a condition `escaped_frame` does not carry
+  (refusal 3). `core/src/emit.rs:group_marker`
   stops discarding the word and returns it, and the opener arm in the walk dispatches on a
   **one-element set** of reserved words rather than on a branch, so OQ-20's second word is a
   second entry rather than a second mechanism.
@@ -3231,7 +3280,10 @@ worked rather than skipped.
   `figures: sectioned` cannot be perturbed by it. `core/src/emit.rs:close_group` gains a
   sibling rather than a branch: the abstract's closer truncates back to the opener's `start`
   exactly as a group's does and writes `#abstract[…]` over the prose the walk already emitted
-  between the two delimiters. **That reuse is the reason this is small** — the buffered
+  between the two delimiters. `Group.start` is recorded *after* `Start(Tag::Paragraph)` pushed
+  its `'\n'`, so the span the closer wraps opens and closes with separator newlines — §2 called
+  that "the one detail an implementer will otherwise rediscover" for `splice_caption`, and this
+  sibling inherits it. **That reuse is the reason this is small** — the buffered
   content is already translated body, so emphasis, inline code and a hard break inside an
   abstract cost nothing and are not separately specified.
 
@@ -3252,7 +3304,11 @@ worked rather than skipped.
   `core/src/emit.rs:header` writes `#import "<look>": template, divider` today and would
   write `template, divider, abstract` only for a document that has one — the shape the math
   prelude already takes in that same function, and for the identical stated reason: it is
-  what keeps the prelude out of every golden that names no formula. **So no shipped golden
+  what keeps the prelude out of every golden that names no formula. **The shape is shared and
+  the spelling is not**, which round 1 asked be said: the prelude is a *separate* conditional
+  `#import` line, where this is a conditionally widened name list on the look's own import.
+  What carries over is the `bool` reaching `header` from the walk, which round 1 confirmed is
+  available at the call site — `header(&walk.front, walk.math)` runs after the walk. **So no shipped golden
   file moves**, and the phase avoids `mpdf-001` Phase 3's thirty-file import sweep entirely.
 
   **The call contract stays at eight arguments.** The abstract crosses as an exported
@@ -3271,6 +3327,21 @@ worked rather than skipped.
   **The press release**: a standfirst under the masthead rule — no label, since a press
   release has no abstract and does have a lede, and the label is the look's to withhold.
 
+  **The label is styled text and never a `heading` element, and this is the phase's sharpest
+  trap rather than a style note.** `core/src/lib.rs:anchors_from` returns an **empty vector**
+  on any mismatch between the headings the walk counted and the headings the compiled document
+  carries — silently, by design — so a look spelling the label `heading(level: 1)` typesets one
+  heading `core` never saw and **withdraws every anchor in the document**, taking the desktop
+  pane's scroll sync with it and leaving nothing on the page to show for it. It would also take
+  a section number under `headings: N` and restart every counter under `figures: sectioned`,
+  which is the same defect this phase refuses a heading-shaped abstract to avoid, re-entered
+  through the look. **`core/assets/template.typ` already records this trap and already chose
+  styled text for it** — the `show bibliography` rule's "References" label, which sits *inside*
+  `#let template`, where `#let abstract` goes beside the file's `#let divider` export. Round 2 corrected a draft that put the two three lines apart
+  and would have sent an implementer to the wrong end of the file. Round 1 built the wrong look and measured
+  exactly this: `1 Abstract`, `2 Introduction`, `Table 2.1`, and no anchors. Both looks
+  therefore set the label with `text()`, and gate (5) is what sees it.
+
   **The label is the look's and the author writes none**, so nothing an author typed can fail
   to reach the page. That is the whole reason the block carries no heading: a `# Summary` the
   look re-titled to *Abstract* would be the silent flattening the dialect exists to refuse,
@@ -3284,34 +3355,124 @@ worked rather than skipped.
   **The two floats stack rather than collide, measured rather than assumed**, by injecting a
   probe into `core/assets/template.typ` and compiling through the CLI, then reverting — the
   technique §2's own bullets used. On `tests/fixtures/authors.md`, two columns: the title
-  block occupies y 67–142, the probe abstract y 165–209, and the body begins at y 225, in
-  source order with no overlap. The probe block measures **362.8pt** wide against a body
-  column's **217.7pt**, so a parent-scoped float genuinely spans. **The single-column case is
-  deliberately not claimed** — the measurement was taken on a two-column article, and gate (5)
+  block occupies y **66.60–153.22** — round 1 corrected a draft that read 142, which is the
+  *top* of the date line rather than the bottom of the block — the abstract y **164.30–251.38**,
+  and the body heading begins at y **261.70**, in source order with no overlap.
+
+  **Round 1 re-measured this at the shape that ships and it holds there too**, which the
+  draft's own probe had not tested: the numbers above are from `#abstract[…]` issued from the
+  document body after the show line, not from a float injected into the look's own body. The
+  two differ in where the call stands, and only the shipped shape settles the question. The probe block measures **362.8pt** wide against a body
+  column's **217.7pt**, so a parent-scoped float genuinely spans — the first being 80% of this
+  look's **453.54pt** text width and the second that width less the gutter, halved, so both are
+  derivable rather than literals a second person has to take on trust. **The single-column case is
+  deliberately not claimed** — the measurement was taken on a two-column article, and gate (6)
   reads it rather than this paragraph asserting it.
 
-  **Six refusals, each naming the author's line**, per §2's rule. A second `::: abstract` in
-  one document; an abstract that is not the first block; a block inside an abstract that is
-  not a paragraph, per OQ-19; an empty abstract, which would otherwise set a label over
-  nothing; a `: ` line inside an abstract, which Phase 5's group would silently take as a
-  caption and this construct has nowhere to put; and an abstract never closed, which is
-  `Walk::unclosed`'s existing refusal reached by a new opener. **A seventh message moves
-  rather than being added**: the `(true, Marker::Word)` arm reads *"figure group inside a
-  figure group"*, which is wrong for both new pairings — an `::: abstract` inside a group, and
-  a `::: table` inside an abstract — and its literal has to name what the author actually
-  nested.
+  **The bare `:::` dispatch becomes three-state, and that is stated because round 1 found the
+  draft silent on it.** Today `(false, Marker::Bare)` *opens* a group — `Marker`'s own doc
+  comment says so. With an abstract open and the group slot empty, a bare `:::` must **close
+  the abstract**, so the arm reads the abstract slot before it falls through to opening a
+  group. Neither `group_marker` returning the word nor the reserved-word set says this.
+
+  **Eight refusals, each naming the author's line**, per §2's rule. Round 1 raised the count
+  from six: two were missing and one was under-specified.
+
+  1. **A second `::: abstract` in one document.**
+  2. **An abstract that is not the first block.** The two overlap — once the first abstract
+     closes, its `#abstract[…]` stands in the buffer, so a second opener fails the first-block
+     test too — so **(1) is tested before (2)**, or gate (3)'s two rows collapse to one string.
+     **(3) is tested before (2) for the same reason**, since a `- ::: abstract` after body prose
+     satisfies both; the order across the three is (1), then (3), then (2). **The ordering is
+     for message quality and the gate does not rest on it** — round 3's correction: (2) and (3)
+     may well share one `construct` string, at which point the order is unobservable, and what
+     discriminates the rows is that a wrong implementation fails them **by compiling**.
+  3. **An abstract opened in a frame or a walk of its own** — inside a list item, inside a
+     block quote, or **inside a footnote definition**. The title is deliberately not "anywhere
+     but the first block", which would read as a superset of (2) rather than the disjoint case
+     it is. The test is **three conditions
+     and not two**: no content emitted, `bufs.len() == 1`, **and `Mode::Document`**.
+
+     The first two are round 1's catch — a list item or a quote opens a *fresh* buffer frame, so
+     `top(bufs)` is empty and a content-only test reads it as first, on the frame reasoning
+     Phase 5 already applies through `core/src/emit.rs:escaped_frame`. **The third is round 2's,
+     and it is the round-1 fix defeating itself**: `core/src/emit.rs:collect_definitions` runs
+     every footnote definition through a **fresh `Walk::new()`**, so inside one `top(bufs)` is
+     empty *and* `bufs.len() == 1`, and the two-condition test written to close the frame hole
+     admits the definition hole. An abstract there would emit `#abstract[…]` inside
+     `#footnote[…]`, which the look then hoists to the top of the page — precisely the
+     source-order/page-order divergence this refusal exists to prevent. Two of the three round-1
+     lenses found it independently, and neither the eight refusals nor gate (3)'s rows covered
+     it as written.
+
+     **The condition costs no plumbing**, which is why it is a clause rather than a phase of its
+     own: `step` is already handed `Mode::Definition` at `core/src/emit.rs:collect_definitions`'
+     call site and already matches on it for the footnote-reference refusal.
+
+     **Refusing beats propagating, and the alternative is named because it is the one an
+     implementer will reach for.** A definition's content really can carry a construct the
+     header must know about — `walk.math` is lifted onto `Body` and ORed back at the reference
+     arm, `*math |= body.math`, which is how the prelude survives a formula written only in a
+     footnote. An abstract flag could ride the same path. It should not: an abstract inside a
+     footnote is nonsense in every venue, and the propagation would make a document's *import
+     line* depend on whether a footnote was referenced. Left unrefused **and** unpropagated it
+     is worse than either — `#abstract[…]` reaching the compile with no `abstract` in the import
+     list, which fails on a Typst identifier the author never wrote, the labelless failure §2
+     forbids.
+  4. **A block inside an abstract that is not a paragraph** — and **a standalone image is
+     refused with them, though it *is* a paragraph at the event level.** Round 1's catch, and
+     the one that would otherwise have contradicted this phase's own "takes none of a figure's
+     machinery": `core/src/emit.rs:step`'s `standalone` test sees `Start(Paragraph)`, image,
+     `End(Paragraph)`, so an image inside an abstract would set a live `Figure`, and a `: `
+     line after it would splice a `#figure(image(…), caption: […])` **inside the float**. The
+     refusal names the image rather than the paragraph rule catching it by accident.
+  5. **A display equation or a citation inside an abstract.** Both are *inline* events inside a
+     paragraph, so (4) does not reach them — round 1's catch, and OQ-19 carries the corrected
+     reasoning. A numbered equation would otherwise consume `math.equation`'s counter from
+     inside a float, and a citation would reach `core/src/emit.rs:check_citations` from a
+     position no reference list is guaranteed to follow.
+  6. **An empty abstract**, which would otherwise set a label over nothing.
+  7. **A `: ` line inside an abstract**, which this construct has nowhere to put. §2's dated
+     note carries why this is new code rather than a correction of group behaviour.
+  8. **An abstract never closed.** **`core/src/emit.rs:Walk::unclosed` gains a second literal
+     rather than reusing its first**, which reads *"figure group the document never closes"* and
+     would tell an author who wrote `::: abstract` about a figure group. All three lenses raised
+     this, and it is the same §2 rule that moves the message below — a refusal that names a
+     construct the author did not write is the defect, wherever it sits.
+     `core/src/emit.rs:escaped_frame` carries the same literal for the frame case and moves with
+     it.
+
+  **A ninth message moves rather than being added**, and it covers **three** pairings rather
+  than the two a draft named: the `(true, Marker::Word)` arm reads *"figure group inside a
+  figure group"*, which is wrong for an `::: abstract` inside a group, for a `::: table` inside
+  an abstract, and for an `::: abstract` inside an abstract — the third being round 1's catch,
+  and it belongs to this message rather than to refusal (1), since what the author nested is
+  what the sentence has to name.
 
   **`core/src/frontmatter.rs` is untouched, and so are `cli/src` and `app/src`.** No key, no
   schema change, no CLI flag.
 
-- **Exit gate:** seven cases.
+- **Exit gate:** eight cases. **Round 1 rewrote the fixture and two of them**, because the
+  fixture as drafted could not reach the failure the scope had itself measured, and one case
+  was falsified by a correct build.
 
-  **The fixture is written out rather than described**, on Phase 10-of-`mpdf-001`'s rule that
-  a second person reproduces a probe rather than inventing it. `tests/fixtures/abstract.md`
-  carries `title: A Paper With An Abstract` and `author: Iva Po`, no other key, then a
-  `::: abstract` block of **two** paragraphs — two rather than one, because a single paragraph
-  cannot show that the block collects more than the first — then one `#` heading and one short
-  paragraph of body.
+  **The fixture is written out rather than described**, on `mpdf-001` Phase 10's rule that a
+  second person reproduces a probe rather than inventing it. `tests/fixtures/abstract.md`
+  carries `title: A Paper With An Abstract`, `author: Iva Po`, **`figures: sectioned`** and
+  **`headings: 2`**, then a `::: abstract` block of **two** paragraphs — two rather than one,
+  because a single paragraph cannot show that the block collects more than the first — then one
+  `#` heading, one short paragraph, and **one captioned table**.
+
+  **The two numbering keys and the table are not decoration, and a draft of this phase omitted
+  them.** They are what make gate (5) able to see the defect the scope measured: with
+  no `figures: sectioned` and no table in the document, a look spelling the label as a
+  `heading` passes every case here while setting `Table 2.1` and withdrawing every anchor.
+
+  **Both abstract paragraphs run long enough to fill the float's measure** — at least three
+  typeset lines each at 9pt across 362.8pt. Round 1's catch: two paragraphs of ordinary short
+  sentences produce no line box wider than a body column at all, so a correct build fails gate
+  (6). This is the property `mpdf-001` Phase 10 specified for its own fixture ("a title long
+  enough to wrap in the press-release look at 20pt") and the draft of this one did not.
 
   (1) **The fixture matches a checked-in golden and compiles.** `tests/golden/abstract.typ`
   pins the emitted `#abstract[…]` and the widened import line, and `md_to_pdf` returns bytes
@@ -3323,49 +3484,124 @@ worked rather than skipped.
   widening the import unconditionally, and it is cheap — the suite already reads every one.
 
   (3) **Every refusal fires and names its line**, as one table over `Error::UnsupportedConstruct`
-  asserting `location` and `construct`, on `core/tests/messages_test.rs`' shape. The rows are
-  the six above, plus the two re-pointed nestings the seventh message covers. **The
-  not-first-block row is asserted twice** — once with a paragraph above the abstract and once
-  with a `#` heading above it — because an implementation checking only for emitted text and
-  one checking only for a heading each pass one row and fail the other.
+  asserting `location` and `construct` — **on `core/tests/golden_test.rs`' shape and not
+  `messages_test.rs`'**, which round 1 corrected: the latter asserts whole `Display` sentences,
+  and destructuring `location` and `construct` is what the existing group-refusal assertions in
+  the former do. **Fourteen rows**: the eight refusals, plus two more for refusal 3, plus one
+  more for refusal 2, plus the three pairings the ninth message covers. Round 3 caught this
+  sentence carrying two totals and neither of them right — the third round running in which a
+  count in this phase moved without its sentence following, which is why the arithmetic is
+  spelled out rather than summarised.
+
+  **Refusal 3 takes three rows** — a list item, a block quote and a **footnote definition** —
+  and the reason is not that its three conditions fail independently, which round 3 corrected:
+  the first two rows both fail `bufs.len() == 1` and only the third exercises `Mode::Document`.
+  The rows are right because **a test carrying only the first two conditions passes the third
+  row by compiling**, which is the strongest discrimination available and does not depend on
+  what literal the implementer chose.
+
+  **The footnote row's definition must be cited.** `core/src/emit.rs:Notes::enter` refuses an
+  uncited definition with its own message *before* it reaches the stored error, so a row whose
+  `[^1]` is never referenced asserts the wrong string. It is the one detail a second person
+  writing that row will hit, and it is recorded rather than left to be rediscovered.
+
+  **The not-first-block row is asserted twice** — once with a paragraph above the abstract, once
+  with a `#` heading above it. **Round 1 falsified the reason a draft gave** and the row stays
+  anyway: the draft said an emitted-text check would pass one and fail the other, but `step`'s
+  heading arm pushes its `'\n'`, `=`s and space at `Start`, so a text check catches both. The
+  rows are kept because they are free and because the *frame* row (refusal 3) is the one that
+  actually discriminates, not because the two body rows differ.
 
   (4) **The abstract reaches the page in both looks**, one `pdftotext` run per look over the
   fixture, the press-release copy made by the `template: press-release` substitution Phase 9
   of `mpdf-001` spelled out. Each dump carries both paragraphs' text above the body heading,
   and the article's carries the label `Abstract` where the press release's does not.
 
-  (5) **The article's abstract spans wider than a column, and the single-column case is read
-  rather than assumed.** One `pdftotext -bbox` run: in the two-column default the abstract's
-  line boxes are wider than a body line's — the probe measured 362.8pt against 217.7pt — and
-  a second run over the same fixture carrying `columns: 1` asserts only that it compiles and
-  that both paragraphs reach the page, since with one column there is nothing to span and the
-  measurement above does not cover it.
+  (5) **The abstract acquires no number and withdraws no anchor**, which is the case the
+  scope's own measurement demanded and a draft of this gate did not carry. Over
+  `tests/fixtures/abstract.md`: the captioned table reads **`Table 1.1`** and not `Table 2.1`,
+  its `#` heading reads **`1`** and not `2`, and `core/src/lib.rs:anchors_from` returns a
+  **non-empty** list. **This is the case that fails a look spelling the label as a `heading`**,
+  which round 1 built and measured failing all three at once — and which every other case here
+  passes, gate (4) included, since the string `Abstract` is on the page either way.
 
-  (6) **An abstract in its own file works**, one multi-file document whose master names
-  `sections/abstract.md` first and `sections/intro.md` second, compiling to a PDF whose dump
-  carries the abstract above the body. This is the case the whole design was asked for and
-  the one no single-file fixture can state.
+  (6) **The article's abstract spans wider than a column, and the single-column case is read
+  rather than assumed.** One `pdftotext -bbox` run over the two-column default: **the widest
+  abstract line box exceeds the widest body line box** — 362.8pt against 217.7pt. **Round 1
+  falsified the draft's "the abstract's line boxes are wider than a body line's"**: on a
+  correct build a five-line abstract measures 362.83, 362.83, 71.29, 362.83 and 205.37, so two
+  of five are narrower and the universal reading fails a correct implementation. Widest against
+  widest is the assertion, and the fixture's long paragraphs are what keep it meaningful. A
+  second run over the same fixture carrying `columns: 1` asserts only that it compiles and that
+  both paragraphs reach the page, since with one column there is nothing to span.
 
-  (7) **`cargo test --workspace` passes and `spec-lint` exits zero with no error**, the second
+  (7) **An abstract in its own file works.** A multi-file document at
+  `tests/fixtures/abstract_sections.md`, whose master carries the frontmatter and names
+  `sections/abstract.md` first and `sections/intro.md` second and carries no body of its own,
+  compiling to a PDF whose dump carries the abstract above the body. This is the case the whole
+  design was asked for, the one no single-file fixture can state, and the one that fails a
+  first-block test written against the master rather than against the joined stream.
+
+  (8) **`cargo test --workspace` passes and `spec-lint` exits zero with no error**, the second
   because `cargo test` does not run it and this phase's close-out raises a rule's line cap.
   **The one warning it prints is inherited and is named here so an implementer does not chase
   it**: `rules/desktop-geometry.md` carries `RULE_SOURCES_WITHOUT_GENERATED`, pre-existing and
   untouched.
+
+  **One shipped assertion moves and is named rather than discovered**, as this spec's phases
+  each name theirs: the group-refusal row in `core/tests/golden_test.rs` expecting
+  *"figure group inside a figure group"* for a `::: table` nested in a group changes with the
+  ninth message. Gate (8) catches it, but the blast-radius list is what an implementer reads
+  first.
 
 - **Close-out.**
 
   **`rules/pipeline.md` owes a cap raise, and this phase says so rather than discovering it.**
   The file sits at **1080/1080 body lines against `max_lines: 1080`** — zero headroom,
   measured 2026-08-31 — where `mpdf-001` Phase 12 could record that none was owed. A new
-  construct with six refusals cannot land in zero lines, so the cap moves and the raise is
+  construct with eight refusals cannot land in zero lines, so the cap moves and the raise is
   part of the diff rather than a surprise at the gate.
 
-  The passages: the dialect list of what the markdown may contain; the `:::` section, whose
-  "the word on the opener is the author's convention and the dialect does not read it" is the
-  same sentence §2 corrects and here is simply made true; the group-refusal count; and the
-  looks section, which gains what each does with an abstract.
+  The passages, **five and not the four a draft named** — round 1 found the fifth: the dialect
+  list of what the markdown may contain, and its count sentence at "Twenty-four things are
+  supported"; the `:::` section, whose "the word on the opener is the author's convention and
+  the dialect does not read it" is the same sentence §2 corrects and here is simply made true;
+  the group-refusal count; the looks section, which gains what each does with an abstract; and
+  **"Every look exports `template` and `divider`"**, which is the export *contract* rather than
+  typography and which a third look must now also satisfy.
 
-  `README.md` — "What the markdown may contain", and the constructs table.
+  **A sixth passage, from round 2**: the Math section's "**the block is written wherever the
+  span sits**, and a paragraph holding one is split by it", which refusal 5 makes false inside
+  an abstract. It is qualified rather than dropped — the sentence is still true of the
+  mechanism it describes everywhere else in the dialect.
+
+  **One count is deliberately left where it stands**, named because round 3 asked for the call
+  either way: `rules/pipeline.md`'s "Two caption shapes are errors" does **not** move to three
+  for refusal 7. A `: ` line inside an abstract is an `UnsupportedConstruct` about the
+  *abstract*, documented in the `:::` section's own paragraph, not a third shape of caption —
+  the same judgement that correctly leaves the citation channel's "Four things the channel
+  refuses" alone.
+
+  **`rules/web-demo.md` is a rules file and tracks the code**, so its "Twenty-three constructs
+  are supported" moves. It is named because the out-of-scope argument below is about the demo
+  *page* and does not reach a rule.
+
+  `README.md`, **three sites and one correction to this list itself**. "What the markdown may
+  contain". **"A word after the opener is yours, and `md2pdf` does not read it"** in
+  `## Figures with more than one member` — the user-facing twin of the §2 sentence this phase
+  corrects, which round 1 found missing from a draft of this close-out and which the phase
+  makes flatly false. And that section's **"Eight things are errors"**, which the ninth message
+  splits. **A draft named "the constructs table", which does not exist** — the file's only
+  tables are two inside fenced examples and the looks table — so that pointer sent an
+  implementer looking for nothing.
+
+  **And a section of its own, which round 2 was right that a closed list of three corrections
+  did not provide.** Phase 5 gave the group `## Figures with more than one member` with its own
+  syntax example and its own "Eight things are errors" sentence; a construct with a syntax and
+  eight refusals gets the same treatment, or the phase ships no user-facing documentation of
+  its whole subject. **And "Try it" gains a fourth entry**, since it walks a reader through the
+  showcase, `article.md` and `press-release.md` and would otherwise point at no sample carrying
+  the construct this phase adds.
 
   **A sample, and deliberately not the showcase.** `samples/showcase/showcase.md` is the
   natural home and carries a trap that costs more than it is worth here:
@@ -3374,10 +3610,57 @@ worked rather than skipped.
   phase says it does not touch. A new `samples/abstract.md` avoids it entirely, and the
   showcase can take one in a later pass that is willing to move the pin.
 
-  **`web/index.html` is named as out of scope rather than left unmentioned.** The demo page
-  says what the dialect adds to markdown, and `mpdf-006` requires every claim on it to be a
-  snippet the workspace suite compiles — so an abstract row is real work under another spec's
-  gate, not a sentence this close-out can drop in. It is `mpdf-006`'s to append.
+  **That skip does not dispose of the claims the skip makes false, and round 1 was right that
+  a draft of this close-out left them standing.** Four user-facing documents assert the
+  showcase uses *every* construct in the dialect — `README.md`'s bold "**`samples/showcase/` is
+  one document that uses every construct in the dialect**", `samples/article.md`'s "uses every
+  construct the dialect carries besides", `samples/showcase/README.md`'s "**every construct
+  md2pdf supports**", and `samples/showcase/showcase.md`'s own copy of that sentence. All four
+  go false the moment the dialect gains a construct the showcase does not carry. **Three are
+  reworded to claim what stays true** — every construct *this document was written for*, or
+  the plain "nearly every" — and the fourth, the showcase's own line at 16, sits **above the
+  pinned line 68**, so its rewording must be line-count-neutral exactly as `mpdf-001` Phase 12's
+  was. This is the corpus's recurring defect, and OQ-17 hit the same shape.
+
+  **Four code sites state the old rule or the old contract, all in files the phase is already
+  editing** — round 1 found them and a draft named none. `core/src/emit.rs:group_marker`'s doc
+  comment says "The word after an opener is the author's convention and **the dialect does not
+  read it**", which is false the moment the function stops discarding it. Both
+  `core/assets/template.typ` and `core/assets/press-release.typ` state the third-look contract,
+  and **they state it in different words** — round 2's catch, and the same trap this close-out
+  fixed for "the constructs table": the literal "That is the contract a third look has to meet"
+  exists **only** in `core/assets/template.typ`'s header comment, while `press-release.typ` says
+  "the same eight the article look takes" and "every look exports it". Both need editing, since a third
+  look must now also export `abstract`; an implementer grepping the quote would find only one. **`core/src/emit.rs:Marker`'s own doc comment is a fifth**, found in round 3 and
+  quoted by this phase's own scope: it says `:::` is "the closer, and the opener where no group
+  is open" and `::: word` is "an opener, and only ever an opener", both of which the three-state
+  dispatch makes incomplete. And `core/tests/golden_test.rs`' group-refusal row carries
+  the literal the ninth message moves, which gate (8)'s own blast-radius note names.
+
+  **Two counts and one pagination assertion sit outside the files this phase edits, and are
+  named rather than left for the gate.** `core/tests/messages_test.rs`' module doc says "Forty-
+  three assertions in `golden_test.rs` … destructure the fields", and gate (3) adds thirteen
+  more; the count already reads drifted and this phase pushes it further.
+  `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page` reads
+  `samples/article.md`, which this phase's "every construct" rewording edits — **Phase 5's own
+  gate named that assertion for *not* touching the sample**, and this phase does touch it. The
+  hand-run `tests/gates/mpdf-009-phase5.js` checks `k.length === 6` over the showcase, which
+  Phase 9 named when it moved that file and which the line-count-neutral rewording must leave
+  standing.
+
+  **`web/index.html` is named as out of scope, and the gap it leaves is logged rather than
+  waved through.** The demo page says what the dialect adds to markdown, and `mpdf-006`
+  requires every claim on it to be a snippet the workspace suite compiles — so an abstract row
+  is real work under another spec's gate, not a sentence this close-out can drop in. **What
+  that argument does not reach is the page's count sentence**, "Twenty-three constructs are
+  supported and twelve are shown here", which round 1 was right to separate: it is already one
+  behind `rules/pipeline.md` and this phase puts it two behind. It is left for `mpdf-006` **as
+  a logged gap with its line named**, per §6's "or the gap logged", rather than half-fixed here
+  without the snippet that spec's gate requires.
+
+  **`CLAUDE.md` and the status artifact: none needed**, the answer §3's reconciliation step
+  asks for rather than an omission. The stanza's observable sentence is untouched — the PDF is
+  still the PDF — and this repository keeps no status artifact.
 
   `specs/INDEX.md` and `rules/INDEX.md` regenerated, never hand-edited — this spec's rollup
   goes `done` → `partial` as the phase is appended and back to `done` when it lands. One push.

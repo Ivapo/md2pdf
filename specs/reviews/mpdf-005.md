@@ -2,6 +2,147 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 10 only — 2026-08-31 — the same three lenses, resumed — **READY**
+
+Verdict: `READY` from all three, zero blocking. **Converged at the cap**, the fourth time this
+spec has. Phase 10's `reviewed` is set to 2026-08-31; `status` was already `accepted`.
+
+**The round-2 blocker verified resolved by all three independently, each against the code
+rather than the changelog.** The correctness lens closed the discriminator question
+exhaustively: **exactly two `step` call sites exist crate-wide** — `Mode::Definition` inside
+`collect_definitions` and `Mode::Document` inside `emit` — and **exactly four `Walk::new()`
+sites**, all inside those same two functions, so a fresh walk is reachable only under
+`Mode::Definition` and no third path creates one. It further established that the two modes
+*partition* the stream rather than overlapping (`Notes::enter` either raises or sets
+`skipping`, and `step`'s first guard then returns early to `End(FootnoteDefinition)`), and that
+the three conditions are **complete** — a GFM table cell holds inline content only, so a list
+item and a block quote are the only other frame pushers a `:::` paragraph can stand in. It
+looked specifically for a fourth hole and found none.
+
+**Two facts the author had not claimed, both verified and folded.** `Notes::enter` re-raises a
+definition's stored error, so refusal 3 fired inside a footnote still carries the opener's own
+line; and `sections::assemble` joins before `emit` runs, so a section file is walked in
+`Mode::Document` and gate (7) is untouched by the new condition.
+
+**The exit-gate lens answered the round's targeted question and the answer changed a
+rationale rather than a rule.** Gate (3)'s three refusal-3 rows are **not** necessarily
+distinguishable by `construct` string, and it does not matter: they discriminate by
+*behaviour*, because a two-condition implementation fails the footnote row **by compiling**.
+The phase's stated reason — that the three conditions fail independently — was one condition
+short of true, the first two both failing `bufs.len() == 1`, and is corrected.
+
+Nine non-blocking folded at convergence. The sharpest: gate (3) carried **two** totals in one
+sentence and **neither was right** — the arithmetic is fourteen rows and is now spelled out,
+this being the third round running in which a count in this phase moved without its sentence
+following. The round-2 fold had also introduced **two bare `file:line` citations**, which §5
+forbids outright ("a line number is not a citation"); both are replaced by the symbolic
+anchors already beside them. Refusal 3's round-2 title read as a superset of refusal 2's and
+is retitled to the disjoint case it is. `core/src/emit.rs:Marker`'s doc comment joins the code
+sites as a fifth — quoted by the phase's own scope and made incomplete by the three-state
+dispatch. `rules/pipeline.md`'s "Two caption shapes are errors" is **deliberately left at two**,
+the call named rather than left implicit, on the same judgement that leaves the citation
+channel's count alone. And the footnote gate row's definition **must be cited**, or
+`Notes::enter`'s uncited-definition refusal fires first and the row asserts the wrong string.
+
+### Round 2 — Phase 10 only — 2026-08-31 — the same three lenses, resumed with the author's changelog — **NOT READY**
+
+Verdict: `NOT READY`. Correctness returned `READY`; the other two returned `NOT READY` with
+**the same single blocker, found independently**, and **it was the round-1 fix defeating
+itself** — the pattern the loop warns about, and the second episode running in this corpus.
+
+**The blocker: the first-block test admitted an abstract inside a footnote definition.** Round
+1 closed a frame hole by specifying the test as content **and** `bufs.len() == 1`, argued from
+list items and block quotes. `core/src/emit.rs:collect_definitions` runs every definition
+through a fresh `Walk::new()`, so inside one `top(bufs)` is empty *and* `bufs.len() == 1` — the
+fix written to close the frame hole opened the definition hole. An abstract there emits
+`#abstract[…]` inside `#footnote[…]`, which the look hoists to the page top: the
+source-order/page-order divergence the rule exists to prevent.
+
+**It compounds through the import flag**, which is what made it a compile failure rather than
+only a layout one. `walk.math` is lifted onto `Body` and ORed back at the reference arm as
+`*math |= body.math`; an abstract flag has no such path, so left unrefused **and**
+unpropagated the emitted `#abstract[…]` reaches the compile with no `abstract` in the import
+list — a failure naming a Typst identifier the author never wrote, which is the labelless
+failure §2 forbids.
+
+**The fix cost one clause**, the exit-gate lens having observed that `step` is already handed
+`Mode::Definition` at the `collect_definitions` call site and already matches on it. The test
+became three conditions; gate (3) grew to fourteen rows. **Refusing was taken over
+propagating, and the alternative is recorded** because it is the one an implementer reaches
+for: propagation would make a document's import line depend on whether a footnote was
+*referenced*.
+
+Fourteen non-blocking folded, including one **all three lenses caught** — the close-out still
+argued its cap raise from "six refusals" after the list grew to eight.
+
+### Round 1 — Phase 10 only — 2026-08-31 — three fresh lenses (correctness/grounding, exit-gate testability, cross-file consistency) — **NOT READY**
+
+Verdict: `NOT READY` from all three. **Round 0, asked once for this episode: yes, and it is the
+right thing to build.** The phase produces the observable directly — a first page carrying an
+abstract set across the full page width above two columns, a shape no markdown in this dialect
+can ask for at all, which is Phase 5's "shape rather than treatment" test. An abstract is the
+most standard element of a paper this dialect cannot express, and OQ-20 refuses to build the
+framework around it. The recorded reservation: it lands in a spec named
+*captions-and-references* and an abstract is neither, so §6.1 step 2 is argued in the phase
+rather than assumed.
+
+**Five deduped blocking findings.**
+
+1. **The label spelled as a `heading` element silently withdraws every anchor.**
+   `core/src/lib.rs:anchors_from` returns an empty vector on any mismatch between walked and
+   typeset headings, and `render` derives the count by querying `HeadingElem`. A heading-shaped
+   label is counted, mismatches, and takes the desktop pane's scroll sync with it — with
+   nothing on the page to show. It would also take a section number and restart
+   `figures: sectioned`, re-entering through the look the exact defect the phase refuses a
+   heading-shaped abstract to avoid. **`core/assets/template.typ`'s `show bibliography` rule
+   already records this trap and already chose styled text for it.** Two lenses reached it from
+   opposite ends — one from `anchors_from`, one by building the wrong look and measuring
+   `1 Abstract` / `2 Introduction` / `Table 2.1` / no anchors. Fixed by pinning the label to
+   `text()` and by a new gate case asserting all three at once.
+2. **Gate (5) was falsified by a correct build.** Measured, a five-line abstract gives boxes of
+   362.83, 362.83, 71.29, 362.83 and 205.37 against body lines of 217.70 — so "the abstract's
+   line boxes are wider than a body line's" is false for two of five. Rewritten to
+   widest-against-widest. The fixture's prose was also unspecified, so a correct build with
+   short sentences would have failed the gate; it now pins the property, on `mpdf-001` Phase
+   10's precedent.
+3. **Refusal 6 reused `Walk::unclosed`'s literal**, reporting *"figure group the document never
+   closes"* for an unclosed `::: abstract` — the same defect the phase fixes one sentence later
+   for a different message. All three lenses raised it. `unclosed` gains a second literal and
+   `escaped_frame` moves with it.
+4. **The close-out missed `README.md`'s "A word after the opener is yours, and `md2pdf` does
+   not read it"** — the user-facing twin of the §2 sentence the phase corrects — and pointed at
+   a "constructs table" that does not exist.
+5. **Four documents assert the showcase uses *every* construct**, all false the moment the
+   dialect gains one the showcase lacks; the fourth sits above `app/src/preview.rs`'s pinned
+   `[14, 29, 68]`, so its rewording must be line-count-neutral.
+
+**Every number the phase was keyed to re-derived exactly**, by two lenses independently: 217.70
+and 362.83 (595.2756 − 2×70.866 = 453.54 text width, ×0.8, and less a 4% gutter halved), thirty
+goldens, `rules/pipeline.md` at 1080/1080, `Table 2.1` reproduced, every cited symbol and
+literal verified. Two were corrected: the title block runs y 66.60–**153.22**, not to 142,
+which was the date line's *yMin* read as the block's bottom; and the stacking claim was
+re-measured at the shape that ships — `#abstract[…]` issued from the body rather than injected
+into the look — where it holds.
+
+**Refusals went six to eight**, two of them round-1 catches: an abstract in a list item or
+block quote (a fresh frame, so a content-only test reads it as first), and a **standalone
+image**, which *is* a paragraph at event level and so slipped the block rule — it would set a
+live `Figure` and let a following `: ` line splice a figure inside the float.
+
+**OQ-19's own risk argument was inverted.** Of its three examples only the list is a block; a
+display equation and a citation are inline events inside a paragraph, so the stated refusal
+already permitted them. Both are now refused by name, and the question is about widening again.
+
+**One deferral, recorded rather than accepted.** `web/index.html`'s "Twenty-three constructs
+are supported" goes to `mpdf-006` as a logged gap with its line named, per §6's "or the gap
+logged": that page's claims must be compiled snippets under that spec's gate, and correcting
+the count without the snippet leaves it asserting a construct nothing compiles.
+`rules/web-demo.md`'s identical count **is** fixed here, a rules file tracking the code.
+
+**The fold introduced a defect of its own** — renumbering the gate broke two cross-references —
+which is the "a fix can introduce a blocker" pattern; both were caught before round 2 opened,
+and round 2 then found the larger instance of the same pattern.
+
 ### Round 3 — Phase 9 only — 2026-08-31 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, **zero newly found**, one courtesy non-blocking folded at
