@@ -210,10 +210,26 @@
         if date != none {
           written.push(text(size: 10pt, date))
         }
+        // How far apart the three runs stand. The runs share one `v` inside
+        // this loop, so one value cannot serve two joins that want different
+        // amounts; the value is chosen per index instead.
+        //
+        // The `em` resolves against this block's 10pt body and never against
+        // the 17pt title. That is how the value shipped since Phase 9 came to
+        // ask for 4pt where the title-to-author join needs 6.78pt and the
+        // author-to-date join 5.07pt just to clear zero: under 4pt the boxes
+        // overlapped and the author rode up into the title's descenders.
+        //
+        // The `linebreak()`s stay and so does `weak: true`. Neither was the
+        // defect. Weak spacing applies here in full and linearly, with no
+        // threshold and no collapse, so the shape was never discarding
+        // anything; and dropping the `linebreak()`s would make each run its own
+        // paragraph and land Typst's paragraph spacing on top of whatever this
+        // line asks for.
         for (index, line) in written.enumerate() {
           if index > 0 {
             linebreak()
-            v(0.4em, weak: true)
+            v(if index == 1 { 1.8em } else { 0.9em }, weak: true)
           }
           line
         }

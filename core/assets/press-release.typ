@@ -190,8 +190,16 @@
           text(size: 20pt, weight: "bold", title)
         })
       }
+      // The author, and the masthead's one piece of spacing. It sits on this
+      // block's `above:` and deliberately not on the title block's `below:`,
+      // because that value also governs the gap between a title-only
+      // document's headline and its `divider` below — the fix put there would
+      // move a document that carries no author at all. Two blocks are separated
+      // by the larger of the first's `below:` and the second's `above:`, so
+      // 1.0em here wins over the title's 0.5em and the two boxes stop
+      // overlapping, which under the shipped values they did by 2.03pt.
       if author != none {
-        block(text(size: 10.5pt, style: "italic", author))
+        block(above: 1.0em, text(size: 10.5pt, style: "italic", author))
       }
       divider()
     })
