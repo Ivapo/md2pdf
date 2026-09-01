@@ -59,7 +59,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 11 — several authors, and the affiliation each belongs to"
-    reviewed: null
+    reviewed: 2026-08-31
     shipped: null
     cut: null
     by: null
@@ -377,6 +377,55 @@ error names what the author typed:
 A paper with three authors from one lab and a fourth from none is a real document, and
 refusing it would break something nobody asked to have broken.
 
+**CORRECTED 2026-08-31 by Phase 11's review round 1, which falsified three claims above.
+Both states are written out, because the wrong one is what a later reader re-derives.**
+
+**The refusals are four, not three; one of them is scoped rather than absolute; and the
+line each names is not the one the sentence above promises.** "Three refusals, each naming
+the author's **own** line" is wrong in that last respect as well: refusal 2's fault is in
+`affiliation`, so that is the line it names. Phase 11's scope assigns all four.
+
+- **The one-affiliation case relaxes refusal 2 rather than triggering it.** As written above,
+  "an `affiliation` key with no marker anywhere" is refused — which makes the commonest real
+  paper unwritable. One lab and three authors leaves the author two bad options: write `^1`
+  on every name, which is the noise OQ-11 names, or write no marker and be refused. So
+  **with exactly one affiliation the markers are optional**: a document that writes none is
+  valid and every author belongs to that affiliation. Refusal 2 applies from **two**
+  affiliations up, where the relation really is unstated. This is OQ-11's resolution and it
+  is a *third* answer, neither of the two that question enumerated.
+- **A fourth refusal: an empty name in the list.** `author: Iva Po;` splits to a second,
+  empty element, which none of the three above covers and which reaches the look as a
+  dangling separator. That is the silent flattening §2's escape-and-reject decision exists
+  to forbid, so it is an error naming the line.
+
+**The grammar is specified here rather than left to one clause**, because round 1 worked
+real inputs through it and found four places two implementers would diverge:
+
+- **Every element is trimmed**, on both lists and on each marker. `author: A^1; B^2` and
+  `A^1;B^2` are the same document, and `^1, 2` and `^1,2` are the same markers — a trim is
+  not a guess, and the spaced form is what an author actually types.
+- **The name splits from its markers at the *first* `^`.** `A^B^1` is therefore refused by
+  refusal 3 naming `B^1`, rather than guessed into a name `A^B`. A `^` inside a name is
+  rarer than a typo in the marker, and §2 refuses rather than guesses.
+- **A marker is a non-empty run of ASCII digits** after trimming, and indexes `affiliation`
+  in written order, from 1.
+
+**`author` crosses as `none` and never as `()` when the document wrote no author**, because
+both looks guard the whole block on `if title != none or author != none or date != none` and
+an empty array is not `none` — a keyless document would grow a title block. And **a
+one-element Typst array needs its trailing comma**: `("Iva Po")` is a parenthesized string,
+not an array, so `header` writes `("Iva Po",)`. Both are traps the emitter must be written
+against, and neither was stated.
+
+**"The contract is stated in exactly two places" is false**, and it is the mitigation's
+load-bearing sentence. It is stated in four prose sites — `rules/pipeline.md` twice,
+`README.md`, and both `core/assets/*.typ` header comments — and asserted mechanically by
+`core/tests/golden_test.rs:every_bundled_template_meets_the_call_contract`. The mitigation's
+substance survives, because **no third look exists** and that was always the real argument;
+the count does not, and the undercount is what generated the close-out's missed sites. **The
+honest count is five locations across four files** — round 2 caught this correction making
+the same class of error it was written to fix.
+
 ## 3. Open questions
 
 - **OQ-1** — ~~Which Typst crates does `core` need (compiler, PDF export), and
@@ -551,7 +600,7 @@ refusing it would break something nobody asked to have broken.
   single column, which is the point of choosing a look. Landed in Phase 9's
   scope.
 
-- **OQ-11** — with exactly one affiliation, does the marker appear at all? Most
+- **OQ-11** — ~~with exactly one affiliation, does the marker appear at all? Most
   published templates drop it: one affiliation over any number of authors needs no
   relation, and a lone `¹` on every name is noise that says nothing. Against that, a
   document that gains a second affiliation would then see every marker appear at once,
@@ -560,7 +609,26 @@ refusing it would break something nobody asked to have broken.
   the two bundled looks disagree, or the **schema**, which would make it a fact about the
   document and refuse a marker the single-affiliation case does not need. Design call.
   Blocks nothing in Phase 10; blocks Phase 11's gate case for the one-affiliation
-  document, which cannot state what it reads.
+  document, which cannot state what it reads.~~ **RESOLVED (2026-08-31), in Phase 11's
+  review round 1: the schema answers, and it answers by making the marker optional rather
+  than by refusing it — a third answer, neither of the two enumerated above.** With
+  exactly one affiliation a document may write no marker at all, and every author belongs
+  to that affiliation; a marker written anyway is honoured and reaches the page, because
+  the author wrote it. The question presupposed that the schema's only move was a refusal,
+  and the round found that reading makes the commonest real paper — one lab, several
+  authors — unwritable: §2's refusal 2 would reject the unmarked form, leaving only the
+  lone `¹` this question calls noise. The **look** answer was rejected for a reason the
+  question did not carry: a look suppressing a marker decides a *fact* about the document
+  (this relation is redundant) rather than a typographic one, and the two bundled looks
+  disagreeing would mean one document reading as two. **The question's own worry — that a
+  second affiliation would make every marker appear at once — does not arise under these
+  rules, and round 2 caught a draft of this resolution accepting a consequence its rules do
+  not produce.** A document with one affiliation and no markers that gains a second is
+  *refused* by refusal 2, not silently re-rendered: the build stops and names the line until
+  the author writes the markers the new relation needs. The page cannot move behind the
+  author's back, which is a stronger answer than the one the question was willing to settle
+  for. Landed in §2's correction and in Phase 11's scope, which carries the
+  one-affiliation gate case this question said it blocked.
 - **OQ-12** — ~~do the two looks need the *same* structural fix for the spacing, or only
   the same property? The article look's title block is a centred run inside one `align`;
   the press release's is three sibling `block`s in a masthead, and the measured **−2.03**
@@ -1345,79 +1413,216 @@ with superscript markers, and the two affiliations those markers point at beneat
 
 - **Step 0 — a decision, not only code?** Yes, two. OQ-3 fixed the frontmatter schema with
   `author` as one free string, and §2's styling decision fixed what the look does with it.
-- **Step 1 — does it remove or contradict shipped work?** **No shipped document moves, and
-  one shipped *contract* does — which is the honest answer rather than the comfortable
-  one.** A document writing `author: Iva Po` is a one-element list and compiles to the same
-  page. But `author` crosses the seam as an array where it crossed as a string, so the look
-  contract Phase 9 stated changes an argument's type rather than gaining one. §2 carries
-  the argument and the mitigation: no third look exists, and the alternative collapses the
-  seam. **Seven of the twenty-nine shipped goldens are re-blessed** — the seven whose
-  `template.with` line carries a non-`none` author — which is a deliberate sweep of the
-  kind Phase 9 performed on the same line, and the gate names the count so a wrong one is
-  visible.
+- **Step 1 — does it remove or contradict shipped work?** **No shipped document's page
+  moves, one shipped *contract* does, and every shipped golden's call line moves — which is
+  the honest answer rather than the comfortable one.** A document writing `author: Iva Po`
+  is a one-element list and compiles to the same page. But `author` crosses the seam as an
+  array where it crossed as a string **and** `affiliation` is added beside it, so the look
+  contract Phase 9 stated both changes an argument's type and gains one. §2 carries the
+  argument and the mitigation: no third look exists, and the alternative collapses the seam.
+  **All twenty-nine shipped goldens are re-blessed**, not seven — `core/src/emit.rs:header`
+  is one unconditional `format!` that names every argument on every call, so an eighth
+  argument lands on the second line of every one of them, exactly as OQ-9's `date` moved all
+  thirteen and `mpdf-005` Phase 8's seventh argument moved twenty-eight. **Round 1 caught a
+  draft of this step claiming seven**, which is the count of goldens whose `author` value
+  *also* changes; the gate now names both counts so a wrong one is visible.
+
 - **Step 2 — the subject.** The frontmatter schema and the title block, which Phase 9 says
   in its own words this spec owns both of. So a phase, not a spec.
 
 - **Scope: the schema, the call, and both looks.**
 
-  `core/src/frontmatter.rs` — `author` becomes a list of names each carrying its markers,
-  split on `;`, with `^` separating a name from its markers and `,` separating markers from
-  each other. A new `affiliation` key takes a `;`-separated list. Three refusals, each
-  naming the author's line, per §2: a marker naming an affiliation the document does not
-  carry, an `affiliation` key with no marker anywhere, and a marker that is not a number.
-  **An author with no marker in a document that has affiliations is not refused**, per §2.
+  `core/src/frontmatter.rs` — `author` becomes a list of names each carrying its markers and
+  a new `affiliation` key takes a list, both under **the grammar §2's correction
+  specifies**: split on `;`, every element trimmed, the name splitting from its markers at
+  the **first** `^`, markers split on `,` and each trimmed, a marker a non-empty run of
+  ASCII digits indexing `affiliation` in written order from 1. **Four refusals**: a marker
+  naming an affiliation the document does not carry; an `affiliation` key with no marker
+  anywhere **and two or more affiliations**, since OQ-11 makes the marker optional at exactly
+  one; a marker that is not a number; and **an empty element in *either* list**, which round
+  2 widened from the author list alone — `affiliation: MIT;` leaves a blank second
+  affiliation that `^2` would then point at without tripping the first refusal. **An author
+  with no marker in a document that has affiliations is not refused**, per §2.
 
-  `core/src/emit.rs:header` writes both as Typst arrays. **`core/src/lib.rs:Error` needs no
-  new variant**: all three refusals are `Frontmatter`, which already carries a line and a
-  problem string, and which is what every other schema refusal in this spec uses.
+  **Which line each refusal names is assigned here, by this phase** — §2 says only that a
+  refusal names a line, and round 2 caught a draft crediting it with more and then
+  contradicting itself two paragraphs later. **Each refusal names the line of the key the
+  author would have to edit**: refusals 1, 3 and 4 name the `author` line when the fault is
+  in `author` and the `affiliation` line when it is in `affiliation`; refusal 2 names the
+  `affiliation` line, since that is the key whose relation is unstated.
+
+  Refusals 1 and 2 are **cross-key checks that can only run after the line loop**, because
+  `affiliation` may sit below `author` — the shape `columns` and `template` already use. So
+  `Frontmatter` gains line-carrying state for **both** keys, the way `bibliography` already
+  keeps a `Location` — round 2 caught a draft provisioning it for `author` alone.
+
+  `core/src/emit.rs:header` writes both as Typst arrays, **with the trailing comma a
+  one-element array needs and `none` rather than `()` for an absent author** — both traps
+  §2's correction records. **`core/src/lib.rs:Error` needs no new variant**: all four
+  refusals are `Frontmatter { location, problem }`, which every other schema refusal uses.
 
   `core/assets/template.typ` and `core/assets/press-release.typ` each render the two lists
-  for themselves: the marker as a superscript, the authors on one line, the affiliations
-  beneath. **Measured in §2 to need no package**, and each look picks its own size, its own
-  separator between names and its own emphasis, on the seam.
+  for themselves: the marker as a superscript, the authors on one line, and **the
+  affiliations directly beneath the authors — in both looks**, each look picking its own
+  size, separator and emphasis. **Round 2 caught a draft of this line saying "between the
+  authors and the date", which is unsatisfiable in the press release**: that masthead runs
+  date, title, author, `divider`, so its date is above the headline and there is no position
+  between the two. "Beneath the authors" is the one instruction true of both. **Measured in §2 to need no package**, and round 1 reproduced that measurement
+  independently. Each look also picks the join spacing for the run it adds — Phase 10 tuned
+  that block and `rules/pipeline.md` records that no needle pins its values.
+
+  **An absent `affiliation` crosses as `none`**, the same byte every other optional key
+  reaches through `core/src/emit.rs:typst_string_or_none` — though not through that function,
+  which renders a string literal from an `Option<&str>`; a list-valued key needs an
+  array-or-`none` helper beside it. Stated because it is a byte in all twenty-nine re-blessed
+  goldens.
 
   **`core/src/sections.rs` and `core/src/bibliography.rs` are untouched**, and so are
-  `cli/src` and `app/src` — neither wrapper reads the schema, which every phase in this
-  corpus has checked as a diff since `mpdf-004`.
+  `cli/src` and `app/src` — neither wrapper reads the schema, verified by round 1 as a grep
+  rather than assumed. **The one thing that could break `app/src` is the sample sweep**, and
+  the close-out disposes of it.
 
-- **Exit gate:** six cases.
+- **Exit gate:** eight cases. **Round 1 rewrote four of them**, because two contradicted
+  each other, one asserted a count a correct build cannot produce, and nothing checked in
+  pinned the phase's own output.
 
-  (1) **The phase itself, read by eye, one PDF per look**, over a document with three
-  authors and two affiliations where the third author belongs to both. The markers point at
-  the right affiliations and the multiple marker reads as one superscript.
+  **The fixture is named and checked in**, which every construct- or key-adding phase in
+  this spec has shipped and a draft of this phase omitted: `tests/fixtures/authors.md`
+  carries `title`, `author`, `affiliation` and `date` — the full list gate (2) needs, since
+  the press release's first join is its dateline — with three authors and two affiliations,
+  the third author in both, **one name containing a comma** — which is what pins §2's sharpest call, that a comma is not a
+  separator and `Po, Iva` stays one person — and a marker written `^1, 2` with the space, so
+  the trim is pinned where an author would actually type it.
 
-  (2) **Every refusal names its own line**, as three tests over `Error::Frontmatter`,
-  asserting the line and the problem string rather than the message's full text — the shape
-  `core/src/frontmatter.rs`'s own tests already use.
+  (1) **`tests/fixtures/authors.md` matches `tests/golden/authors.typ`** and compiles to a
+  PDF with the `%PDF` magic bytes. The golden shows both Typst arrays, the trailing comma
+  where one is needed, the comma'd name intact as one element, and `^1, 2` reduced to two
+  markers. **This is the case a draft of this phase had no artifact for at all.**
 
-  (3) **A one-name document is unchanged, byte for byte**, over `--emit-typst` and a
-  compiled PDF hash. **This is the case that holds the phase's central claim** and the one
-  an implementer who reaches for an `authors` key passes while failing everything the
-  schema's no-synonyms rule is for.
+  (2) **Read by eye, one PDF per look**, over that same fixture: the markers point at the
+  right affiliations, the multiple marker reads as one superscript, and — because this phase
+  inserts a run into the block Phase 10 tuned — **every join in the block is separated by a
+  positive number**, in one `pdftotext -bbox` run per look, the method Phase 10's gate case
+  (2) established. **Each look has its own join list and they are enumerated separately**,
+  which is the enumeration failure Phase 10's round 2 caught and round 2 caught again here:
+  the article's are title→authors, authors→affiliations and affiliations→date; the press
+  release's are date→title, title→authors and authors→affiliations, its masthead putting the
+  date first. Three each, and as in Phase 10 they are the joins **between** keys — a wrapping
+  headline sets its own lines tighter, deliberately, in both looks.
 
-  (4) **The seven goldens re-blessed are exactly seven**, checked as a diff naming them, and
-  each changes on its `template.with` line alone. The other twenty-two carry `author: none`
-  and must not move.
+  (3) **The one-affiliation document, which OQ-11 said this gate could not state.** Two
+  authors and one `affiliation`, **written with no marker**, is valid, compiles, and puts no
+  marker on the page; the same document with `^1` on both names is also valid and does print
+  them. Two fixtures or one fixture and one inline document, in both looks.
 
-  (5) **Both looks carry the contract**, by needles over
-  `core/tests/golden_test.rs:BUNDLED_TEMPLATES`, and
-  `every_bundled_template_meets_the_call_contract` gains `affiliation` beside the seven it
-  names today.
+  (4) **Every refusal names its own line**, as four tests — the fourth covering **both**
+  shapes of the empty element, in `author` and in `affiliation` —
+  over `Error::Frontmatter`, asserting `location.line` and `problem` — the shape
+  `core/src/frontmatter.rs:errors_name_the_key_and_the_line` already uses, which asserts
+  both. **Round 1 recorded that this file's tests assert the problem alone and round 2
+  falsified it**; some do, that one does not, and the correction is kept visible because a
+  false claim about the code is what a later reader would re-derive.
 
-  (6) **`cargo test --workspace` passes**, and `samples/` gains a document that carries two
-  authors, because a schema key with no sample is a key the corpus check cannot see.
+  (5) **A one-name document's compiled PDF is byte-identical against `HEAD`, and its
+  `--emit-typst` changes on the call line alone.** This replaces a draft case claiming the
+  emitted source was byte-identical too, which **a correct implementation cannot satisfy**:
+  `tests/golden/frontmatter.typ` is a one-name document and is one of the seven whose
+  `author` value changes. §2's survivable wording is "a one-name document is a one-element
+  list, and *its page* does not move", and that is what this case reads. The document is
+  named: `tests/fixtures/frontmatter.md` for the article look and a copy of it carrying
+  `template: press-release` for the other, the two-PDF form Phase 10's gate case (3) used.
+
+  (6) **All twenty-nine goldens are re-blessed, and the two counts are both named.** Each
+  changes on its `template.with` line alone; **the seven carrying a non-`none` author change
+  in two ways** — the array form and the new argument — **and the other twenty-two in one**,
+  the new argument only. Checked as a diff naming the files, the way Phase 9 and `mpdf-005`
+  Phase 8 checked theirs.
+
+  (7) **Both looks carry the contract, by two needles rather than one**, per the doctrine
+  `rules/pipeline.md` records — "the parameter alone is satisfied by a look that takes it
+  and ignores it". So `affiliation` the parameter, and the `super()` call that renders a
+  marker. `every_bundled_template_meets_the_call_contract` gains `affiliation` beside the
+  seven it names today.
+
+  (8) **`cargo test --workspace` passes**, and **the three shipped assertions over the
+  `template.with` line are named in the radius** rather than discovered:
+  `core/tests/golden_test.rs:the_generated_source_carries_the_title_and_the_author`,
+  `:absent_frontmatter_gets_every_default` — the only literal copy of the whole call line
+  outside the goldens — and `:a_key_repeated_across_two_frontmatter_blocks_names_its_own_line`.
+  **`spec-lint` runs too**, which `cargo test` does not: the close-out edits a rule with five
+  lines of headroom.
 
 - **Close-out**, named line by line because this phase's prose radius is wider than its code
-  radius: `rules/pipeline.md`'s frontmatter section — the key count and the schema table —
-  its template section's call-contract argument list, and **line 941's "The date sets
-  beneath the author"**, which stops being the whole order once an affiliation sits between
-  them. `README.md`'s frontmatter documentation, its `## Styling` contract sentence, and
-  **its look table, whose `article` row reads "the date under the author"** for the same
-  reason.
-  `web/index.html` if the page states the schema's keys; `rules/web-demo.md` records that
-  the page's examples are compiled, so a new key with no example is a choice rather than an
-  omission and the close-out says which. `samples/` gains the two-author document case (6)
-  names. **`specs/INDEX.md` and `rules/INDEX.md` regenerated**, never hand-edited. One push.
+  radius, and **round 1 found six sites a draft of it missed**.
+
+  `rules/pipeline.md`: the frontmatter section's key count, **and the second count in the
+  same passage** — "Eight of them reach the look: `core/src/emit.rs:header` always names all
+  seven arguments and the selected file" — which is the line `mpdf-005`'s round caught
+  carrying two counts; the template section's call-contract argument list; and the sentence
+  **"The date sets beneath the author"**, which stops being the whole order once an
+  affiliation sits between them. **The sentence is quoted rather than cited by line number**,
+  per §5: a line number is not a citation, and a draft of this close-out carried one.
+  **The file has five lines of headroom against `max_lines: 1020`** and this phase adds a
+  key, a five-clause grammar, four refusals with the line each names, an eighth argument and
+  the affiliation run in both looks. So the close-out **raises the cap to 1070** rather than
+  trimming — the number is named because round 2 caught "raises the cap" being uncheckable,
+  and it is calibrated on `mpdf-005` Phase 8, which needed 960 → 1010 for one key plus one
+  parameter. The rule's `covers` line gains a clause for the new key, on that same
+  precedent; frontmatter lines are free against `max_lines`.
+
+  `README.md`: the frontmatter documentation, the key count, the `## Styling` contract
+  sentence — "`md2pdf` names all seven on every call" — and the look table's `article` row,
+  "the date under the author", for the ordering reason above.
+
+  **Three code sites state a count or the order and are in the radius**:
+  `core/src/frontmatter.rs`'s module doc comment ("the schema is nine keys"), both
+  `core/assets/*.typ` header comments (the article's "That is the contract a third look has
+  to meet" and the press release's "the same seven the article look takes"), and
+  `core/assets/template.typ`'s "The date sits under the author, set smaller." **A fifth
+  states the contract count and round 3 found it**: `core/tests/golden_test.rs`'s doc comment
+  on `every_bundled_template_meets_the_call_contract` — "`header` names all seven arguments
+  on every call" — three lines above the code gate (7) already edits, which also makes §2's
+  corrected tally one short.
+
+  `web/index.html`: the page states the schema, so it gains the key — **and carries an
+  ordinal, "A ninth frontmatter key names a bibliography"**, which a close-out stopping at
+  the key list would leave stale. `rules/web-demo.md` records that the page's examples are
+  compiled, so a new key with no example is a choice the close-out names — **and if it names
+  the example, three more things move**: `core/tests/page_examples_test.rs`'s
+  `EXPECTED: usize = 12`, that file's `the_page_carries_twelve_examples` in its *name*, and
+  `rules/web-demo.md`'s "three groups and twelve examples". Round 2 found all three, and they
+  retire an assumption the corpus was carrying — that this test asserts nothing about the
+  count. **That file carries "twelve" on eight lines and only one is the sentence above**, so
+  the arm that adds an example sweeps the word rather than the line. `rules/web-demo.md`'s
+  "the eight frontmatter keys that decide the look" moves with the page's own heading either
+  way.
+
+  **`samples/` is the widest stale surface and the close-out makes an explicit call rather
+  than sweeping blindly.** `samples/article.md` already carries five claims falsified by the
+  *ninth* key — "four of the eight keys", "all eight are optional", "names all eight at
+  once", "A key outside those eight", "The three keys this file leaves out" — a
+  pre-existing miss this phase inherits and **corrects, since it is editing the same
+  sentences** — **including its "A date key joins them there, set beneath the author line"**,
+  the ordering sentence's last instance, which round 2 found four lines above the counts and
+  in the same paragraph. `README.md`'s "under all nine frontmatter keys",
+  `samples/showcase/README.md`'s "all nine frontmatter keys", and
+  `samples/showcase/showcase.md`'s heading "The frontmatter, all nine keys", its "every key
+  there is, and all nine are optional" and its "`title`, `author` and `date` become the block
+  at the top of the first page" — the last a content claim rather than a count, which the
+  others do not cover. Adding the tenth key to the showcase would shift its frontmatter by a
+  line and break
+  `app/src/preview.rs:the_anchors_are_the_headings_of_whichever_file_the_pane_holds`, which
+  pins `[13, 28, 60]` — **colliding with this phase's own "`app/src` untouched"**. Those are
+  heading *line numbers*, so the real constraint is **no line added or removed above line 60
+  of `showcase.md`**, which round 2 sharpened from "its frontmatter is not extended" and
+  which the prose corrections above must respect. So the showcase's *prose* is corrected
+  within that bound and its frontmatter is not extended; the two-author
+  document gate case (1) needs is a **new sample**, which is also what keeps the corpus
+  check from passing vacuously. That trap is the one `mpdf-005` Phase 8 hit and made a call
+  on; this phase inherits it and makes the same one.
+
+  **`specs/INDEX.md` and `rules/INDEX.md` regenerated**, never hand-edited — the spec's
+  rollup goes `partial` → `done` as the last unshipped phase lands. One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at

@@ -2,6 +2,130 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 11 only — 2026-08-31 — the two panel lenses that were NOT READY, resumed — **READY**
+
+Verdict: `READY` from both, zero blocking. **Converged.** Phase 11's `reviewed` is set to
+2026-08-31; `status` was already `accepted`.
+
+Both round-2 blockers verified resolved against the files. The affiliations sit **directly
+beneath the authors in both looks**, and gate (2) carries **each look's own three joins** —
+article title→authors, authors→affiliations, affiliations→date; press release date→title,
+title→authors, authors→affiliations. Refusal 2's line is assigned by the phase rather than
+credited to §2, and `Frontmatter` carries a `Location` for **both** keys.
+
+The consistency lens re-verified every quoted fragment in the enlarged close-out verbatim —
+twenty-three of them across nine files — and found no newly-introduced false claim. It also
+confirmed the sharpened showcase bound independently: `grep -n "^#" samples/showcase/showcase.md`
+returns 13, 28, 60, matching `app/src/preview.rs`'s pin, so "no line added or removed above
+line 60" is the real constraint and the close-out's own line-34 correction is a re-wrap risk
+under it. The cap history checks out in `git log -p`: 960 → 1010 at `mpdf-005` Phase 8, 1010
+→ 1020 at Phase 10, 1015 body lines today, so 1070 is calibrated rather than picked.
+
+Five non-blocking folded at convergence: §2's standing "Three refusals, each naming the
+author's **own** line" is falsified in that last respect too and the correction block now
+says so; gate (4)'s label for refusal 4 was narrower than the widened refusal; `affiliation`
+reaches `none` but not through `typst_string_or_none`, which renders a string literal from an
+`Option<&str>`; `rules/web-demo.md` carries "twelve" on eight lines where the close-out named
+one; and `core/tests/golden_test.rs`'s doc comment on
+`every_bundled_template_meets_the_call_contract` is a **fifth** prose statement of the
+contract count, three lines above code gate (7) already edits.
+
+### Round 2 — Phase 11 only — 2026-08-31 — the same three lenses, resumed with the author's changelog — **NOT READY**
+
+Grounding returned `READY`; exit-gate and cross-file returned `NOT READY` with **two new
+blockers, both introduced by the round-1 fix** — the pattern the loop warns about, observed.
+
+**The affiliations' position, found independently by two lenses.** Round 1 caught the
+placement being stated only in the close-out; folding it into the scope wrote "between the
+authors and the date", which is article order. `core/assets/press-release.typ`'s masthead is
+date → title → author → `divider`, so the phase's one positional instruction was
+unsatisfiable in one of the two looks it named, and gate (2) inherited it as a single
+article-order join list — the same enumeration failure Phase 10's round 2 caught, one level
+up. **Refusal 2's line, stated two ways**: "four refusals, each naming the author's line" and
+then "refusal 2 names the `affiliation` line", with the assignment credited to §2, which
+never makes one, and line-carrying state provisioned for one key where the refinement needs
+two.
+
+**One lens was right against the other two, and the author's own check decided it.** Round
+1's grounding lens reported that `core/src/frontmatter.rs`'s tests assert the problem alone;
+the author wrote that into gate (4) as a correction and the cross-file lens repeated it in
+round 2. The exit-gate lens disputed it. `errors_name_the_key_and_the_line` asserts
+`location.line` **and** `problem.contains(needle)`, and there is a second `location.line`
+assertion in the file. A false claim about the code would have landed permanently in an
+append-only document on a 2-to-1 consensus. The gate now cites that test as the shape it uses
+and keeps the falsified claim visible.
+
+Also folded: refusal 4 widened to an empty element in **either** list — `affiliation: MIT;`
+leaves a blank a `^2` would point at without tripping refusal 1; OQ-11's recorded reasoning
+corrected, since under its own rules a one-affiliation unmarked document that gains a second
+is **refused** by refusal 2 rather than silently re-rendered, so the page cannot move behind
+the author; §2's "four prose sites" corrected to five locations across four files, the same
+class of undercount the correction was written to fix; the fixture's full key list, since the
+press release's first join is its dateline; the `[13, 28, 60]` pin being heading *line
+numbers*, so the bound is "no line above line 60"; and the cap given a number, 1070.
+
+### Round 1 — Phase 11 only — 2026-08-31 — a three-lens panel of fresh reviewers with repo access (correctness/grounding, exit-gate testability, cross-file consistency) — **NOT READY**
+
+**Round 0 (this episode — Phase 11 is its own, per the note in Phase 10's round 1):** *does
+this produce the observable, and is it the right one?* **Yes to both.** A PDF whose title
+block carries several authors and the affiliations their markers point at, and the warrant is
+a gap §2 records rather than a speculation: `author` has been one free string since Phase 2,
+so a document with two authors has had nowhere to put the second. The one thing worth
+pressing — whether affiliations are scope creep beside plain multi-author support — the
+cross-file lens worked and declined to assert, on the ground that the `author` type change,
+the golden sweep and the contract break are each paid once either way, and that shipping
+`;`-lists first would put `^` into documents before it means anything.
+
+All three lenses returned `NOT READY`. **Five blocking findings, deduped; three were raised
+independently by all three.**
+
+1. **"Seven of twenty-nine goldens re-blessed" is unsatisfiable.** Gate (5) makes
+   `affiliation` an eighth call-contract argument, and `core/src/emit.rs:header` is one
+   unconditional `format!` naming every argument on every call — verified by the author
+   directly — so **all twenty-nine** call lines move, as OQ-9's `date` moved all thirteen and
+   `mpdf-005` Phase 8's seventh argument moved twenty-eight (`2bcb441`). The only build
+   satisfying "the other twenty-two must not move" emits `affiliation` conditionally, which
+   OQ-10 resolved against. Fixed by naming both counts: 29 move, 7 in two ways, 22 in one.
+2. **Gate (3) contradicts gate (4).** `tests/golden/frontmatter.typ` carries
+   `author: "Iva Po"` — a one-name document, and one of the seven. Both cases cannot hold.
+   §2's survivable wording is that a one-name document's *page* does not move, and gate (5)
+   now reads exactly that: the compiled PDF byte-identical, `--emit-typst` changing on the
+   call line alone, over a named document.
+3. **OQ-11 unresolved, and the gate case it declares it blocks does not exist.** Resolved
+   with a **third** answer neither the question nor any reviewer enumerated: the schema makes
+   the marker **optional** at exactly one affiliation. The cross-file lens is what forced it,
+   by observing that the schema-as-refusal reading would add a *fourth* refusal against §2's
+   three; and the deciding fact is that §2's refusal 2 as written made the commonest real
+   paper — one lab, several authors — unwritable, leaving only `^1` noise or an error. The
+   look answer was rejected: a look suppressing a marker decides a *fact* rather than a
+   typographic question, and two looks disagreeing would make one document read as two.
+4. **The parsing grammar forces guesses**, caught by the grounding lens alone. Now specified:
+   every element trimmed on both lists and each marker, so `^1, 2` and `^1,2` agree; the name
+   splits at the **first** `^`, so `A^B^1` is refused naming `B^1` rather than guessed; a
+   marker is a digit run indexing `affiliation` from 1. Its empty-element case became a
+   **fourth** refusal.
+5. **Nothing checked in pins the phase's own output**, caught by the exit-gate lens. Every
+   construct- or key-adding phase in this spec ships a fixture and a golden; this one named
+   none, and case (1) was a by-eye read over a document it did not name — the shape Phase
+   10's round 2 blocked. Now `tests/fixtures/authors.md` and `tests/golden/authors.typ`,
+   carrying a comma'd name to pin §2's sharpest call and `^1, 2` to pin the trim.
+
+**One rejection, and both lenses that raised the area accepted it:** no gate case for a
+document writing `authors:`. `core/src/frontmatter.rs:parse`'s unknown-key arm already
+refuses it and `an_unknown_frontmatter_key_is_an_error_that_names_it` already pins it, so the
+no-synonyms rule is shipped code rather than this phase's to prove. **One deferral:**
+intra-frontmatter refusal ordering left a free choice, since refusals 1 and 2 can only
+resolve after the line loop; the exit-gate lens agreed it is defensible and no shipped
+assertion contradicts either answer.
+
+The grounding lens reproduced §2's `super()` measurement in a throwaway clone —
+`A Third Person¹˒²`, superscript digits and a superscript comma, no package and no change to
+`TypstWorld` — so that claim now stands on two independent runs. The cross-file lens found
+the phase's sharpest trap: extending `samples/showcase/showcase.md` with the tenth key breaks
+`app/src/preview.rs`'s `[13, 28, 60]` pin, colliding with the phase's own "`app/src`
+untouched". Six close-out sites were missed and are now named, and §2's "the contract is
+stated in exactly two places" — the mitigation's load-bearing sentence — was falsified.
+
 ### Round 2 — Phase 10 only — 2026-08-31 — same reviewer, resumed with the author's changelog — **READY**
 
 Verdict: `READY`, zero blocking, five non-blocking, all five folded at convergence. **Both
