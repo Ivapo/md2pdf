@@ -67,6 +67,11 @@ phases:
     shipped: 2026-09-01
     cut: null
     by: null
+  - name: "Phase 12 — a name may stand on the line below"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -1212,6 +1217,60 @@ design the *body* issues both calls, so no look-internal ordering constraint exi
 recorded because both probes that measured anything here had to create one, and a reader of
 either would carry the constraint away with it.
 
+### A name may stand on the line below, and newlines are what bound it (decision, recorded)
+
+**APPENDED 2026-09-01**, on the adjacency rule being found inconsistent with the caption it
+was modelled on, and per §6.1 step 2.
+
+**An equation's `{#name}` may sit on the next line, or in the next paragraph, and what bounds
+it is that everything between is newlines.** Phase 4 required the group to be the text run
+*immediately* following the closing `$$`. The widened rule is
+`core/src/emit.rs:Figure::live`'s, unchanged and now shared: same frame, the recorded span
+still standing, and a tail of nothing but the newlines the paragraph arms push.
+
+**The inconsistency is what makes this a defect rather than a preference, and it is in the
+corpus rather than in an argument.** `samples/showcase/sections/blocks.md:62` writes a
+caption's own name on a continuation line —
+
+```markdown
+: The three kinds a caption reaches, and the counter each one keeps.
+  {#tab:kinds}
+```
+
+— and it names, because a caption collects its whole paragraph and `caption_name` takes the
+last group in it. So the dialect already says a name may stand on the line below, *unless the
+construct is an equation*. Phase 4 reached that asymmetry honestly — it recorded the
+allowance as "dropped, because a label is adjacent where a caption is a paragraph away" — but
+what it priced was the *mechanism*, not the rule an author has to hold.
+
+**What the author gets today is the silent drop the dialect exists to refuse, measured
+2026-09-01 through the shipped binary.** `$$x = 1$$` with `{#eq:one}` a line below emits
+`{\#eq:one}` and **prints the group on the page**. Referenced, it fails — but at the
+*reference's* line, `nothing declares the name 'eq:one'`, which names neither the label the
+author wrote nor the line they wrote it on. Both halves are worse than a refusal, and the
+second is worse than the first.
+
+**The write becomes an insert, and this is the one detail an implementer will otherwise
+rediscover.** The label is appended at the end of the buffer today, which is correct only
+while the equation is the last thing in it. A paragraph away the buffer already holds
+`$ x = 1 $\n\n`, and appending would put `<eq:one>` after the break, where Typst attaches it
+to something else or to nothing. It is inserted at the record's own end,
+`start + written.len()`. **In the adjacent case that offset *is* the end of the buffer**, so
+the bytes a shipped document emits do not move — measured, and §4's gate (2) is what holds it.
+
+**One refusal, and it is what the widening pays for.** A text run that is entirely a `{#…}`
+group, with no caption open and nothing live to name, is refused at its own line rather than
+escaped onto the page. A name written too far from its equation, or above a figure that has
+no caption to carry it, is a mistake in every case the dialect can express, and the shape is
+reserved in two positions already. **The caption guard is load-bearing and not defensive**:
+the showcase's own continuation line above is exactly this shape, and it must stay a caption's
+name rather than become an error.
+
+**What is deliberately not widened is the run itself.** `$$…$$ see {#eq:one}` and
+`$$…$$ {#eq:one} and more` stay the prose Phase 4 made them, and OQ-10's leading-text
+measurement stands: the group must still be the whole of a run, and only *which* run has
+moved. A rule that read part of a run would be the one no author can hold.
+
 ## 3. Open questions
 
 - **OQ-1** — ~~what is the syntax for a caption and for a name?~~ **RESOLVED
@@ -1606,6 +1665,18 @@ either would carry the constraint away with it.
   reason is structural: a caption is a *later paragraph* and a name on a fence is
   the *next event*.
 
+  **WIDENED 2026-09-01, on drafting Phase 12: the carrier stands and the position
+  does not.** `$$…$$ {#eq:one}` still names, byte for byte. What that phase adds is
+  that the group may also stand a line or a paragraph below, bounded by newlines,
+  because the caption this rule was measured against has always allowed exactly
+  that and the asymmetry was a rule no author could hold. **Two sentences here are
+  now false and are corrected rather than deleted**, since this is the reasoning a
+  later reader will repeat: Phase 4 as shipped *did* record a point — `Equation`,
+  with a frame depth and an offset — so "no recorded point" was already overtaken
+  by the phase this question resolved into; and "no splice" goes with it, the label
+  now being inserted at that record's own end rather than appended at the buffer's.
+  The measurement above is untouched and still the reason the carrier is the fence.
+
   **The name-only `: ` line is rejected, and Phase 3 is what rejects it.** That
   shape was the draft's first candidate, and shipping Phase 3 made it expensive
   rather than merely inelegant: `: {#eq:one}` is a marker carrying a name and no
@@ -1847,6 +1918,28 @@ either would carry the constraint away with it.
   implied — which is the argument for having refused to design the namespace on one member,
   and would have been the argument for refusing on two. **Blocks nothing**, and it is the
   question a third word has to answer before it is drafted rather than after.
+
+- **OQ-23 — may a *figure's* name stand on a line of its own, the way an equation's now
+  may?** *(design call)* Phase 12 widens the equation's position and leaves the figure's
+  where Phase 3 put it: a figure's name rides the end of its caption line, or of any line in
+  that caption's paragraph, and nowhere else. So `: A caption.` followed by a blank line and
+  `{#fig:one}` is not a name — and under Phase 12 it stops being prose and becomes the new
+  refusal, which is an improvement and not an answer. The asymmetry is now the reverse of the
+  one Phase 12 removed, and it is smaller: a caption is a paragraph and its name may stand on
+  any line of it, so the shape an author reaches for already works. **Blocks nothing** —
+  widening a refusal never moves a document that compiles, and the refusal is what makes the
+  question visible rather than silent.
+
+- **OQ-24 — should a `: ` line standing after a display equation be named rather than
+  printed?** *(design call)* `$$x = 1$$` followed by a blank line and `: A caption.` reaches
+  the page as the literal prose `: A caption.` today, and Phase 12 does not change it: the
+  marker attaches over a group or a live `Figure` record and a display equation is neither,
+  so `attaches` is false and the run falls through to the escape. That is the same silent
+  drop Phase 12 refuses one shape along, and it is left open rather than swept in because the
+  answer is not obviously "refuse it": §2 decided that a caption is what *makes* a figure,
+  and an equation is not a figure, so a caption line there might reasonably become a
+  captioned equation instead. **Blocks nothing**, and it wants deciding before a third
+  construct learns the marker.
 
 ## 4. Implementation phases
 
@@ -4318,6 +4411,216 @@ on step 2 and the steps above it are worked rather than skipped.
   **`core/tests/messages_test.rs`' count moves**, and the instrument beside it —
   `grep -c "Err(Error::"` over `core/tests/golden_test.rs` — is what makes that a measurement
   rather than a guess.
+
+  **`CLAUDE.md` and the status artifact: none needed.** The stanza's observable sentence is
+  untouched — the PDF is still the PDF — and this repository keeps no status artifact.
+
+  `specs/INDEX.md` and `rules/INDEX.md` regenerated, never hand-edited — this spec's rollup
+  goes `done` → `partial` as the phase is appended and back to `done` when it lands. One push.
+
+### Phase 12 — a name may stand on the line below
+
+*Produces the observable: yes — a PDF in which an equation the author named on the line below
+carries its number and the sentence pointing at it reads "Equation 1", where today that PDF
+carries the literal text `{#eq:one}` and the reference fails. The observable changes for a
+document that compiles today, which is why step 1 is worked at length.*
+
+**Drafted 2026-09-01**, on §2's appended placement decision and per §6.1 step 2. The ordered
+test lands on step 2 and the steps above it are worked rather than skipped.
+
+- **Step 0 — a decision, not only code?** Yes, and it is one this spec made twice. OQ-10
+  chose the carrier and Phase 4's scope fixed the position — *"adjacent, in one paragraph"* —
+  and both are quoted in `core/src/emit.rs:Equation`'s own doc comment. Reversing the position
+  while keeping the carrier is a decision changing, not a bug being fixed.
+- **Step 1 — does it remove or contradict shipped work?** **It contradicts a shipped gate
+  assertion, and that is the finding this step exists to surface.**
+  `core/tests/golden_test.rs:a_group_that_is_not_the_whole_run_names_nothing` carries four
+  rows, and its fourth — added by `19b61da`, *"test(mpdf-005): the Phase 4 exit gate"* — is
+  `"# H\n\n$$\nz = 6\n$$\n{#eq:nextline}\n"` asserting the emitted prose
+  `$ z = 6 $\n{\\#eq:nextline}`, labelled *"a group a soft break away, which is no longer
+  adjacent"*. **That row is a positive assertion of the behaviour this phase reverses**, so it
+  inverts rather than survives.
+
+  **Nothing built is un-built, and the distinction is the one Phase 10 drew.** Every shipped
+  spelling still names, byte for byte: `$$…$$ {#eq:one}`, ` {#eq:one}` and `$$…$${#eq:one}`
+  are untouched, and the two not-whole-run shapes stay prose. What changes is the set of
+  *additional* places a group may stand. So this is a phase and not a `## 0.` closing note —
+  Phase 4 is not removed, its gate row is widened, and §6.1's third sub-case is what carries
+  the prose: OQ-10 takes a dated `WIDENED` note in place, original kept.
+
+  **It narrows a permission, and the census is load-bearing for the fourth phase running.**
+  A whole-run `{#…}` group that prints as prose today becomes a label or an error. Measured
+  2026-09-01 over `tests/`, `samples/`, `web/` and `README.md`, the census finds **exactly one
+  document with such a group standing alone on a line** — `samples/showcase/sections/blocks.md:62`,
+  a *caption's* name reached over a soft break — and it must keep meaning what it means. That
+  one hit is not an obstacle; it is the evidence the phase runs on, and gate (5) is written
+  against it.
+- **Step 2 — the subject.** **The `{#name}` grammar and the display equation's record**, both
+  of which this spec shipped: Phase 3 invented the group and Phase 4 gave it to equations.
+  `mpdf-004` was weighed and loses — it owns the LaTeX subset a formula may hold, and this
+  changes no formula, no `math.typ` name and no conversion. `mpdf-001` owns no part of it.
+- **Step 3 is not reached.** No framework is reserved and none is extended.
+
+- **Scope: one liveness rule shared, one append made an insert, one refusal.**
+
+  **`core/src/emit.rs:Equation::live` adopts `core/src/emit.rs:Figure::live`'s tail test**, and
+  the two collapse into one helper both call. Today the equation's is
+  `bufs[depth - 1].get(start..) == Some(written)` — an exact tail — where the figure's accepts a
+  tail of nothing but `\n`. **After this phase the two bodies are identical, and leaving them
+  as two would be the drift this corpus keeps finding**: each struct keeps its own doc comment,
+  because each records its own argument, and both call the one function.
+
+  **That single change is what admits both spellings.** `Event::SoftBreak` and
+  `End(Tag::Paragraph)` each push one `'\n'`, so a name a line below and a name a paragraph
+  below are the same tail to the test, and **two blank lines name as well as one** — measured.
+  Anything else between — prose, a heading, a rule, an image — fails the tail and leaves the
+  record dead, which is the bound and needs no arithmetic of its own.
+
+  **The label's write becomes an insert, and this is the half a draft will miss.**
+  `top(bufs).push_str(&format!(" <{name}>"))` appends at the end of the buffer, which is the
+  right place only while the equation is the last thing in it. A paragraph away the buffer
+  already holds `$ x = 1 $\n\n`, and appending puts the label after the break, where Typst
+  attaches it to something else or to nothing. It is inserted at the record's own end,
+  `start + written.len()`. **In the adjacent case that offset is the end of the buffer**, so
+  the shipped spelling emits the same bytes — measured, and gate (2) is what holds it.
+
+  **One refusal, and it is what the widening pays for.** A text run that is entirely a `{#…}`
+  group, with **no caption open** and no live equation record, is
+  `name group with nothing to name` at its own line. Today it is escaped onto the page, and a
+  reference to it fails at the *reference's* line naming neither the label nor where it was
+  written — measured 2026-09-01, both halves.
+
+  **The caption guard is load-bearing and not defensive**, which the census is why:
+  `samples/showcase/sections/blocks.md:62` is exactly this shape inside a caption's own
+  paragraph, and `core/src/emit.rs:step`'s caption branch collects it into `Caption.text` for
+  `core/src/emit.rs:caption_name` to read. Without `caption.is_none()` the showcase stops
+  compiling. **Measured by building it wrong**: with the guard the showcase compiles and its
+  table still reads `Table 3.1` with the group off the page.
+
+  **What is deliberately not touched.** `core/src/emit.rs:equation_name` keeps its whole-run
+  rule and its trim, so `$$…$$ see {#eq:one}` and `$$…$$ {#eq:one} and more` stay prose;
+  `core/src/emit.rs:caption_name` keeps taking the last group on a line;
+  `core/src/emit.rs:check_name` is unchanged; the `caption.is_some()` guard on the display arm
+  that stops a span inside a caption stealing the caption's name is unchanged;
+  `core/src/frontmatter.rs`, both looks, `cli/src` and `app/src` are untouched. No key, no
+  schema change, no CLI flag, no look export.
+
+- **Exit gate:** six cases.
+
+  **The fixture is written out rather than described**, on `mpdf-001` Phase 10's rule, and it
+  is a **new** fixture rather than an addition to a shipped one, on the convention every phase
+  of this spec has kept. `tests/fixtures/equation_names_apart.md` carries
+  `equations: numbered`, one `#` heading, and **three named equations**: one named a **soft
+  break** below its fence, one named a **paragraph** below, and one named **adjacently** —
+  the third not for coverage but because the golden must show the adjacent and the apart forms
+  emitting the same shape. Each is referenced with `[](#…)`, so a label that failed to attach
+  fails the compile rather than passing quietly.
+
+  (1) **The fixture matches a checked-in golden, and the golden is where the insert is
+  pinned.** `tests/golden/equation_names_apart.typ` shows each label **immediately after its
+  own closing `$`** — `$ x = 1 $ <eq:soft>` — with the separator newlines *after* it and the
+  group gone from the source. **The wrong build this discriminates against is named**: an
+  append writes `$ x = 1 $\n\n <eq:soft>`, which is a label after a paragraph break, and it
+  is the implementation a draft reaches for because it is what ships today. `md_to_pdf`
+  returns bytes starting `%PDF`.
+
+  (2) **One shipped golden moves, in one prose line, and the other thirty-two do not.**
+  `tests/golden/plain_equation_names.typ` line 7 carries its fixture's sentence *"A name is
+  the whole of what follows the closing fence"*, which the close-out corrects; the case asserts
+  that file's **markup** lines are unchanged — `$ E = m c ^(2 ) $ <eq:energy>`,
+  `$ w = 4 $ {\\#eq:trailing} and more` and `$ y = 5 $ see {\\#eq:leading}` all byte-identical —
+  and that every other golden is byte-identical whole. **That is what says the insert is the
+  append in the adjacent case**, and it is the case a wrong build fails at thirty files at once.
+
+  (3) **The refusal fires and names its line**, as rows over `Error::UnsupportedConstruct`
+  asserting `location` and `construct`, on `core/tests/golden_test.rs`' shape. **Five rows**: a
+  group after prose that killed the record, a group after a heading, a group with nothing above
+  it at all, a group under an **uncaptioned image** — which has a record of its own kind and
+  still nothing to name — and a group alone in a list item.
+
+  (4) **The three not-whole-run shapes are still prose**, which is Phase 4's gate (5) held
+  rather than reversed: `$$…$$ {#eq:trailing} and more`, `$$…$$ see {#eq:leading}` and
+  `$x + 1$ {#eq:inline}` all reach the page with their markers intact. **And the fourth row of
+  `core/tests/golden_test.rs:a_group_that_is_not_the_whole_run_names_nothing` inverts** — the
+  soft-break document now emits `$ z = 6 $ <eq:nextline>` — which is the assertion step 1 names
+  and the one place this phase's blast radius touches a shipped test.
+
+  (5) **A caption's name on a continuation line still names, and the showcase is the case.**
+  `samples/showcase/sections/blocks.md`'s `: The three kinds…` / `  {#tab:kinds}` compiles, its
+  table reads **`Table 3.1`**, and the group does not reach the page — read once with
+  `pdftotext`. **This is the case that fails a refusal written without `caption.is_none()`**,
+  and it fails it by refusing a document that ships.
+
+  (6) **`cargo test --workspace` passes and `spec-lint` exits zero with no error.** **The one
+  warning it prints is inherited and is named so an implementer does not chase it**:
+  `rules/desktop-geometry.md` carries `RULE_SOURCES_WITHOUT_GENERATED`, pre-existing and
+  untouched.
+
+  **Two shipped assertions move and are named rather than discovered.** The fourth row of
+  `a_group_that_is_not_the_whole_run_names_nothing` (gate (4) above), and
+  `core/tests/messages_test.rs`' count of `Err(Error::` sites in `golden_test.rs`, which reads
+  **forty-seven** today — the instrument beside it, `grep -c "Err(Error::"`, is what makes that
+  a measurement rather than a guess.
+
+  **One shipped assertion deliberately does not move**, named because a draft will expect it
+  to: `core/tests/golden_test.rs:each_equation_name_refusal_names_the_authors_line` bakes the
+  adjacent form into the shared prefix its six rows are built on, and every one of them still
+  fires at the line it fires at today. A next-line form there would re-derive six line numbers
+  for nothing.
+
+- **Close-out.**
+
+  **`rules/pipeline.md` owes a cap raise**, at **1188 of `max_lines: 1215`** measured
+  2026-09-01 — twenty-seven lines of headroom against a new refusal and a rewritten paragraph.
+
+  **`rules/pipeline.md`, four passages.** The equation-name paragraph, whose *"Its liveness
+  test is `Figure::live`'s with the trailing-separator allowance dropped, since a label is
+  adjacent where a caption is a paragraph away — a soft break between the fence and the group
+  is enough to leave it prose"* is **made flatly false** and is the sentence this phase exists
+  to correct. The same paragraph's *"It needs no splice"*, which the insert makes wrong. The
+  caption-name paragraph, which cites `Figure::live` and now shares it. And a refusal for the
+  new message — **not** folded into the file's *"Two caption shapes are errors"*, on the same
+  judgement that kept a `: ` line inside an abstract out of that count: this is an
+  `UnsupportedConstruct` about a **name group**, not a third shape of caption. `covers:` gains
+  nothing — line 24 already reads *"the name a caption or a display equation declares"*.
+
+  **`README.md`, four sites.** *"**A display equation is named on its closing fence**"* and
+  *"The group has to be the whole of what follows the closing `$$`"* in
+  `## Naming a figure or an equation, and pointing at it`; *"Put `{#eq:name}` after the closing
+  `$$`"* in `## What the markdown may contain`; and that section's **"Five things are errors"**,
+  which the new refusal takes to six.
+
+  **Two fixtures carry prose that states the old rule, and one of them moves its golden.**
+  `tests/fixtures/plain_equation_names.md`'s *"A name is the whole of what follows the closing
+  fence"* is the misleading one and is corrected, which re-blesses
+  `tests/golden/plain_equation_names.typ` in that one line — gate (2) is written around exactly
+  that. `tests/fixtures/equation_names.md`'s *"A name rides the closing fence"* is **left
+  standing**, and the call is recorded rather than left to a reader: it is incomplete rather
+  than false, since a name still does ride the fence, and moving it would move a second golden
+  for no correction.
+
+  **Two samples state it too, and one of them re-runs a pagination assertion.**
+  `samples/showcase/sections/mathematics.md`'s *"A display equation is named on its closing
+  fence, since it has no caption line to carry a name"* — the showcase's copy of the README
+  sentence. And `samples/article.md`'s *"a name after the closing fence makes it something a
+  sentence can point at"*, which `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`
+  reads: **Phase 4's own scope named that assertion for not touching the sample and this phase
+  does touch it**, so the edit is line-count-neutral or the assertion is re-read, exactly as
+  Phase 10's showcase rewording was.
+
+  **Four code sites state the old rule.** `core/src/emit.rs:Equation`'s doc comment, whose
+  *"the trailing-separator allowance dropped"* and *"a `SoftBreak`'s newline between them is
+  enough to leave the group the prose it is"* are both reversed; `Equation::live`'s own
+  *"still the last thing in its own frame"*; `Figure::live`'s, which now documents a rule two
+  records share; and `core/src/emit.rs:equation_name`'s, which stays right about the run and
+  should say which run.
+
+  **`web/index.html`: none needed, and the reason is not the usual one.** The page's
+  `name-and-reference` example writes the adjacent form, which this phase leaves working byte
+  for byte, so no claim on the page goes stale and no example needs adding — the dialect gains
+  no construct and `rules/web-demo.md`'s count does not move. This is a *narrower* answer than
+  Phases 10 and 11's logged gap, and it is stated so a reader does not assume the gap widened
+  again.
 
   **`CLAUDE.md` and the status artifact: none needed.** The stanza's observable sentence is
   untouched — the PDF is still the PDF — and this repository keeps no status artifact.
