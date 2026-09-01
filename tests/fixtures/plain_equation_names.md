@@ -5,7 +5,7 @@ equations: plain
 
 # Names an equation does not take
 
-A name is the whole of what follows the closing fence. This equation carries
+A name is a whole run on or below the closing fence. This equation carries
 one, and nothing points at it, which the shipped default allows:
 
 $$

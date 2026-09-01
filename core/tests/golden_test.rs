@@ -59,6 +59,8 @@ const EQUATION_NAMES_MD: &str = include_str!("../../tests/fixtures/equation_name
 const EQUATION_NAMES_TYP: &str = include_str!("../../tests/golden/equation_names.typ");
 const PLAIN_EQUATION_NAMES_MD: &str = include_str!("../../tests/fixtures/plain_equation_names.md");
 const PLAIN_EQUATION_NAMES_TYP: &str = include_str!("../../tests/golden/plain_equation_names.typ");
+const EQUATION_NAMES_APART_MD: &str = include_str!("../../tests/fixtures/equation_names_apart.md");
+const EQUATION_NAMES_APART_TYP: &str = include_str!("../../tests/golden/equation_names_apart.typ");
 const GROUPS_MD: &str = include_str!("../../tests/fixtures/groups.md");
 const GROUPS_TYP: &str = include_str!("../../tests/golden/groups.typ");
 const SECTIONED_FIGURES_MD: &str = include_str!("../../tests/fixtures/sectioned_figures.md");
@@ -2752,8 +2754,9 @@ fn a_marker_line_after_a_display_equation_is_still_prose() {
     );
 
     // A name written on a `: ` line beneath an equation is prose, marker and
-    // all: there is no figure above it to record, and the group is a paragraph
-    // away from the equation rather than adjacent to it.
+    // all: there is no figure above it to record, and though the equation's
+    // record is live a paragraph away since Phase 12, `: A line. {#eq:one}` is
+    // a run the group is not the whole of, so `equation_name` finds nothing.
     let typst = md_to_typst("# H\n\n$$\nx = 1\n$$\n\n: A line. {#eq:one}\n", &[]).unwrap();
     assert!(
         typst.contains("\n: A line. {\\#eq:one}"),
@@ -4934,7 +4937,7 @@ fn markers_with_nothing_to_point_at_are_cleared() {
 ///
 /// The import is the load-bearing half. `header` names `abstract` only for a
 /// document that opened one, which is what keeps every shipped golden file
-/// byte-identical — the suite reads all thirty-three of them, so an
+/// byte-identical — the suite reads all thirty-four of them, so an
 /// implementation that widened it unconditionally fails here and there at once.
 /// The count read thirty when this test was written and the directory held
 /// thirty-one; re-measured with `ls tests/golden | wc -l`, which is the
@@ -5595,6 +5598,168 @@ fn each_keywords_refusal_names_its_construct_and_its_line() {
                 assert_eq!(found_line, line, "for {what}");
             }
             other => panic!("expected `{construct}` for {what}, got {other:?}"),
+        }
+    }
+}
+
+// -- mpdf-005 Phase 12: a name may stand on the line below --------------------
+
+/// The fixture matches its golden, and the golden is where the insert is pinned.
+///
+/// Each label sits immediately after its own closing `$`, and the group's own
+/// separator newlines stand *after* it rather than being unwound the way
+/// `splice_caption` unwinds a caption's: the consumed paragraph leaves four,
+/// the soft break three — one from the break, two from the paragraph's end and
+/// the next one's start — and the adjacent form two. **The wrong build this
+/// discriminates against is the append that shipped before Phase 12**, which
+/// writes `$ x = 1 $\n\n <eq:soft>`: a label after a paragraph break, attached
+/// to nothing.
+#[test]
+fn the_equation_names_apart_fixture_matches_its_golden_file() {
+    assert_eq!(
+        md_to_typst(EQUATION_NAMES_APART_MD, &[]).unwrap(),
+        EQUATION_NAMES_APART_TYP
+    );
+    for (needle, what) in [
+        ("$ x = 1 $ <eq:soft>\n\n\nOr", "a name a soft break below"),
+        ("$ y = 2 $ <eq:para>\n\n\n\nOr", "a name a paragraph below"),
+        ("$ z = 3 $ <eq:adjacent>\n\n#ref", "a name on the fence"),
+        (
+            "$ w = 4 $ <eq:four>\n\n\nThis sentence",
+            "a name a paragraph below with prose on the line after it",
+        ),
+    ] {
+        assert!(
+            EQUATION_NAMES_APART_TYP.contains(needle),
+            "{what} does not leave `{}`",
+            needle.escape_debug()
+        );
+    }
+    for wrong in ["$\n <eq:", "$\n\n <eq:"] {
+        assert!(
+            !EQUATION_NAMES_APART_TYP.contains(wrong),
+            "a label was appended after the break rather than inserted at the record's end"
+        );
+    }
+}
+
+#[test]
+fn the_equation_names_apart_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(EQUATION_NAMES_APART_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// The insert is the append in the adjacent case, and this is the assertion
+/// that says so.
+///
+/// `plain_equation_names.md`'s first sentence stated the old rule and moved
+/// with Phase 12, so its golden was re-blessed. The three markup lines in that
+/// file are the adjacent, trailing-text and leading-text spellings, and each
+/// has to come through the re-bless byte for byte: a build whose insert point
+/// is anything but the record's end moves the first, and one that widened the
+/// run rule moves the other two. The other thirty-two goldens hold the same
+/// claim through their own whole-file assertions.
+#[test]
+fn the_plain_equation_names_markup_lines_are_unchanged() {
+    for line in [
+        "\n$ E = m c ^(2 ) $ <eq:energy>\n",
+        "\n$ w = 4 $ {\\#eq:trailing} and more\n",
+        "\n$ y = 5 $ see {\\#eq:leading}\n",
+    ] {
+        assert!(
+            PLAIN_EQUATION_NAMES_TYP.contains(line),
+            "the re-blessed golden no longer carries `{}`",
+            line.escape_debug()
+        );
+    }
+}
+
+/// A name a line below, or a paragraph below, names — the row that inverted.
+///
+/// The first document is byte for byte the fourth row Phase 4's gate put in
+/// `a_group_that_is_not_the_whole_run_names_nothing`, asserting the group
+/// stayed prose; it is the one shipped assertion this phase reverses. The
+/// second has two blank lines between the fence and the group, because the
+/// bound is that everything between is newlines, not that there is one of
+/// them. Emitted rather than read off a golden, for the reason that test gives.
+#[test]
+fn a_name_a_line_or_a_paragraph_below_still_names() {
+    for (md, form, what) in [
+        (
+            "# H\n\n$$\nz = 6\n$$\n{#eq:nextline}\n",
+            "$ z = 6 $ <eq:nextline>\n",
+            "a group a soft break below, which Phase 4 left as prose",
+        ),
+        (
+            "# H\n\n$$\nz = 6\n$$\n\n\n{#eq:two}\n",
+            "$ z = 6 $ <eq:two>\n",
+            "a group two blank lines below",
+        ),
+    ] {
+        let typst = md_to_typst(md, &[]).unwrap();
+        assert!(typst.contains(form), "{what} did not name: {typst}");
+        assert!(
+            !typst.contains("{\\#eq:"),
+            "{what} reached the page as prose as well: {typst}"
+        );
+    }
+}
+
+/// A paragraph that is nothing but a group, with nothing to name, is refused
+/// at its own line.
+///
+/// Every row printed the group on the page before Phase 12, except the sixth,
+/// which took the figure group's own message. **The sixth is the only case in
+/// the phase that reaches the opener's retirement of the equation record, and
+/// the equation before the opener is what makes it a test at all**: without it
+/// there is no record for the opener to retire, a bare `::: figure` /
+/// `{#eq:one}` errors under every build, and the row passes green with the
+/// retirement unbuilt. With it, a build that keeps the record live inserts the
+/// label across `Group.start` and yields the figure-group message, which is
+/// what the row asserts against.
+///
+/// A tight list item is deliberately not a row: `- {#fig:one}` is bare inlines
+/// with no paragraph for the refusal to be the whole of, so it stays prose.
+#[test]
+fn each_nameless_group_refusal_names_its_line() {
+    for (md, line, what) in [
+        (
+            "# H\n\n$$\nx = 1\n$$\n\nSome prose.\n\n{#eq:one}\n",
+            9,
+            "a group after prose that killed the record",
+        ),
+        ("# H\n\n{#eq:one}\n", 3, "a group after a heading"),
+        ("{#eq:one}\n", 1, "a group with nothing above it at all"),
+        (
+            "# H\n\n![a](dot.png)\n\n{#fig:one}\n",
+            5,
+            "a group under an uncaptioned image, whose record is not an equation's",
+        ),
+        (
+            "# H\n\n- one\n\n- {#eq:one}\n",
+            5,
+            "a group alone in a loose list item",
+        ),
+        (
+            "# H\n\n$$x = 1$$\n\n::: figure\n\n{#eq:one}\n",
+            7,
+            "a group after a `:::` opener, which retires the equation before it",
+        ),
+    ] {
+        match md_to_typst(md, &[]) {
+            Err(Error::UnsupportedConstruct {
+                construct,
+                location:
+                    Location {
+                        file: None,
+                        line: found,
+                    },
+            }) => {
+                assert_eq!(construct, "name group with nothing to name", "for {what}");
+                assert_eq!(found, line, "for {what}");
+            }
+            other => panic!("expected a nameless-group refusal for {what}, got {other:?}"),
         }
     }
 }

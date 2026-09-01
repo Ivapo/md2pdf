@@ -66,6 +66,7 @@ fn emit_typst_prints_the_golden_file() {
         ("cross_references.md", "cross_references.typ"),
         ("equation_names.md", "equation_names.typ"),
         ("plain_equation_names.md", "plain_equation_names.typ"),
+        ("equation_names_apart.md", "equation_names_apart.typ"),
         ("groups.md", "groups.typ"),
         ("abstract.md", "abstract.typ"),
         ("keywords.md", "keywords.typ"),
