@@ -63,6 +63,11 @@ phases:
     shipped: 2026-08-31
     cut: null
     by: null
+  - name: "Phase 12 — a marker with nothing to point at"
+    reviewed: null
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -426,6 +431,55 @@ the count does not, and the undercount is what generated the close-out's missed 
 honest count is five locations across four files** — round 2 caught this correction making
 the same class of error it was written to fix.
 
+**CORRECTED 2026-08-31 by Phase 12, after the shipped refusal was read by its first user as
+saying an affiliation is always required.** Both states are written out, because the wrong
+one is what a later reader re-derives.
+
+**Refusal 1 above is stated absolutely and should not be.** "A marker naming an affiliation
+the document does not carry" refuses `author: Iva Po^1` in a document with **no
+`affiliation` key at all** — a state an author reaches by commenting the key out while
+drafting, which is an ordinary move, and by writing the markers before the key. The error it
+raised named a line and stopped the build over markers that state nothing, and its own
+sentence read as though the schema required an affiliation. It does not.
+
+**The refusal now begins at one affiliation. With none, every marker is dropped and the
+document compiles.** The case is not that dropping is harmless — it is which failure each
+answer leaves *visible*.
+
+- **The failure refusal 1 was written against is invisible**: `^3` among two real
+  affiliations sets a superscript that points at nothing, in a byline where the other
+  superscripts point at something, and no reader scans a byline for that. That case is
+  untouched, and so is `^0`.
+- **The failure a drop permits is self-evident**: an author who writes markers meaning to
+  add the affiliations later, and forgets, gets a PDF with **no affiliation block anywhere**.
+  That is not a defect a reader has to hunt for; it is the whole feature missing from the
+  page. The cost is real and it is accepted, because it announces itself.
+
+**This bends §2's escape-and-reject decision and the bound is named rather than argued
+away.** A marker is dropped rather than named, which that decision forbids for *content*.
+The bound is that a marker is not content: it is one end of a **relation**, and at zero
+affiliations the relation has no other end, so a dropped marker takes nothing off the page
+that was ever going to reach it. A name still sets exactly as the author wrote it. That is
+the whole of the distinction, and a later phase that starts dropping *content* on this
+precedent has misread it.
+
+**It is also OQ-11's answer taken one step down, which is the continuity argument rather
+than a fresh one.** OQ-11 made the marker optional at exactly one affiliation, because there
+the relation is redundant. At zero the relation does not exist. A schema that lets an author
+omit a marker where it says nothing, and refuses one where it says nothing, is answering the
+same question two ways.
+
+**`core` clears the markers rather than the look ignoring them, and that is load-bearing.**
+What crosses the seam is the truth about the document: a document with no affiliations has
+authors with no markers, so `--emit-typst` shows `markers: ()` and neither look changes by a
+character. A look asked to ignore markers when `affiliation` is `none` would be a second
+place the rule lives, and the two would drift.
+
+**Still four refusals, and now two of them are scoped rather than one.** Refusal 2 begins at
+two affiliations, per OQ-11; refusal 1 begins at one. Refusals 3 and 4 — a marker that is not
+a number, and an empty element in either list — are unconditional, because both are faults in
+what the author *typed* rather than in a relation that may not exist.
+
 ## 3. Open questions
 
 - **OQ-1** — ~~Which Typst crates does `core` need (compiler, PDF export), and
@@ -643,6 +697,17 @@ the same class of error it was written to fix.
   block's `above:`**, because the title block's `below:` also governs a title-only
   document's gap to its `divider`, and moving it fails the phase's own byte-identity case.
   Landed in Phase 10's scope, with §2 carrying both measurements.
+- **OQ-14** — does `core` need a warning channel at all? Phase 12 drops a marker that points
+  at nothing and says so nowhere, because the alternative on offer was an error and the
+  author had already been stopped by one. A third answer exists — warn on stderr and
+  continue — and it was weighed and not taken, for a reason that is about the crate rather
+  than about markers: `core`'s API returns a `Result` and has no second channel, so a warning
+  would be a new return shape on `md_to_typst` and `md_to_pdf`, threaded through `cli`, the
+  desktop app and the WASM build, for one message. Phase 1 shipped a stderr warning for a
+  stripped frontmatter block and Phase 2 removed it, so the precedent runs both ways.
+  **Nothing in Phase 12 turns on the answer** — a warning is additive to a document that
+  already compiles — but a second construct wanting one would make this a real question, and
+  the first is the cheapest place to notice that. Design call, cheap to hold.
 - **OQ-13** — does the affiliation list belong to the title block alone, or does a later
   spec want it anywhere else? A footer, a running header and a first-page footnote are all
   places published documents put one, and `mpdf-003`'s desktop app has a footer design
@@ -1623,6 +1688,105 @@ with superscript markers, and the two affiliations those markers point at beneat
 
   **`specs/INDEX.md` and `rules/INDEX.md` regenerated**, never hand-edited — the spec's
   rollup goes `partial` → `done` as the last unshipped phase lands. One push.
+
+### Phase 12 — a marker with nothing to point at
+*Produces the observable: yes — a PDF from a document that today does not compile at all,
+its byline setting the names their author wrote without the markers that point nowhere.*
+
+**Drafted 2026-08-31**, on §2's correction above, and appended per §6.1 step 2. The ordered
+test lands on step 2 and the steps above it are worked rather than skipped.
+
+- **Step 0 — a decision, not only code?** Yes. Refusal 1's scope is a schema decision, taken
+  in Phase 11 and stated absolutely there. What changes is where it begins.
+- **Step 1 — does it remove or contradict shipped work?** **It narrows a shipped refusal,
+  and the distinction from removal is that nothing built is un-built.** Phase 11 stands whole:
+  every marker that pointed at a real affiliation still does, and three of the four refusals
+  are untouched. **The prose is a different matter and is corrected in place**, per §6.1's
+  third sub-case: §2's absolute statement of refusal 1 is actively misleading now, so it
+  carries a dated correction beside it rather than a note in a sibling file the reader never
+  reaches. **The precedent is this phase's own predecessor** — Phase 11 relaxed refusal 2 at
+  one affiliation by exactly this pair of moves, a phase plus a `CORRECTED` block in §2.
+- **Step 2 — the subject.** The frontmatter schema, which this spec has owned since Phase 2
+  and OQ-3. So a phase, not a spec.
+
+- **Scope: one condition and one clearing pass, in one function.**
+
+  `core/src/frontmatter.rs:check_affiliations` gains a zero arm. Where the document carries
+  **no** affiliation, every author's `markers` is emptied and the block is valid; where it
+  carries one or more, refusal 1 is exactly what it is today, `^0` included. The function
+  now resolves as well as refuses, so it takes `&mut Frontmatter` and is renamed to say so.
+
+  **The message added the same day is deleted with the case it named** — the sentence
+  beginning `key 'author' marks a name '^1'`, which existed only for a document this phase
+  makes valid. The marker-past-the-end message stays, since there the fix is a number.
+
+  **No `.typ` file changes and no golden moves.** `core` clears the markers, so what the
+  looks receive is a document with no markers and no affiliations, which is a shape both
+  already render — the seam §2's correction argues for. No shipped golden carries a marker
+  without an affiliation, so none moves; the call contract stays at eight.
+
+  **`core/src/emit.rs` is untouched**, and so are `cli/src` and `app/src`.
+
+- **Exit gate:** five cases.
+
+  (1) **A document with markers and no `affiliation` key compiles**, where today it exits
+  non-zero. The fixture is named and checked in: `tests/fixtures/orphan_markers.md`, two
+  authors carrying `^1` and `^2` and no `affiliation` line — the shape an author reaches by
+  commenting the key out, which is how this was found. Its `--emit-typst` shows
+  `markers: ()` on **every** author and `affiliation: none`, which is the case that proves
+  `core` cleared them rather than a look ignoring them.
+
+  (2) **Its byline carries no superscript, in both looks**, read on one `pdftotext` run per
+  look over that fixture — the two-PDF form Phase 9 gate case (2) established. The names set
+  exactly as written. **This is the case that would catch a clearing pass that only emptied
+  the first author.**
+
+  (3) **Every refusal that survives still fires and names its line**, as one test over
+  `Error::Frontmatter` asserting `location.line` and `problem`, on
+  `core/src/frontmatter.rs:errors_name_the_key_and_the_line`'s shape: `^3` under two
+  affiliations; `^0` under two; `^1` under **one**, which is the boundary this phase moves and
+  the case a wrong condition would let through; a marker that is not a number, under an
+  affiliation **and** under none, since refusal 3 is unconditional; an empty element in either
+  list; and refusal 2 at two affiliations with no marker anywhere.
+
+  (4) **A document that carries an affiliation does not move.** `tests/fixtures/authors.md`
+  compiles to a PDF byte-identical against `HEAD`, in both looks, compared as a hash — the
+  form Phase 10 gate case (3) and Phase 11 gate case (5) both used. This is what says the
+  narrowing reached only the zero case.
+
+  (5) **`cargo test --workspace` passes with no golden re-blessed and no `.typ` file
+  touched** — `git diff --stat` naming `core/src/frontmatter.rs`, the new fixture, and the
+  close-out's prose, and nothing else. **`spec-lint` runs too**, which `cargo test` does not:
+  the close-out edits a rule with eleven lines of headroom.
+
+- **Close-out**, named line by line, since this phase's prose radius is again wider than its
+  code radius.
+
+  `rules/pipeline.md`: the refusals paragraph, whose first sentence states refusal 1
+  absolutely, and the sentence **"With exactly one affiliation the markers are optional"**,
+  which is now the middle of a three-way answer rather than the whole of it. The file has
+  **eleven lines of headroom against `max_lines: 1080`** and this phase adds one scoped
+  condition, so **no cap change is owed** — which is stated because the two phases before
+  this one both owed one.
+
+  `README.md`: the frontmatter section's refusal list — "So is a marker pointing at an
+  affiliation you did not write" — which is true only from one affiliation up.
+
+  `samples/authors.md`: its "What you may leave out" section, which is where an author would
+  look for this, and its own copy of the refusal list. **This sample is the close-out's real
+  work**, because it is the file that answers the question this phase came from.
+
+  **One code comment states the refusal absolutely and is in the radius**:
+  `core/src/frontmatter.rs`'s comment above the marker check. `core/assets/*.typ` state
+  nothing about refusals and are untouched, which is the same fact as "no look changes".
+
+  **`web/index.html` states no refusal about markers** and does not move — checked rather
+  than assumed, because Phase 11's close-out found six prose sites where a draft had named
+  five.
+
+  **`specs/INDEX.md` and `rules/INDEX.md` regenerated**, never hand-edited — the spec's
+  rollup goes `done` → `partial` as this phase is appended and back to `done` when it lands.
+  One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
