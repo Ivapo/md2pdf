@@ -796,7 +796,7 @@ fn at_line_start(md: &str, offset: usize) -> bool {
     offset == 0 || md.as_bytes().get(offset - 1) == Some(&b'\n')
 }
 
-/// Claim a broken shortcut reference that begins `@` or `-@`, and no other.
+/// Claim a broken shortcut reference that begins `@`, `+@` or `-@`, and no other.
 ///
 /// **A `[@key]` is not a link until this makes it one.** A CommonMark shortcut
 /// reference is a link only where a matching reference definition exists, and a
@@ -811,10 +811,13 @@ fn at_line_start(md: &str, offset: usize) -> bool {
 /// `crate::md_to_html`, where a citation renders as `<a href="@k">@k</a>` — which
 /// is honest for a writer that has no notion of citations.
 ///
-/// **`-@` is not decoration.** It is Pandoc's suppressed-author form, which the
-/// dialect refuses by name; under an `@`-only predicate `[-@k]` would stay five
-/// text runs the emitter never sees and would reach the page as `\[\-\@k\]` — a
-/// refusal the dialect promises and the parse could not deliver.
+/// **`-@` and `+@` are not decoration.** They are the year form and the prose
+/// form — Pandoc's suppressed author and natbib's `\citet` — which
+/// [`cite_key`] reads as `form: "year"` and `form: "prose"`; under an
+/// `@`-only predicate `[-@k]` and `[+@k]` would stay five text runs the emitter
+/// never sees and would reach the page as `\[\-\@k\]` and `\[\+\@k\]`, which is
+/// what the second did until `mpdf-007` Phase 5. The sigil counts only glued
+/// to its at-sign: `[+ @k]` is the text `\[\+ \@k\]`, measured.
 ///
 /// Returning `None` leaves the source exactly as it is, which is what keeps
 /// `an [ open bracket, a ] close bracket`, `[see @k]` and `[a@b.com]` the
@@ -829,7 +832,7 @@ fn citation_reference<'a>(link: BrokenLink<'a>) -> Option<(CowStr<'a>, CowStr<'a
 /// link's end arm over the destination the callback wrote — so the parse and the
 /// emitter cannot disagree about what a citation is.
 fn is_citation(reference: &str) -> bool {
-    reference.starts_with('@') || reference.starts_with("-@")
+    reference.starts_with('@') || reference.starts_with("-@") || reference.starts_with("+@")
 }
 
 /// One footnote label, folded the way the parser folds it.
@@ -1948,12 +1951,26 @@ fn step(
                         location: Location::at(frame.line),
                     });
                 }
-                let key = cite_key(&frame.url, frame.line)?;
-                names.cited.push((key.to_string(), frame.line));
+                let (form, keys) = cite_key(&frame.url, frame.line)?;
+                // Every key joins the list at the group's line, so a key the
+                // bibliography does not hold is named at the line its bracket
+                // sits on, and `check_citations` reads nothing new.
+                for key in &keys {
+                    names.cited.push((key.to_string(), frame.line));
+                }
+                // A group's calls are adjacent with nothing between them. Typst
+                // gathers `cite` elements separated by nothing, or by space
+                // alone, into one group — one parenthesis, the style's own
+                // separator between the sources — and a space here would be a
+                // byte the author did not write.
                 let out = top(bufs);
-                out.push_str("#cite(label(");
-                out.push_str(&typst_string(key));
-                out.push_str("))");
+                for key in keys {
+                    out.push_str("#cite(label(");
+                    out.push_str(&typst_string(key));
+                    out.push(')');
+                    out.push_str(form.argument());
+                    out.push(')');
+                }
                 return Ok(());
             }
 
@@ -3211,42 +3228,92 @@ fn wrote_citation(frame: &LinkFrame) -> bool {
     ) && is_citation(&frame.url)
 }
 
-/// The one key a citation's payload names, or the refusal its payload earns.
+/// The form a citation asks for, and the `#cite` argument that asks Typst for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CiteForm {
+    /// `[@k]`: the parenthetical mark, Typst's default and the one form the
+    /// dialect had before `mpdf-007` Phase 5.
+    Normal,
+    /// `[+@k]`: the mark reads in the sentence — natbib's `\citet`.
+    Prose,
+    /// `[-@k]`: the year alone — Pandoc's suppressed-author form.
+    Year,
+}
+
+impl CiteForm {
+    /// The named argument written after the label, and nothing for the normal
+    /// form, so that `[@k]` emits the byte-identical call it always has.
+    fn argument(self) -> &'static str {
+        match self {
+            CiteForm::Normal => "",
+            CiteForm::Prose => ", form: \"prose\"",
+            CiteForm::Year => ", form: \"year\"",
+        }
+    }
+}
+
+/// The form a citation's payload asks for and the keys it names, or the refusal
+/// the payload earns — read in one fixed order, so that no shape is guessed at.
 ///
-/// Pandoc spells three more things inside these brackets, and this dialect reads
-/// none of them, so each is named at its own line rather than guessed at or
-/// silently dropped — OQ-3 is where whether they ever land is argued. The
-/// suppressed-author arm is the `else` rather than a test of its own, because
-/// [`is_citation`] has already established that a payload reaching here begins
-/// `@` or `-@`.
+/// A `,` anywhere is the locator, first, so `[+@a; @b, p. 33]` is refused as
+/// the locator and never as a form over a group. Then a leading `+` is the
+/// prose form and a leading `-` the year form — [`is_citation`] has already
+/// established that a payload reaching here begins `@`, `+@` or `-@`, so what
+/// follows the sigil begins `@`. Then the rest splits on `;`, each piece
+/// trimmed, because `[@a ; @b]` reaches the callback with its spaces; each
+/// piece must be a key, `@` and at least one character, so `[@a; b]`, `[@a;]`
+/// and `[@a;;@b]` are refused as pieces that are not keys rather than written
+/// as `label("b")` for Typst to fail on with a message naming no line. Last, a
+/// form over more than one key is refused: Typst's merged prose group reads
+/// `Claude and Knuth (2025), Postigo (2026)`, which is not a sentence, and "a
+/// form names one source" is the rule an author can hold.
+///
+/// The locator stays refused on purpose. Typst's `supplement` would render it,
+/// but nothing has asked for it, and OQ-3 leaves that half open.
 ///
 /// **The key is not checked against a character set**, which is where this parts
 /// from `check_name`. A figure name is authored inside this dialect and can be
 /// constrained; a citation key is authored in a file the author often did not
 /// write and cannot change, so a rule here would refuse real bibliographies
 /// rather than protect anyone.
-fn cite_key(payload: &str, line: usize) -> Result<&str> {
+fn cite_key(payload: &str, line: usize) -> Result<(CiteForm, Vec<&str>)> {
     let refuse = |problem: String| Error::Citation {
         location: Location::at(line),
         problem,
     };
 
-    let Some(key) = payload.strip_prefix('@') else {
-        return Err(refuse(format!(
-            "'{payload}' suppresses the author, which the dialect does not read"
-        )));
-    };
-    if key.contains(';') {
-        return Err(refuse(format!(
-            "'{payload}' cites several sources at once, and one citation cites one"
-        )));
-    }
-    if key.contains(',') {
+    if payload.contains(',') {
         return Err(refuse(format!(
             "'{payload}' carries a locator, which the dialect does not read"
         )));
     }
-    Ok(key)
+
+    let (form, rest) = if let Some(rest) = payload.strip_prefix('+') {
+        (CiteForm::Prose, rest)
+    } else if let Some(rest) = payload.strip_prefix('-') {
+        (CiteForm::Year, rest)
+    } else {
+        (CiteForm::Normal, payload)
+    };
+
+    let mut keys = Vec::new();
+    for piece in rest.split(';') {
+        let piece = piece.trim();
+        let Some(key) = piece.strip_prefix('@').filter(|key| !key.is_empty()) else {
+            return Err(refuse(format!(
+                "'{payload}' holds '{piece}', which is not a key"
+            )));
+        };
+        keys.push(key);
+    }
+
+    if form != CiteForm::Normal && keys.len() > 1 {
+        return Err(refuse(format!(
+            "'{payload}' puts a form on several sources, and a form names one"
+        )));
+    }
+
+    Ok((form, keys))
 }
 
 /// Lay a block out under a prefix: the first line takes `prefix`, and every
@@ -3371,7 +3438,7 @@ fn align_name(align: &Alignment) -> &'static str {
 ///
 /// Every argument is named on every call, including the ones the frontmatter
 /// left out, so that same output shows the layout the document actually gets.
-/// A bundled look therefore accepts all eight, and one missing an argument
+/// A bundled look therefore accepts all nine, and one missing an argument
 /// would fail the compile with an error naming neither the document nor the
 /// key.
 ///
@@ -3384,16 +3451,19 @@ fn align_name(align: &Alignment) -> &'static str {
 /// because both looks guard the whole title block on the keys being `none` and
 /// an empty array is not.
 ///
-/// `equations`, `figures` and `headings` cross as Typst strings rather than
-/// through `typst_string_or_none`: the schema resolves each to a name on every
-/// document, so the `none` arm would be dead, and a bare `plain` reaching the
-/// call unquoted fails the compile with `unknown variable: plain` — at compile
-/// time rather than at the schema, naming an identifier the author never typed.
-/// `headings` crosses as the name it was written as, `"2"` and not `2`, for
-/// the same reason and one more: it is the look that converts it, so no
-/// numbering format and no depth arithmetic reaches this file. The name is all
-/// that crosses; what a number looks like, whether it carries the section it
-/// stands in, and how deep the numbers go, is the look's own.
+/// `equations`, `figures`, `headings` and `citations` cross as Typst strings
+/// rather than through `typst_string_or_none`: the schema resolves each to a
+/// name on every document, so the `none` arm would be dead, and a bare `plain`
+/// reaching the call unquoted fails the compile with `unknown variable: plain`
+/// — at compile time rather than at the schema, naming an identifier the author
+/// never typed. `headings` crosses as the name it was written as, `"2"` and not
+/// `2`, for the same reason and one more: it is the look that converts it, so
+/// no numbering format and no depth arithmetic reaches this file. The name is
+/// all that crosses; what a number looks like, whether it carries the section
+/// it stands in, and how deep the numbers go, is the look's own. `citations`
+/// crosses on the same rule as the scheme's name and never as a style's: the
+/// look maps `author-date` to one of Typst's bundled styles, so no style name
+/// reaches this file either.
 fn header(front: &Frontmatter, math: bool, has_abstract: bool, has_keywords: bool) -> String {
     let prelude = match math {
         true => format!("#import \"{PRELUDE_NAME}\": {PRELUDE_NAMES}\n"),
@@ -3414,7 +3484,7 @@ fn header(front: &Frontmatter, math: bool, has_abstract: bool, has_keywords: boo
     format!(
         "#import \"{}\": {exports}\n\
          {prelude}\
-         #show: template.with(title: {}, author: {}, affiliation: {}, columns: {}, date: {}, equations: {}, figures: {}, headings: {})\n",
+         #show: template.with(title: {}, author: {}, affiliation: {}, columns: {}, date: {}, equations: {}, figures: {}, headings: {}, citations: {})\n",
         front.template.file(),
         typst_string_or_none(front.title.as_deref()),
         typst_authors_or_none(front.author.as_ref()),
@@ -3424,6 +3494,7 @@ fn header(front: &Frontmatter, math: bool, has_abstract: bool, has_keywords: boo
         typst_string(front.equations.name()),
         typst_string(front.figures.name()),
         typst_string(front.headings.name()),
+        typst_string(front.citations.name()),
     )
 }
 

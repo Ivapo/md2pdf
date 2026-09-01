@@ -3,7 +3,7 @@
 // does, and the parser and the emitter know nothing about either.
 //
 // The emitter names every argument on every call, so this file takes the same
-// eight the article look takes, and exports the same four names beside it:
+// nine the article look takes, and exports the same four names beside it:
 // `template`, `divider`, and the `abstract` and `keywords` a document that
 // opened one of them gets. `author` arrives as an array of `(name, markers)`
 // dictionaries and `affiliation` an array of strings, the relation between the
@@ -25,7 +25,7 @@
 
 // `divider` is defined above because a Typst closure captures the scope it is
 // written in. The masthead calls it, so it has to exist by this line.
-#let template(title: none, author: none, affiliation: none, columns: 1, date: none, equations: "plain", figures: "flat", headings: "plain", doc) = {
+#let template(title: none, author: none, affiliation: none, columns: 1, date: none, equations: "plain", figures: "flat", headings: "plain", citations: "numeric", doc) = {
   // A press release runs in one column by convention, and the frontmatter
   // resolves the count to 1 where the document left the key out. An author who
   // writes `columns: 2` still gets two.
@@ -166,6 +166,14 @@
   // sizes both at 9.5pt. The contract a third look inherits is "the caption
   // sits on the block's edge", not "both numbers are 2em".
   show figure.caption.where(kind: raw): it => pad(left: 2em, it)
+
+  // The scheme the marks follow, answered as the article look answers it and
+  // reaching the same style: Harvard cite-them-right under `author-date`, on
+  // the precedent that both looks write `(1)` for `equations`, and `ieee` by
+  // name under `numeric`, which is Typst's own default and therefore the page a
+  // press release has always had. The condition sits inside the argument
+  // because a `set` inside a scoped `if` dies with the block.
+  set bibliography(style: if citations == "author-date" { "harvard-cite-them-right" } else { "ieee" })
 
   // The label above the reference list, answered here as everything else is.
   // The emitter writes `title: none` and passes the words over, because Typst's

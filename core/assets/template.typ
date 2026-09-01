@@ -4,7 +4,8 @@
 // change to the parser or the emitter.
 //
 // The emitter names every argument on every call, so every bundled look takes
-// title, author, affiliation, columns, date, equations, figures and headings.
+// title, author, affiliation, columns, date, equations, figures, headings and
+// citations.
 // Every look also exports `divider`, `abstract` and `keywords` beside
 // `template`, the last two of which the emitter imports only for a document
 // that opened one — separately, so a document may have either, both or neither.
@@ -15,7 +16,7 @@
 // The defaults are the fallback for a hand-written call; core/src/frontmatter.rs
 // holds the ones a document actually gets.
 
-#let template(title: none, author: none, affiliation: none, columns: 2, date: none, equations: "plain", figures: "flat", headings: "plain", doc) = {
+#let template(title: none, author: none, affiliation: none, columns: 2, date: none, equations: "plain", figures: "flat", headings: "plain", citations: "numeric", doc) = {
   set page(paper: "a4", margin: 2.5cm, columns: columns)
   set text(font: "Libertinus Serif", size: 10pt, lang: "en")
   set par(justify: true, leading: 0.65em)
@@ -181,6 +182,19 @@
   // its captions smaller than its code would misalign the two silently, by
   // exactly the ratio.
   show figure.caption.where(kind: raw): it => pad(left: 2em, it)
+
+  // The scheme the marks follow. The author asks for `numeric` or `author-date`
+  // and this look names the style that answers it, which is the seam
+  // `equations` set: `harvard-cite-them-right` for the second, chosen on the
+  // merged group — it separates two sources with a semicolon where Elsevier
+  // Harvard uses the comma it also puts between author and year, so a pair
+  // cited at once stays two — and `ieee` by name for the first, which is Typst's
+  // own default, so the numeric page is provably the page it always was rather
+  // than assumed to be. The condition sits inside the argument for the reason
+  // the equation rule's does: a `set` inside a scoped `if` dies with the block.
+  // `cite`'s own `style` defaults to the bibliography's, so the marks and the
+  // list take this one rule together.
+  set bibliography(style: if citations == "author-date" { "harvard-cite-them-right" } else { "ieee" })
 
   // The label above the reference list. The emitter writes
   // `#bibliography(…, title: none)` and hands the words to the look, because

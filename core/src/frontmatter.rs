@@ -1,11 +1,11 @@
 //! Parses the leading YAML frontmatter block.
 //!
-//! The schema is ten keys, so this is a hand-written parser over a documented
+//! The schema is eleven keys, so this is a hand-written parser over a documented
 //! YAML subset rather than a dependency. It follows the same policy the emitter
 //! applies to markdown: anything outside the subset is an error that names the
 //! offending key and its line, never a guess.
 //!
-//! Two of the ten take a *list*, and the parser refusing an indented line is why
+//! Two of the eleven take a *list*, and the parser refusing an indented line is why
 //! they take it inside one: a list is a `;`-separated value rather than YAML's
 //! own nesting.
 
@@ -207,6 +207,44 @@ impl Headings {
     }
 }
 
+/// The scheme a document's citation marks follow.
+///
+/// A name against a closed set, on `Equations`' shape and for its reason: the
+/// author decides *whether* a mark names its source, and the look decides
+/// *how* — which of Typst's bundled styles answers the scheme — so this crosses
+/// to the template as a name and carries no style of its own. A
+/// `citation-style` key carrying Typst's catalogue was weighed and refused: it
+/// would put that catalogue into the dialect and make every look promise every
+/// style. A third scheme is a third name here rather than a key of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Citations {
+    Numeric,
+    AuthorDate,
+}
+
+impl Citations {
+    /// Every accepted name. The default sits first, as `Equations::ALL`'s does.
+    pub const ALL: [Citations; 2] = [Citations::Numeric, Citations::AuthorDate];
+
+    /// The name a document writes in the `citations` key, and the string the
+    /// emitter hands the look.
+    pub fn name(self) -> &'static str {
+        match self {
+            Citations::Numeric => "numeric",
+            Citations::AuthorDate => "author-date",
+        }
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        Citations::ALL.into_iter().find(|c| c.name() == name)
+    }
+
+    /// The accepted names, for the error a name outside the set raises.
+    fn names() -> String {
+        Citations::ALL.map(Citations::name).join(" or ")
+    }
+}
+
 /// One author, and the affiliations they belong to.
 ///
 /// The markers ride the name because nothing else in a flat schema carries the
@@ -256,6 +294,9 @@ pub(crate) struct Frontmatter {
     pub equations: Equations,
     pub figures: Figures,
     pub headings: Headings,
+    /// The scheme the citation marks follow, resolved to a name on every
+    /// document as the three numbering keys above are.
+    pub citations: Citations,
     /// The bibliography file this document names, with the line that named it.
     ///
     /// The only key that names a *file*, which is why it alone carries a line:
@@ -283,9 +324,10 @@ impl Default for Frontmatter {
     /// lands on.
     ///
     /// `equations` defaults to the name that numbers nothing, `figures` to the
-    /// name that sections nothing, and `headings` to the name that numbers no
-    /// heading, so a document written before any of the three existed compiles
-    /// to the same page it always did.
+    /// name that sections nothing, `headings` to the name that numbers no
+    /// heading, and `citations` to the numeric marks Typst draws on its own, so
+    /// a document written before any of the four existed compiles to the same
+    /// page it always did.
     fn default() -> Self {
         Self {
             title: None,
@@ -297,6 +339,7 @@ impl Default for Frontmatter {
             equations: Equations::Plain,
             figures: Figures::Flat,
             headings: Headings::Plain,
+            citations: Citations::Numeric,
             bibliography: None,
         }
     }
@@ -423,6 +466,15 @@ pub(crate) fn parse(block: &str, first_line: usize) -> Result<Frontmatter> {
                     ));
                 };
                 out.headings = headings;
+            }
+            "citations" => {
+                let Some(citations) = Citations::from_name(value) else {
+                    return Err(problem(
+                        line,
+                        format!("key 'citations' takes {}, not '{value}'", Citations::names()),
+                    ));
+                };
+                out.citations = citations;
             }
             // The one key that names a file. Its value takes the shape rule
             // every path in this dialect takes — a document and the files it
@@ -821,6 +873,43 @@ mod tests {
                 }
                 other => panic!("expected a Frontmatter error for {value}, got {other:?}"),
             }
+        }
+    }
+
+    #[test]
+    fn both_citation_names_parse() {
+        for (name, citations) in [
+            ("numeric", Citations::Numeric),
+            ("author-date", Citations::AuthorDate),
+        ] {
+            let out = parse(&format!("citations: {name}\n"), 2).unwrap();
+            assert_eq!(out.citations, citations);
+        }
+    }
+
+    /// A document that leaves the key out numbers its marks, which is the page
+    /// every document had before the key existed.
+    #[test]
+    fn an_absent_citations_key_numbers_the_marks() {
+        assert_eq!(parse("title: A\n", 2).unwrap().citations, Citations::Numeric);
+    }
+
+    /// A name outside the set names the key and lists what it accepts, exactly
+    /// as `template`, `equations`, `figures` and `headings` do. One mechanism,
+    /// not five.
+    ///
+    /// `apa` is the deliberate bad value: it is the guess an author who knows
+    /// Typst's style catalogue makes, and the key does not take a style. The
+    /// scheme is the author's; the style that answers it is the look's.
+    #[test]
+    fn a_citations_name_outside_the_set_lists_the_names_it_accepts() {
+        match parse("citations: apa\n", 2) {
+            Err(Error::Frontmatter { problem, .. }) => {
+                assert!(problem.contains("citations"), "problem was: {problem}");
+                assert!(problem.contains("numeric"), "problem was: {problem}");
+                assert!(problem.contains("author-date"), "problem was: {problem}");
+            }
+            other => panic!("expected a Frontmatter error, got {other:?}"),
         }
     }
 
