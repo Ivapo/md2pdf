@@ -13,8 +13,8 @@ bibliography: refs.bib
 
 # What this is
 
-This is one document that uses every construct md2pdf supports, so that you can
-see all of them set on a page at once and read the markdown that produced them
+This is one document that uses nearly every construct md2pdf supports, so you
+can see them set on a page at once and read the markdown that produced them
 side by side. It is written across six files, because being written across
 several files is itself one of the constructs. Convert it, open the PDF, then
 change something and convert it again:

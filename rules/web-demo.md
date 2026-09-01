@@ -125,8 +125,16 @@ through as text (a caption over a table, over a listing and over an image, a `::
 `{#name}` and the `[](#name)` that points at it, display math), things markdown has no way
 to say (the nine frontmatter keys that decide the look, a footnote, a citation and the
 reference list it earns), and three refusals — raw HTML, a task list, and a LaTeX command
-off the accepted list. Twenty-three constructs are supported, so the page is a chosen few
+off the accepted list. Twenty-five constructs are supported, so the page is a chosen few
 and links out to the README for the rest.
+
+**The page's own lede is two behind that**, and the gap is logged rather than half-fixed
+here: `web/index.html`'s `<p class="lede">` reads "Twenty-three constructs are supported
+and twelve are shown here", which was one behind before `mpdf-005` Phase 10 and is two
+behind after it. Correcting the number alone would leave the page claiming a count it shows
+no example of, and an example is real work under this spec's own gate — every claim on the
+page is a snippet the workspace suite compiles — so both the count and an `::: abstract`
+row belong to a phase of `mpdf-006` rather than to another spec's close-out.
 
 **Each example is one element, and three consumers read it.** A
 `<script type="text/markdown" data-example="…" data-expect="ok|error">` holds the source;

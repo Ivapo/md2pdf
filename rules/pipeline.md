@@ -19,6 +19,7 @@ covers: >
   section's own images resolve against, the location
   every message carries, the caption that makes an image, a table or a code block a figure and
   the splice that attaches it, the `:::` group that makes several of them one figure,
+  the one word on an opener the dialect reads and the abstract it opens,
   the name a caption or a display equation declares and
   the reference that points at it, the citation the broken-link callback claims, the
   reference list it earns and the four ways the bibliography channel refuses,
@@ -30,7 +31,7 @@ covers: >
   key carries and the affiliation each of their markers points at, the heading anchors a
   compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 1080
+max_lines: 1145
 generated: 2026-08-31
 ---
 
@@ -83,11 +84,11 @@ one.
 
 ## The dialect
 
-Twenty-four things are supported: headings at levels 1–6, paragraph text, soft breaks,
+Twenty-five things are supported: headings at levels 1–6, paragraph text, soft breaks,
 emphasis, strong emphasis, strikethrough, inline code, math in both its forms, hard line
 breaks, thematic breaks, links, cross-references, citations, include markers, images,
-captions, figure groups, bullet lists, ordered lists, code blocks, block quotes, pipe
-tables, footnotes, and a leading YAML frontmatter block. Heading levels map to Typst
+captions, figure groups, abstracts, bullet lists, ordered lists, code blocks, block quotes,
+pipe tables, footnotes, and a leading YAML frontmatter block. Heading levels map to Typst
 headings of the same level.
 
 The inline constructs reach Typst as function calls, not as its own markup.
@@ -296,7 +297,9 @@ them, which is Typst's block equation: `typst::syntax::ast:Equation::block` test
 space after the opening delimiter and before the closing one. Both arms call `convert`, so
 the scan is one mechanism, and the display one consults no position — `$$` is the author's
 own signal, where an image has none and `write_image` infers a form from `Walk.para`. So the
-block is written wherever the span sits, and a paragraph holding one is split by it. How
+block is written wherever the span sits, and a paragraph holding one is split by it —
+everywhere the dialect carries a span at all, an abstract being the one place a display
+equation is refused rather than written. How
 that block then sits is a look decision, reached over the Typst element the way both looks
 already reach `raw` and `table.cell`; nothing about math is exported. Numbering is the one
 part of it the author has a say in, and it crosses in the frontmatter's `equations` key
@@ -509,9 +512,11 @@ A caption attaches to the construct directly above it, so no arrangement of the 
 spells "these two images are one figure". A paragraph whose whole text is `:::`, optionally
 followed by one word, opens a group; one whose whole text is `:::` closes it; and the
 closer writes `#figure(grid(columns: N, …), caption: […]) <name>` over the members, with
-`N` their count. **The word on the opener is the author's convention and the dialect does
-not read it**, because Typst infers the kind through the `grid` — two images opened
-`::: table` are a Figure. The members are the three constructs a caption reaches, and
+`N` their count. **The dialect reads exactly one word on an opener, and every other one is
+the author's convention**: `abstract` opens the construct below, and `table`, `figure` and
+the rest open a group and are not read, because Typst infers the kind through the `grid` —
+two images opened `::: table` are a Figure. `core/src/emit.rs:RESERVED` is the one-element
+set the opener arm looks the word up in. The members are the three constructs a caption reaches, and
 `core/src/emit.rs:take_member` needs no second notion of what one is: it takes a
 `core/src/emit.rs:Figure` record's `body` each time one is made while a group is open,
 and removes the call from the buffer as it does. One caption, in trailing position, and
@@ -534,13 +539,48 @@ quote arms — the only two an opener's paragraph can stand in — and
 `core/src/emit.rs:Walk::unclosed` refuses one left open where either walk ends, a footnote
 definition's included, since a caption inside one already works.
 
-Eight group shapes are errors, each an `UnsupportedConstruct` naming the author's line: no
-caption, no member, a second `: ` line, a `: ` line with a member after it, a `:::` inside
-a group, a group never closed, a paragraph beginning `:::` that is neither delimiter, and a
-block between the members that is not one of the three. The empty group is the one that
+Nine group shapes are errors, each an `UnsupportedConstruct` naming the author's line: no
+caption, no member, a second `: ` line, a `: ` line with a member after it, a group never
+closed, a paragraph beginning `:::` that is neither delimiter, a block between the members
+that is not one of the three, and either construct opened inside a group — a nested group
+and a nested abstract being two messages rather than one, since what the author nested is
+what the sentence names. The empty group is the one that
 would otherwise reach Typst, as `grid(columns: 0)`, and fail the compile with `number must
 be positive`, naming nothing the author would recognise. The `: `-line rule is what keeps
 subcaptions open: a marker after a member is the spelling one will want.
+
+**`::: abstract` opens the abstract a paper starts with, and a bare `:::` closes it.** The
+dispatch is therefore three-state: a bare delimiter closes whichever construct is open and
+opens a group where neither is. `core/src/emit.rs:close_abstract` truncates back to the
+opener's `start` and writes `#abstract[…]` over the prose the walk already emitted between
+the delimiters — `core/src/emit.rs:close_group`'s own idiom, and the second and third
+non-append writes in the file. What it wraps is already-translated body, so emphasis,
+inline code, a link, a footnote and an inline `$…$` all work inside one; `[` and `]` are in
+`SPECIAL`, so a literal bracket in the prose cannot close the call.
+
+**The abstract is not a figure and takes none of a figure's machinery** — no caption, no
+`{#name}`, no number, no `#ref` and no counter — so `figures: sectioned` cannot be
+perturbed by it and `core/src/lib.rs:anchors_from` still counts the headings the walk
+counted. It crosses to the look as `#abstract[…]` against an **exported function**, not as
+a call argument, and `core/src/emit.rs:header` names `abstract` in the import only for a
+document that opened one, which is what leaves every other document's source unchanged.
+
+**It must be the document's first block**, because both looks lift it out of the flow and
+an abstract written lower would appear at the top with source order and page order
+disagreeing. In a multi-file document "first" is first in the *joined* stream, so an
+abstract may be a section file of its own.
+
+Eight abstract shapes are errors, each an `UnsupportedConstruct` naming the author's line:
+a second abstract, one that is not the first block, one opened in a list item, a block
+quote or a footnote definition, a block inside it that is not a paragraph, a standalone
+image, a display equation or a citation inside it, an empty one, a `: ` line inside it, and
+one the document never closes. **The frame test is three conditions and not two**: a list
+item and a block quote each open a fresh buffer frame, which `bufs.len() == 1` answers, and
+`core/src/emit.rs:collect_definitions` runs every footnote definition through a fresh
+`Walk::new()` where both a content test and that one pass — so `Mode::Document` is read
+too, and an abstract flag is refused rather than propagated the way `math` is. The image,
+the display equation and the citation are named separately because each is an *inline*
+event inside a paragraph, which the block guard cannot see.
 
 **A caption line may end in a `{#name}` group, which names the figure that caption makes.**
 It becomes a Typst label written into the same string the record keeps —
@@ -864,12 +904,16 @@ Two looks are bundled, and `core/src/frontmatter.rs:Template` names both:
 count — and the emitter passes the frontmatter through and adds no styling of its own, so a
 third look is a third `.typ` file and one enum variant.
 
-Every look exports `template` and `divider`, and its `template` takes `title`, `author`,
-`affiliation`, `columns`, `date`, `equations`, `figures` and `headings` before the trailing
-`doc`. That is the contract, because `core/src/emit.rs:header` names all eight on every
-call; a look missing one would fail the compile with an error naming neither the document
-nor the key. No golden file pins it, so a test in `core/tests/golden_test.rs` reads each look's source and
-asserts it — two needles for `equations`, the parameter and `math.equation`; two for
+Every look exports `template`, `divider` and `abstract`, and its `template` takes `title`,
+`author`, `affiliation`, `columns`, `date`, `equations`, `figures` and `headings` before the
+trailing `doc`. That is the contract, because `core/src/emit.rs:header` names all eight on
+every call and imports the first two names on every document and the third on one that
+opened an abstract; a look missing one would fail the compile with an error naming neither
+the document nor the key. **The export list is three and the call is eight** — an abstract
+crosses as a function beside `divider` rather than as a ninth argument, so the call contract
+has not moved since `mpdf-001` Phase 11.
+No golden file pins it, so a test in `core/tests/golden_test.rs` reads each look's source and
+asserts it — one needle per exported name; two needles for `equations`, the parameter and `math.equation`; two for
 `figures`, the parameter and `counter(figure.where(kind:`; two for `headings`, the
 parameter and `int(headings)`; and two for `affiliation`, the parameter and `super(` —
 because the parameter alone is satisfied by a look that takes it and ignores it. `headings`' second needle is the conversion rather than the
@@ -949,7 +993,16 @@ A caption crosses no argument at all, and neither does a group. Each look carrie
 `set figure.caption(…)`, `show figure: set block(…)`, `show figure.caption: …`,
 `show figure: set grid(gutter: …)`, `show figure.where(kind: raw): set align(left)` and
 `show figure.caption.where(kind: raw): …` of its own, plus one rule that reaches past a
-figure entirely — `show raw.where(block: true): set block(inset: …)`. All seven reach Typst
+figure entirely — `show raw.where(block: true): set block(inset: …)`. An abstract crosses no
+argument either, and answers in a `#let` rather than a `show`: the article look floats it
+with `place(top + center, scope: "parent", float: true)` — the title block's own shape, so
+the two stack in source order — at 80% of the text width under a centred bold `Abstract`
+label, and the press release sets a standfirst under the masthead rule and prints no label,
+a press release having a lede rather than an abstract. **Neither label is a `heading`**, on
+the reference list's own reasoning: one heading more than the markdown wrote withdraws every
+anchor `core/src/lib.rs:anchors_from` reports, and would take a section number under
+`headings` and restart every figure counter under `figures: sectioned`. All seven `show`
+rules reach Typst
 elements the way both looks already reach `raw` and `table.cell`, so the contract stays at
 seven. **The first four are kind-agnostic in both looks**, which is what styled and numbered
 a captioned table, a captioned listing and a group the day the emitter first emitted one,

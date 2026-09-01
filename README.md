@@ -38,11 +38,11 @@ adds to markdown, and every example on it is one this repository's tests compile
 click away from a PDF in your own browser, the three refusals included. Nothing is sent
 anywhere, and there is no server to send it to.
 
-Locally, **`samples/showcase/` is one document that uses every construct in the dialect** —
-every inline and block form, captions, groups, names and cross-references, both forms of
-math, footnotes, and citations against the fake bibliography beside it, under all ten
-frontmatter keys, and written across six files because that is a construct too. It is the
-fastest way to see the whole surface set on a page:
+Locally, **`samples/showcase/` is one document that uses nearly every construct in the
+dialect** — every inline and block form, captions, groups, names and cross-references, both
+forms of math, footnotes, and citations against the fake bibliography beside it, under all
+ten frontmatter keys, and written across six files because that is a construct too. It is
+the fastest way to see the whole surface set on a page:
 
 ```console
 $ ./target/release/md2pdf samples/showcase/showcase.md
@@ -66,6 +66,16 @@ and compare the two pages:
 ```console
 $ ./target/release/md2pdf samples/press-release.md
 $ open samples/press-release.pdf
+```
+
+`samples/abstract.md` is the construct the showcase does not carry: a paper whose first
+block is an abstract, set across the full width of the page above the columns. Convert it,
+then put `template: press-release` in its frontmatter and convert it again, to see the same
+words as a standfirst under a masthead rule with no label at all:
+
+```console
+$ ./target/release/md2pdf samples/abstract.md
+$ open samples/abstract.pdf
 ```
 
 ## Use
@@ -239,7 +249,7 @@ build command and the one thing an unsigned bundle cannot do.
 
 This release supports **headings, paragraph text, the inline constructs, the block
 constructs, links, cross-references, citations, include markers, tables, images, captions,
-figure groups, footnotes, strikethrough, and math in both its forms**:
+figure groups, abstracts, footnotes, strikethrough, and math in both its forms**:
 
 ````markdown
 # Introduction
@@ -557,9 +567,11 @@ name, so `[](#fig:halves)` points at the pair. A group takes the three things a 
 takes: a standalone image, a table and a code block. Write as many as you like; they
 sit in one row, and how far apart is the look's business.
 
-**A word after the opener is yours, and `md2pdf` does not read it.** `::: figure` and
-`::: table` are both fine and both mean the same thing, because the kind comes from what
-the members are — two tables are a *Table* whatever you opened them with.
+**`md2pdf` reads one word after the opener, and every other one is yours.** `abstract` is
+that word, and it opens something else entirely — see *The abstract a paper opens with*,
+below. `::: figure` and `::: table` are both fine and both mean the same thing, because a
+group's kind comes from what the members are — two tables are a *Table* whatever you opened
+them with.
 
 **`:::` at the start of a paragraph is reserved.** Everywhere else it is ordinary text:
 inside a sentence, on the second line of a paragraph, and inside a code block, which is
@@ -567,14 +579,66 @@ how the example above is written. Leave the blank lines in — a `:::` and the i
 it with no blank line between them are one paragraph, not a group, and `md2pdf` says so
 rather than guessing.
 
-Eight things are errors, each naming the line: a group with no caption, one with no
-member, a second `: ` line, a `: ` line with a member after it, a `:::` inside a group, a
-group you never close, a paragraph starting `:::` that is neither an opener nor a closer,
-and anything between the members that is not one of the three:
+Nine things are errors, each naming the line: a group with no caption, one with no
+member, a second `: ` line, a `: ` line with a member after it, a group inside a group, an
+abstract inside a group, a group you never close, a paragraph starting `:::` that is neither
+an opener nor a closer, and anything between the members that is not one of the three:
 
 ```console
 $ md2pdf paper.md
 error: unsupported markdown construct 'figure group with no caption' at line 12
+```
+
+## The abstract a paper opens with
+
+An abstract is set across the full width of the page, above the columns the body runs in.
+It is the same `:::` delimiter, with the one word `md2pdf` reads after the opener, and it
+goes at the very top of the document:
+
+```markdown
+---
+title: A Paper That Opens With an Abstract
+author: Iva Po
+---
+
+::: abstract
+
+An abstract is the one block a paper opens with that is neither a section, nor a
+figure, nor body text. Write as many paragraphs as it takes.
+
+:::
+
+# Introduction
+```
+
+The block holds **paragraphs**, and the inline constructs inside them: emphasis, strong,
+`code`, links, footnotes and an inline `$…$` formula. That is enough for a structured
+abstract, which is written as bold run-in text — **Background.** then **Methods.** then
+**Results.** — rather than as headings.
+
+**It takes no caption, no name and no number**, and it restarts nothing: it is not a
+figure, so it cannot perturb `figures: sectioned`, and it is not a heading, so it takes no
+section number under `headings` and never appears in the document's outline.
+
+**The look decides what it looks like.** The `article` look gives it a centred **Abstract**
+label and sets it narrower than the page; `press-release` sets the same words as a
+standfirst under the masthead rule and prints no label at all, because a press release has
+a lede rather than an abstract. `samples/abstract.md` is the same document in both.
+
+**It has to be the document's first block, and there may be only one.** Both looks lift it
+out of the flow, so an abstract written lower down would appear at the top anyway and the
+page would disagree with the file you wrote. In a document written across several files,
+first means first in the joined stream — so the abstract may be a section file of its own
+that the master names before the rest.
+
+Eight things are errors, each naming the line: a second abstract, one that is not the first
+block, one opened inside a list item, a block quote or a footnote definition, a block inside
+it that is not a paragraph — including a standalone image — a display equation or a citation
+inside it, an empty one, a `: ` caption line inside it, and one you never close:
+
+```console
+$ md2pdf paper.md
+error: unsupported markdown construct 'abstract that is not the document's first block' at line 24
 ```
 
 ## Naming a figure or an equation, and pointing at it
@@ -831,9 +895,10 @@ the rule a thematic break draws, the title block, and the column count. Two ship
 the emitter do not need to know.
 
 A third look is a third `.typ` file plus one name in `core/src/frontmatter.rs`. It has one
-contract to meet: export `template` and `divider`, and let `template` take `title`,
-`author`, `affiliation`, `columns`, `date`, `equations`, `figures` and `headings` before its
-trailing document argument. `md2pdf` names all eight on every call. `author` arrives as an
+contract to meet: export `template`, `divider` and `abstract`, and let `template` take
+`title`, `author`, `affiliation`, `columns`, `date`, `equations`, `figures` and `headings`
+before its trailing document argument. `md2pdf` names all eight on every call, and imports
+`abstract` for a document that opened one. `author` arrives as an
 array of `(name, markers)` dictionaries and `affiliation` as an array of strings: what
 crosses is the relation between the two lists, and every question of how it looks — that a
 marker is a superscript, that the names run on one line — is the look's own.
@@ -842,7 +907,8 @@ Everything else a look decides, it decides over Typst's own elements with `show`
 rules, taking no argument at all. A table's header row, a code block's font, a figure's
 caption, the space between a group's members and how far off the margin a block of code
 sits all reach a look that way — which is why neither a caption nor a group widened the
-call at all. An argument is added only where the *author* has something to ask for, which is
+call at all. An abstract does not either: it is a third exported name beside `divider`,
+not a ninth argument. An argument is added only where the *author* has something to ask for, which is
 what `equations`, `figures` and `headings` are: the three questions a look cannot answer on
 its own, because the answer is a fact about the document rather than about the house style.
 

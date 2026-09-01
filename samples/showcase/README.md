@@ -1,8 +1,10 @@
 # The showcase
 
-One document that uses **every construct md2pdf supports**, so the whole surface
-can be read on a page at once instead of assembled from the README. It is
-written across six files, because that is one of the constructs.
+One document that uses **every construct this document was written for**, so the
+whole surface can be read on a page at once instead of assembled from the
+README. It is written across six files, because that is one of the constructs.
+The abstract is the one thing added since, and it has samples/abstract.md to
+itself.
 
 ```console
 $ md2pdf showcase.md

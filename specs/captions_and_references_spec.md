@@ -8,7 +8,7 @@ note: >
   true when another is inserted above it. The `:::` delimiter this spec invented
   for a multi-member figure also carries the abstract a paper opens with.
 status: accepted
-last_updated: 2026-08-31
+last_updated: 2026-09-01
 
 phases:
   - name: "Phase 1 — a captioned figure"
@@ -58,7 +58,7 @@ phases:
     by: null
   - name: "Phase 10 — the abstract a paper opens with"
     reviewed: 2026-08-31
-    shipped: null
+    shipped: 2026-09-01
     cut: null
     by: null
 
