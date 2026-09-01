@@ -73,6 +73,8 @@ const CITATIONS_PRESS_RELEASE_MD: &str =
     include_str!("../../tests/fixtures/citations_press_release.md");
 const CITATIONS_PRESS_RELEASE_TYP: &str =
     include_str!("../../tests/golden/citations_press_release.typ");
+const AUTHOR_DATE_MD: &str = include_str!("../../tests/fixtures/author_date.md");
+const AUTHOR_DATE_TYP: &str = include_str!("../../tests/golden/author_date.typ");
 const AUTHORS_MD: &str = include_str!("../../tests/fixtures/authors.md");
 const AUTHORS_TYP: &str = include_str!("../../tests/golden/authors.typ");
 const ONE_AFFILIATION_MD: &str = include_str!("../../tests/fixtures/one_affiliation.md");
@@ -144,6 +146,15 @@ const REFS_BIB: &[u8] = include_bytes!("../../tests/fixtures/refs.bib");
 
 fn citations_assets() -> Vec<Asset> {
     vec![asset("refs.yml", REFS_YML)]
+}
+
+/// The bibliography `author_date.md` names: four records of one to four
+/// authors, a file of its own rather than four records added to `refs.yml`, so
+/// `citations.md`'s golden and the both-formats test keep their key set.
+const AUTHOR_DATE_YML: &[u8] = include_bytes!("../../tests/fixtures/author_date.yml");
+
+fn author_date_assets() -> Vec<Asset> {
+    vec![asset("author_date.yml", AUTHOR_DATE_YML)]
 }
 
 fn bib_assets() -> Vec<Asset> {
@@ -321,7 +332,7 @@ fn the_generated_source_carries_the_title_and_the_author() {
 fn absent_frontmatter_gets_every_default() {
     assert!(
         md_to_typst(BASIC_MD, &[]).unwrap().contains(
-            "template.with(title: none, author: none, affiliation: none, columns: 2, date: none, equations: \"plain\", figures: \"flat\", headings: \"plain\")"
+            "template.with(title: none, author: none, affiliation: none, columns: 2, date: none, equations: \"plain\", figures: \"flat\", headings: \"plain\", citations: \"numeric\")"
         ),
         "the defaults did not reach the template call"
     );
@@ -1472,7 +1483,7 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 
 /// Every bundled look meets the call contract the emitter writes.
 ///
-/// `header` names all eight arguments on every call, and imports two of the
+/// `header` names all nine arguments on every call, and imports two of the
 /// four exported names on every document, the third on a document that opened
 /// an abstract and the fourth on one that opened a keywords block, so a look
 /// missing one would fail the compile with an error naming neither the document
@@ -1482,8 +1493,10 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 /// **`abstract` and `keywords` join the export needles rather than taking a test
 /// of their own**, where a caption, a gutter and a listing's inset each took
 /// one: those are `show` rules crossing no argument, and these are names the
-/// import line names. Neither is a ninth parameter — the call contract stays at
-/// eight — and what a label looks like, and whether a look sets one at all, is
+/// import line names. Neither is a parameter — the call stood at eight from
+/// `mpdf-001` Phase 11 until `citations` made it nine in `mpdf-007` Phase 5,
+/// and both front-matter blocks crossed as exported names rather than moving
+/// it — and what a label looks like, and whether a look sets one at all, is
 /// each look's own call, which is why the words `Abstract` and `Keywords` are
 /// deliberately not needles.
 ///
@@ -1517,6 +1530,15 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 /// affiliations set italic, how far beneath the names they sit — stays off the
 /// list for the reason the three formats do.
 ///
+/// `citations` brings its own pair on the same precedent, and the second is
+/// `harvard-cite-them-right` — the style name only a look that maps the scheme
+/// can carry. Round 1 of the phase's review found that without it a
+/// press-release look writing `"ieee"` unconditionally passed every case,
+/// since the fixture, the cross-tree hash and the showcase all exercise the
+/// article look. `"ieee"` is deliberately not a needle: a look that wrote
+/// `auto` would render the default's page, and the hash is what holds that,
+/// not a string.
+///
 /// These needles join the contract test rather than taking one of their own,
 /// where a caption, a gutter and a listing's alignment each took one: those
 /// cross no argument at all, and this is a call-contract parameter, which is
@@ -1541,6 +1563,8 @@ fn every_bundled_template_meets_the_call_contract() {
             "counter(figure.where(kind:",
             "headings",
             "int(headings)",
+            "citations",
+            "harvard-cite-them-right",
         ] {
             assert!(source.contains(needle), "{file} does not carry `{needle}`");
         }
@@ -3564,7 +3588,9 @@ fn every_bundled_template_labels_a_reference_list() {
 ///
 /// Pandoc's prefix form is on this list because this dialect has no prefix
 /// form. `[see @k]` prints for the same reason any unclaimed markdown prints,
-/// which is a stated boundary rather than a discovered one.
+/// which is a stated boundary rather than a discovered one. `[+ @k]` is on it
+/// because a sigil counts only glued to its at-sign: a callback firing on a
+/// bare `+` would claim `[+ 3]`.
 #[test]
 fn the_callback_claims_a_citation_and_nothing_else() {
     for (md, form, what) in [
@@ -3582,6 +3608,11 @@ fn the_callback_claims_a_citation_and_nothing_else() {
             "# H\n\na bracketed email [a@b.com] here\n",
             r"\[a\@b.com\]",
             "a bracketed email address",
+        ),
+        (
+            "# H\n\na loose sigil [+ @k] here\n",
+            r"\[\+ \@k\]",
+            "a plus not glued to its at-sign, which is text and not the prose form",
         ),
         (
             "# H\n\nan a[0] index\n",
@@ -3616,18 +3647,23 @@ fn the_callback_claims_a_citation_and_nothing_else() {
 
 /// Each citation the dialect refuses names the author's own line.
 ///
-/// The three payloads are Pandoc's and this dialect reads none of them, so each
-/// is named where it stands rather than guessed at or silently dropped. **`[-@k]`
-/// is on this list for a measured reason**: under a callback firing on `@`
-/// alone it stays five text runs the emitter never sees, and would have reached
-/// the page as `\[\-\@k\]` — a refusal the dialect promises and the parse could
-/// not deliver.
+/// Three payloads are refused, and each is named where it stands rather than
+/// guessed at or silently dropped: a form over a group, which `cite_key`
+/// refuses last so that the locator and the piece that is not a key are named
+/// first; a locator, which the dialect does not read; and a piece between
+/// semicolons that is not a key. `[@a; @b]` and `[-@k]` were on this list from
+/// `mpdf-007` Phase 1 to Phase 5 as reservations, and both land now — the
+/// group as Typst's own merge and the suppressed author as the year form — so
+/// their rows left rather than moved.
 ///
-/// The fourth is the one that is not about the payload. A `[@key]` in a
-/// document that names no bibliography is refused rather than printed: mapping
-/// only where the frontmatter key is present would leave it on the page as
-/// `\[\@smith2020\]`, visible and meaningless, which is the silent flattening
-/// the dialect refuses for every other construct.
+/// The rows that are not about the payload are the ones a document that names
+/// no bibliography earns. A `[@key]` in such a document is refused rather than
+/// printed: mapping only where the frontmatter key is present would leave it
+/// on the page as `\[\@smith2020\]`, visible and meaningless, which is the
+/// silent flattening the dialect refuses for every other construct. The
+/// `[+@k]` row is here rather than in a table of its own so this file's one
+/// destructuring site for a citation error stays one, and the forty-eight that
+/// `messages_test.rs` records over this file holds.
 #[test]
 fn each_refused_citation_names_the_authors_line() {
     for (md, line, needle, what) in [
@@ -3638,10 +3674,16 @@ fn each_refused_citation_names_the_authors_line() {
             "a citation in a document that declares none",
         ),
         (
-            "# H\n\nSeveral [@a; @b] here.\n".to_string(),
+            "# H\n\nA prose group [+@a; @b] here.\n".to_string(),
             3,
-            "cites several sources at once",
-            "Pandoc's multiple-key form",
+            "puts a form on several sources",
+            "the prose form over a group",
+        ),
+        (
+            "# H\n\nA year group [-@a; @b] here.\n".to_string(),
+            3,
+            "puts a form on several sources",
+            "the year form over a group",
         ),
         (
             "# H\n\nA locator [@k, p. 33] here.\n".to_string(),
@@ -3650,10 +3692,22 @@ fn each_refused_citation_names_the_authors_line() {
             "Pandoc's locator form",
         ),
         (
-            "# H\n\nSuppressed [-@k] here.\n".to_string(),
+            "# H\n\nA prose locator [+@k, p. 33] here.\n".to_string(),
             3,
-            "suppresses the author",
-            "Pandoc's suppressed-author form",
+            "carries a locator",
+            "a locator under a form, which is the locator first",
+        ),
+        (
+            "# H\n\nA piece [@a; b] here.\n".to_string(),
+            3,
+            "is not a key",
+            "a group whose second piece is not a key",
+        ),
+        (
+            "# H\n\nA prose [+@k] here.\n".to_string(),
+            3,
+            "names no bibliography",
+            "a prose citation in a document that declares none",
         ),
         (
             "# H\n\nA note[^1].\n\n[^1]: See [@k].\n".to_string(),
@@ -3697,6 +3751,113 @@ fn a_citation_inside_a_footnote_definition_cites() {
         typst.contains(r#"#footnote[The definition cites #cite(label("DBLP:books/lib/Knuth86a"))"#),
         "the citation inside the note did not reach the reference site: {typst}"
     );
+}
+
+/// The author-date fixture matches its golden, and the golden pins the three
+/// forms and the merge.
+///
+/// **The wrong build this discriminates against** passes the form as `#cite`'s
+/// `style` argument: it compiles, renders the wrong mark, and fails the `form:`
+/// needles below. The group needle carries no byte between its two calls,
+/// because a space would be a byte the author did not write. The needles are
+/// asserted over the golden beside the whole-file comparison, so a re-bless
+/// that lost one of them fails here by name rather than by diff.
+#[test]
+fn author_date_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(AUTHOR_DATE_MD, &[]).unwrap(), AUTHOR_DATE_TYP);
+    for needle in [
+        "headings: \"plain\", citations: \"author-date\")\n",
+        r#"#cite(label("two"), form: "prose")"#,
+        r#"#cite(label("one"), form: "year")"#,
+        r#"#cite(label("three"))#cite(label("one"))"#,
+        "\n#bibliography(\"author_date.yml\", title: none)\n",
+    ] {
+        assert!(
+            AUTHOR_DATE_TYP.contains(needle),
+            "the golden does not carry `{needle}`"
+        );
+    }
+    assert!(
+        !AUTHOR_DATE_TYP.contains("style:"),
+        "a form reached the call as a style"
+    );
+}
+
+/// The author-date fixture compiles, and the page was read by hand.
+///
+/// The suite reads no PDF text, on the precedent `rules/pipeline.md` records
+/// for `figures` and `headings`, so what the marks render as is recorded here
+/// from `pdftotext` over `md_to_pdf`'s output on 2026-09-01, under
+/// `harvard-cite-them-right`:
+///
+/// - `[@one]` is *(Postigo, 2026)*, and the collapsed `[@two][]` is
+///   *(Claude and Knuth, 2025)*;
+/// - `[+@two]` reads in the sentence as *Claude and Knuth (2025)*;
+/// - `[-@one]` is the year alone, *2026*;
+/// - `[@three; @one]` is one parenthesis with a semicolon,
+///   *(Lovelace, Turing and Hopper, 2024; Postigo, 2026)*;
+/// - `[+@four]` shortens from four, *Hamilton et al. (2023)*;
+/// - and the list runs Claude, Hamilton, Lovelace, Postigo — alphabetical,
+///   where `ieee` lists in the order the marks were cited.
+#[test]
+fn the_author_date_fixture_compiles_to_a_pdf() {
+    let pdf = md_to_pdf(AUTHOR_DATE_MD, &author_date_assets()).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+    assert!(pdf.len() > 1000, "the PDF is suspiciously small");
+}
+
+/// Each form is emitted, not read off the golden — and under no `citations`
+/// key at all, which is what says the form is the citation's and the style is
+/// the document's. Each document names `bibliography: refs.yml`, because
+/// `check_citations` refuses a cited key without one whatever the scheme; the
+/// keys need not be in the file, since emission reads no asset.
+///
+/// The three spellings of a group emit the same two calls: `[@a ; @b]`
+/// reaches the callback with its spaces, measured, and each piece is trimmed.
+/// The collapsed form still emits the call it always did, which is the byte
+/// Phase 1 promised for `[@k][]`.
+#[test]
+fn each_citation_form_is_emitted_under_the_default_scheme() {
+    for (body, form, what) in [
+        (
+            "A prose [+@k] form.",
+            r#"#cite(label("k"), form: "prose")"#,
+            "the prose form",
+        ),
+        (
+            "A year [-@k] form.",
+            r#"#cite(label("k"), form: "year")"#,
+            "the year form",
+        ),
+        (
+            "A group [@a; @b] here.",
+            r#"#cite(label("a"))#cite(label("b"))"#,
+            "a group",
+        ),
+        (
+            "A group [@a;@b] here.",
+            r#"#cite(label("a"))#cite(label("b"))"#,
+            "a group with no space",
+        ),
+        (
+            "A group [@a ; @b] here.",
+            r#"#cite(label("a"))#cite(label("b"))"#,
+            "a group with a space either side of the semicolon",
+        ),
+        (
+            "A collapsed [@k][] form.",
+            r#"#cite(label("k"))"#,
+            "the collapsed form, unchanged",
+        ),
+    ] {
+        let md = format!("---\nbibliography: refs.yml\n---\n\n# H\n\n{body}\n");
+        let typst = md_to_typst(&md, &[]).unwrap();
+        assert!(typst.contains(form), "{what} did not emit `{form}`: {typst}");
+        assert!(
+            typst.contains("citations: \"numeric\""),
+            "{what} moved the default scheme: {typst}"
+        );
+    }
 }
 
 /// A bibliography the caller did not supply is refused by name.
@@ -4937,7 +5098,7 @@ fn markers_with_nothing_to_point_at_are_cleared() {
 ///
 /// The import is the load-bearing half. `header` names `abstract` only for a
 /// document that opened one, which is what keeps every shipped golden file
-/// byte-identical — the suite reads all thirty-four of them, so an
+/// byte-identical — the suite reads all thirty-five of them, so an
 /// implementation that widened it unconditionally fails here and there at once.
 /// The count read thirty when this test was written and the directory held
 /// thirty-one; re-measured with `ls tests/golden | wc -l`, which is the
@@ -5658,7 +5819,7 @@ fn the_equation_names_apart_fixture_compiles_to_a_pdf() {
 /// file are the adjacent, trailing-text and leading-text spellings, and each
 /// has to come through the re-bless byte for byte: a build whose insert point
 /// is anything but the record's end moves the first, and one that widened the
-/// run rule moves the other two. The other thirty-two goldens hold the same
+/// run rule moves the other two. The other thirty-three goldens hold the same
 /// claim through their own whole-file assertions.
 #[test]
 fn the_plain_equation_names_markup_lines_are_unchanged() {

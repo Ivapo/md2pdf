@@ -1,5 +1,5 @@
 #import "template.typ": template, divider
-#show: template.with(title: "A Dated Article", author: ((name: "Iva Po", markers: ()),), affiliation: none, columns: 2, date: "10 August 2026", equations: "plain", figures: "flat", headings: "plain")
+#show: template.with(title: "A Dated Article", author: ((name: "Iva Po", markers: ()),), affiliation: none, columns: 2, date: "10 August 2026", equations: "plain", figures: "flat", headings: "plain", citations: "numeric")
 
 = Introduction
 

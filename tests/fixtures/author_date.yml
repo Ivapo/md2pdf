@@ -1,0 +1,36 @@
+# The bibliography tests/fixtures/author_date.md names: four records of one,
+# two, three and four authors, keyed by their count, so that one page shows
+# every shape an author-date style has — a name, a pair, a third spelled out
+# and an "et al." — and the parenthesis two sources share. It is a file of its
+# own rather than four records added to refs.yml, so citations.md's golden and
+# the both-formats test keep their key set. Every work here is invented.
+one:
+  type: article
+  title: On Reading in the Sentence
+  author: Postigo, Ivan
+  date: 2026
+  parent:
+    type: periodical
+    title: Journal of Invented Typography
+    volume: 19
+two:
+  type: book
+  title: The Method Holds
+  author: ["Claude", "Knuth, Donald E."]
+  date: 2025
+  publisher: Fenwick and Sons
+three:
+  type: article
+  title: Three Names Before a Year
+  author: ["Lovelace, Ada", "Turing, Alan", "Hopper, Grace"]
+  date: 2024
+  parent:
+    type: periodical
+    title: Journal of Invented Typography
+    volume: 17
+four:
+  type: report
+  title: Shortened From Four
+  author: ["Hamilton, Margaret", "Kay, Alan", "Ritchie, Dennis", "Thompson, Ken"]
+  date: 2023
+  publisher: The Typesetting Works

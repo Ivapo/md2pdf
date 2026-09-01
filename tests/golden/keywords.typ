@@ -1,5 +1,5 @@
 #import "template.typ": template, divider, abstract, keywords
-#show: template.with(title: "A Paper With Keywords", author: ((name: "Iva Po", markers: ()),), affiliation: none, columns: 2, date: none, equations: "plain", figures: "sectioned", headings: "2")
+#show: template.with(title: "A Paper With Keywords", author: ((name: "Iva Po", markers: ()),), affiliation: none, columns: 2, date: none, equations: "plain", figures: "sectioned", headings: "2", citations: "numeric")
 
 #abstract[
 The terms a paper is indexed by are metadata rather than prose, and the obvious

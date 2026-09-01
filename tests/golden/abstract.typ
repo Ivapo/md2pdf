@@ -1,5 +1,5 @@
 #import "template.typ": template, divider, abstract
-#show: template.with(title: "A Paper With An Abstract", author: ((name: "Iva Po", markers: ()),), affiliation: none, columns: 2, date: none, equations: "plain", figures: "sectioned", headings: "2")
+#show: template.with(title: "A Paper With An Abstract", author: ((name: "Iva Po", markers: ()),), affiliation: none, columns: 2, date: none, equations: "plain", figures: "sectioned", headings: "2", citations: "numeric")
 
 #abstract[
 An abstract is the one block a paper opens with that is neither a section nor a

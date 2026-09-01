@@ -292,16 +292,17 @@ fn an_absent_key_exits_non_zero_and_names_the_key_and_the_line() {
 
 /// Each citation the dialect refuses exits non-zero and prints its sentence.
 ///
-/// Read here as a user reads them, rather than only as an `Error` value: the
-/// three payloads Pandoc spells and this dialect does not read, and a citation
-/// in a document that names no bibliography.
+/// Read here as a user reads them, rather than only as an `Error` value: a
+/// form over a group, which is refused because a form names one source; the
+/// locator Pandoc spells and this dialect does not read; and a citation in a
+/// document that names no bibliography. The group and the suppressed author
+/// were rows here until `mpdf-007` Phase 5 landed both.
 #[test]
 fn each_refused_citation_exits_non_zero_and_names_its_payload() {
     for (body, needle) in [
         ("A cite [@smith2020] here.", "names no bibliography"),
-        ("Several [@a; @b] here.", "cites several sources at once"),
+        ("Several [+@a; @b] here.", "puts a form on several sources"),
         ("A locator [@k, p. 33] here.", "carries a locator"),
-        ("Suppressed [-@k] here.", "suppresses the author"),
     ] {
         let input = scratch(&format!("refused-{}.md", needle.replace(' ', "-")));
         std::fs::write(&input, format!("# H\n\n{body}\n")).unwrap();

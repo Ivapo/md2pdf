@@ -1,6 +1,6 @@
 #import "template.typ": template, divider
 #import "math.typ": aligned, bmatrix, diff, matrix, mitexmathbf, mitexsqrt, negthinspace, pmatrix, sect, vmatrix
-#show: template.with(title: "Numbered equations", author: none, affiliation: none, columns: 2, date: none, equations: "numbered", figures: "flat", headings: "plain")
+#show: template.with(title: "Numbered equations", author: none, affiliation: none, columns: 2, date: none, equations: "numbered", figures: "flat", headings: "plain", citations: "numeric")
 
 = Numbered equations
 
