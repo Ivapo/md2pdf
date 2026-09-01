@@ -1,10 +1,8 @@
 # The showcase
 
-One document that uses **every construct this document was written for**, so the
-whole surface can be read on a page at once instead of assembled from the
-README. It is written across six files, because that is one of the constructs.
-The abstract is the one thing added since, and it has samples/abstract.md to
-itself.
+One document that uses **every construct md2pdf supports**, so the whole surface
+can be read on a page at once instead of assembled from the README. It is
+written across six files, because that is one of the constructs.
 
 ```console
 $ md2pdf showcase.md
@@ -13,7 +11,7 @@ $ open showcase.pdf
 
 | File | What it is |
 | --- | --- |
-| `showcase.md` | the **master** — all ten frontmatter keys, what the document is, and five markers |
+| `showcase.md` | the **master** — all ten frontmatter keys, the abstract, what the document is, and five markers |
 | `sections/*.md` | the five sections, in the order the master names them |
 | `sections/*.svg` | the four figures, beside the sections that draw them |
 | `refs.bib` | the bibliography its citations resolve against, entirely invented |

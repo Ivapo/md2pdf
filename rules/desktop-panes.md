@@ -133,7 +133,7 @@ not, so it rejects with *"undefined is not a function"* from inside the minified
 bundle, which names nothing useful. `TextLayer`'s constructor takes the stream
 itself and drives it with `getReader()` and `read()`, so handing it
 `page.streamTextContent()` obeys the rule by construction rather than by
-remembering it. The showcase carries 968 text items across its six pages.
+remembering it. The showcase carries 1134 text items across its six pages.
 
 **Only a link carrying an internal destination is rendered**, filtered before the
 layer is built. An external one has no element, no `href` and nothing to
@@ -153,8 +153,10 @@ come back with — so the element gets a fragment and the click is answered by
 `goToDestination`, which resolves the destination, takes its page index, turns its
 own coordinate into a CSS offset through that page's render viewport, and scrolls
 the container. **The destination's own coordinate, not the top of its page**:
-`[](#fig:halves)` lands 458 pt down page 4, measured, and the showcase's one
-cross-page reference lands 570 pt down page 3.
+`[](#fig:halves)` lands 678 pt down page 4, measured, and the showcase's four
+cross-page references all point from page 5 back into page 4 and land between
+132 and 678 pt down it — four destinations a page-top implementation would
+collapse onto one.
 
 **The bundle carries the two classes and none of their scaffolding**, which lives
 in `pdf_viewer.css` and is not vendored. So the app defines `--scale-round-x` and

@@ -38,11 +38,11 @@ adds to markdown, and every example on it is one this repository's tests compile
 click away from a PDF in your own browser, the three refusals included. Nothing is sent
 anywhere, and there is no server to send it to.
 
-Locally, **`samples/showcase/` is one document that uses nearly every construct in the
-dialect** — every inline and block form, captions, groups, names and cross-references, both
-forms of math, footnotes, and citations against the fake bibliography beside it, under all
-ten frontmatter keys, and written across six files because that is a construct too. It is
-the fastest way to see the whole surface set on a page:
+Locally, **`samples/showcase/` is one document that uses every construct in the dialect** —
+every inline and block form, the abstract it opens with, captions, groups, names and
+cross-references, both forms of math, footnotes, and citations against the fake bibliography
+beside it, under all ten frontmatter keys, and written across six files because that is a
+construct too. It is the fastest way to see the whole surface set on a page:
 
 ```console
 $ ./target/release/md2pdf samples/showcase/showcase.md
@@ -68,10 +68,11 @@ $ ./target/release/md2pdf samples/press-release.md
 $ open samples/press-release.pdf
 ```
 
-`samples/abstract.md` is the construct the showcase does not carry: a paper whose first
-block is an abstract, set across the full width of the page above the columns. Convert it,
-then put `template: press-release` in its frontmatter and convert it again, to see the same
-words as a standfirst under a masthead rule with no label at all:
+`samples/abstract.md` is one construct on its own: a two-column paper whose first block is
+an abstract, set across the full width of the page above both columns. The showcase carries
+one too, but in a single column, where there is nothing to span. Convert it, then put
+`template: press-release` in its frontmatter and convert it again, to see the same words as
+a standfirst under a masthead rule with no label at all:
 
 ```console
 $ ./target/release/md2pdf samples/abstract.md

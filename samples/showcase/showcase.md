@@ -11,13 +11,23 @@ headings: 2
 bibliography: refs.bib
 ---
 
+::: abstract
+
+This document is one paper that uses every construct md2pdf carries, so that
+the whole surface can be read on a page at once. It opens with the block you
+are reading, which is one of them: a pair of `:::` lines with the word
+`abstract` after the opener, set across the full width of the page above the
+body, and the only construct in the dialect that has to come first.
+
+:::
+
 # What this is
 
-This is one document that uses nearly every construct md2pdf supports, so you
-can see them set on a page at once and read the markdown that produced them
-side by side. It is written across six files, because being written across
-several files is itself one of the constructs. Convert it, open the PDF, then
-change something and convert it again:
+This is one document that uses every construct md2pdf supports, so you can see
+them set on a page at once and read the markdown that produced them side by
+side. It is written across six files, because being written across several
+files is itself one of the constructs. Convert it, open the PDF, then change
+something and convert it again:
 
     md2pdf showcase.md
 

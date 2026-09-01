@@ -42,9 +42,9 @@ one number and one name. Put the caption last, just above the closing line:
 
 :::
 
-That is one figure, not two. A word after the opener is yours and md2pdf does
-not read it — the kind comes from what the members are, so the two tables below
-are a *Table* however the group was opened:
+That is one figure, not two. md2pdf reads one word after the opener, `abstract`,
+and every other one is yours — a group's kind comes from what the members are,
+so the two tables below are a *Table* however the group was opened:
 
 ::: table
 
