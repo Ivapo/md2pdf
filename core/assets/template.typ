@@ -300,12 +300,31 @@
 //
 // `clearance` is the gap *below*, and only that: the space above this block is
 // the title block float's own clearance, so the two are set independently.
-// Measured at 14.3 pt below against 10.7 pt above, where 1.4em read 8.3 and
-// left the block looking glued to the text. **The reason for the value has
-// moved and the value has not**: this used to be the front-matter/body boundary
-// and a keywords block stacking under it makes it an internal front-matter gap.
-// Which gap should be the largest is this look's own call, and the 2em is kept
-// rather than re-tuned on a phase that had no reading to re-tune it against.
+//
+// **It is below-only, which is the whole difficulty here**: this one number is
+// the gap to the keywords block in a paper that has one and the gap to the body
+// in a paper that does not, and a float cannot see what follows it. Re-measured
+// 2026-09-01 over `tests/fixtures/keywords.md` and `tests/fixtures/abstract.md`,
+// the relation is linear — the text-to-text gap is `clearance` less 4.34 pt, at
+// 1em = 10 pt — so the value is a trade between the two cases rather than a
+// reading of either.
+//
+// **1.5em is where that trade was settled**, at 10.66 pt to the keywords block:
+// the internal gap now sits under the 14.30 pt that block's own clearance opens
+// to the body, so the front matter reads as one piece and the boundary out of it
+// is the widest gap on the page. It was 2em, which put 15.66 pt *inside* the
+// front matter against 14.30 pt leaving it — the value having been tuned when
+// the abstract was the last block in the stack, and inherited unchanged when it
+// stopped being.
+//
+// **The two cases do not read the same at one value**, which is worth writing
+// down because it looks like arithmetic and is not: the same 1.5em measures
+// 10.66 pt to a keywords float and **9.30 pt** to a body heading, the 1.36 pt
+// being the difference between what a float's box and a heading's box leave
+// above their text. So the cost of this trade is an abstract-only paper's
+// boundary coming down from 14.30 to 9.30 pt. 1.2em was measured and refused:
+// at 7.66 pt it is under the ~8 pt that read glued to the text when this was
+// first tuned, and 9.30 has little enough margin over it already.
 //
 // **The label is styled text and never a `heading`**, on the reference list's
 // own reasoning one section up and for one more reason besides: a heading here
@@ -317,7 +336,7 @@
   top + center,
   scope: "parent",
   float: true,
-  clearance: 2em,
+  clearance: 1.5em,
   block(width: 80%, {
     // `place(top + center)` sets the alignment its content inherits, so the
     // paragraphs would centre their last lines without this. The label is the
