@@ -751,21 +751,31 @@ empty run of ASCII digits indexing `affiliation` in written order, from 1.
 key's own line — the second key a line is kept for, because two of the refusals are cross-key and
 `affiliation` may sit above or below `author`.
 
-Four refusals, each an `Error::Frontmatter` naming the line of the key the author would have to
-edit. A marker naming an affiliation the document does not carry, on the `author` line — Typst
-cannot catch that one, because by then it is a number in a list and a superscript pointing at
-nothing is what would ship. An `affiliation` whose relation is unstated, on the `affiliation` line,
-which begins at **two** entries; `core/src/frontmatter.rs:check_affiliations` runs both of those
-after the line loop. A marker that is not a number, so `A^B^1` is refused naming `B^1` rather than
-guessed into a name `A^B`. And an empty element in **either** list, since `affiliation: MIT;`
-leaves a blank a `^2` would point at without tripping the first.
+Five refusals, each an `Error::Frontmatter` naming the line of the key the author would have to
+edit. A marker naming an affiliation the document does not carry, on the `author` line, which
+begins at **one** entry — Typst cannot catch that one, because by then it is a number in a list
+and a superscript pointing at nothing is what would ship. An `affiliation` whose relation is
+unstated, on the `affiliation` line, which begins at **two**;
+`core/src/frontmatter.rs:resolve_affiliations` runs both of those after the line loop. A marker
+that is not a number, so `A^B^1` is refused naming `B^1` rather than guessed into a name `A^B`. An
+empty element in **either** list, since `affiliation: MIT;` leaves a blank a `^2` would point at
+without tripping the first. And an entry with no name before its `^`. The last three are faults in
+what the author typed rather than in a relation, so all three fire in the line loop, unscoped.
 
-**With exactly one affiliation the markers are optional**, and a document that writes none is valid
-— every author belongs to it. That is what makes one lab and several authors writable without a
-lone `¹` on every name, and it is why the second refusal begins at two. A document that then gains
-a second is *refused* until its author writes the markers, so the page cannot move behind them. An
-author with no marker beside marked ones is deliberately not refused: three authors from one lab
-and a fourth from none is a real document.
+**The count answers three ways.** With **no** affiliation there is nothing to point at, so
+`resolve_affiliations` empties every author's `markers` and the block is valid — a document
+drafted with the key commented out, or with the markers written before it, compiles rather than
+stopping. With **exactly one** the markers are optional and a document that writes none is valid,
+every author belonging to it, which makes one lab and several authors writable without a lone `¹`
+on every name; a marker written anyway is honoured, because at one it is true. From **two** up the
+relation has to be stated, so a document that gains a second is *refused* until its author writes
+the markers and the page cannot move behind them. An author with no marker beside marked ones is
+deliberately not refused: three authors from one lab and a fourth from none is a real document.
+
+The clearing at zero is `core`'s and not a look's, so what crosses the seam is the truth about the
+document and neither `.typ` file changes by a character. What licenses a drop is what it leaves on
+the page — `Iva Po^1` sets as `Iva Po`, correctly typeset — where
+`core/src/emit.rs:check_citations` refuses its dangling relation over glyphs a reader misreads.
 
 `bibliography` is the one key that names a *file*, and the only one that carries a line —
 `core/src/lib.rs:BibliographyRef` holds both, because a bibliography is never
@@ -993,9 +1003,10 @@ that test, because a key the author wrote that reached no page would vanish.
 **Whether a marker reaches the page is the look's, read off the data rather than off a key.** Both
 compute it the same way, `author.any(one => one.markers.len() > 0)`, and apply the one answer to
 the names and the affiliations together, so a one-affiliation document that wrote no marker prints
-none rather than a `¹` for a relation its author did not need to state. Each look answers the
-typography for itself — the article sets its affiliations italic, the press release upright, the
-byline above them being already italic there.
+none rather than a `¹` for a relation its author did not need to state. With **no** affiliation the
+suppression is not the look's at all: `resolve_affiliations` has already cleared the data both read,
+so neither decides anything. Each look answers the typography for itself — the article sets its
+affiliations italic, the press release upright, the byline above them being already italic there.
 
 **How far apart that block sets its lines is a value, and no needle pins it** — the rule that
 keeps a caption's separator and a listing's inset off the needle lists. Each look picks its

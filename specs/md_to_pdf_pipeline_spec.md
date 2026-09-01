@@ -65,7 +65,7 @@ phases:
     by: null
   - name: "Phase 12 — a marker with nothing to point at"
     reviewed: 2026-08-31
-    shipped: null
+    shipped: 2026-08-31
     cut: null
     by: null
 

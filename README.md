@@ -767,12 +767,14 @@ author: Iva Po^1; Someone Else^2; A Third Person^1, 2
 affiliation: Anthropic, San Francisco; MIT, Cambridge
 ```
 
-There is no `authors` and no `affiliations` — one key, several values. With exactly **one**
-affiliation you may leave the markers out and every author belongs to it; from two up, an
-`affiliation` nobody points at is an error. So is a marker pointing at an affiliation you
-did not write, a marker that is not a number, and an empty entry in either list. An author
-with no marker beside authors that have one is fine: a fourth author from no lab is a real
-document.
+There is no `authors` and no `affiliations` — one key, several values. The count decides how
+much you have to say. Write **no** `affiliation` at all and the markers are dropped, so a
+file you are still drafting converts rather than stopping. With exactly **one**, the markers
+are optional and every author belongs to it. From **two** up an `affiliation` nobody points
+at is an error, and so is a marker pointing at one you did not write. A marker that is not a
+number, an empty entry in either list, and a `^` with no name before it are errors whatever
+you wrote — those are typing mistakes, not relations. An author with no marker beside authors
+that have one is fine: a fourth author from no lab is a real document.
 
 `date` is your text and nothing else. `md2pdf` never reads a clock, so the same file
 makes the same PDF on every machine and on any day.

@@ -39,9 +39,9 @@ so this file makes the same PDF on every machine and on any day.
 `author` and `affiliation` are both lists, separated by `;` and never by a
 comma: the first name above is `Postigo, Ivan`, which is one person. A `^`
 after a name points at an affiliation, numbered from 1 in the order you wrote
-them, and a name may point at more than one — the third author above writes
-`^1, 2` and reads with both numbers as a single superscript. With exactly one
-affiliation you may leave the markers out and every author belongs to it.
+them, and a name may point at more than one — the third author writes `^1, 2`
+and reads with both numbers as one superscript. With exactly one affiliation
+the markers are optional; with no `affiliation` key at all they are dropped.
 
 `template` picks the look and takes `article` or `press-release`. This file
 names the first; change that one word and convert again to read all of this in
