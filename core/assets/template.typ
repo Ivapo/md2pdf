@@ -5,6 +5,8 @@
 //
 // The emitter names every argument on every call, so every bundled look takes
 // title, author, affiliation, columns, date, equations, figures and headings.
+// Every look also exports `divider` and `abstract` beside `template`, the
+// second of which the emitter imports only for a document that opened one.
 // That is the contract a third look has to meet. `author` arrives as an array of
 // `(name, markers)` dictionaries and `affiliation` as an array of strings, both
 // `none` where the document wrote the key out: what crosses is the relation
@@ -281,4 +283,38 @@
   above: 1.2em,
   below: 1.2em,
   line(length: 100%, stroke: 0.5pt + luma(60%)),
+)
+
+// The abstract a paper opens with, set across every column above the body. The
+// emitter writes `#abstract[…]` for a document that opened `::: abstract`, and
+// names this in the import only for such a document, so nothing about a
+// document that has none changes.
+//
+// `scope: "parent"` is what lifts the block out of the column grid, and Typst
+// supports that only together with `float` — the title block's own shape,
+// above. The two floats stack in source order, the title block first, because
+// the emitter's call stands after the show line and the title block is placed
+// inside `template` before `doc`.
+//
+// **The label is styled text and never a `heading`**, on the reference list's
+// own reasoning one section up and for one more reason besides: a heading here
+// would take a section number under `headings` and restart every figure counter
+// under `figures: sectioned`, so the abstract would renumber the document it
+// opens. The block is 80% of the text width, which is narrower than the page
+// and wider than a column under either column count.
+#let abstract(body) = place(
+  top + center,
+  scope: "parent",
+  float: true,
+  clearance: 1.4em,
+  block(width: 80%, {
+    // `place(top + center)` sets the alignment its content inherits, so the
+    // paragraphs would centre their last lines without this. The label is the
+    // one thing here that is centred, and it says so.
+    set align(left)
+    set text(size: 9pt)
+    block(width: 100%, above: 0em, below: 0.7em,
+      align(center, text(size: 1.15em, weight: "bold", "Abstract")))
+    body
+  }),
 )

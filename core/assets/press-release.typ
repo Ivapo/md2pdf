@@ -3,11 +3,14 @@
 // does, and the parser and the emitter know nothing about either.
 //
 // The emitter names every argument on every call, so this file takes the same
-// eight the article look takes — `author` an array of `(name, markers)`
-// dictionaries and `affiliation` an array of strings, the relation between the
-// two crossing as structure and every question of how it looks answered here. It
-// sets only what the frontmatter supplied and prints no fixed text of its own:
-// the look is this file's job, and the words on the page are the author's.
+// eight the article look takes, and exports the same three names beside it:
+// `template`, `divider`, and the `abstract` a document that opened one gets.
+// `author` arrives as an array of `(name, markers)` dictionaries and
+// `affiliation` an array of strings, the relation between the two crossing as
+// structure and every question of how it looks answered here. It sets only what
+// the frontmatter supplied and prints no fixed text of its own — which is why
+// `abstract` here is a standfirst under no label: the look is this file's job,
+// and the words on the page are the author's.
 
 // A thematic break, and the rule under the masthead below. The emitter calls
 // this by name on every look, so every look exports it.
@@ -233,3 +236,20 @@
 
   doc
 }
+
+// The abstract, which this look sets as a standfirst rather than as a labelled
+// block. A press release has no abstract and does have a lede, and the label is
+// the look's to withhold — the same call each look already makes about a
+// caption's separator, one construct along. It refuses nothing: a look that
+// declined to render content the author wrote would be the vanishing the
+// dialect exists to prevent.
+//
+// It needs none of the article look's float machinery. The masthead is ordinary
+// content ending in its own rule, and the emitter's `#abstract[…]` is the first
+// thing in the body, so the standfirst lands under that rule by standing where
+// it stands. The gap rides this block's `above:` rather than the rule's
+// `below:`, which is the convention the masthead itself follows.
+#let abstract(body) = block(above: 0.4em, below: 1.4em, {
+  set text(size: 12.5pt, style: "italic")
+  body
+})
