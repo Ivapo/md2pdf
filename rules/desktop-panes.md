@@ -133,7 +133,10 @@ not, so it rejects with *"undefined is not a function"* from inside the minified
 bundle, which names nothing useful. `TextLayer`'s constructor takes the stream
 itself and drives it with `getReader()` and `read()`, so handing it
 `page.streamTextContent()` obeys the rule by construction rather than by
-remembering it. The showcase carries 1134 text items across its six pages.
+remembering it. The showcase carries 1140 text items across its six pages —
+re-measured 2026-09-01 through the vendored `app/dist/pdfjs/`, served with the PDF
+to a browser, which is the engine that produced the number. Nothing in
+`cargo test` reads it, so it is a phase that edits the showcase that moves it.
 
 **Only a link carrying an internal destination is rendered**, filtered before the
 layer is built. An external one has no element, no `href` and nothing to

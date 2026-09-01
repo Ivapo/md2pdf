@@ -64,7 +64,7 @@ phases:
     by: null
   - name: "Phase 11 — the keywords a paper is indexed by"
     reviewed: 2026-09-01
-    shipped: null
+    shipped: 2026-09-01
     cut: null
     by: null
 
@@ -4197,9 +4197,11 @@ on step 2 and the steps above it are worked rather than skipped.
 
   **Three shipped assertions move and are named rather than discovered.**
   `core/tests/golden_test.rs:every_bundled_template_meets_the_call_contract` gains one needle,
-  `#let keywords(`. `core/tests/golden_test.rs:the_dialect_reads_one_word_and_leaves_the_rest_alone`
+  `#let keywords(`. `core/tests/golden_test.rs:the_dialect_reads_its_reserved_words_and_leaves_the_rest_alone`
   keeps passing — it probes `::: table` — but its **name and doc comment assert a narrowing that
-  no longer holds**, so both move. And
+  no longer holds**, so both move. *(The citation is written at the name the test carries after
+  this phase, since a citation is a pointer rather than a claim and `spec-lint` resolves it; it
+  shipped reading `…one_word…` where it now reads `…its_reserved_words…`.)* And
   `app/src/preview.rs:the_anchors_are_the_headings_of_whichever_file_the_pane_holds` pins
   `[24, 39, 78]` over `samples/showcase/showcase.md`; the close-out adds lines **above the
   first** of them, so **all three move**, and so does that test's doc comment, which names the

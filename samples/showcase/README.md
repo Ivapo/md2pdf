@@ -11,7 +11,7 @@ $ open showcase.pdf
 
 | File | What it is |
 | --- | --- |
-| `showcase.md` | the **master** — all ten frontmatter keys, the abstract, what the document is, and five markers |
+| `showcase.md` | the **master** — all ten frontmatter keys, the abstract, the keywords beside it, what the document is, and five markers |
 | `sections/*.md` | the five sections, in the order the master names them |
 | `sections/*.svg` | the four figures, beside the sections that draw them |
 | `refs.bib` | the bibliography its citations resolve against, entirely invented |

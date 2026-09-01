@@ -17,7 +17,14 @@ This document is one paper that uses every construct md2pdf carries, so that
 the whole surface can be read on a page at once. It opens with the block you
 are reading, which is one of them: a pair of `:::` lines with the word
 `abstract` after the opener, set across the full width of the page above the
-body, and the only construct in the dialect that has to come first.
+body. Front matter is where it has to stand, and the terms below it are the
+other block that may.
+
+:::
+
+::: keywords
+
+typesetting; markdown; figure numbering, sectioned; cross-references
 
 :::
 
