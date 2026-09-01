@@ -309,22 +309,30 @@
 // 1em = 10 pt — so the value is a trade between the two cases rather than a
 // reading of either.
 //
-// **1.5em is where that trade was settled**, at 10.66 pt to the keywords block:
-// the internal gap now sits under the 14.30 pt that block's own clearance opens
-// to the body, so the front matter reads as one piece and the boundary out of it
-// is the widest gap on the page. It was 2em, which put 15.66 pt *inside* the
-// front matter against 14.30 pt leaving it — the value having been tuned when
-// the abstract was the last block in the stack, and inherited unchanged when it
-// stopped being.
+// **Both front-matter floats carry the same clearance, and that is the whole
+// design decision here.** Each one's clearance is the gap below *itself*, so
+// whichever block the author wrote last is the one that sets the boundary out of
+// the front matter — and the author's order is theirs, not this look's. Giving
+// the two different values makes the page depend on that order: measured
+// 2026-09-01 with the abstract at 1.5em and keywords at 2em, an abstract-first
+// paper read 10.66 pt inside and 14.30 pt out, and a keywords-first one read
+// 15.21 pt inside and 9.30 pt out — the same defect, mirrored. Equal values make
+// all four shapes read alike, and `keywords` below carries this same 1.6em.
 //
-// **The two cases do not read the same at one value**, which is worth writing
-// down because it looks like arithmetic and is not: the same 1.5em measures
-// 10.66 pt to a keywords float and **9.30 pt** to a body heading, the 1.36 pt
-// being the difference between what a float's box and a heading's box leave
-// above their text. So the cost of this trade is an abstract-only paper's
-// boundary coming down from 14.30 to 9.30 pt. 1.2em was measured and refused:
-// at 7.66 pt it is under the ~8 pt that read glued to the text when this was
-// first tuned, and 9.30 has little enough margin over it already.
+// **1.6em is the title block's own clearance**, so the front matter runs on one
+// rhythm: 10.72 pt from the title block to the abstract, 11.66 pt from there to
+// the keywords, 10.30 pt out to the body. It was 2em, which put 15.66 pt inside
+// the front matter — the value having been tuned when the abstract was the last
+// block in the stack, and inherited unchanged when Phase 11 put another under it.
+//
+// **What no static pair of values reaches is a boundary wider than the internal
+// gap**, which is worth writing down because it looks like arithmetic and is not:
+// the same clearance measures ~1.4 pt more to another float than to a body
+// heading, that being what a float's box and a heading's box leave above their
+// text. So with equal values the internal gap is always the slightly wider one.
+// 1.4 pt is invisible where the 5.4 pt this replaces was not. Going lower was
+// measured and refused: 1.5em puts the boundary at 9.30 pt and 1.2em at 7.66,
+// against the ~8 pt that read glued to the text when this was first tuned.
 //
 // **The label is styled text and never a `heading`**, on the reference list's
 // own reasoning one section up and for one more reason besides: a heading here
@@ -336,7 +344,7 @@
   top + center,
   scope: "parent",
   float: true,
-  clearance: 1.5em,
+  clearance: 1.6em,
   block(width: 80%, {
     // `place(top + center)` sets the alignment its content inherits, so the
     // paragraphs would centre their last lines without this. The label is the
@@ -364,7 +372,10 @@
 // The block is the abstract's own shape at the abstract's own measure, so the
 // two read as one piece of front matter rather than as two blocks that happen
 // to be adjacent. It stacks *after* the abstract when the author wrote it
-// after, floats being issued in source order. **The label is styled text and
+// after, floats being issued in source order — and it carries the **same
+// clearance the abstract does**, deliberately, so that which of the two ends the
+// front matter changes nothing about the page. The abstract's own comment
+// carries the measurements and why they are shared. **The label is styled text and
 // never a `heading`**, on the abstract's own reasoning: a heading here would be
 // one `core` never counted, and `anchors_from` withdraws every anchor in the
 // document on that mismatch, silently.
@@ -372,7 +383,7 @@
   top + center,
   scope: "parent",
   float: true,
-  clearance: 2em,
+  clearance: 1.6em,
   block(width: 80%, {
     // `place(top + center)` sets the alignment its content inherits, so a
     // one-line list would centre itself without this.
