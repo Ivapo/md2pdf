@@ -288,6 +288,25 @@ struct Abstract {
     start: usize,
 }
 
+/// The `::: keywords` block the walk is inside.
+///
+/// [`Abstract`]'s sibling in shape and its opposite in what the closer does
+/// with the region: an abstract wraps the prose it holds, and this reads the
+/// prose it holds, splits it on `;` and discards it. Both are refused anywhere
+/// but the top level, so neither carries a depth.
+///
+/// **The terms cross as content and nothing here escapes them.** The walk has
+/// already run `escape_into` over the region by the time the closer sees it,
+/// and `;` is not in [`SPECIAL`], so the separator is a character the escape
+/// pass never touches and the split is safe under the plain-text rule.
+struct Keywords {
+    /// The line the opener sits on, which every refusal over it names.
+    line: usize,
+    /// Where the opener's paragraph begins in the document body, which the
+    /// closer truncates back to.
+    start: usize,
+}
+
 /// One name a walk declared, and what declared it.
 struct Declaration {
     name: String,
@@ -440,10 +459,35 @@ struct Walk {
     ///
     /// Two readers, one fact. It is what makes a *second* `::: abstract` a
     /// refusal of its own rather than the not-first-block one — once the first
-    /// closes, its `#abstract[…]` stands in the buffer and the first-block test
+    /// closes, its `#abstract[…]` stands in the buffer and the position test
     /// would fail on it — and it is what tells `header` to widen the look's
     /// import, which is what keeps every shipped golden file still.
     wrote_abstract: bool,
+    /// The `::: keywords` block the walk is inside, while it is open.
+    ///
+    /// A slot of its own beside [`Walk::abstract`] rather than a second kind of
+    /// it, for the reason that one is not a [`Group`]: the two blocks share a
+    /// position rule and share nothing else. This one holds one paragraph of
+    /// plain text where that one collects every paragraph and every inline
+    /// construct in them, and its closer reads the region rather than wrapping
+    /// it.
+    keywords: Option<Keywords>,
+    /// Whether this walk has already closed a keywords block.
+    ///
+    /// [`Walk::wrote_abstract`]'s twin, and **two independent flags rather than
+    /// one**: a document may open either block, both, or neither, and `header`
+    /// reads them separately because the import names each separately.
+    wrote_keywords: bool,
+    /// Where the document's front matter ends in the body buffer.
+    ///
+    /// **The position rule generalised, which is what makes two front-matter
+    /// blocks one test.** Each closer advances this past what it wrote, and an
+    /// opener asks whether the body holds only newlines *past* it. With the
+    /// field still at zero that is exactly Phase 10's "the abstract is the
+    /// document's first block", so the shipped refusal and its message are
+    /// unmoved; what it newly permits is an abstract under keywords, and
+    /// keywords under an abstract, in whichever order the author wrote them.
+    front_matter: usize,
     /// The link the walk is inside, while its text is collected.
     link: Option<LinkFrame>,
     /// Every figure name this walk declared, and every one it referenced.
@@ -492,6 +536,9 @@ impl Walk {
             group: None,
             r#abstract: None,
             wrote_abstract: false,
+            keywords: None,
+            wrote_keywords: false,
+            front_matter: 0,
             link: None,
             names: Names::default(),
             para: None,
@@ -508,15 +555,18 @@ impl Walk {
     /// works, so a group inside one does too, and the document's walk skips
     /// that region entirely.
     ///
-    /// **The two constructs name themselves rather than share one sentence.**
-    /// An author who wrote `::: abstract` and never closed it, told about a
+    /// **The three constructs name themselves rather than share one sentence.**
+    /// An author who wrote `::: keywords` and never closed it, told about a
     /// figure group, is being named a construct they did not write — which is
     /// the defect this project's rule is about, wherever the message sits.
-    /// Only one of the two can be open at a time, so the order here decides
+    /// Only one of the three can be open at a time, so the order here decides
     /// nothing.
     fn unclosed(&self) -> Result<()> {
         if let Some(open) = &self.r#abstract {
             return Err(never_closed("abstract", open.line));
+        }
+        if let Some(open) = &self.keywords {
+            return Err(never_closed("keywords", open.line));
         }
         match &self.group {
             Some(open) => Err(never_closed("figure group", open.line)),
@@ -1005,7 +1055,12 @@ pub(crate) fn emit(md: &str, sources: &Sources) -> Result<Emitted> {
         cited, referenced, ..
     } = std::mem::take(&mut walk.names);
 
-    let mut out = header(&walk.front, walk.math, walk.wrote_abstract);
+    let mut out = header(
+        &walk.front,
+        walk.math,
+        walk.wrote_abstract,
+        walk.wrote_keywords,
+    );
     let (body, images) = walk.finish();
     out.push_str(body.trim_end_matches('\n'));
     out.push('\n');
@@ -1067,6 +1122,9 @@ fn step(
         group,
         r#abstract,
         wrote_abstract,
+        keywords,
+        wrote_keywords,
+        front_matter,
         link,
         names,
         para,
@@ -1185,11 +1243,13 @@ fn step(
         return Err(uncaptionable(line_of(md, range.start)));
     }
 
-    // An abstract holds paragraphs and nothing else, which is the *complement*
-    // of the group's set rather than the same one: a table and a code block are
-    // members of a group and are not blocks an abstract may hold. Only one of
-    // the two can be open, so these two guards never both fire.
-    if r#abstract.is_some()
+    // A front-matter block holds paragraphs and nothing else, which is the
+    // *complement* of the group's set rather than the same one: a table and a
+    // code block are members of a group and are not blocks either of these may
+    // hold. Only one of the three can be open, so these two guards never both
+    // fire — and the message names whichever block the author was inside, since
+    // a refusal naming a construct they did not write is the defect.
+    if let Some(what) = front_open(r#abstract, keywords)
         && matches!(
             &event,
             Event::Start(
@@ -1203,7 +1263,7 @@ fn step(
         )
     {
         return Err(Error::UnsupportedConstruct {
-            construct: "block inside an abstract that is not a paragraph".to_string(),
+            construct: format!("block inside {what} that is not a paragraph"),
             location: Location::at(line_of(md, range.start)),
         });
     }
@@ -1439,41 +1499,81 @@ fn step(
                             location: Location::at(line),
                         });
                     };
-                    // **The dispatch is three-state.** A bare `:::` closes
+                    // **The dispatch is four-state.** A bare `:::` closes
                     // whichever construct is open — and only one ever is,
-                    // since each refuses the other inside it — so the abstract
-                    // slot is read before this falls through to opening a
-                    // group. A word opens an abstract where the dialect
-                    // reserves it and a group where it does not.
-                    let opening = match &marker {
-                        Marker::Bare => "figure group",
-                        Marker::Word(word) if RESERVED.contains(&word.as_str()) => "abstract",
-                        Marker::Word(_) => "figure group",
+                    // since each refuses the others inside it — so the two
+                    // front-matter slots are read before this falls through to
+                    // opening a group. A word opens the block the dialect
+                    // reserves it for and a group where it reserves none.
+                    let front = match &marker {
+                        Marker::Word(word) => reserved(word),
+                        Marker::Bare => None,
                     };
-                    match (group.is_some(), r#abstract.is_some(), marker) {
-                        (true, _, Marker::Bare) => {
+                    let opening = match front {
+                        Some(front) => front_name(front),
+                        None => "figure group",
+                    };
+                    match (
+                        group.is_some(),
+                        r#abstract.is_some(),
+                        keywords.is_some(),
+                        marker,
+                    ) {
+                        (true, _, _, Marker::Bare) => {
                             let open = group.take().expect("a group is open");
                             close_group(bufs, open)?;
                         }
-                        (false, true, Marker::Bare) => {
+                        (false, true, _, Marker::Bare) => {
                             let open = r#abstract.take().expect("an abstract is open");
                             close_abstract(bufs, open)?;
                             *wrote_abstract = true;
+                            // The front matter now ends past what the closer
+                            // wrote, which is what lets the other block follow
+                            // this one.
+                            *front_matter = top(bufs).len();
                         }
-                        (true, _, Marker::Word(_)) => {
+                        (false, false, true, Marker::Bare) => {
+                            let open = keywords.take().expect("a keywords block is open");
+                            close_keywords(bufs, open)?;
+                            *wrote_keywords = true;
+                            *front_matter = top(bufs).len();
+                        }
+                        (true, _, _, Marker::Word(_)) => {
                             return Err(nested(opening, "a figure group", line));
                         }
-                        (false, true, Marker::Word(_)) => {
+                        (false, true, _, Marker::Word(_)) => {
                             return Err(nested(opening, "an abstract", line));
                         }
-                        (false, false, Marker::Word(word)) if RESERVED.contains(&word.as_str()) => {
+                        (false, false, true, Marker::Word(_)) => {
+                            return Err(nested(opening, "keywords", line));
+                        }
+                        (false, false, false, Marker::Word(_)) if front.is_some() => {
                             // The opener is a block boundary, so a record
                             // standing before it is retired, exactly as a
                             // group's opener retires one.
                             *figure = None;
-                            *r#abstract = Some(open_abstract(line, bufs, &mode, *wrote_abstract)?);
+                            match front.expect("the word is reserved") {
+                                Front::Abstract => {
+                                    *r#abstract = Some(open_abstract(
+                                        line,
+                                        bufs,
+                                        &mode,
+                                        *front_matter,
+                                        *wrote_abstract,
+                                    )?);
+                                }
+                                Front::Keywords => {
+                                    *keywords = Some(open_keywords(
+                                        line,
+                                        bufs,
+                                        &mode,
+                                        *front_matter,
+                                        *wrote_keywords,
+                                    )?);
+                                }
+                            }
                         }
-                        (false, false, _) => {
+                        (false, false, false, _) => {
                             // The opener is a block boundary, so a record
                             // standing before it is retired: a caption inside
                             // the group is the group's own.
@@ -1490,16 +1590,20 @@ fn step(
                     return Ok(());
                 }
 
-                // An abstract has nowhere to put a caption, so a `: ` line
-                // inside one is named rather than printed. It does not fall out
-                // of any rule around it: the caption arm attaches over a group
-                // or a live record and an abstract is neither, so the line
-                // would reach the page as a bare `: ` inside a float — a
-                // mistyped marker reaching the reader, which is the direction
-                // the marker's own rule does run in.
-                if r#abstract.is_some() && opens && caption_marker(&text).is_some() {
+                // Neither front-matter block has anywhere to put a caption, so
+                // a `: ` line inside one is named rather than printed. It does
+                // not fall out of any rule around it: the caption arm attaches
+                // over a group or a live record and neither block is either, so
+                // `attaches` is false and the line would fall through to
+                // `escape_into` — reaching the page as a bare `: ` inside a
+                // float, or as a term in a keywords list. One guard for both,
+                // because the hazard is one hazard.
+                if let Some(what) = front_open(r#abstract, keywords)
+                    && opens
+                    && caption_marker(&text).is_some()
+                {
                     return Err(Error::UnsupportedConstruct {
-                        construct: "caption line inside an abstract".to_string(),
+                        construct: format!("caption line inside {what}"),
                         location: Location::at(line_of(md, range.start)),
                     });
                 }
@@ -1582,21 +1686,38 @@ fn step(
         // intraword emphasis, so `foo*bar*baz` would reach the PDF with
         // literal underscores through one and would not compile at all
         // through the other.
-        Event::Start(Tag::Emphasis) => top(bufs).push_str("#emph["),
+        //
+        // A term is plain text, so both forms are refused inside keywords under
+        // one name: CommonMark calls `*x*` emphasis and `**x**` strong emphasis,
+        // and an author told about the second having written the first learns
+        // nothing the first name did not tell them.
+        Event::Start(Tag::Emphasis) => {
+            refuse_in_keywords(keywords, "emphasis", line_of(md, range.start))?;
+            top(bufs).push_str("#emph[");
+        }
         Event::End(TagEnd::Emphasis) => top(bufs).push(']'),
-        Event::Start(Tag::Strong) => top(bufs).push_str("#strong["),
+        Event::Start(Tag::Strong) => {
+            refuse_in_keywords(keywords, "emphasis", line_of(md, range.start))?;
+            top(bufs).push_str("#strong[");
+        }
         Event::End(TagEnd::Strong) => top(bufs).push(']'),
 
         // The function form here is the only form there is: Typst has no
         // markup for a strike, so the delimiter argument above does not
         // arise. The parser admits a run of one tilde as well as two, so
         // `~struck~` reaches this arm too.
-        Event::Start(Tag::Strikethrough) => top(bufs).push_str("#strike["),
+        Event::Start(Tag::Strikethrough) => {
+            refuse_in_keywords(keywords, "strikethrough", line_of(md, range.start))?;
+            top(bufs).push_str("#strike[");
+        }
         Event::End(TagEnd::Strikethrough) => top(bufs).push(']'),
 
         // The content is a string literal, never the markup escape, so it
         // reaches the PDF verbatim whatever it holds.
         Event::Code(inline) => {
+            // A `;` inside `#raw("a;b")` is a semicolon the author never wrote
+            // as a separator, which is the whole reason a term is plain text.
+            refuse_in_keywords(keywords, "inline code", line_of(md, range.start))?;
             let out = top(bufs);
             out.push_str("#raw(");
             out.push_str(&typst_string(&inline));
@@ -1611,6 +1732,7 @@ fn step(
         // reaches the walk as raw code text, so no inline event is produced
         // inside it at all.
         Event::InlineMath(latex) => {
+            refuse_in_keywords(keywords, "formula", line_of(md, range.start))?;
             let markup = math::convert(&latex, line_of(md, range.start))?;
             let out = top(bufs);
             out.push('$');
@@ -1645,6 +1767,7 @@ fn step(
                     location: Location::at(line_of(md, range.start)),
                 });
             }
+            refuse_in_keywords(keywords, "formula", line_of(md, range.start))?;
             let markup = math::convert(&latex, line_of(md, range.start))?;
             let written = format!("$ {markup} $");
             let depth = bufs.len();
@@ -1753,6 +1876,7 @@ fn step(
                 // A citation is inline text, so the block guard above does not
                 // reach it either. One here would reach `check_citations` from
                 // a position no reference list is guaranteed to follow.
+                refuse_in_keywords(keywords, "citation", frame.line)?;
                 if r#abstract.is_some() {
                     return Err(Error::UnsupportedConstruct {
                         construct: "citation inside an abstract".to_string(),
@@ -1768,6 +1892,10 @@ fn step(
                 return Ok(());
             }
 
+            // A `;` inside a URL is a semicolon the author never wrote as a
+            // separator, exactly as one inside a code span is — and a `#ref`
+            // reaches this arm too, an empty-texted link being what one is.
+            refuse_in_keywords(keywords, "link", frame.line)?;
             match frame.url.strip_prefix('#').filter(|_| text.is_empty()) {
                 Some(name) => {
                     names.referenced.push((name.to_string(), frame.line));
@@ -1811,6 +1939,7 @@ fn step(
             dest_url, title, ..
         }) => {
             let line = line_of(md, range.start);
+            refuse_in_keywords(keywords, "image", line)?;
 
             // The path the master would have written. It is the identity every
             // downstream reader keys on — the Typst source, the world's
@@ -1860,6 +1989,7 @@ fn step(
         // placement order, which is the order GFM numbers them in, so the
         // emitter writes no number itself.
         Event::FootnoteReference(label) => {
+            refuse_in_keywords(keywords, "footnote", line_of(md, range.start))?;
             let Mode::Document(notes) = &mut mode else {
                 // Resolving a footnote inside a footnote would mean a recursive
                 // substitution with a cycle check, for a construct real
@@ -1912,7 +2042,13 @@ fn step(
 
         // Typst's line break is a `\` before a newline. The same `\`
         // directly before text is an escape sequence instead.
-        Event::HardBreak => top(bufs).push_str("\\\n"),
+        // A hard break is written as a `\` and a newline, which inside a term
+        // is a line break in the middle of an index term. An abstract permits
+        // one, so the divergence is the author's to be told about.
+        Event::HardBreak => {
+            refuse_in_keywords(keywords, "hard break", line_of(md, range.start))?;
+            top(bufs).push_str("\\\n");
+        }
 
         // The emitter names the rule and owns nothing about its look.
         Event::Rule => top(bufs).push_str("\n#divider()\n"),
@@ -2316,23 +2452,67 @@ fn splice_caption(bufs: &mut [String], figure: &mut Option<Figure>, words: &Word
 
 // -- groups -----------------------------------------------------------------
 
+/// The front-matter block a reserved word opens.
+///
+/// The word is the author's spelling and this is what the walk dispatches on,
+/// so the table below is the only place the two are related. Every member costs
+/// a slot on [`Walk`], a look export, its own refusals and its own gate rows —
+/// **the mechanism generalises and the namespace does not**, which is why a
+/// third word is a phase rather than a line here.
+enum Front {
+    Abstract,
+    Keywords,
+}
+
 /// The words `:::` reserves, and the construct each one opens.
 ///
-/// **One entry, and the shape is the point.** `abstract` is the only word the
-/// dialect reads; every other one is the author's own convention and opens the
-/// figure group it always did. A second reserved word would be a second entry
-/// here rather than a second mechanism anywhere — which is what makes being
-/// wrong about the family cheap, since a namespace with one member is a guess
-/// about the second.
-const RESERVED: [&str; 1] = ["abstract"];
+/// **Two entries, and the shape is the point.** `abstract` and `keywords` are
+/// the words the dialect reads; every other one is the author's own convention
+/// and opens the figure group it always did. A third reserved word would be a
+/// third entry here rather than a third mechanism anywhere — but it would still
+/// buy its own look export, its own refusals and its own gate rows, which is
+/// what keeps this a table and not an open namespace.
+const RESERVED: [(&str, Front); 2] = [("abstract", Front::Abstract), ("keywords", Front::Keywords)];
+
+/// The construct a `:::` opener's word reserves, if it reserves one.
+fn reserved(word: &str) -> Option<&'static Front> {
+    RESERVED
+        .iter()
+        .find_map(|(name, front)| (*name == word).then_some(front))
+}
+
+/// What a front-matter construct is called in a message about it.
+///
+/// The nesting sentence names what the author nested, so the two constructs
+/// answer for themselves here rather than at each of the arms that ask.
+fn front_name(front: &Front) -> &'static str {
+    match front {
+        Front::Abstract => "abstract",
+        Front::Keywords => "keywords",
+    }
+}
+
+/// Which front-matter block the walk is inside, named the way a refusal about
+/// what stands *in* one names it.
+///
+/// The article differs from [`front_name`]'s and that is the whole reason this
+/// is a second function: "a block inside **an abstract**" against "a block
+/// inside **keywords**". Only one can be open, so the order decides nothing.
+fn front_open(r#abstract: &Option<Abstract>, keywords: &Option<Keywords>) -> Option<&'static str> {
+    match (r#abstract, keywords) {
+        (Some(_), _) => Some("an abstract"),
+        (_, Some(_)) => Some("keywords"),
+        _ => None,
+    }
+}
 
 /// Which delimiter a `:::` paragraph is.
 ///
 /// **Neither variant names a single construct any more.** A bare `:::` closes
-/// whichever of the two is open and opens a group where neither is; a word
-/// opens an abstract where it is [`RESERVED`] and a group where it is not. What
-/// the paragraph *is* is settled here; what it *does* is settled by the walk,
-/// which is the only place that knows what already stands open.
+/// whichever of the three is open and opens a group where none is; a word opens
+/// the front-matter block [`RESERVED`] names and a group where it names none.
+/// What the paragraph *is* is settled here; what it *does* is settled by the
+/// walk, which is the only place that knows what already stands open.
 enum Marker {
     /// `:::` — a closer, and an opener where nothing is open.
     Bare,
@@ -2343,10 +2523,11 @@ enum Marker {
 /// The delimiter a paragraph's whole text is, if it is one at all.
 ///
 /// **The word after an opener is returned rather than discarded, and the
-/// dialect reads exactly one of them.** `abstract` opens an abstract; `table`,
-/// `figure` and everything else stay the author's convention over a group,
-/// because Typst infers a figure's kind from the `grid` it is handed and no
-/// word ever selects one. One word and no more, because `::::`, `:::x` and
+/// dialect reads the two [`RESERVED`] names it.** `abstract` and `keywords`
+/// open the front-matter blocks; `table`, `figure` and everything else stay the
+/// author's convention over a group, because Typst infers a figure's kind from
+/// the `grid` it is handed and no word ever selects one. One word and no more,
+/// because `::::`, `:::x` and
 /// `::: two words` are mistypings better named than guessed at — a reserved
 /// position that is reserved for some spellings and not others is a rule no
 /// author can hold.
@@ -2388,10 +2569,12 @@ fn uncaptionable(line: usize) -> Error {
 
 /// The refusal a delimiter the document never closes takes.
 ///
-/// One sentence built in one place, so the two callers cannot drift. **Only a
-/// group reaches it from [`escaped_frame`]**: an abstract is refused unless it
-/// stands at the top level, so its frame is the document body and there is no
-/// frame under it to pop.
+/// One sentence built in one place, so the callers cannot drift — and the
+/// payoff for having built it that way is that a third construct is a third
+/// **value** for `what` rather than a third literal. **Only a group reaches it
+/// from [`escaped_frame`]**: both front-matter blocks are refused unless they
+/// stand at the top level, so the frame each opens in is the document body and
+/// there is no frame under one to pop.
 fn never_closed(what: &str, line: usize) -> Error {
     Error::UnsupportedConstruct {
         construct: format!("{what} the document never closes"),
@@ -2402,11 +2585,12 @@ fn never_closed(what: &str, line: usize) -> Error {
 /// The refusal one `:::` construct opened inside another takes.
 ///
 /// **What the author nested is what the sentence has to name**, which is why
-/// this is one message over four pairings rather than one literal: an
-/// `::: abstract` inside a group, a `::: table` inside an abstract and an
-/// `::: abstract` inside an abstract are all wrong to describe as a figure
-/// group inside a figure group, and the fourth pairing — which is that — reads
-/// exactly as it always did.
+/// this is one message over nine pairings rather than one literal: each of the
+/// three constructs opened inside each of the three. An `::: abstract` inside a
+/// group, a `::: table` inside an abstract and an `::: abstract` inside an
+/// abstract are all wrong to describe as a figure group inside a figure group,
+/// and the pairing that *is* that reads exactly as it always did. Phase 11 adds
+/// the five keywords carries and no mechanism at all.
 fn nested(inner: &str, outer: &str, line: usize) -> Error {
     Error::UnsupportedConstruct {
         construct: format!("{inner} inside {outer}"),
@@ -2532,15 +2716,23 @@ fn close_group(bufs: &mut [String], open: Group) -> Result<()> {
 /// back at the reference arm, the way `math` already travels — would make a
 /// document's import line depend on whether a footnote was cited.
 ///
-/// The block must be first because both looks lift it out of the flow: an
-/// abstract written at the end would appear at the top, which is source order
-/// and page order disagreeing, and requiring it first costs an author nothing.
-/// In a multi-file document "first" is first in the *joined* stream, `mpdf-008`
-/// having joined before the walk begins.
+/// The block must stand in the front matter because both looks lift it out of
+/// the flow: an abstract written at the end would appear at the top, which is
+/// source order and page order disagreeing. In a multi-file document that is
+/// judged against the *joined* stream, `mpdf-008` having joined before the walk
+/// begins.
+///
+/// **The message still says "the document's first block", and that is
+/// deliberate.** Phase 11 widened the rule so an abstract may follow a keywords
+/// block, but every document this refusal still fires on has body content or a
+/// second abstract above it — which does mean the abstract is not the first
+/// block. Widening a refusal moves no document that compiles, and moving the
+/// literal would move rows that pin it.
 fn open_abstract(
     line: usize,
     bufs: &[String],
     mode: &Mode,
+    front_matter: usize,
     wrote_abstract: bool,
 ) -> Result<Abstract> {
     if wrote_abstract {
@@ -2556,17 +2748,27 @@ fn open_abstract(
             location: Location::at(line),
         });
     }
+    let body = in_front_matter(bufs, front_matter).ok_or_else(|| Error::UnsupportedConstruct {
+        construct: "abstract that is not the document's first block".to_string(),
+        location: Location::at(line),
+    })?;
+    Ok(Abstract { line, start: body })
+}
+
+/// Whether an opener stands in the document's front matter, and where it stands.
+///
+/// **One test for both front-matter blocks, which is OQ-20's answer as code.**
+/// Phase 10 asked whether the document body held only newlines; this asks
+/// whether it holds only newlines *past where the front matter ends*, and each
+/// closer advances that offset over what it wrote. With the offset still at zero
+/// the two questions are the same one, so Phase 10's own refusal is unmoved and
+/// a third front-matter block would read this rather than write a fourth.
+fn in_front_matter(bufs: &[String], front_matter: usize) -> Option<usize> {
     let body = bufs.last().expect("the document body is always open");
-    if !body.bytes().all(|byte| byte == b'\n') {
-        return Err(Error::UnsupportedConstruct {
-            construct: "abstract that is not the document's first block".to_string(),
-            location: Location::at(line),
-        });
-    }
-    Ok(Abstract {
-        line,
-        start: body.len(),
-    })
+    body[front_matter..]
+        .bytes()
+        .all(|byte| byte == b'\n')
+        .then_some(body.len())
 }
 
 /// Write the abstract its closer ends as one call over the prose it holds.
@@ -2595,6 +2797,124 @@ fn close_abstract(bufs: &mut [String], open: Abstract) -> Result<()> {
 
     out.truncate(open.start);
     out.push_str(&format!("#abstract[\n{held}\n]"));
+    Ok(())
+}
+
+// -- keywords ---------------------------------------------------------------
+
+/// Open a keywords block, or refuse where one may not stand.
+///
+/// [`open_abstract`]'s sibling, refusal for refusal and in the same order, and
+/// on the same three-condition frame test: a list item and a block quote each
+/// open a fresh buffer frame, and `collect_definitions` runs every footnote
+/// definition through a fresh `Walk::new()` where a frame test alone passes.
+fn open_keywords(
+    line: usize,
+    bufs: &[String],
+    mode: &Mode,
+    front_matter: usize,
+    wrote_keywords: bool,
+) -> Result<Keywords> {
+    if wrote_keywords {
+        return Err(Error::UnsupportedConstruct {
+            construct: "second keywords block in one document".to_string(),
+            location: Location::at(line),
+        });
+    }
+    if bufs.len() != 1 || !matches!(mode, Mode::Document(_)) {
+        return Err(Error::UnsupportedConstruct {
+            construct: "keywords inside a list item, a block quote or a footnote definition"
+                .to_string(),
+            location: Location::at(line),
+        });
+    }
+    let body = in_front_matter(bufs, front_matter).ok_or_else(|| Error::UnsupportedConstruct {
+        construct: "keywords with body content above them".to_string(),
+        location: Location::at(line),
+    })?;
+    Ok(Keywords { line, start: body })
+}
+
+/// Refuse a construct written inside a keywords block.
+///
+/// **The nine names are this guard's own mapping and cannot come from
+/// [`describe`]**, which answers `"markdown construct"` for an emphasis and
+/// `"supported construct"` for inline code, a formula and a hard break — seven
+/// of the nine collapsed into two strings, and its doc comment makes a
+/// load-bearing claim that a construct the walk *handles* is absent from it.
+///
+/// **Every caller sits below the `:::` dispatch in [`step`]**, which is what
+/// makes a `::: table` written inside a keywords block take the nesting message
+/// rather than this one. The citation is why the two link callers are at the
+/// *end* event: `wrote_citation` is what tells a citation from a link, and it
+/// reads a frame the start arm has only just built.
+fn refuse_in_keywords(keywords: &Option<Keywords>, what: &str, line: usize) -> Result<()> {
+    match keywords {
+        Some(_) => Err(Error::UnsupportedConstruct {
+            construct: format!("{what} inside keywords"),
+            location: Location::at(line),
+        }),
+        None => Ok(()),
+    }
+}
+
+/// Write the keywords its closer ends as one call over the terms it holds.
+///
+/// **The truncate is [`close_abstract`]'s, on the same arithmetic**, and what
+/// differs is only what the region is for: the abstract wraps it, and this reads
+/// it, splits it and discards it. `start` was taken after the opener's paragraph
+/// arm pushed its `'\n'`, so the region opens and closes with separator
+/// newlines and the trim is what takes them off.
+///
+/// **The blank-line test runs on the *trimmed* region and that is load-bearing.**
+/// Untrimmed, a well-formed block ends in two newlines — the term paragraph's
+/// own end and the closer's start — so a raw test would refuse every one. Tested
+/// here rather than at an event, because both event-level placements refuse a
+/// well-formed block: counting `Start(Tag::Paragraph)` counts the closer's
+/// paragraph and counting `End` counts the opener's.
+///
+/// **No escape runs here at all.** The walk ran `escape_into` at the
+/// `Event::Text` arm, and the terms cross as an array of *content* on
+/// [`splice_caption`]'s precedent rather than as string literals on
+/// `typst_authors_or_none`'s: a hyphen is in [`SPECIAL`], so `cross-references`
+/// is already `cross\-references` in the region, which inside quotes is not a
+/// string escape at all and escaped again would compound.
+fn close_keywords(bufs: &mut [String], open: Keywords) -> Result<()> {
+    let refuse = |construct: &str| {
+        Err(Error::UnsupportedConstruct {
+            construct: construct.to_string(),
+            location: Location::at(open.line),
+        })
+    };
+
+    let out = top(bufs);
+    let held = out[open.start..].trim_matches('\n').to_string();
+    // A blank line inside the region is a second paragraph, and this block holds
+    // one: the terms are a list rather than prose, and a second paragraph of
+    // them is a document saying something the call cannot carry.
+    if held.contains("\n\n") {
+        return refuse("second paragraph inside keywords");
+    }
+    // An empty block is the one that would otherwise reach Typst. `#keywords(())`
+    // compiles — an empty array's `join` is `none` — and prints the look's label
+    // with nothing after it, which is Phase 1's bare *"Figure 1:"* one construct
+    // along.
+    if held.is_empty() {
+        return refuse("keywords with no terms");
+    }
+
+    let terms: Vec<&str> = held.split(';').map(str::trim).collect();
+    // `a;;b`, a leading `;` and a trailing `;` are each a term with no text, and
+    // `core` refuses them because a look has no way to tell an empty list from a
+    // list it should decline.
+    if terms.iter().any(|term| term.is_empty()) {
+        return refuse("keywords with an empty term");
+    }
+
+    let written: Vec<String> = terms.iter().map(|term| format!("[{term}]")).collect();
+    let out = top(bufs);
+    out.truncate(open.start);
+    out.push_str(&format!("#keywords({})", typst_array(&written)));
     Ok(())
 }
 
@@ -2997,15 +3317,23 @@ fn align_name(align: &Alignment) -> &'static str {
 /// numbering format and no depth arithmetic reaches this file. The name is all
 /// that crosses; what a number looks like, whether it carries the section it
 /// stands in, and how deep the numbers go, is the look's own.
-fn header(front: &Frontmatter, math: bool, has_abstract: bool) -> String {
+fn header(front: &Frontmatter, math: bool, has_abstract: bool, has_keywords: bool) -> String {
     let prelude = match math {
         true => format!("#import \"{PRELUDE_NAME}\": {PRELUDE_NAMES}\n"),
         false => String::new(),
     };
-    let exports = match has_abstract {
-        true => "template, divider, abstract",
-        false => "template, divider",
-    };
+    // **Two independent flags and not one.** A document may open either block,
+    // both or neither, so the list is built rather than matched: the import
+    // names each construct separately, and widening it for a document that has
+    // neither would move every shipped golden file.
+    let mut names = vec!["template", "divider"];
+    if has_abstract {
+        names.push("abstract");
+    }
+    if has_keywords {
+        names.push("keywords");
+    }
+    let exports = names.join(", ");
     format!(
         "#import \"{}\": {exports}\n\
          {prelude}\

@@ -3,14 +3,17 @@
 // does, and the parser and the emitter know nothing about either.
 //
 // The emitter names every argument on every call, so this file takes the same
-// eight the article look takes, and exports the same three names beside it:
-// `template`, `divider`, and the `abstract` a document that opened one gets.
-// `author` arrives as an array of `(name, markers)` dictionaries and
-// `affiliation` an array of strings, the relation between the two crossing as
-// structure and every question of how it looks answered here. It sets only what
-// the frontmatter supplied and prints no fixed text of its own — which is why
-// `abstract` here is a standfirst under no label: the look is this file's job,
-// and the words on the page are the author's.
+// eight the article look takes, and exports the same four names beside it:
+// `template`, `divider`, and the `abstract` and `keywords` a document that
+// opened one of them gets. `author` arrives as an array of `(name, markers)`
+// dictionaries and `affiliation` an array of strings, the relation between the
+// two crossing as structure and every question of how it looks answered here.
+// It sets almost no fixed text of its own — which is why `abstract` here is a
+// standfirst under no label: the look is this file's job, and the words on the
+// page are the author's. **`keywords` is the one exception, and it is one
+// deliberately**: a bare comma list under a lede reads as a stray sentence
+// rather than as index terms, so the label is what makes the author's own words
+// legible instead of standing in for them.
 
 // A thematic break, and the rule under the masthead below. The emitter calls
 // this by name on every look, so every look exports it.
@@ -245,11 +248,33 @@
 // dialect exists to prevent.
 //
 // It needs none of the article look's float machinery. The masthead is ordinary
-// content ending in its own rule, and the emitter's `#abstract[…]` is the first
-// thing in the body, so the standfirst lands under that rule by standing where
-// it stands. The gap rides this block's `above:` rather than the rule's
+// content ending in its own rule, and this look places nothing at all — so both
+// front-matter blocks land where the emitter wrote them, in the author's own
+// order, and a document that opens with `::: keywords` sets its terms above the
+// standfirst. The gap rides this block's `above:` rather than the rule's
 // `below:`, which is the convention the masthead itself follows.
 #let abstract(body) = block(above: 0.4em, below: 1.4em, {
   set text(size: 12.5pt, style: "italic")
   body
+})
+
+// The terms a paper is indexed by, set in this look's own voice under the
+// standfirst — the press release's keyword line, which is what a wire service
+// files them as. It refuses nothing, for the reason the standfirst refuses
+// nothing.
+//
+// **The separator between two terms is this look's and never the emitter's.**
+// The terms arrive as an array of content, one element per term, so `join` is
+// where the comma is decided — and a term may hold a comma of its own, which is
+// why the author's separator is `;` and why this cannot be a joined string.
+//
+// The label is set here where the standfirst's is withheld, and the difference
+// is not a change of heart: a lede is prose and reads as itself, where a bare
+// list of terms under one reads as a stray sentence. It is styled text and never
+// a `heading`, on the abstract's own reasoning — a heading `core` never counted
+// withdraws every anchor in the document.
+#let keywords(terms) = block(above: 0.4em, below: 1.4em, {
+  set text(size: 10pt)
+  text(weight: "bold", "Keywords: ")
+  terms.join(", ")
 })

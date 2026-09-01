@@ -5,8 +5,9 @@
 //
 // The emitter names every argument on every call, so every bundled look takes
 // title, author, affiliation, columns, date, equations, figures and headings.
-// Every look also exports `divider` and `abstract` beside `template`, the
-// second of which the emitter imports only for a document that opened one.
+// Every look also exports `divider`, `abstract` and `keywords` beside
+// `template`, the last two of which the emitter imports only for a document
+// that opened one — separately, so a document may have either, both or neither.
 // That is the contract a third look has to meet. `author` arrives as an array of
 // `(name, markers)` dictionaries and `affiliation` as an array of strings, both
 // `none` where the document wrote the key out: what crosses is the relation
@@ -292,15 +293,19 @@
 //
 // `scope: "parent"` is what lifts the block out of the column grid, and Typst
 // supports that only together with `float` — the title block's own shape,
-// above. The two floats stack in source order, the title block first, because
-// the emitter's call stands after the show line and the title block is placed
-// inside `template` before `doc`.
+// above. The three floats stack in source order, the title block first, because
+// the emitter's calls stand after the show line and the title block is placed
+// inside `template` before `doc`. Which of the other two follows is the
+// author's: keywords written above an abstract typeset above it.
 //
 // `clearance` is the gap *below*, and only that: the space above this block is
 // the title block float's own clearance, so the two are set independently.
-// Measured — the abstract is the boundary between the front matter and the
-// body, so that gap is the larger of the two: 14.3 pt below against 10.7 pt
-// above, where 1.4em read 8.3 and left the block looking glued to the text.
+// Measured at 14.3 pt below against 10.7 pt above, where 1.4em read 8.3 and
+// left the block looking glued to the text. **The reason for the value has
+// moved and the value has not**: this used to be the front-matter/body boundary
+// and a keywords block stacking under it makes it an internal front-matter gap.
+// Which gap should be the largest is this look's own call, and the 2em is kept
+// rather than re-tuned on a phase that had no reading to re-tune it against.
 //
 // **The label is styled text and never a `heading`**, on the reference list's
 // own reasoning one section up and for one more reason besides: a heading here
@@ -322,5 +327,39 @@
     block(width: 100%, above: 0em, below: 0.7em,
       align(center, text(size: 1.15em, weight: "bold", "Abstract")))
     body
+  }),
+)
+
+// The terms a paper is indexed by, set under the abstract and above the body.
+// The emitter writes `#keywords((…))` for a document that opened
+// `::: keywords`, handing over an array of *content* — one element per term,
+// already escaped, in the order the author wrote them.
+//
+// **The separator between two terms is this look's and never the emitter's**,
+// which is why the terms arrive as an array and not as a joined string: `core`
+// has no way to know that this look wants a comma and another wants a middle
+// dot. `join` is where that call is made, and a term may itself hold a comma —
+// *figure numbering, sectioned* — which is what made `;` the author's separator
+// rather than a preference.
+//
+// The block is the abstract's own shape at the abstract's own measure, so the
+// two read as one piece of front matter rather than as two blocks that happen
+// to be adjacent. It stacks *after* the abstract when the author wrote it
+// after, floats being issued in source order. **The label is styled text and
+// never a `heading`**, on the abstract's own reasoning: a heading here would be
+// one `core` never counted, and `anchors_from` withdraws every anchor in the
+// document on that mismatch, silently.
+#let keywords(terms) = place(
+  top + center,
+  scope: "parent",
+  float: true,
+  clearance: 2em,
+  block(width: 80%, {
+    // `place(top + center)` sets the alignment its content inherits, so a
+    // one-line list would centre itself without this.
+    set align(left)
+    set text(size: 9pt)
+    text(weight: "bold", "Keywords: ")
+    terms.join(", ")
   }),
 )
