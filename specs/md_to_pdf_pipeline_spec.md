@@ -55,7 +55,7 @@ phases:
     by: null
   - name: "Phase 10 — the title block gets its air back"
     reviewed: 2026-08-31
-    shipped: null
+    shipped: 2026-08-31
     cut: null
     by: null
   - name: "Phase 11 — several authors, and the affiliation each belongs to"

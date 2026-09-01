@@ -29,7 +29,7 @@ covers: >
   section by, the depth a document numbers its headings to, the heading anchors a
   compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 1010
+max_lines: 1020
 generated: 2026-08-31
 ---
 
@@ -942,6 +942,14 @@ The date sets beneath the author. The press release sets its dateline above a fl
 title, over a `divider` rule, and runs in one column. Either look omits its title block when
 `title`, `author` and `date` are all absent — the date joins that test, because a key the
 author wrote that reached no page would vanish.
+
+**How far apart that block sets its lines is a value, and no needle pins it** — the rule that
+keeps a caption's separator and a listing's inset off the needle lists. Each look picks its
+own: a `v()` per join in the article, `above:` on the press release's author block, which
+sits there because the title block's `below:` also governs a title-only document's gap to its
+`divider`. Lowering either would put the author back into the title's descenders and nothing
+in the suite would say so. The joins are read by hand, with `pdftotext -bbox`, and they are
+the joins *between* keys: a wrapping headline sets its own two lines tighter, deliberately.
 
 Both looks carry `show table.cell.where(y: 0): strong`, which sets a table's header row in
 strong type. A GFM table
