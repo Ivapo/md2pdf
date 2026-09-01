@@ -215,9 +215,11 @@ impl Headings {
 /// place to write the join.
 ///
 /// `markers` indexes [`Frontmatter::affiliation`] in written order, from 1, and
-/// is empty where the author wrote none — which the schema permits at exactly
-/// one affiliation, and which the look reads to decide whether a marker reaches
-/// the page at all.
+/// is empty two ways: where the author wrote none, which the schema permits at
+/// exactly one affiliation, and where the author wrote some and the document
+/// carries no affiliation for them to point at, which [`resolve_affiliations`]
+/// clears. Either way it is the same fact, and the look reads it to decide
+/// whether a marker reaches the page at all.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Author {
     pub name: String,
@@ -454,44 +456,69 @@ pub(crate) fn parse(block: &str, first_line: usize) -> Result<Frontmatter> {
     // An explicit count wins. An absent one takes the selected look's
     // convention, so a press release is single-column without saying so.
     out.columns = columns.unwrap_or(out.template.columns());
-    check_affiliations(&out)?;
+    resolve_affiliations(&mut out)?;
     Ok(out)
 }
 
-/// The two refusals that read both list keys at once.
+/// The two refusals that read both list keys at once, and the clearing pass
+/// that runs where neither of them can.
 ///
 /// They cannot run inside the loop above, because `affiliation` may sit below
 /// `author` — the shape `columns` and `template` already take. Each names the
 /// line of the key the author would have to edit, which for the first is the
 /// `author` line the marker was written on and for the second the `affiliation`
 /// line whose relation is unstated.
-fn check_affiliations(out: &Frontmatter) -> Result<()> {
+///
+/// It resolves as well as refuses, which is why it takes the block by `&mut`:
+/// with no affiliation at all there is no relation for a marker to state, so
+/// the markers are cleared rather than refused and the document compiles.
+fn resolve_affiliations(out: &mut Frontmatter) -> Result<()> {
     let count = out
         .affiliation
         .as_ref()
         .map_or(0, |listed| listed.list.len());
 
+    // No affiliation at all: nothing points, because there is nothing to point
+    // at. Every marker is cleared and the block is valid — the commonest way to
+    // reach this being an `affiliation` line commented out or not yet written.
+    //
+    // `core` clears rather than a look ignoring, so what crosses the seam is the
+    // truth about the document: authors with no markers. A look asked to skip
+    // the markers when `affiliation` is `none` would be a second place this rule
+    // lives, and the two would drift.
+    //
+    // What a drop leaves on the page is what licenses it. `Iva Po^1` sets as
+    // `Iva Po`, which is a name, correctly typeset — nothing on the page is
+    // wrong. That is the separator from `emit::check_citations`, which refuses
+    // its own dangling relation because the fallback there puts wrong glyphs in
+    // front of a reader. What this permits instead is a document whose author
+    // meant to add the affiliations and forgot, and whose PDF is then missing
+    // the whole block: a cost that announces itself.
+    if count == 0 {
+        if let Some(authors) = &mut out.author {
+            for author in &mut authors.list {
+                author.markers.clear();
+            }
+        }
+        return Ok(());
+    }
+
     // A marker naming an affiliation the document does not carry. Typst cannot
     // catch this: by the time it sees one it is a number in a list, and the
-    // failure it would ship is a superscript pointing at nothing.
+    // failure it would ship is a superscript pointing at nothing in a byline
+    // where the others point at something — which no reader scans for.
     //
-    // A document with *no* affiliation at all gets its own sentence, naming both
-    // ways out. It is the commonest way to meet this error — an `affiliation`
-    // line commented out or not yet written — and "the document carries 0" reads
-    // as though an affiliation were always required, which is the opposite of
-    // what the schema says.
+    // The refusal begins at *one*, which is the first count at which a marker
+    // can be wrong about something. `^0` belongs to it from there up.
     if let Some(authors) = &out.author {
         for marker in authors.list.iter().flat_map(|author| &author.markers) {
             if *marker == 0 || *marker > count {
-                let problem = match count {
-                    0 => format!(
-                        "key 'author' marks a name '^{marker}' and the document names no 'affiliation'; add that key, or drop the markers"
-                    ),
-                    _ => format!(
+                return Err(problem(
+                    authors.location.line,
+                    format!(
                         "key 'author' points at affiliation {marker}, and 'affiliation' carries {count}"
                     ),
-                };
-                return Err(self::problem(authors.location.line, problem));
+                ));
             }
         }
     }
@@ -547,9 +574,11 @@ fn entries(value: &str, key: &str, line: usize) -> Result<Vec<String>> {
 /// naming `B^1` rather than guessed into a name `A^B`: a `^` inside a name is
 /// rarer than a typo in a marker, and this dialect refuses rather than guesses.
 ///
-/// A digit run too long for a `usize` saturates rather than raising here. It
-/// cannot index any list, so `check_affiliations` refuses it as the marker
-/// naming an affiliation the document does not carry, which is what it is.
+/// A digit run too long for a `usize` saturates rather than raising here,
+/// because it cannot index any list either way. From one affiliation up
+/// [`resolve_affiliations`] refuses it as a marker past the end, which is what
+/// it is; with no affiliation at all it is cleared along with every other
+/// marker, there being nothing for any of them to be past.
 fn author(entry: &str, line: usize) -> Result<Author> {
     let Some((name, markers)) = entry.split_once('^') else {
         return Ok(Author {
@@ -928,23 +957,29 @@ mod tests {
     /// Every refusal the two list keys add names the line the author would have
     /// to edit.
     ///
-    /// The four are: a marker naming an affiliation the document does not carry;
-    /// an `affiliation` key whose relation is unstated, which begins at *two*;
-    /// a marker that is not a number; and an empty element, in **either** list.
+    /// The five are: a marker naming an affiliation the document does not carry,
+    /// which begins at *one* — with none the markers are cleared instead; an
+    /// `affiliation` key whose relation is unstated, which begins at *two*; a
+    /// marker that is not a number; an empty element, in **either** list; and an
+    /// entry with no name before its `^`. The last three are faults in what the
+    /// author typed rather than in a relation that may not exist, so all three
+    /// fire in the line loop before either scoped one can run, and none is
+    /// conditional on a count.
     ///
     /// The line each names is the key the author would edit rather than the key
     /// the check happens to read, which is why the second names `affiliation`
-    /// where the other three name the key the fault is written in. Both are
-    /// asserted, on `errors_name_the_key_and_the_line`'s shape.
+    /// where the others name the key the fault is written in. Both are asserted,
+    /// on `errors_name_the_key_and_the_line`'s shape.
     #[test]
     fn every_affiliation_refusal_names_its_own_line() {
         // (block, the line the error names, a fragment of the sentence)
         for (block, line, needle) in [
-            // A marker pointing past the affiliations the document carries, and
-            // the `^0` that points before them.
+            // A marker pointing past the affiliations the document carries. One
+            // is the boundary this refusal begins at, and the row an
+            // implementation narrowing it to `count <= 1` fails.
+            ("affiliation: One\nauthor: A^2\n", 3, "carries 1"),
             ("affiliation: One; Two\nauthor: A^1; B^3\n", 3, "carries 2"),
-            ("author: A^1\n", 2, "names no 'affiliation'"),
-            ("author: A^1\n", 2, "drop the markers"),
+            // The `^0` that points before them, which the same arm catches.
             (
                 "affiliation: One; Two\nauthor: A^0; B^1\n",
                 3,
@@ -963,20 +998,26 @@ mod tests {
                 "no author points at one",
             ),
             // A marker that is not a number. `A^B^1` splits at the *first* `^`,
-            // so what is refused is `B^1` rather than a guessed name `A^B`.
+            // so what is refused is `B^1` rather than a guessed name `A^B`. This
+            // one is a fault in what the author typed, so it fires under an
+            // affiliation and under none alike.
+            ("affiliation: One\nauthor: A^x\n", 3, "not 'x'"),
             ("author: A^x\n", 2, "not 'x'"),
             ("author: A^B^1\n", 2, "not 'B^1'"),
             ("author: A^\n", 2, "not ''"),
             ("author: A^1,\n", 2, "not ''"),
             // An empty element, in either list. A dangling separator would reach
             // the look as a nameless author or a blank affiliation a `^2` could
-            // then point at.
+            // then point at. The `author` case is asserted under no affiliation,
+            // where nothing else would now refuse the block; the `affiliation`
+            // case cannot be, since an empty element there presupposes the key.
             ("author: Iva Po;\n", 2, "key 'author' has an empty entry"),
             (
                 "author: A^1\naffiliation: MIT;\n",
                 3,
                 "key 'affiliation' has an empty entry",
             ),
+            // An entry that is not empty and has no name before its '^'.
             ("author: ^1\n", 2, "no name before its '^'"),
         ] {
             match parse(block, 2) {

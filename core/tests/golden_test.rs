@@ -74,6 +74,7 @@ const CITATIONS_PRESS_RELEASE_TYP: &str =
 const AUTHORS_MD: &str = include_str!("../../tests/fixtures/authors.md");
 const AUTHORS_TYP: &str = include_str!("../../tests/golden/authors.typ");
 const ONE_AFFILIATION_MD: &str = include_str!("../../tests/fixtures/one_affiliation.md");
+const ORPHAN_MARKERS_MD: &str = include_str!("../../tests/fixtures/orphan_markers.md");
 
 /// Every bundled look, by the name the `template` key selects it with. **Six
 /// tests read these**: the call contract `mpdf-001` Phase 9 fixed, and the five
@@ -4775,13 +4776,20 @@ fn the_authors_fixture_compiles() {
     assert!(pdf.len() > 1000, "the PDF is suspiciously small");
 }
 
-/// With exactly one affiliation the markers are optional, and a document that
-/// writes none is valid.
+/// With exactly one affiliation the markers are optional — the middle rung of a
+/// three-way answer — and a document that writes none is valid.
 ///
 /// This is the case OQ-11 said its gate could not state. The schema answers by
 /// making the marker optional rather than by refusing it: one lab and several
 /// authors is the commonest real paper, and refusing the unmarked form would
 /// leave its author only the lone superscript on every name that says nothing.
+/// From two affiliations up the relation has to be stated; with none there is
+/// no relation and the markers are cleared, which
+/// `markers_with_nothing_to_point_at_are_cleared` reads.
+///
+/// A marker written anyway at exactly one affiliation is honoured, because the
+/// author wrote it and it is true. That is the half of OQ-11 the zero case
+/// cannot carry, and this test is where it is pinned.
 ///
 /// Both forms are read, and in both looks. The marked twin is inline rather
 /// than a second fixture, because what separates the two is one character in
@@ -4831,4 +4839,44 @@ fn one_affiliation_carries_its_markers_or_leaves_them_out() {
             assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
         }
     }
+}
+
+// -- mpdf-001 Phase 12: a marker with nothing to point at ----------------------
+
+/// A marker in a document that names no affiliation is cleared, and the
+/// document compiles where today it exits non-zero.
+///
+/// The refusal this narrows was stated absolutely by Phase 11, so `^1` with no
+/// `affiliation` key at all stopped the build over markers that state nothing —
+/// a state an author reaches by commenting the key out while drafting, or by
+/// writing the markers before the key.
+///
+/// **`core` clears the markers rather than a look ignoring them**, which is what
+/// this reads: `markers: ()` on **every** author and `affiliation: none`, so
+/// what crosses the seam is the truth about the document and neither look
+/// changes by a character. A clearing pass that emptied only the first author
+/// would pass a needle over one name and still set a `2` in the byline, since
+/// both looks call `super()` per author with no guard on `affiliation` — so the
+/// assertion names both authors in one string.
+///
+/// This is an inline assertion rather than a golden file, on the shape
+/// `one_affiliation_carries_its_markers_or_leaves_them_out` already uses: a
+/// golden would pin the whole document where what this phase changes is one
+/// argument.
+#[test]
+fn markers_with_nothing_to_point_at_are_cleared() {
+    let source = md_to_typst(ORPHAN_MARKERS_MD, &[]).unwrap();
+    assert!(
+        source.contains(
+            "author: ((name: \"Iva Po\", markers: ()), (name: \"Someone Else\", markers: ()))"
+        ),
+        "a marker survived a document that names no affiliation: {source}"
+    );
+    assert!(
+        source.contains("affiliation: none"),
+        "the document grew an affiliation it never wrote: {source}"
+    );
+
+    let pdf = md_to_pdf(ORPHAN_MARKERS_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
 }
