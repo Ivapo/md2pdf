@@ -676,10 +676,10 @@ and the split would break a term at it.
 
 **The look decides what the terms look like, down to the character between two of them.**
 `md2pdf` hands the look a list and never a sentence: the article look sets them under the
-abstract at the same measure with a bold `Keywords:` run-in, and the press release sets them
-under its standfirst. Neither look refuses them. And the block takes none of a figure's
-machinery — no number of its own, and no counter it restarts — so a `figures: sectioned`
-document numbers its first table `1.1` with or without one.
+abstract at the same measure with a bold-italic `Keywords:` run-in, and the press release
+sets them under its standfirst with the same label. Neither look refuses them. And the block
+takes none of a figure's machinery — no number of its own, and no counter it restarts — so a
+`figures: sectioned` document numbers its first table `1.1` with or without one.
 
 Nine things are errors, each naming the line: a second keywords block, one with body content
 above it, one opened inside a list item, a block quote or a footnote definition, a block

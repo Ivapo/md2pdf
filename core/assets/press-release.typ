@@ -275,6 +275,6 @@
 // withdraws every anchor in the document.
 #let keywords(terms) = block(above: 0.4em, below: 1.4em, {
   set text(size: 10pt)
-  text(weight: "bold", "Keywords: ")
+  text(weight: "bold", style: "italic", "Keywords: ")
   terms.join(", ")
 })

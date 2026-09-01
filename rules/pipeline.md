@@ -1049,10 +1049,11 @@ block crosses an argument either, and both answer in a `#let` rather than a `sho
 article look floats each with `place(top + center, scope: "parent", float: true)` — the
 title block's own shape, so the three stack in source order and whichever of the two the
 author wrote first is set first — at 80% of the text width, the abstract under a centred
-bold `Abstract` label and the terms under a bold `Keywords:` run-in. The press release sets
-the abstract as a standfirst under the masthead rule and prints no label, a press release
-having a lede rather than an abstract, and does label the terms: a bare comma list under a
-lede reads as a stray sentence rather than as index terms. **The separator between two terms
+bold `Abstract` label and the terms under a bold-italic `Keywords:` run-in. The press
+release sets the abstract as a standfirst under the masthead rule and prints no label, a
+press release having a lede rather than an abstract, and does label the terms in the same
+bold italic: a bare comma list under a lede reads as a stray sentence rather than as index
+terms. **The separator between two terms
 is each look's own**, applied with `join` over the array the emitter hands over, which is
 why `core` writes no separator at all. **No label is a `heading`**, on
 the reference list's own reasoning: one heading more than the markdown wrote withdraws every

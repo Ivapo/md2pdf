@@ -378,7 +378,7 @@
     // one-line list would centre itself without this.
     set align(left)
     set text(size: 9pt)
-    text(weight: "bold", "Keywords: ")
+    text(weight: "bold", style: "italic", "Keywords: ")
     terms.join(", ")
   }),
 )
