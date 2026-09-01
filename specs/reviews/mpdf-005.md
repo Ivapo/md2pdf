@@ -2,6 +2,30 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 4 — Phase 12 only — 2026-09-01 — the consistency lens, resumed — **READY (past the cap, by the human's decision)**
+
+Verdict: `READY`, zero blocking. **Converged at round four**, scoped to the round-3 blocker alone,
+with the other two lenses already `READY` at round three. Phase 12's `reviewed` is set to
+2026-09-01; `status` was already `accepted`. This is the second time this spec has gone past the
+cap, and both times it was a person's call and is logged as one.
+
+**The blocker's fix verified against the files.** The struck close-out item is restored as the
+eighth code site, quoted to match `core/tests/golden_test.rs:2754-2756` once the comment wrapping
+is flattened, with the split stated — the comment is owed an edit and the assertion is not — and
+the replacement reason given against the *inline* half, where `: A line. {#eq:one}` stays prose
+because `equation_name` finds a group that is not the whole of its run.
+
+**The instrument generalisation was re-run by the reviewer and reproduces on all three sentences**,
+and it found a fourth the close-out did not need to enumerate: the same phrase in
+`core/src/emit.rs:Equation`'s doc comment also greps to zero, wrapping at 181-182. Every one of the
+zeros is a wrap artefact and every sentence is at the site named.
+
+**The one instrument that failed three times in this episode is the episode's transferable
+finding**, and it is now written into the phase rather than only into this record: a line-based
+grep over a phrase that may wrap struck a correct close-out item at round 2, produced the round-1
+README mis-attribution that round 2 reversed, and under-reports the close-out's own quotations. A
+quoted sentence locates a site; it is not itself a search string.
+
 ### Round 3 — Phase 12 only — 2026-09-01 — the same three lenses, resumed — **NOT READY (escalated at the cap)**
 
 Verdict: correctness `READY`, exit-gate `READY`, consistency `NOT READY` with one blocker. **Both
