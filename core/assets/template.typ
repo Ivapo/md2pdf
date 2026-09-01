@@ -296,6 +296,12 @@
 // the emitter's call stands after the show line and the title block is placed
 // inside `template` before `doc`.
 //
+// `clearance` is the gap *below*, and only that: the space above this block is
+// the title block float's own clearance, so the two are set independently.
+// Measured — the abstract is the boundary between the front matter and the
+// body, so that gap is the larger of the two: 14.3 pt below against 10.7 pt
+// above, where 1.4em read 8.3 and left the block looking glued to the text.
+//
 // **The label is styled text and never a `heading`**, on the reference list's
 // own reasoning one section up and for one more reason besides: a heading here
 // would take a section number under `headings` and restart every figure counter
@@ -306,7 +312,7 @@
   top + center,
   scope: "parent",
   float: true,
-  clearance: 1.4em,
+  clearance: 2em,
   block(width: 80%, {
     // `place(top + center)` sets the alignment its content inherits, so the
     // paragraphs would centre their last lines without this. The label is the
