@@ -2915,6 +2915,13 @@ fn no_shipped_display_equation_took_a_label() {
 /// whole would refuse the trailing shape and label the leading one — passing
 /// every other case in this phase and shipping a rule the dialect does not
 /// have.
+///
+/// **The paragraph-ending inline row is Phase 12's.** Its group is the whole of
+/// a run that does not open its paragraph, so a refusal scoped to the run
+/// rather than the paragraph turns a line Phase 4 decided stays prose into an
+/// error beside a visible formula. The soft-break row that stood in its place
+/// until Phase 12 inverted — a name a line below now names — and lives in
+/// `a_name_a_line_or_a_paragraph_below_still_names`.
 #[test]
 fn a_group_that_is_not_the_whole_run_names_nothing() {
     // Emitted rather than read off the golden: a needle over a golden constant
@@ -2937,9 +2944,9 @@ fn a_group_that_is_not_the_whole_run_names_nothing() {
             "an inline span, which Typst never numbers",
         ),
         (
-            "# H\n\n$$\nz = 6\n$$\n{#eq:nextline}\n",
-            "$ z = 6 $\n{\\#eq:nextline}",
-            "a group a soft break away, which is no longer adjacent",
+            "# H\n\nAn inline $x + 1$ {#eq:inline}\n",
+            "$x + 1$ {\\#eq:inline}",
+            "an inline span whose group ends its paragraph, which a run-scoped refusal breaks",
         ),
     ] {
         let typst = md_to_typst(md, &[]).unwrap();

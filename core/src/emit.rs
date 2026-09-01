@@ -136,8 +136,12 @@ struct AltCapture {
 ///
 /// The record is verified where it is spent rather than invalidated from the
 /// walk's other arms, which rests on a property of the whole file: every write
-/// into a `bufs` frame is an append. The splice below is the one exception, and
-/// it updates this record in the same breath.
+/// into a `bufs` frame is an append, except the truncates that spend a record —
+/// the splice below is one, and it updates this record in the same breath — and
+/// one insert, the label an equation's name writes. That insert is a narrower
+/// exception than it looks: it lands at the end of a *live* [`Equation`] record,
+/// so by liveness nothing but separator newlines stands after it in that frame,
+/// and no offset read afterwards points past it.
 struct Figure {
     /// How deep the buffer stack was when the call was written.
     depth: usize,
@@ -162,34 +166,36 @@ struct Figure {
 impl Figure {
     /// Whether the recorded point is still the thing it recorded.
     ///
-    /// Three conditions, all read here and none maintained at a distance: the
-    /// same frame is on top, the region still carries the call it recorded, and
-    /// everything after it is the separator newlines the paragraph arms push.
-    /// Anything written in between — a heading, a rule, prose, an inline image —
-    /// fails the third, and a buffer frame opened in between fails the first.
+    /// The rule is [`still_standing`]'s, which an [`Equation`] shares: a caption
+    /// is a paragraph away from the block it captions, so the separator
+    /// newlines the paragraph arms push are the one thing allowed after the
+    /// call. Anything written in between — a heading, a rule, prose, an inline
+    /// image — kills the record, and so does a buffer frame opened in between.
     fn live(&self, bufs: &[String]) -> bool {
-        bufs.len() == self.depth
-            && bufs[self.depth - 1]
-                .get(self.start..)
-                .and_then(|rest| rest.strip_prefix(self.written.as_str()))
-                .is_some_and(|tail| tail.bytes().all(|byte| byte == b'\n'))
+        still_standing(bufs, self.depth, self.start, &self.written)
     }
 }
 
 /// A display equation the walk has already written, and where it sits.
 ///
-/// The same argument as [`Figure`] with the trailing-separator allowance
-/// dropped, because a label is *adjacent* where a caption is a paragraph away:
-/// the name rides the closing `$$`, so the parser hands the walk the equation
-/// and then the group as the very next event, in the same paragraph. A record
-/// is spent only where it still stands at the end of the frame it was written
-/// in, so a `SoftBreak`'s newline between them is enough to leave the group the
-/// prose it is.
+/// The same argument as [`Figure`], and since Phase 12 the same rule: the name
+/// rides the closing `$$`, or stands on the line below it, or in the paragraph
+/// below that, and what bounds it is that everything between is the separator
+/// newlines the paragraph arms push. Phase 4 had dropped that allowance on the
+/// ground that a label is adjacent where a caption is a paragraph away, which
+/// priced the mechanism and not the rule an author has to hold: a caption's
+/// own name already stood on a continuation line, and the asymmetry was a rule
+/// no one could keep. A `SoftBreak`'s newline between the fence and the group
+/// is no longer enough to leave it prose; prose, a heading, a rule or an image
+/// between them is.
 ///
 /// Nothing is held forward waiting for a name, for the reason `Figure` records
 /// at length: rounds 2 to 4 of Phase 1 each measured a different construct
 /// broken by holding a call across an event, and nothing here needs a hold,
-/// since the equation is already written when the name arrives.
+/// since the equation is already written when the name arrives. The label is
+/// *inserted* at the record's own end rather than appended, because a paragraph
+/// away the buffer already holds the separator newlines, and an append would
+/// put the label after the break, where Typst attaches it to something else.
 struct Equation {
     /// How deep the buffer stack was when the equation was written.
     depth: usize,
@@ -200,11 +206,36 @@ struct Equation {
 }
 
 impl Equation {
-    /// Whether the recorded span is still the last thing in its own frame.
+    /// Whether the recorded span still stands, with nothing but separator
+    /// newlines after it — [`still_standing`]'s rule, shared with [`Figure`].
     fn live(&self, bufs: &[String]) -> bool {
-        bufs.len() == self.depth
-            && bufs[self.depth - 1].get(self.start..) == Some(self.written.as_str())
+        still_standing(bufs, self.depth, self.start, &self.written)
     }
+
+    /// Where the label goes: the byte just past the span, which is the end of
+    /// the buffer in the adjacent case and before the separator newlines in
+    /// the others.
+    fn end(&self) -> usize {
+        self.start + self.written.len()
+    }
+}
+
+/// Whether a recorded span still stands where it was written.
+///
+/// Three conditions, all read here and none maintained at a distance: the
+/// same frame is on top, the region still carries what was written, and
+/// everything after it is the separator newlines the paragraph arms push —
+/// `SoftBreak`, `Start(Tag::Paragraph)` and `End(TagEnd::Paragraph)` push one
+/// each, so a line below and a paragraph below both pass. Anything else in
+/// between — a heading, a rule, prose, an inline image — fails the third, and
+/// a buffer frame opened in between fails the first. [`Figure::live`] and
+/// [`Equation::live`] are both this function, so the two cannot drift apart.
+fn still_standing(bufs: &[String], depth: usize, start: usize, written: &str) -> bool {
+    bufs.len() == depth
+        && bufs[depth - 1]
+            .get(start..)
+            .and_then(|rest| rest.strip_prefix(written))
+            .is_some_and(|tail| tail.bytes().all(|byte| byte == b'\n'))
 }
 
 /// The caption paragraph being collected, over the figure it will attach to.
@@ -310,7 +341,7 @@ struct Keywords {
 /// One name a walk declared, and what declared it.
 struct Declaration {
     name: String,
-    /// The line the caption or the closing `$$` sits on.
+    /// The line the caption sits on, or the line an equation's name group does.
     line: usize,
     /// Whether a display equation declared it, rather than a caption.
     ///
@@ -1550,8 +1581,10 @@ fn step(
                         (false, false, false, Marker::Word(_)) if front.is_some() => {
                             // The opener is a block boundary, so a record
                             // standing before it is retired, exactly as a
-                            // group's opener retires one.
+                            // group's opener retires one — the equation's too,
+                            // for the reason given there.
                             *figure = None;
+                            *equation = None;
                             match front.expect("the word is reserved") {
                                 Front::Abstract => {
                                     *r#abstract = Some(open_abstract(
@@ -1576,8 +1609,13 @@ fn step(
                         (false, false, false, _) => {
                             // The opener is a block boundary, so a record
                             // standing before it is retired: a caption inside
-                            // the group is the group's own.
+                            // the group is the group's own. The equation record
+                            // goes too — the opener writes nothing into the
+                            // frame, so its liveness test would not notice the
+                            // boundary, and a name inside the group would be
+                            // inserted before `Group.start`.
                             *figure = None;
+                            *equation = None;
                             *group = Some(Group {
                                 line,
                                 depth: bufs.len(),
@@ -1658,19 +1696,46 @@ fn step(
                     *para = None;
                     bufs.push(String::new());
                     escape_into(top(bufs), rest);
-                } else if equation
-                    .as_ref()
-                    .is_some_and(|recorded| recorded.live(bufs))
+                } else if let Some(recorded) = equation.as_ref()
+                    && recorded.live(bufs)
                     && let Some(name) = equation_name(&text, line_of(md, range.start))?
                 {
-                    // A name riding the closing `$$`, written where the
-                    // equation was just written. Liveness is tested first, so a
-                    // run after a dead record is the prose it has always been
-                    // and raises nothing; the run itself is consumed rather
-                    // than escaped, which is what takes the group off the page.
+                    // A name on the closing `$$`, on the line below it or in the
+                    // paragraph below that, written where the equation was
+                    // written: an insert at the record's end, which is the end
+                    // of the buffer only in the adjacent case — a paragraph
+                    // away the separator newlines already stand there, and an
+                    // append would put the label after the break. Liveness is
+                    // tested first, so a run after a dead record falls through
+                    // to the refusal below or to prose; the run itself is
+                    // consumed rather than escaped, which is what takes the
+                    // group off the page.
+                    let end = recorded.end();
                     declare(names, name, line_of(md, range.start), true)?;
-                    top(bufs).push_str(&format!(" <{name}>"));
+                    top(bufs).insert_str(end, &format!(" <{name}>"));
                     *equation = None;
+                } else if opens
+                    && caption.is_none()
+                    && whole_paragraph(md, &range, *para_end)
+                    && bare_group(&text).is_some()
+                {
+                    // A paragraph that is nothing but a `{#…}` group, with no
+                    // caption open and nothing live to name, is a name written
+                    // too far from its equation or above a figure with no
+                    // caption to carry it — a mistake in every case the dialect
+                    // can express, so it is refused at its own line rather than
+                    // escaped onto the page, where a reference to it would fail
+                    // at the reference's line and name neither. The paragraph
+                    // is the unit and not the run, on `:::`'s own discipline:
+                    // `An inline $x + 1$ {#eq:inline}` ends in a run that is a
+                    // bare group and does not open its paragraph, and stays the
+                    // prose Phase 4 made it. The caption test is defence in
+                    // depth: the marker arm clears `para` before it pushes the
+                    // caption's frame, so `opens` is already false inside one.
+                    return Err(Error::UnsupportedConstruct {
+                        construct: "name group with nothing to name".to_string(),
+                        location: Location::at(line_of(md, range.start)),
+                    });
                 } else {
                     if let Some(open) = caption.as_mut() {
                         open.text.push_str(&text);
@@ -2995,28 +3060,40 @@ fn caption_name(typed: &str, line: usize) -> Result<Option<(&str, &str)>> {
     Ok(Some((group, name)))
 }
 
-/// The name a text run is entirely, where that run follows a display equation.
+/// The name a text run is entirely, where that run follows a display equation
+/// on its closing `$$`, on the line below it, or in the paragraph below that.
 ///
 /// **The group must be the whole of the run**, which is the same discipline that
 /// keeps `: ` a marker in one position rather than a ban: `$$…$$ {#eq:one} and
 /// more` and `$$…$$ see {#eq:one}` are both the prose they have always been. The
 /// run is trimmed at both ends because the parser hands the group over with the
 /// space the author typed before it, so `{#eq:one}`, ` {#eq:one}` and
-/// `$$…$${#eq:one}` all name.
+/// `$$…$${#eq:one}` all name. Which run may name is the record's question and
+/// not this one's: [`Equation::live`] answers it.
 ///
 /// A finding rule of its own rather than [`caption_name`]'s: that one takes the
 /// *last* group on a line, so reusing it would label the leading-text shape.
 fn equation_name(run: &str, line: usize) -> Result<Option<&str>> {
-    let Some(name) = run
-        .trim()
-        .strip_prefix("{#")
-        .and_then(|rest| rest.strip_suffix('}'))
-    else {
+    let Some(name) = bare_group(run) else {
         return Ok(None);
     };
     check_name(name, line)?;
 
     Ok(Some(name))
+}
+
+/// The name inside a run that is nothing but a `{#…}` group, unchecked.
+///
+/// The shape alone, shared by [`equation_name`] and by the refusal of a
+/// paragraph that is only a group with nothing to name. The refusal reads the
+/// shape and not the name, which is what keeps precedence a non-question: under
+/// a live equation `{#eq one}` and `{#}` take [`check_name`]'s own message, and
+/// with nothing live they take the refusal, since the walk never reaches the
+/// name.
+fn bare_group(run: &str) -> Option<&str> {
+    run.trim()
+        .strip_prefix("{#")
+        .and_then(|rest| rest.strip_suffix('}'))
 }
 
 /// Record a declared name, refusing one the document has already declared.
