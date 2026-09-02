@@ -2,6 +2,270 @@
 
 Append-only. One heading per round, newest first.
 
+### Rounds 4 and 5 — Phase 2 only — 2026-09-02 — three lenses, resumed — **READY**
+
+Verdict: `READY`, zero blocking from all three lenses. **Converged at round five, two
+rounds past §7.6's cap, on the human's explicit decision** — which is how that rule says
+the cap is passed, and this is the record of it. Phase 2's `reviewed` is set to
+2026-09-02.
+
+**The escalation and what the human decided.** Round 3 escalated with one blocker and two
+candidate fixes from the reviewers — (a) word the corrected doc comment so it names no
+path, keeping the count at nine, or (b) let it name the path and set the count to ten.
+The author was given both plus a third the reviewers had not proposed: **replace the count
+with a property**, which was the only option that also closed the correctness lens's
+second instance, `core/tests/examples_test.rs` being a file the phase *creates* and whose
+right module doc would breach any closed list. **The human chose the third**, and
+authorised the rounds that verified it.
+
+**Gate 4 is now four checks and no number**: no path-form mention of the removed page test
+survives under `core/` or `cli/`; every `app/`/`web/` match is a comment and never code;
+the four doc comments that deliberately keep an `app/` path are still present, **named by
+symbol rather than counted**; and `core/tests/long_document_test.rs` names neither the
+page test nor `web/index.html`. The third is a floor against over-deletion with no ceiling
+a new comment could breach. The fourth was added in round 5 from a non-blocking finding
+and **negative-tested**: reverting the first correction alone fails check 4 and passes
+checks 1, 2 and 3, so it is the only clause that catches a skipped correction.
+
+**Round 4 found the defect had moved one clause over, into gate 5 — moved there by gate
+4's own repair.** Two lenses measured it independently: gate 5 asserted "0 errors and 60
+warnings, being 43 / 6 / 9 / 2", and the folds fixing gate 4 pushed the total to 63 by
+adding three unresolvable citations, **two of them inside gate 4's own new text**. Gate 5
+is now a property on the same principle: `0 errors`, and every warning one of four kinds,
+the fourth widened to a bare `<file>.rs:<symbol>` whose file left with the split. The
+totals and the per-spec census are gone, and so is the scope's five-spec census, which had
+stood two bullets above a sentence claiming no count was asserted anywhere in the phase.
+**The cause was removed as well as the symptom**: gate 4's check 1 names the page test's
+refusal case in prose rather than citing it, so the clause no longer adds the very kind of
+citation it exists to explain.
+
+**Why this is recorded as one seam and not eight slips.** Five separate numbers in this
+phase were wrong across five rounds, and every one was a count over something the phase
+itself edits. Gate 4's moved four times, twice by its own repairs. Gate 5's moved three
+times, once *because* gate 4 was fixed — and once more in round 5, 63 → 62, when the
+self-citation was removed, **with nothing breaking, because no clause asserts a total any
+more.** That last movement is the property demonstrated rather than argued.
+
+**The distinction that survives, in the exit-gate lens's words**, because it is what a
+later reader needs in order not to helpfully restore a number: gate 4's broken counts were
+totals over *lines the phase rewrites*, so the phase's own prose moved them; gate 1's
+242 is a total over `#[test]` attributes, which no doc-comment edit can see. "The
+denominator is what decides whether a phase can falsify its own gate."
+
+**Three numbers were deliberately kept and each was tested this round.** Gate 2's nine
+`ok` and three `error` rows, counted off a `web/index.html` this phase reads and then
+deletes without editing. Gate 1's 255 today and 242 without the page test's thirteen —
+the one that *is* a count over a file the phase edits, verified by measuring
+`long_document_test.rs` at two `#[test]` before and after and the post-phase tree at
+exactly 242. And check 3's four-symbol floor, which is a floor rather than a total.
+
+**One blocker was the author's own and is recorded as such.** Round 4's check 3 named
+`core/src/sections.rs:segment`; the `app/src/watch.rs:classify` note is in
+`Sources::resolve`'s doc comment, `segment`'s own beginning twelve lines later with no
+`app/` path. All three lenses converged on the correction, and `Sources::resolve` is the
+corpus's own spelling in `rules/pipeline.md`. `spec-lint` could not have caught it — both
+symbols exist, so the citation resolved either way.
+
+Non-blocking, folded in round 5: gate 4's preamble read "Three checks" over four bullets,
+which is the same species as everything else this review found.
+
+Two non-blocking notes left open rather than folded: gate 6's "re-checked after a wait"
+names no interval, and "the draft's" in gate 2 has no antecedent in the document now that
+the round-1 `CORRECTED` block is gone, this record being the only place that version
+exists.
+
+### Round 3 — Phase 2 only — 2026-09-02 — three lenses, all resumed — **NOT READY — ESCALATED AT THE CAP**
+
+Verdict: `NOT READY` from all three, on **one** blocker, which all three found
+independently and which is the third consecutive round broken by the same seam.
+**§7.6's cap is reached, so this escalates to the human and nothing is set** — Phase 2's
+`reviewed` stays `null`. Going past the cap is a decision a person makes, and this entry
+is where it is recorded.
+
+**The blocker.** Gate 4 asserts `grep -rn "app/\|web/" core cli` returns **nine**, and
+its justification is that the two doc comments the phase corrects "each match on
+`web/index.html` and on nothing else, so a correction that leaves the token has not
+corrected anything". The first half is true and all three lenses verified it. The
+conclusion silently assumes the *replacement* text introduces no token of the other kind,
+and the grep is `app/` **or** `web/`. Round 2's fold changed the prescribed `md_to_html`
+correction from "name `tests/fixtures/examples/`" — which carried no token, and is the
+wording the 11 → 10 → 9 arithmetic was measured against — to "the reader left with the
+page, and it is now Letur's `app/tests/page_examples_test.rs`", which carries an `app/`
+one. Measured on a rebuilt tree with both corrections applied exactly as the scope words
+them: **ten**, with `core/src/lib.rs` ×4. The corrected line does not leave the
+population; it moves from the `web/` column to the `app/` column.
+
+The correctness lens found a second instance of the same closed-world assumption:
+**`core/tests/examples_test.rs` is a file this phase creates, and gate 4's list of six
+files does not include it.** §2's whole argument for the extraction is provenance, so a
+module doc naming `web/index.html` is the right comment to write there — and it breaks a
+closed count of nine or ten either way.
+
+**Why this is recorded as a seam rather than three arithmetic slips.** Round 1 found the
+count wrong by seven (`app/`-only measured into an `app/`-or-`web/` clause). Round 2 found
+the corrected count wrong by two (the phase's own edits removing counted tokens). Round 3
+finds it wrong by one (a replacement introducing a token). Each round fixed the number and
+the next edit broke it. **The instrument is a count over a tree the same phase edits**,
+and gate 1 already catches the thing gate 4 exists for — code in `core`/`cli` depending on
+a removed tree would not compile. That is the observation the escalation carries.
+
+**Everything else in Phase 2 survived re-derivation, by all three lenses independently.**
+Gate 5 re-measured **after both corrections**: 0 errors, 60 warnings, split 43 `app/` /
+6 `web/` / 9 page-test / 2 bare, matching the four kinds the clause names. Gate 1's 255
+today and 242 without the page test's thirteen, exact. Gate 2's three sentences verbatim
+from the page. Gate 3's `-o` and its `press-release.typ` / `math.typ` justification.
+Gate 6's premise — `https://ivapo.github.io/md2pdf/` answers 200 today, so it checks a
+real state change — with no conflict against §1.2, whose non-goal is signing and
+distribution and whose "no secret is needed" still holds, nor against OQ-3. The extraction,
+the asset provenance with `samples/pipeline.svg` at 510 against the page's 509, the
+`ok/`–`error/` split, and the close-out all hold. `rules/pipeline.md` is 1237 of 1240;
+`cli/src/main.rs:default_output` exists.
+
+**Round 2's non-blocking fixes verified resolved:** the `CORRECTED` block is gone and no
+reference to it dangles, the only remaining `CORRECTED` mentions being §1.1's and Phase
+1's legitimate §6.1 use; §3 reads 1–7 in order; gate 6 has its scope bullet; gate 5 names
+four kinds; gate 1 pins rather than records. The review record's own form was checked
+against the corpus and matches, append-only with Phase 1's rounds untouched.
+
+Two non-blocking notes left open: gate 6's "re-checked after a wait" names no interval, so
+a verifier has no threshold at which a persistent 200 becomes a failure; and "the draft's"
+in gates 2 and 5 now has no antecedent in the document, this record being the only place
+that version exists.
+
+### Round 2 — Phase 2 only — 2026-09-02 — three lenses, all resumed with the author's changelog — **NOT READY**
+
+Verdict: `NOT READY`. **All three lenses independently found the same thing: the round-1
+fold broke the gate it was fixing.** This is §7.3's "a fix can introduce a blocker" case,
+and it is recorded in full because the loop generated it on itself.
+
+**The one blocker, from three directions.** Round 1's fold ordered two doc comments
+corrected — `core/src/lib.rs:md_to_html`'s and `core/tests/long_document_test.rs`'s
+module block — and gate 4 counts the lines both sit on. Each matches
+`grep "app/\|web/"` on `web/index.html` and on nothing else, so correcting either
+removes it from the count. The exit-gate lens measured the arithmetic step by step: **11**
+with Phase 2's removals alone, **10** once the `md_to_html` comment is corrected, **9**
+once the module block is. Gate 4's "eleven, and only these" therefore describes a tree
+the phase will not produce: an implementer who performs the corrections fails the gate,
+and one who passes it has not performed them. The gate's own hedge — line numbers are an
+aid, the file tally is the assertion — does not rescue it, because the per-file tally is
+exactly what moves. **Gate 4 now reads nine**, with the corrected tally and the reason it
+is nine rather than eleven.
+
+**Two more the correctness lens found inside the same fold.** First, the fold told the
+implementer to correct `md_to_html`'s doc comment to name `tests/fixtures/examples/` as
+its reader — while adding OQ-7 in the same pass, which records that
+`core/tests/examples_test.rs` never calls `md_to_html`. That swaps one false decision
+statement for another, and the close-out would have propagated it into `rules/`, the one
+artifact that must track the code. The honest correction is that **the reader left with
+the page**: it is Letur's `app/tests/page_examples_test.rs` now, and this repository has
+none, which is what OQ-7 holds. Second, repointing the module block's precedent clause at
+`examples_test.rs` asserts a shape that file does not have — the clause appeals to an
+`#[ignore]`d generator and a compiled-in copy, and `bless_the_generated_blocks` went to
+Letur in Phase 1. **The precedent clause is deleted rather than repointed**, which also
+settles the 10-vs-9 ambiguity the exit-gate lens named: the bullet had not said whether
+`web/index.html` survived.
+
+**A non-blocking finding accepted whole, because it was right about the method.** The
+consistency lens argued that the fold's dated `CORRECTED` block did not match §6.1 or
+either corpus precedent: §6.1 reserves that instrument for **shipped prose kept in place
+and now misleading**, where Phase 2 is unshipped and its scope and gate were rewritten
+outright — nothing was kept, so a reader could not see what was corrected. It was a
+changelog wearing a correction's clothes, and §7.7 puts the round narrative here instead.
+**The block is deleted and this entry is where it went.**
+
+Other non-blocking findings folded: gate 5's leading sentence named three warning kinds
+against a four-kind population (the two bare `preview.rs:<symbol>` warnings are a fourth);
+gate 1 *recorded* a `#[test]` count without comparing it to anything, and now pins **255
+today → 242 plus `examples_test.rs`'s own**, the difference being the page test's
+thirteen; gate 3's "three bundled looks" was loose, `core/assets/math.typ` being a
+preamble; gate 6 lived only in the gate where Phase 1 had put its settings step in the
+scope as well, and now has a scope bullet and a re-check after a wait, Pages' CDN serving
+a cached build for a while after a disable; and OQ-7 was listed between OQ-4 and OQ-5,
+making §3 read 1, 2, 3, 4, 7, 5, 6 — it is now in sequence.
+
+**Numbers re-measured this round**, so a later round can trust them: the post-removal grep
+is 11, and 9 after the two corrections; `core/tests/` and `cli/tests/` carry 255 `#[test]`
+today and 242 without the page test; `spec-lint` on a simulated post-phase tree reports
+0 errors and 60 warnings, being 43 `app/`, 6 `web/`, 9 page-test and 2 bare
+`preview.rs:`; `samples/pipeline.svg` is 510 bytes against the page's 509;
+`rules/pipeline.md` is 1237 body lines against `max_lines: 1240`; and
+`curl -sI https://ivapo.github.io/md2pdf/` answers **200**, so gate 6 checks a real state
+change. `https://ivapo.github.io/letur/` answers 200 with twelve `data-example` rows,
+which is Phase 1's gate 7 still holding.
+
+One finding was left to Phase 3's own round rather than folded: Phase 3's scope now
+carries the CI hand-off — the engine keeps no workflow once both leave with Letur — with
+no exit-gate clause, so it can pass silently. Named here so that round meets it.
+
+### Round 1 — Phase 2 only — 2026-09-02 — three fresh lenses (correctness/grounding, exit-gate testability, cross-file consistency/scope) — **NOT READY**
+
+Verdict: `NOT READY` from all three. **Round 0, asked once for this episode and answered
+by the author:** Phase 2 produces no observable and says so, and §1.1 argues the omission
+rather than assuming it — in a path-by-path split the observable is the thing *at risk*,
+so it is the gate of every phase rather than its product, with precedent in
+`rules/pipeline.md`'s byte-identical measurements and `mpdf-007` Phase 5. It is the right
+thing to build now: Phase 1 shipped the same day, both repositories hold `app/` and
+`web/`, and that interim silently loses an edit made in the wrong one.
+
+Deduped to four blockers, all folded.
+
+**1. Gate 4's grep returns eleven, not four.** All three lenses, independently. §2 measured
+`grep -rn 'app/' core cli` — `app/` alone — and got four doc comments; gate 4 greps `app/`
+*or* `web/`, which adds seven `web/` mentions the scope never enumerated. A correct
+implementation failed the gate as written, and an implementer chasing "only four" is
+pushed to delete true doc comments.
+
+**2. Gate 5's warning population is wrong by eleven of sixty.** All three lenses, each
+having built a simulated post-phase tree. Nine warnings cite
+`core/tests/page_examples_test.rs:<symbol>` from specs that stay, **four of them in this
+spec itself**, and two cite bare `preview.rs:<symbol>` that resolve today through the
+suffix branch and stop once `app/` leaves. Since four sit in an accepted, append-only
+document, **the gate had to be reworded rather than the corpus repaired** — which is the
+call the exit-gate lens argued and the author took.
+
+**3. The page-test extraction is not mechanical.** Correctness and exit-gate lenses. The
+scope created "the twelve rows as files" and said the new test compiles them "against the
+two assets" — but the two assets are the page's inline `data-asset` elements, and the
+phase deletes the page without extracting them. Neither has a substitute in the engine:
+`tests/fixtures/refs.yml` is keyed `"DBLP:books/lib/Knuth86a"` and its own header says a
+fixture keyed `knuth1986` would "prove nothing", so the `citation` row fails outright;
+and `samples/pipeline.svg` differs from the page's by one trailing newline, which is the
+*dangerous* case because it compiles and the gate would accept a fixture set that is not
+the page's. How a file "carries its `data-expect`" was also unstated, and the natural
+in-file marker is actively wrong — two rows open with `---`, and a leading HTML comment is
+itself a `raw HTML block` refusal. Resolved by copying both assets from the parent commit
+byte for byte, and by carrying `data-expect` in the directory name.
+
+**4. The scope contradicted itself over `core/tests/long_document_test.rs`'s module doc.**
+Correctness lens. One bullet said it "moves with it"; another said the `app/`-naming doc
+comments "stay as they are" — and that `//!` block holds **both** the `app/dist/index.html`
+mention the second bullet keeps and the page-test precedent the first would move. Nothing
+can move with the page test in any case, the file staying with the engine.
+
+**OQ-4 was a fifth blocker to one lens and non-blocking to another**, the second arguing an
+implementer could proceed by elimination since the phase deletes both workflows and adds
+none. Put to the author and **resolved: the old URL is let go.** The consistency lens found
+the state neither of OQ-4's two options covered — Pages staying enabled on `Ivapo/md2pdf`
+and serving the last build of a deleted `web/` — which became gate clause 6.
+
+Non-blocking findings folded: gate 2's verb ("twelve rows" over-counting nine `ok` plus
+three `error`) and its unreproducible "copying the needles", the three sentences now
+quoted verbatim since both of their sources die in the same commit; gate 1's
+baseline-free `git diff --stat`, which is empty whatever the commit did; gate 3's missing
+`-o`, which would dirty the tree; gate 5's `spec-lint` invocation, the tool being on no
+`PATH`; the stale `by: mpdf-010` scope sentence, which contradicted the gate and §2's rule
+2; the `app/`-path census, five specs rather than two; `.gitignore`'s `/.playwright-mcp/`
+and `node_modules/`, whose comments name things that leave; `Cargo.lock`; the phase
+header's "two hashed fixtures" against a gate naming three documents; and README's
+`## Try it` claim.
+
+**Deferred rather than fixed:** `md_to_html` loses its only test one phase before it is
+published — **new OQ-7**, pointed at Phase 3 with three candidate answers, because the
+dropped comparison is *about the page* and the page is Letur's. And the engine keeps no CI
+once both workflows leave, written into Phase 3's scope.
+
+**Rejected: none.** Every finding from all three lenses was accepted, folded or deferred.
+
 ### Round 3 — Phase 1 only — 2026-09-02 — the correctness lens, resumed — **READY**
 
 Verdict: `READY`, zero blocking. **Converged at round three, at the cap.** Phase 1's

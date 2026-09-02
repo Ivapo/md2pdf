@@ -15,7 +15,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 2 — the engine stands alone"
-    reviewed: null
+    reviewed: 2026-09-02
     shipped: null
     cut: null
     by: null
@@ -431,14 +431,26 @@ twice, once in each history, which is what a copy of a record is.
   browser build of the dialect is Letur's. A small engine playground — a textarea and a
   PDF, no argument, no rows — is what the spike was before `mpdf-006`, and it may be
   wanted again once the landing page is Letur's. Nothing asks for it today.
-- **OQ-4 — where does `https://ivapo.github.io/md2pdf/` go?** *(design call)* The Pages
+- **OQ-4 — where does `https://ivapo.github.io/md2pdf/` go?** *(design call)* ~~The Pages
   workflow moves with `web/`, so the site publishes from Letur's repository at
   `https://ivapo.github.io/letur/`, once the author enables Pages there with its source
   set to the workflow — a settings step the deploy action does not perform for itself.
   The old URL is linked from the engine's README and from the page's own prose. A
   redirect page at the old path is one file in the engine's repository with a Pages
   workflow of its own, or the links move and the old URL is let go; the second is
-  cheaper and the first is kinder to a bookmark.
+  cheaper and the first is kinder to a bookmark.~~ **RESOLVED 2026-09-02, in Phase 2's
+  round 1, confirmed by the author: the old URL is let go.** The links move to
+  `https://ivapo.github.io/letur/` and no redirect is written — the redirect option
+  would have added a file *and a Pages workflow of its own* to a phase that otherwise
+  removes both workflows, and left the engine keeping a Pages deploy forever for one
+  `<meta refresh>`. The half neither option covered, and the reason this needed
+  resolving rather than eliminating: **Pages stays enabled on `Ivapo/md2pdf` until
+  someone disables it**, serving the last deployed build of a `web/` Phase 2 deletes.
+  That is a live site outliving its source, so disabling it is Phase 2's gate 6 — an
+  author settings step, the mirror of Phase 1's enabling Pages on `Ivapo/letur`. The
+  first half of the paragraph above is unchanged and shipped in Phase 1: Letur publishes
+  at `https://ivapo.github.io/letur/`, measured 2026-09-02 at twelve `data-example`
+  rows.
 - **OQ-5 — how tightly does Letur pin the engine?** *(design call)* `"0.1"` takes every
   patch release; `"=0.1.0"` takes none. A product that measures its page to the text
   item, as `rules/desktop-panes.md` does, has a reason to prefer the exact pin and bump
@@ -452,6 +464,21 @@ twice, once in each history, which is what a copy of a record is.
   get the demotion §2's rule 2 describes because they are checked today; `by` would need
   a check invented for it, which nothing here asks for. It is named so the asymmetry is
   a recorded gap rather than a discovery.
+
+- **OQ-7 — `md2pdf_core::md_to_html` is published in Phase 3 with no test and no
+  reader.** *(design call, raised by Phase 2's round 1 and deferred by it)* Measured:
+  `core/tests/page_examples_test.rs` is its only caller in this tree, and the
+  extraction Phase 2 performs deliberately takes two halves — compile the `ok` rows,
+  assert the `error` sentences — and leaves the third, the generated column compared
+  against `pulldown_cmark::html`, with the page in Letur. So after Phase 2 the export
+  has no exercise here, and Phase 3 ships it to the registry that way. This is a
+  consequence of a decision §2 already recorded rather than a defect in it, and it is
+  not Phase 2's to fix: the comparison is *about the page*, and the page is Letur's.
+  Three answers are open — Letur's `app/tests/page_examples_test.rs` goes on covering it
+  from next door and that is enough; the engine grows a small test of its own over
+  `tests/fixtures/examples/`; or the export is reconsidered before Phase 3 publishes an
+  API this repository does not use. **Named so Phase 3 meets it as a recorded question
+  rather than a discovery.**
 
 ## 4. Implementation phases
 
@@ -568,46 +595,179 @@ without them, measured, so this phase is blocked until they do and is planned on
 ### Phase 2 — the engine stands alone
 
 *Produces the observable: **no**, and the gate is that it does not move.* Every golden
-is byte-identical and the two hashed fixtures hash as they did.
+is byte-identical and the three hashed documents hash as they did.
 
 - **Scope:**
   - `Cargo.toml`'s members become `["core", "cli"]`. `app/`, `web/`, `tests/gates/`, the
     panel fixtures, the four specs and their review records, the five rule files and the
-    two workflows are removed in one ordinary commit; nothing is rewritten.
-  - `core/tests/page_examples_test.rs` is removed, and `tests/fixtures/examples/` gains
-    the twelve rows as files, each named for its `data-example` and carrying its
-    `data-expect`, with `core/tests/examples_test.rs` compiling the `ok` rows against
-    the two assets and asserting each `error` row's sentence — the two tests
-    `page_examples_test.rs` did, minus the page. `core/tests/long_document_test.rs`'s
-    module doc, which names the page test as its precedent, moves with it.
+    two workflows are removed in one ordinary commit; nothing is rewritten. `Cargo.lock`
+    is pruned by the members change and is committed with it.
+  - **`core/tests/page_examples_test.rs` is removed, and `tests/fixtures/examples/`
+    takes the page's twelve rows *and its two assets*.** The assets are the half a
+    "mechanical" extraction drops, and the engine holds no substitute for either:
+    - The page carries two `data-asset` elements, `pipeline.svg` (509 bytes) and
+      `refs.yml` (151 bytes, one key, `knuth1986`). **Neither may be reused from the
+      engine's own tree.** `tests/fixtures/refs.yml` is keyed
+      `"DBLP:books/lib/Knuth86a"` and its own header comment says why — a fixture keyed
+      `knuth1986` "would pass under either spelling and prove nothing about
+      `label(…)`" — so the `citation` row cites a key that file does not hold and fails
+      outright. `samples/pipeline.svg` is 510 bytes against the page's 509, one trailing
+      newline, which is worse than failing: it compiles, and the gate would accept a
+      fixture set that is not the page's. **Both are copied out of `web/index.html` at
+      the phase's parent commit**, byte for byte, into `tests/fixtures/examples/`.
+    - **A row's `data-expect` is carried by the directory, not by the file**:
+      `tests/fixtures/examples/ok/` and `tests/fixtures/examples/error/`, each file
+      named for its `data-example`. An in-file marker is *actively wrong*, and the trap
+      is specific — two rows (`frontmatter`, `citation`) open with `---`, and a leading
+      HTML comment is itself a `raw HTML block` refusal.
+    - `core/tests/examples_test.rs` compiles the **nine** `ok` rows with both assets in
+      hand, refuses the **three** `error` rows, and asserts the counts, which is
+      `core/tests/page_examples_test.rs:EXPECTED`'s job arriving without the page.
+  - **Two doc comments are corrected, and both are decision statements this phase makes
+    false** — as against the many that merely name a path which now lives next door, and
+    which stay. The test is whether the sentence still says something true after the
+    split, not whether it mentions a moved file:
+    - `core/tests/long_document_test.rs`'s `//!` block, at line 17, appeals to
+      `page_examples_test.rs`'s shape as a precedent — *"the generator is `#[ignore]`d
+      … and the check reads a compiled-in copy"*. **The precedent clause is deleted, not
+      repointed.** `core/tests/examples_test.rs` has neither half: `bless_the_generated_blocks`
+      went to Letur with the page in Phase 1, and there is no compiled-in copy to bless.
+      Repointing it at `examples_test.rs` would assert a shape that file does not have.
+      The claim the sentence carries — the generator writes the fixtures and this file
+      pins them — stands on its own and stays; only the appeal goes, and
+      `web/index.html` goes with it.
+    - `core/src/lib.rs:md_to_html`'s doc comment says "the only reader it has —
+      `web/index.html`'s comparison column, generated by `core/tests/page_examples_test.rs`".
+      **The honest correction is that the reader left with the page**, and it is now
+      Letur's `app/tests/page_examples_test.rs` over Letur's own copy of that column.
+      It is *not* `tests/fixtures/examples/`: `examples_test.rs` never calls
+      `md_to_html`, so naming it would swap one false statement for another — and the
+      close-out would then propagate that into `rules/`, the artifact that must track
+      the code. OQ-7 holds what this export's missing exercise here costs.
   - The README loses `## The desktop app`, the app half of `## Install` and the
-    `pdf.js` note, and gains one paragraph pointing at Letur's repository; its links to
-    the demo move per OQ-4.
+    `pdf.js` note, and gains one paragraph pointing at Letur's repository. **Its demo
+    link moves to `https://ivapo.github.io/letur/` per OQ-4, now resolved**, and
+    `## Try it`'s claim that "every example on it is one this repository's tests
+    compile" is rewritten: after this phase the page is Letur's and what this repository
+    compiles is `tests/fixtures/examples/`.
+  - **Pages is disabled on `Ivapo/md2pdf`.** An author settings step, the mirror of
+    Phase 1's enabling it on `Ivapo/letur`, and named in the scope rather than only in
+    the gate so a plan-mode pass reading the scope alone sees the step it must arrange.
+    Without it GitHub goes on serving the last deployed build of a `web/` this phase
+    deletes — measured 2026-09-02, that URL answers **HTTP 200**, so this is a live site
+    outliving its source rather than a hypothetical.
   - `CLAUDE.md` drops nothing from its stanza — the observable sentence is unchanged.
-    `.spec-lint.yaml` is unchanged: the three rules Phase 1 needed are what let
-    `mpdf-008` Phase 4's `by: mpdf-010` and the `app/` paths in `mpdf-007` and
-    `mpdf-008` report as warnings here. `.gitignore` loses the `app/`, `web/` and harness
-    entries. Both `INDEX.md` files regenerated.
-  - The three doc comments in `core/` and the one in `cli/tests/cli_test.rs` that name
-    `app/` paths stay as they are: they are the record of why a shape was chosen, and a
-    path in prose that now lives next door is what a warning is for.
+    `.spec-lint.yaml` is unchanged: **the three rules Phase 1 needed are what let the
+    cross-repository paths report as warnings rather than errors here.** They are *not*
+    what makes `mpdf-008` Phase 4's `by: mpdf-010` report as one: a `by` is never
+    resolved against the id map, so it reports **nothing**, per §2's rule 2 and
+    confirmed by measurement. Those paths are spread across five of this corpus's
+    specs; gate 5 names the kinds rather than counting them, and says why.
+    `.gitignore` loses the
+    `app/`, `web/` and harness entries — `/app/gen/`, `/web/pkg/`, `/web/target/`,
+    `/app/.mirror/`, `/app/.harness/` — **and two more**, whose comments name things
+    that leave: `/.playwright-mcp/` (the gate driver) and `node_modules/` (which names
+    `app/package.json`). Both `INDEX.md` files regenerated.
+  - Every other doc comment in `core/` and `cli/` naming an `app/` or `web/` path stays
+    as it is, and so does every historical mention of the page test by bare filename:
+    they are the record of why a shape was chosen, and a path in prose that now lives
+    next door is what a warning is for. **No count of them is asserted anywhere in this
+    phase**, deliberately — gate 4 says why.
 - **Exit gate:**
-  1. `cargo test --workspace` is green with `core` and `cli` alone, and `git diff
-     --stat -- tests/golden` is empty: no golden moves.
-  2. `core/tests/examples_test.rs` compiles twelve rows, and its `error` rows' sentences
-     are the ones `page_examples_test.rs` asserted, checked by copying the needles.
+  1. `cargo test --workspace` is green with `core` and `cli` alone, and
+     `git diff --stat <parent>..HEAD -- tests/golden` is empty: no golden moves. **The
+     revision range is not optional** — with no baseline the command compares the
+     working tree to the index and is empty whatever the commit did. And the suite is
+     **counted, not just green**: `grep -rh '#\[test\]' core/tests/*.rs cli/tests/*.rs |
+     wc -l` reads **255** today and must read **242 plus whatever `examples_test.rs`
+     adds**, the difference being the page test's thirteen. Phase 1 pinned its counts
+     this way; without it an over-deletion that leaves a green suite passes.
+  2. `core/tests/examples_test.rs` compiles the **nine** `ok` rows and refuses the
+     **three** `error` rows — twelve rows, of which nine compile, measured off
+     `web/index.html`'s `data-expect` attributes. The three sentences are quoted here so
+     the clause is self-contained, both of the draft's sources being deleted by this
+     same commit: `unsupported markdown construct 'raw HTML block' at line 3`,
+     `unsupported markdown construct 'task list marker' at line 1`, and
+     `math error at line 1: unsupported command '\includegraphics'`.
   3. **The page does not move.** `target/release/md2pdf` over `tests/fixtures/citations.md`,
      `tests/fixtures/citations_press_release.md` and `samples/showcase/showcase.md`,
-     hashed before this phase's commit and after, pairwise identical.
-  4. `grep -rn "app/\|web/" core cli` returns only the four doc comments named in scope,
-     re-derived at the gate rather than trusted.
-  5. `spec-lint .` exits zero with no error, and every warning is an unresolved `app/`
-     or `web/` path. `mpdf-008` Phase 4's `by: mpdf-010` reports nothing, per §2's rule
-     2, and the inherited `RULE_SOURCES_WITHOUT_GENERATED` leaves with
-     `rules/desktop-geometry.md`, so the gate expects neither.
-- **Close-out:** `rules/pipeline.md`'s `covers:` loses nothing and its README pointer
-  moves; `rules/web-demo.md` is gone from this tree, and `rules/INDEX.md` says so by
-  regeneration. One push.
+     hashed before this phase's commit and after, pairwise identical. **`-o` into a
+     scratch path**, since `cli/src/main.rs:default_output` writes beside its input and
+     would dirty `tests/fixtures/` and `samples/`. Three is the right number because
+     between them they reach all three files in `core/assets/`:
+     `citations_press_release.md` is the only one taking `press-release.typ`, and
+     `showcase.md` the only one reaching `math.typ`.
+  4. **Nothing under `core/` or `cli/` reaches into `app/` or `web/`, and no surviving
+     line names a file this phase deleted.** Four checks, none of them a count:
+     - `grep -rn "core/tests/page_examples_test" core cli` returns **nothing**. The
+       **path** form is a claim about *this* tree, and this phase deletes the file it
+       names; the one line carrying it is `core/src/lib.rs:md_to_html`'s, which the scope
+       corrects. **The bare filename is deliberately not caught**, and that distinction
+       is the clause's whole design: `core/tests/messages_test.rs`'s module block records
+       that before that file existed, the repository's only byte-exact `Display`
+       assertion was the page test's refusal case — a statement about what *was* true,
+       which the split does not falsify and which this phase therefore leaves alone.
+       (Named in prose rather than cited, so this clause does not itself add the very
+       kind of citation it is about.) A check that demanded zero mentions would force true
+       history to be erased to satisfy a gate, which is the error this clause replaced.
+     - Every line `grep -rn "app/\|web/" core cli` matches is **a comment, never code**:
+       each begins, after leading whitespace, with `///`, `//!` or `//`. That is the
+       property the phase actually turns on — that the crossings are a record of why a
+       shape was chosen and not a dependency — and `cargo test --workspace` in gate 1
+       is what would fail if it were ever false, a compile reaching a deleted tree not
+       being a thing a grep has to discover.
+     - The four doc comments that deliberately keep an `app/` path are **still there**,
+       named rather than counted: `core/src/sections.rs:Sources::resolve`'s note on
+       `app/src/watch.rs:classify`, `core/src/lib.rs:Anchor`'s on `app/src/document.rs`,
+       `core/tests/long_document_test.rs`'s module block, and
+       `cli/tests/cli_test.rs:the_binarys_file_is_byte_identical_to_the_librarys_bytes`'s.
+       A floor on what must survive, so an over-deletion is caught, with no ceiling that
+       a new comment could breach.
+     - **`core/tests/long_document_test.rs` names neither `web/index.html` nor the page
+       test.** Without this an implementer could skip the first correction entirely: the
+       surviving clause is a comment, so the check above passes it, and its page-test
+       mention is the bare form the first check spares.
+
+     **This clause was a count in three drafts and broke in all three review rounds**, by
+     seven, then two, then one: a total over a tree *this same phase edits* moves whenever
+     the phase writes or rewrites a line, and both corrections below do, as does the new
+     `core/tests/examples_test.rs` — whose module doc naming `web/index.html` as its
+     fixtures' provenance is the right comment to write and would breach any closed list.
+     The instrument was the defect, not the arithmetic. Recorded so a later reader does
+     not helpfully restore a number.
+  5. `spec-lint .` — **by absolute path, the tool being on no `PATH` here** — exits
+     zero with **no error**, and every warning is an unresolved citation of one of four
+     kinds: a path under `app/`, a path under `web/`, a path under the removed page
+     test, or a **bare `<file>.rs:<symbol>` whose file left with the split** — the last
+     covering both `mpdf-007`'s two `preview.rs:` citations, which resolve today through
+     the suffix branch and go unresolved once `app/src/preview.rs` leaves (the basename
+     fallback having been removed rather than guarded by `sdd-001` Phase 13), and any
+     bare page-test citation the corpus carries. **None of these is repairable in the
+     corpus**, several sitting in accepted, append-only documents — including this one —
+     which is why the gate names kinds.
+
+     **No total is asserted here, for the reason gate 4 gives one clause up, and this
+     clause is where that reason was proved twice.** A count of warnings is a count over
+     a corpus that *contains this spec*, and every review round edits this spec: the
+     drafts read 60, and the folds that fixed gate 4 moved it to 63 by adding three
+     citations of their own — one in the `examples_test.rs` scope bullet and **two
+     inside gate 4's own repair**. A number that a gate's own correction falsifies is
+     not a gate. `mpdf-008` Phase 4's `by: mpdf-010` reports nothing, and the inherited
+     `RULE_SOURCES_WITHOUT_GENERATED` leaves with `rules/desktop-geometry.md`, so the
+     gate expects neither — both properties, both measured, neither a count.
+  6. **Pages is off on `Ivapo/md2pdf`**, per OQ-4 and the scope bullet above.
+     `curl -sI https://ivapo.github.io/md2pdf/` returns 404 rather than today's 200.
+     **Re-checked after a wait**, Pages' CDN serving a cached build for a while after a
+     disable, so a single 200 immediately afterwards is not a failure.
+- **Close-out:** `rules/pipeline.md`'s `covers:` loses nothing — all ten of its
+  `sources` are under `core/` and `cli/` and none is removed — and the correction it
+  does need is the sentence asserting `md_to_html`'s "one reader is `web/index.html`'s
+  comparison column, generated by `core/tests/page_examples_test.rs`", two files this
+  phase deletes. It takes the same correction as the doc comment it is generated from,
+  in the same pass — the reader left with the page — or `/sync-rules` will faithfully
+  re-seed the stale claim. **The file sits at 1237 of its 1240 `max_lines`**, so the cap
+  moves with the edit rather than the prose being shaved to fit. `rules/web-demo.md` is
+  gone from this tree, and `rules/INDEX.md` says so by regeneration. One push.
 
 ### Phase 3 — the engine is published, and Letur depends on it by version
 
@@ -618,6 +778,12 @@ same bytes the workspace's does.*
   - `core/Cargo.toml` gains `repository`, `readme` and `keywords`; `cli/Cargo.toml`
     gains the same and a `version` beside its `path` dependency. A `README.md` for the
     crate is the repository's own, which the field names.
+  - **Two things Phase 2 leaves this phase, both raised in its round 1 and neither
+    fixed there.** After Phase 2 the engine carries **no CI at all** — both workflows
+    were Letur's and left with it — so nothing but a local `cargo test --workspace`
+    stands between a commit and a publish; whether that wants a workflow of its own is
+    this phase's call, at the moment it first matters. And `md_to_html` publishes
+    untested, which OQ-7 holds.
   - `cargo publish --dry-run -p md2pdf-core` and then `-p md2pdf-cli` both package and
     build clean. **The publish itself is the author's step**, run by hand in the order
     the dependency requires, `md2pdf-core` first; this spec does not run it.
