@@ -20,5 +20,5 @@ path = "src/main.rs"
 # **The `version` is not decoration.** A published crate cannot depend on a path,
 # so `cargo publish` refuses this crate outright without it; the path is what a
 # workspace build uses and the version is what the registry resolves.
-md2pdf-core = { path = "../core", version = "0.1.0" }
+md2pdf-core = { path = "../core", version = "0.1.1" }
 clap = { version = "4", features = ["derive"] }

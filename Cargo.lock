@@ -1454,7 +1454,7 @@ dependencies = [
 
 [[package]]
 name = "md2pdf-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "md2pdf-core",
@@ -1462,7 +1462,7 @@ dependencies = [
 
 [[package]]
 name = "md2pdf-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hayagriva",
  "mitex",
