@@ -2,6 +2,59 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3, resumed — Phase 3 only — 2026-09-02 — the two rate-limited lenses, retried — **READY**
+
+Verdict: `READY`, **zero blocking from all three lenses**. Phase 3's `reviewed` is set to
+2026-09-02. The entry below this one stands as the record of the interrupted attempt; the
+session limit had in fact already reset when it was written, and both agents reported on
+the retry.
+
+**Both lenses verified their own concerns rather than taking the changelog's word.** The
+exit-gate lens ran gate 3's replacement itself — `cargo build --locked --manifest-path
+web/Cargo.toml --target wasm32-unknown-unknown`, **exit 0 in 53 s**, compiling `typst`,
+`md2pdf-core` and `md2pdf-web-spike` for `wasm32-unknown-unknown` — and recorded that it
+discriminates in both directions the curl could not: it compiles the crate the phase
+rewrites, and `--locked` fails outright if the manifest is swapped and the lockfile is not
+regenerated, which is the omission the old clause could not see. The correctness lens
+resolved the same tree with `cargo tree --locked` and answered the ordering question the
+flag raises: the scope regenerates both lockfiles, so `--locked` **asserts the committed
+pair agree** rather than silently repairing them, and run before that regeneration it fails
+loudly, which is a correct failure rather than a trap.
+
+**One round-1 number was corrected in the reviewer's favour of the author.** The
+correctness lens's round-1 "~30 transitives" was a truncated tail; `cargo update --dry-run`
+reports **48 `Updating` lines plus 4 `Adding`**, so the 48 written into §1.1's note and
+gate 2 is exact rather than approximate.
+
+**Four non-blocking findings, all folded before the date was set.** Two were stale pointers
+left by this round's own renumbering — scope bullet 1 still sent the reader to "gate 5" for
+the crates.io check, which had become gate 6; and gate 3's *"the only thing that compiles
+the wasm crate"* was contradicted by its sibling, gate 5's `pages` run compiling it with
+`wasm-pack`, both added in the same fold. The clause now says *"the only thing run
+locally"* and names the other. The third was a **CommonMark lazy continuation**: the round-1
+`CORRECTED` note on §2's *"needs"* had no blank line after it, so the `core/assets/`
+paragraph was absorbed into the blockquote — the same defect repaired two paragraphs down
+in round 2, made twice. A sweep of every blockquote in the document found one more of the
+same shape in §1.2 and both are fixed; the sweep is the fourth.
+
+**The verification instrument the close-out offers was itself measured, twice.** Round 3's
+first pass found `grep -rln 'git = \|md2pdf-cli' rules README.md` returning three of the
+four Letur artifacts, missing the one two rounds had been spent finding, because
+`web-demo.md` states the dependency in prose. Both other lenses then re-ran the widened
+three-alternative form and confirmed it returns exactly four, that `git dependency` is the
+only alternative reaching `rules/web-demo.md:264`, and that `rules/INDEX.md` matches none —
+all three claims the close-out makes about its own grep.
+
+**What this episode cost, and the shape of it.** Six blockers in round 1, two in round 2
+**both introduced by round 1's fold**, and four non-blocking in round 3 of which two were
+introduced by round 2's. Every self-inflicted one was a consistency defect rather than a
+design error — a stale pointer, a missing blank line, a list widened but not re-derived, a
+gate borrowed from a phase where it had been sound. The one that mattered, gate 3's
+constant, is the same species as the vacuous pass gate 2's `-o` closes, and it was written
+*by the author into a gate whose neighbouring clause explains that exact trap*. That is
+the argument for the same-agent resume stated as a measurement: the lens that had spent
+round 1 on gate testability is the one that caught it.
+
 ### Round 3 — Phase 3 only — 2026-09-02 — three lenses resumed, **one completed** — **INCOMPLETE**
 
 Verdict: **not recorded as converged.** The scope/consistency lens returned `READY` with

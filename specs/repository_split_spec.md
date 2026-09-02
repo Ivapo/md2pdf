@@ -20,7 +20,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 3 — the engine is published, and Letur depends on it by version"
-    reviewed: null
+    reviewed: 2026-09-02
     shipped: null
     cut: null
     by: null
@@ -150,6 +150,7 @@ moves nothing, so a lock seeded from the engine's resolves the same tree.
   > Phase 3: `cargo publish` needs a crates.io account with a verified email and a token
   > on the machine that runs it. Phase 3 states that as a prerequisite of its own, in
   > the shape Phase 1 used for the `spec-lint` rules.
+
 - **Not a change to what the dialect does.** No construct, key, refusal or look moves.
   Every golden is byte-identical, and that is a gate rather than a hope.
 - **Not a monorepo tool.** No submodule, no subtree, no workspace-of-workspaces. Letur
@@ -321,6 +322,7 @@ needs a `version` beside its `path`, since a published crate cannot depend on a 
 > and Phase 3 adds them for that reason. **The `version` beside the path is the one that
 > is literally required**, and that half is measured and unchanged: without it
 > `cargo publish` refuses the CLI outright.
+
 `core/assets/` is 2.5 MB, almost all of it the bundled fonts under `core/assets/fonts/`,
 and Cargo packages everything under the crate that `.gitignore` does not exclude, so the
 looks and the fonts travel without an `include` list; the registry's limit is well
@@ -861,7 +863,7 @@ nor reserves a name. `md2pdf` itself stays taken, per §1.2.
     as a literal here so the shape is not guessed. **A
     `README.md` for the crate is the repository's own**: `readme = "../README.md"` reaches
     one level out of the package, and cargo copies the file into the archive and rewrites
-    the field to `README.md` — measured, so gate 1 can read it rather than gate 5
+    the field to `README.md` — measured, so gate 1 can read it rather than gate 6
     discovering its absence on the crate page.
   - **The engine gets CI of its own.** After Phase 2 it carries none — both workflows were
     Letur's and left with it — so nothing but a local `cargo test --workspace` stands
@@ -910,9 +912,12 @@ nor reserves a name. `md2pdf` itself stays taken, per §1.2.
   3. **Letur builds against the registry, both of its crates.** `cargo test --workspace`
      green in Letur, which reaches `app` alone; **and `cargo build --locked
      --manifest-path web/Cargo.toml --target wasm32-unknown-unknown` succeeds**, which is
-     the only thing that compiles the wasm crate whose manifest and lockfile this phase
-     rewrites — `web/Cargo.toml` detaches itself with an empty `[workspace]`, so the
-     workspace command never reaches it. The target needs `rustup target add
+     the only thing *run locally* that compiles the wasm crate whose manifest and lockfile
+     this phase rewrites — `web/Cargo.toml` detaches itself with an empty `[workspace]`,
+     so the workspace command never reaches it, and gate 5's `pages` run is the only
+     other thing that builds it at all. **`--locked` is what makes this a second check
+     rather than a repair**: the scope regenerates `web/Cargo.lock` beside the manifest,
+     and the flag asserts the committed pair agree instead of quietly fixing them. The target needs `rustup target add
      wasm32-unknown-unknown` if it is not already there.
      `grep -rn 'git = ' app/Cargo.toml web/Cargo.toml` returns nothing, and neither
      manifest carries a `[patch]`.
