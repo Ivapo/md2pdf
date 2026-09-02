@@ -4,6 +4,13 @@ description = "Converts markdown to Typst markup and compiles it to a PDF."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+# What the registry wants beyond the four above, added by `mpdf-011` Phase 3.
+# `readme` reaches one level out of the package: cargo copies the file into the
+# archive and rewrites the field, so the crate page shows the repository's own
+# README rather than a second copy kept in step by hand.
+repository = "https://github.com/Ivapo/md2pdf"
+readme = "../README.md"
+keywords = ["markdown", "pdf", "typst", "typesetting", "converter"]
 
 [lib]
 name = "md2pdf_core"

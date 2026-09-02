@@ -1,0 +1,42 @@
+# Runs the whole deterministic suite — `cargo test --workspace` over `core` and
+# `cli`, some twenty seconds of it, of which nine are `long_document_test.rs`.
+#
+# **Why this exists at all.** `mpdf-011` Phase 2 took both of this repository's
+# workflows to Letur, because both built Letur's files; after it the engine
+# carried no CI, and nothing but a local run stood between a commit and a
+# `cargo publish` that cannot be taken back. Phase 3 settled that as a decision
+# of the spec's rather than the implementer's call: two implementers, one adding
+# a workflow and one not, would otherwise both pass every clause.
+#
+# No `paths:` filter. Every source in this repository can move a golden, and the
+# suite is the gate for all of them.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A superseded run is not worth finishing.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Typst is a large tree and dominates the build. Without this the job
+      # recompiles it on every push.
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run the suite
+        run: cargo test --workspace

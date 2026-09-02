@@ -4,11 +4,21 @@ description = "Command-line front end for md2pdf-core."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+# What the registry wants beyond the four above, added by `mpdf-011` Phase 3.
+# `readme` reaches one level out of the package: cargo copies the file into the
+# archive and rewrites the field, so the crate page shows the repository's own
+# README rather than a second copy kept in step by hand.
+repository = "https://github.com/Ivapo/md2pdf"
+readme = "../README.md"
+keywords = ["markdown", "pdf", "typst", "typesetting", "cli"]
 
 [[bin]]
 name = "md2pdf"
 path = "src/main.rs"
 
 [dependencies]
-md2pdf-core = { path = "../core" }
+# **The `version` is not decoration.** A published crate cannot depend on a path,
+# so `cargo publish` refuses this crate outright without it; the path is what a
+# workspace build uses and the version is what the registry resolves.
+md2pdf-core = { path = "../core", version = "0.1.0" }
 clap = { version = "4", features = ["derive"] }

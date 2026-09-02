@@ -33,7 +33,7 @@ covers: >
   key carries and the affiliation each of their markers points at, the heading anchors a
   compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 1240
+max_lines: 1250
 generated: 2026-09-01
 ---
 
@@ -1250,6 +1250,16 @@ and not one of each, and what it guards is a consumer's mis-scroll rather than a
 document — no byte of the PDF depends on it.
 
 ## The CLI
+
+**Two crates on crates.io, one binary.** `md2pdf-core` is the library and `md2pdf-cli` is
+the front end that wraps it; `cargo install md2pdf-cli` puts a binary called `md2pdf` on
+`PATH`, which is how anything outside this workspace reaches the compiler — Letur's
+browser harness among them, which compiles every document it serves through it and
+installs it with `--locked`, because it then compares what came out. The registry name
+`md2pdf` belongs to an unrelated project, which is why neither crate carries it and the
+binary does. Both manifests name `repository`, `readme` and `keywords` for the crate page,
+and `cli/Cargo.toml`'s dependency carries a `version` beside its `path`: a published crate
+cannot depend on a path, and `cargo publish` refuses it outright without one.
 
 `md2pdf input.md [-o output.pdf] [--emit-typst]`. Without `-o` the PDF lands at the input
 path with a `.pdf` extension. `--emit-typst` prints the Typst source and ignores `-o`; that

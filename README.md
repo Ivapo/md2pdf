@@ -10,6 +10,16 @@ so the same markdown compiles to the same PDF on every machine.
 ## Install
 
 ```console
+$ cargo install md2pdf-cli
+$ md2pdf --help
+```
+
+The crate is [`md2pdf-cli`](https://crates.io/crates/md2pdf-cli) and the binary it
+installs is `md2pdf`; the library it wraps is
+[`md2pdf-core`](https://crates.io/crates/md2pdf-core), which is what you depend on to
+convert markdown from your own code. From a checkout instead:
+
+```console
 $ cargo build --release
 $ ./target/release/md2pdf --help
 ```
