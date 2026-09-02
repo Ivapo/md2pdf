@@ -416,9 +416,9 @@ twice, once in each history, which is what a copy of a record is.
   learns a list, and it learns two more things beside it.** §2's last decision carries
   the three rules, because round 1 measured that the prefix was the smallest of three
   ways the linter fails a corpus that spans two repositories. The prefix itself is
-  `ltr`, defaulted: three letters inside the methodology's `[a-z]{2,4}`, and the author
-  may name another before Phase 1 writes it into Letur's `.spec-lint.yaml` and
-  `CLAUDE.md`.
+  `ltr`, three letters inside the methodology's `[a-z]{2,4}` — **proposed as a default
+  and confirmed by the author 2026-09-02**, so it is what Phase 1 writes into Letur's
+  `.spec-lint.yaml` and `CLAUDE.md` rather than a value still open to a rename.
 - **OQ-2 — what is Letur's observable, in one sentence?** *(design call, defaulted)* The
   engine's is "the typeset PDF that Typst compiles from the user's markdown". Letur's is
   *"the page the author sees beside their text, redrawn as they write it"*, which is
