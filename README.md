@@ -833,7 +833,24 @@ house style.
 
 ## Licence
 
-The code is MIT. Most of the bundled fonts are under the SIL Open Font Licence —
-Libertinus Serif in four faces for body text, and Libertinus Mono for code; see
+The code in this repository is MIT; `LICENSE` carries the text, and it travels inside
+both published crates.
+
+**What the binary embeds, and under what terms.** `md2pdf` is statically linked: the
+Typst compiler is not a runtime dependency you install separately but code compiled into
+the executable, so its licence follows the binary wherever it goes. **Typst** and its
+crates, and **mitex**, are Apache-2.0. Everything else in the tree is permissive too —
+MIT, BSD, Zlib, Unicode-3.0 and the rest — and there is no copyleft anywhere in it.
+`THIRD-PARTY-LICENSES.md` is the full list, 334 crates with the text of every licence
+among them, generated from the resolve by `tools/third-party-licenses.py` and shipped in
+both crates.
+
+**The fonts are bundled too, and are not crates.** Most are under the SIL Open Font
+Licence — Libertinus Serif in four faces for body text, and Libertinus Mono for code; see
 `core/assets/fonts/OFL.txt`. The math font, NewCMMath-Regular, is under the GUST Font
-Licence; see `core/assets/fonts/GUST-FONT-LICENSE.txt`.
+Licence; see `core/assets/fonts/GUST-FONT-LICENSE.txt`. Both files travel in the
+published crate beside the fonts they cover.
+
+Typst is a trademark of its authors. This project uses the name to say what it is built
+on, which is what Apache-2.0 §6 leaves to nominative use; it is not affiliated with or
+endorsed by them.

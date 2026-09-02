@@ -8,3 +8,6 @@
 
 # Notes kept beside the work rather than in it.
 /notes-ivan/
+
+# Python bytecode from the licence generator.
+__pycache__/
