@@ -3,33 +3,8 @@
 # Converting a sample writes its PDF beside it, in samples/ or in a folder under it.
 /samples/**/*.pdf
 
-# tauri-build writes the capability schemas beside tauri.conf.json.
-/app/gen/
-
-# The wasm spike builds into these; the module is 25.7 MB and is never committed.
-/web/pkg/
-/web/target/
-
-# The mirror `app/typecheck.mjs` writes the front end into for tsc. Generated on
-# every run and never committed.
-/app/.mirror/
-
 # Finder metadata, which reappears however often it is deleted.
 .DS_Store
 
-# The Playwright MCP driver writes a console log per run here, driving the front
-# end for a gate. Scratch, and one file per attempt.
-/.playwright-mcp/
-
 # Notes kept beside the work rather than in it.
 /notes-ivan/
-
-# The scratch directory `app/harness/serve.mjs` copies a page into, one per
-# revision/document/mutation. Outside `app/dist/` deliberately: `generate_context!`
-# walks `frontendDist` recursively into the shipped binary.
-/app/.harness/
-
-# `app/package.json` pins the browser driver the harness runs on. The modules are
-# a `bun install` a contributor runs once and are never committed; `app/bun.lock`
-# is.
-node_modules/

@@ -13,8 +13,7 @@
 //! MiB against a band of three and 414 MiB against a whole of 71, both quietly
 //! wrong, and the phase would look like it passed.
 //!
-//! **The generator writes them and this file pins them**, which is the shape
-//! `page_examples_test.rs` already uses for `web/index.html`: the generator is
+//! **The generator writes them and this file pins them**: the generator is
 //! `#[ignore]`d so `cargo test --workspace` never runs it, and the check reads a
 //! compiled-in copy, so a rebuild is what makes it see new bytes.
 //!

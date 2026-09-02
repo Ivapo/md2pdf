@@ -1,6 +1,0 @@
-{
-  "identifier": "default",
-  "description": "What the window may call: the core defaults, and the two file dialogs.",
-  "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-save"]
-}

@@ -1,3 +1,0 @@
-# Beta
-
-[](note.md)

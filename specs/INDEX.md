@@ -6,21 +6,13 @@
   The core .md → .pdf pipeline: pulldown-cmark parses, a hand-written emitter maps events to Typst markup, and embedded Typst compiles the PDF, behind a CLI.
 - **[images](images_spec.md)** — `mpdf-002` · accepted · done
   Markdown images become PDF images: the emitter maps ![alt](path), callers supply the named files as bytes, and the CLI reads them from disk.
-- **[desktop-app](desktop_app_spec.md)** — `mpdf-003` · accepted · partial
-  A macOS desktop app that shows the PDF while you write: a Tauri window wraps the same core crate, watches the document and its images, and re-renders.
 - **[math](math_spec.md)** — `mpdf-004` · accepted · done
   LaTeX math in markdown becomes typeset math in the PDF: the dialect allows a closed list of LaTeX commands, mitex converts them in process, and a command outside the list is an error naming the command and its line.
 - **[captions-and-references](captions_and_references_spec.md)** — `mpdf-005` · accepted · done
   Figures, tables, listings and equations gain captions, numbers and cross-references: the emitter wraps them in Typst's `figure`, the looks decide what a caption and a number look like, and a reference that names one stays true when another is inserted above it. The `:::` delimiter this spec invented for a multi-member figure also carries the front matter a paper opens with: the abstract, and the keywords it is indexed by.
-- **[web-demo](web_demo_spec.md)** — `mpdf-006` · accepted · done
-  The published browser demo becomes the project's front door: the page says what the dialect adds to markdown, every claim it makes is a snippet the workspace suite compiles, and one click sets that snippet as a PDF in the reader's own browser.
 - **[citations-and-bibliography](citations_spec.md)** — `mpdf-007` · accepted · done
   A document cites its sources and prints their reference list: the frontmatter names a bibliography file, the caller supplies it as bytes beside the images, `[@key]` becomes a citation, and Typst renders both the marks and the list.
 - **[multi-file-documents](multi_file_documents_spec.md)** — `mpdf-008` · accepted · partial
   A document may be written as several markdown files: a master names its sections in the order they are read, `core` joins them into the one stream the emitter already walks, and every error, every asset and every anchor learns which file it came from.
-- **[pdf-renderer](pdf_renderer_spec.md)** — `mpdf-009` · accepted · done
-  The app draws the page itself: `pdf.js` is vendored as two static modules and rasterises each page onto a canvas the pane owns, so fit-to-width is a mode rather than a transform, the type is sharp at the display's own resolution, and the text and links come back with it.
-- **[file-panel](file_panel_spec.md)** — `mpdf-010` · accepted · done
-  The panel becomes the project's files: the opened document's folder is the root, the panel lists the markdown, images and bibliographies under it, one file is set as the main the app compiles, and clicking another edits it while the main still draws the page.
 - **[repository-split](repository_split_spec.md)** — `mpdf-011` · accepted · partial
   The engine and the desktop app part ways: `md2pdf-core` and its CLI stay in this repository and are published as crates, Letur moves to a repository of its own with its history, its page and its gates, and depends on the engine by version.

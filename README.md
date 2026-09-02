@@ -14,29 +14,21 @@ $ cargo build --release
 $ ./target/release/md2pdf --help
 ```
 
-The desktop app builds into a real macOS application:
-
-```console
-$ cargo tauri build
-```
-
-That writes `target/release/bundle/macos/Letur.app`, and a `.dmg` beside it under
-`target/release/bundle/dmg/`. Drag the `.app` into `/Applications` and launch it from
-there; double-clicking a `.md` file opens it too.
-
-**The bundle is not signed.** Copy it over — a USB stick, `scp`, a shared folder — and
-it runs. Download it or send it by AirDrop and macOS marks it quarantined, and
-Gatekeeper refuses it until you allow it by hand in System Settings → Privacy &
-Security. Signing and notarising it needs an Apple Developer account, which this build
-does not have.
-
 ## Try it
 
-**With nothing installed: [ivapo.github.io/md2pdf](https://ivapo.github.io/md2pdf/).** The
+**With nothing installed: [ivapo.github.io/letur](https://ivapo.github.io/letur/).** The
 same crate compiled to WebAssembly, converting in the page — it sets out what this dialect
-adds to markdown, and every example on it is one this repository's tests compile and one
-click away from a PDF in your own browser, the three refusals included. Nothing is sent
-anywhere, and there is no server to send it to.
+adds to markdown, and every example on it is one click away from a PDF in your own
+browser, the three refusals included. Nothing is sent anywhere, and there is no server to
+send it to. **The twelve examples that page shows are fixtures here too**, frozen under
+`tests/fixtures/examples/`, where `core/tests/examples_test.rs` compiles the nine it
+accepts and holds the three it refuses to the sentence they print.
+
+Both that page and the macOS app that draws the PDF while you write it are **Letur**, a
+second front end over this crate: it converts exactly what the command converts and
+refuses exactly what the command refuses, in the same words. It has a repository of its
+own, at [github.com/Ivapo/letur](https://github.com/Ivapo/letur), with its own releases
+and its own bundle.
 
 Locally, **`samples/showcase/` is one document that uses every construct in the dialect** —
 every inline and block form, the abstract it opens with and the keywords beside it, captions,
@@ -93,159 +85,6 @@ Without `-o`, the PDF lands at the input path with a `.pdf` extension.
 `--emit-typst` prints the Typst source instead of compiling it. That output imports the
 look the frontmatter chose, which exists only inside the compiler's virtual filesystem, so
 it serves inspection rather than a standalone `typst compile`.
-
-## The desktop app
-
-There is a second front end, **Letur**: a macOS window that shows the PDF while you write
-it. It wraps the same core crate, so it converts exactly what the command converts and
-refuses exactly what the command refuses, in the same words — a document written across
-several files included.
-
-```console
-$ cargo tauri dev
-```
-
-That opens a window. Press `⌘O`, or the Open button, and pick a markdown file: the
-window finds the document that file belongs to, puts its text in the left pane, lists the
-project's files beside it and draws the page on the right. `cargo tauri dev`
-needs the Tauri CLI (`cargo install tauri-cli`); without it,
-`cargo run --release -p letur` opens the same window and skips the
-rebuild-on-change.
-
-**Type in the left pane and the page follows.** It redraws when you stop typing, and
-**the PDF is what the pane says, not what the file says** — so the page shows your
-unsaved work. `⌘S` writes the pane back to whichever file it is
-holding, and the foot of the window says `saved` for a moment. **The floppy in the
-header, or `⇧⌘S`, is `Save as…`**: it saves **wherever you point it**, and it takes the
-same kinds the panel lists — `.md`, `.bib`, `.yml` and `.yaml`. **Where it lands decides
-whether the pane goes with it.** Inside the project, the pane holds the new file and the
-next `⌘S` goes there. Outside it, the file is written and **the pane stays where it
-was** — the save is a copy, and the bar says `saved as <name> in <folder>` so you can
-see which of the two just happened. **The window keeps compiling the project it had**
-either way. If you save a file your document names, the page redraws with it; if you
-save the file you were editing under a new name — inside the project — the page goes
-back to what the old one says on disk, because that is the file the document still
-names. **The bar along the foot of the window names whatever the pane is holding** — the
-file you are typing in, which once you have clicked another file in the list is not
-the file the page beside it comes from, or the picture, if you have clicked an image
-row to look at one. **That bar also carries the view and fit controls**: the panel and
-the line numbers as two small marks on the left, and the fit beside the appearance
-button. **The header is Open and Save as…** — two marks and the status line, and nothing
-that decides what the window shows.
-**The button in that bar sets the window light or dark**: it starts on whichever your
-system is set to, and clicking gives you the other one. It remembers your choice the
-next time you open the app, and it changes only the app's own chrome — the page stays
-the white it will print as. Until you press it the window follows your system, so a
-machine that switches at sunset takes the window with it; pressing it once settles
-that, and there is no way back short of clearing the app's own settings. Drag the divider to give either side more room. **The `Lines` mark in the bar numbers
-the pane and marks the line your cursor is on**, so an error that names a line names
-somewhere you can see.
-
-**Save the file in another program and the page redraws too** — with one exception. The
-window watches the whole project, so editing a section, a figure or the bibliography
-elsewhere redraws it as well, and adding or removing a file shows up in the list. If the
-pane holds unsaved edits when the file changes underneath, the app keeps your text and
-says so rather than choosing for you: save to write the pane over the file, or press
-`Discard` in the bar it says it in to take the file instead. It never merges the two.
-
-A document that will not compile leaves the last good page on screen, dimmed, with the
-error above it — the same sentence the command prints — and the page comes back when you
-fix it.
-
-**A redraw opens the page on the heading you are writing under.** The app draws the page
-itself, so it knows where you are: it follows your cursor to the nearest heading above it,
-which is as close as it can get without one. Opening a file, and taking one that changed
-underneath, still start you at page 1. In a document written across several files it
-follows the headings in the file the pane is showing — so editing a section takes you to
-that section's own pages in the whole document, which is the thing the file list below is
-for. A master that is only a list of sections has no headings of its own and opens at
-page 1.
-
-**Dragging the divider or resizing the window leaves you where you were.** Nothing about
-the document moved, so nothing about your place in it does either — the page just refits
-to the width you gave it and comes back sharp when you let go.
-
-**The control beside `Lines` says how big the page is drawn.** `Fit width` is where it
-starts and is what the pane has always done; `Fit page` puts a whole page in the window;
-and the percentages below them pin a size of your own, up to 400%, where a page wider
-than the pane scrolls sideways. Changing it keeps your place in the document, and the
-page is drawn again at the new size rather than stretched to it. Opening a file goes
-back to `Fit width`.
-
-**The page is text, not a picture of text.** Select and copy from it as you would in any
-PDF reader — on a long document, from the pages around the one you are reading, which are
-the ones the app keeps drawn — and click a cross-reference to jump to the figure, table,
-equation, footnote or reference it names. A link out to the web does not open: the app fetches nothing and opens
-nothing, so those links are inert on the page.
-
-The header says where the page stands — `current` with the time the compile took, or
-`stale` when the last one failed and the page you are looking at is the older one.
-
-**`File → Save a Copy…` writes the PDF where you ask**, offering the path of
-the file that compiles with a `.pdf` extension — the page is that document's, whichever
-file you happen to be editing. It writes the page on screen and compiles nothing, so
-the file and the page cannot disagree, and it is byte for byte the file `md2pdf` writes
-for the same document — while the pane and the file say the same thing, which they do
-until you type. A page that is stale, or no page at all, is refused rather than written.
-
-**A `.md` file double-clicked in Finder opens in the app**, once it is the handler for
-that extension. macOS gives an installed editor the first claim on `.md`, so if
-double-clicking still opens your editor, pick a markdown file, press `⌘I`, and set
-*Open With* to Letur followed by *Change All*. Double-clicking a section opens its whole
-document, per the project rule below. Opening a second file this way switches the window
-to it, and **unsaved edits in the pane are lost** — the same as reopening from the Open
-dialog. Save first if you want to keep them.
-
-**The window opens a project, not just a file.** Open any markdown file and the app
-looks for the document it belongs to: if a file in the folder above names it as a
-section, that folder is the project. So double-clicking `sections/method.md` gives you
-the whole book, not one chapter of it. A file nobody names is its own project, which is
-every single-file document and is what the app has always done. The one limit: a section
-more than one folder below its master roots at its own folder — open the master instead.
-
-**Every document lists its folder down the left**: the markdown, the bibliographies and
-the images under the project's root, folders and all, with the file that compiles marked
-`◀ main`. A file the document names that is not on disk is listed too, struck through,
-because that is the file the next compile will refuse on. Hover a markdown row and a
-`main` button appears: click it and that file becomes the one that compiles, and the app
-remembers your choice the next time you open that folder. It remembers it in its own
-Application Support folder and writes nothing into yours. The `Files` mark in the bar
-folds the list away and brings it back.
-
-**The `+` beside `Files` makes a new one.** Type the path you want it at, relative to
-the project — `sections/discussion.md` — and the app creates it empty and lists it. It
-takes markdown and bibliographies, `.md`, `.bib`, `.yml` and `.yaml`, and it will not
-write outside the project or over a file that is already there; it says so beside the
-field if you ask for either. It does **not** add the include marker to your master:
-where a new section belongs in a document is your decision, so write `[](…)` where you
-want it. Folders are not created — make the folder first, in Finder.
-
-**Hover any other row and a `trash` button appears beside it: it moves that file
-to the Trash.** Not a delete — the Trash, so the file is in there under Finder's
-own `Put Back` if you did not mean it. **Nothing asks you twice**, and that is
-deliberate: a confirmation is what stands in for an undo where there is none,
-and this has one. The file that compiles has no such button — set another file
-as `main` first if you want that one gone — and neither does a struck-through
-row, which names a file that is not there to move. If you delete the file the
-pane is holding, the pane goes back to the one that compiles; if it holds
-unsaved edits the app will not delete it, and says so with `Discard` beside the
-sentence. Delete a section your document names and the row stays, struck
-through, and the next compile refuses by that file's name — which is the app
-telling you the document is broken, not the app breaking it.
-
-**Click a file in that list and the pane opens it, while the page keeps showing the whole
-document.** So you can write chapter three and watch the book: the file that compiles and
-the file you are editing are two different things, and the list marks each. `⌘S` writes
-the one in the pane. If it holds unsaved edits the app will not switch — it says so and
-offers `Discard`, the same way it does when a file changes underneath you.
-
-**Click a figure and it opens over the pane, which keeps the file it was holding.** So you
-can check that `emit.svg` is the diagram you meant without leaving for Preview: nothing
-compiles, the page goes on showing the whole document, and `⌘S` still writes the markdown
-you were editing. `Escape`, or `Back to the text`, puts it away, and so does opening any
-other file. A PDF is a legal figure here, so the list holds one — it says so rather than
-drawing it. Bibliographies are listed but not opened. The Install section above has the
-build command and the one thing an unsigned bundle cannot do.
 
 ## What the markdown may contain
 
@@ -988,6 +827,3 @@ The code is MIT. Most of the bundled fonts are under the SIL Open Font Licence �
 Libertinus Serif in four faces for body text, and Libertinus Mono for code; see
 `core/assets/fonts/OFL.txt`. The math font, NewCMMath-Regular, is under the GUST Font
 Licence; see `core/assets/fonts/GUST-FONT-LICENSE.txt`.
-
-The desktop app draws its page with Mozilla's `pdf.js`, vendored as two modules under
-`app/dist/pdfjs/` and licensed Apache-2.0; see `app/dist/pdfjs/LICENSE`.
