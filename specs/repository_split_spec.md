@@ -11,7 +11,7 @@ last_updated: 2026-09-02
 phases:
   - name: "Phase 1 — Letur's repository exists, with its history"
     reviewed: 2026-09-02
-    shipped: null
+    shipped: 2026-09-02
     cut: null
     by: null
   - name: "Phase 2 — the engine stands alone"

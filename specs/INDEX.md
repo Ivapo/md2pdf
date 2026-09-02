@@ -22,5 +22,5 @@
   The app draws the page itself: `pdf.js` is vendored as two static modules and rasterises each page onto a canvas the pane owns, so fit-to-width is a mode rather than a transform, the type is sharp at the display's own resolution, and the text and links come back with it.
 - **[file-panel](file_panel_spec.md)** — `mpdf-010` · accepted · done
   The panel becomes the project's files: the opened document's folder is the root, the panel lists the markdown, images and bibliographies under it, one file is set as the main the app compiles, and clicking another edits it while the main still draws the page.
-- **[repository-split](repository_split_spec.md)** — `mpdf-011` · accepted · pending
+- **[repository-split](repository_split_spec.md)** — `mpdf-011` · accepted · partial
   The engine and the desktop app part ways: `md2pdf-core` and its CLI stay in this repository and are published as crates, Letur moves to a repository of its own with its history, its page and its gates, and depends on the engine by version.
