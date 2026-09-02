@@ -115,6 +115,18 @@ its default the same way. **The identity is sound to key a gate to**, measured i
 date, and `core/src/lib.rs:today` returns `None`; `cargo update --workspace --dry-run`
 moves nothing, so a lock seeded from the engine's resolves the same tree.
 
+> **CORRECTED 2026-09-02, in Phase 3's round 1.** The last clause is vacuous as
+> evidence. `cargo update --workspace --dry-run` restricts the update to the two
+> workspace members and reports `Locking 0 packages` whatever the transitives are doing,
+> so it could never have moved; measured the same day, the unrestricted `cargo update
+> --dry-run` reports **48 semver-compatible updates** available over this lock,
+> `icu_segmenter 2.2.0 → 2.3.0` among them — Typst's own text segmentation, which is
+> where line breaking is decided. **The identity claim itself stands**, and stood for
+> both shipped phases, because every gate that read it compared builds off *one committed
+> lock*. What does not follow from it is that a *fresh resolve* reproduces the bytes, and
+> that is exactly what a `cargo install` from the registry does — so Phase 3's gate 2
+> pins `--locked` rather than inheriting a guarantee this sentence never gave.
+
 ### 1.2 Non-goals
 
 - **Not the web version of Letur.** `web/` moves to Letur's repository as it is, and
@@ -133,6 +145,11 @@ moves nothing, so a lock seeded from the engine's resolves the same tree.
   sitting beside a public library's publish token, and nothing more. **No secret is
   needed for anything in this spec**: the Pages deploy runs on the workflow's own
   identity token, and the engine is public, so a git dependency resolves without one.
+
+  > **CORRECTED 2026-09-02, in Phase 3's round 1.** True of Phases 1 and 2 and false of
+  > Phase 3: `cargo publish` needs a crates.io account with a verified email and a token
+  > on the machine that runs it. Phase 3 states that as a prerequisite of its own, in
+  > the shape Phase 1 used for the `spec-lint` rules.
 - **Not a change to what the dialect does.** No construct, key, refusal or look moves.
   Every golden is byte-identical, and that is a gate rather than a hope.
 - **Not a monorepo tool.** No submodule, no subtree, no workspace-of-workspaces. Letur
@@ -266,6 +283,13 @@ https://github.com/Ivapo/md2pdf --locked md2pdf-cli`; after it, `cargo install
 md2pdf-cli`. That is also the product's own install story for the tool, so the harness
 asks for nothing a Letur contributor would not have.
 
+> **CORRECTED 2026-09-02, in Phase 3's round 2: the post-publish line keeps `--locked`.**
+> `cargo install --locked md2pdf-cli` is what Phase 3 writes at all four harness sites,
+> because the harness compiles documents a gate then compares — the same reason gate 2
+> pins it. What the sentence got right survives: the *product's* install story is still
+> the plain `cargo install md2pdf-cli`, so the flag is the only thing a Letur contributor
+> types that a reader of the README does not.
+
 The alternative — a compile binary inside Letur's crate — was weighed and refused. The
 app has no library target, so a second binary would either restructure the crate to
 share `app/src/document.rs:read_assets_with` or duplicate `cli/src/main.rs:read_assets`
@@ -288,6 +312,15 @@ own empty `[workspace]` table and stays so.
 `core/Cargo.toml`.** It has `name`, `description`, `version`, `edition` and `license`,
 and needs `repository`, `readme` and `keywords`. `cli/Cargo.toml`'s path dependency
 needs a `version` beside its `path`, since a published crate cannot depend on a path.
+
+> **CORRECTED 2026-09-02, in Phase 3's round 1: *needs* overstates two thirds of it.**
+> Measured, `cargo package -p md2pdf-core` succeeds on the unmodified manifest with only
+> `warning: manifest has no documentation, homepage or repository`; only `description`
+> and `license` are mandatory and the crate has both. `repository`, `readme` and
+> `keywords` are what a crate on the registry ought to carry rather than what it must,
+> and Phase 3 adds them for that reason. **The `version` beside the path is the one that
+> is literally required**, and that half is measured and unchanged: without it
+> `cargo publish` refuses the CLI outright.
 `core/assets/` is 2.5 MB, almost all of it the bundled fonts under `core/assets/fonts/`,
 and Cargo packages everything under the crate that `.gitignore` does not exclude, so the
 looks and the fonts travel without an `include` list; the registry's limit is well
@@ -307,10 +340,33 @@ need not have. `app/build.rs` stays the one line it is.
 
 **The dry run is the gate and the publish is the author's.** `cargo publish --dry-run`
 packages and builds the crate exactly as the registry would and uploads nothing, so it
-is what a phase can assert. The publish itself is irreversible — a version can be yanked
+is what a phase can assert.
+
+> **CORRECTED 2026-09-02, in Phase 3's round 1: the singular dry run is wrong for a
+> two-crate workspace, and all three lenses found it.** Measured,
+> `cargo publish --dry-run -p md2pdf-cli` fails with *`no matching package named
+> md2pdf-core found — location searched: crates.io index`* while the library is
+> unpublished, because packaging rewrites the path dependency into a registry one. So
+> the sentence above holds for `md2pdf-core` and **not** for `md2pdf-cli`, and a phase
+> asserting two `-p` runs "and then" each other asserts a sequence no correct
+> implementation can pass — the tool's dry run would be readable only *after* the
+> irreversible act it exists to precede. **One invocation naming both crates** —
+> `cargo publish --dry-run -p md2pdf-core -p md2pdf-cli` — packages both and verifies
+> the tool against the locally packaged library; measured clean on cargo 1.97.1. Phase
+> 3's scope and its gate 1 take that form.
+
+The publish itself is irreversible — a version can be yanked
 and never deleted — so Phase 3's scope names it as a step the author runs, and its gate
 is read *after* it: a `cargo install md2pdf-cli` from the registry writes the same bytes
 the workspace binary writes.
+
+> **CORRECTED 2026-09-02, in Phase 3's round 2.** The last clause needs `--locked` to be
+> true, and §1.1's own note above says why: an unlocked `cargo install` is a *fresh
+> resolve*, and 48 semver-compatible updates sit over this lock today. **The plain line
+> is not wrong where it is a consumer's install story** — §1's usage example and the
+> engine README's `## Install` keep it deliberately, because a reader installing the tool
+> is not making an equivalence claim. It is wrong wherever something *compares two
+> builds*, which is this sentence, gate 2, and the harness's four sites.
 
 ### Two corpora, one id space kept, and what the linter has to learn first (decision, recorded)
 
@@ -451,11 +507,18 @@ twice, once in each history, which is what a copy of a record is.
   first half of the paragraph above is unchanged and shipped in Phase 1: Letur publishes
   at `https://ivapo.github.io/letur/`, measured 2026-09-02 at twelve `data-example`
   rows.
-- **OQ-5 — how tightly does Letur pin the engine?** *(design call)* `"0.1"` takes every
+- **OQ-5 — how tightly does Letur pin the engine?** *(design call)* ~~`"0.1"` takes every
   patch release; `"=0.1.0"` takes none. A product that measures its page to the text
   item, as `rules/desktop-panes.md` does, has a reason to prefer the exact pin and bump
   by hand. Cheap to hold, and decided by the first time an engine patch moves a Letur
-  number.
+  number.~~ **RESOLVED 2026-09-02, in Phase 3's round 1, confirmed by the author:
+  `md2pdf-core = "0.1"`.** Three lenses found Phase 3 writing "per OQ-5" for a literal
+  OQ-5 had not chosen, which is an implementer's guess by another name — the two answers
+  produce different manifests and different lockfiles in two crates. `"0.1"` is what §1's
+  usage example shows and what the comment in Letur's own `app/Cargo.toml` already
+  promises, so the exact pin would have contradicted two shipped statements. **The
+  argument for the exact pin survives as the thing that would reopen this**: the first
+  engine patch that moves a number `rules/desktop-panes.md` measures.
 - **OQ-6 — should an unresolvable `by` be reported at all?** *(design call, for the
   methodology rather than for this repository)* Measured in Phase 1's round 2: a phase
   carrying `cut` and `by` is checked for the pair and for a matching `supersedes` on the
@@ -477,8 +540,17 @@ twice, once in each history, which is what a copy of a record is.
   Three answers are open — Letur's `app/tests/page_examples_test.rs` goes on covering it
   from next door and that is enough; the engine grows a small test of its own over
   `tests/fixtures/examples/`; or the export is reconsidered before Phase 3 publishes an
-  API this repository does not use. **Named so Phase 3 meets it as a recorded question
-  rather than a discovery.**
+  API this repository does not use. ~~**Named so Phase 3 meets it as a recorded question
+  rather than a discovery.**~~ **RESOLVED 2026-09-02, in Phase 3's round 1, confirmed by
+  the author: the first answer.** The premise that the export has no reader is true of
+  *this tree* and false of the corpus: measured that round, Letur's
+  `app/tests/page_examples_test.rs` imports `md2pdf_core::{Asset, md_to_html, md_to_pdf}`
+  and calls `md_to_html` twice, over Letur's own copy of the comparison column. **That is
+  what the split means rather than a gap it left** — the export serves the page, and the
+  page is Letur's — so the engine grows no test of its own and the export ships as it is.
+  The third answer was weighed and refused on the same measurement: removing the `pub fn`
+  would break that suite and take the browser demo's second column with it, which is a
+  large price for tidiness about a function whose behaviour is checked either way.
 
 ## 4. Implementation phases
 
@@ -771,35 +843,121 @@ is byte-identical and the three hashed documents hash as they did.
 
 ### Phase 3 — the engine is published, and Letur depends on it by version
 
-*Produces the observable: **no**, and the gate is that the registry's binary writes the
-same bytes the workspace's does.*
+*Produces the observable: **no**, and the gate is that a binary installed from the
+registry writes the same PDF bytes the workspace's does.*
+
+**Prerequisite, outside this repository.** `cargo publish` needs a crates.io account with
+a verified email and a token on the machine that runs it, which §1.2's "no secret is
+needed" did not anticipate and its dated note now records. **Both names are free**,
+measured 2026-09-02 against the crates.io API — `md2pdf-core` and `md2pdf-cli` each answer
+*does not exist* — so no publish is stranded half-done by a name someone else holds, which
+is the one ordering `cargo publish --dry-run` cannot warn about because it neither checks
+nor reserves a name. `md2pdf` itself stays taken, per §1.2.
 
 - **Scope:**
-  - `core/Cargo.toml` gains `repository`, `readme` and `keywords`; `cli/Cargo.toml`
-    gains the same and a `version` beside its `path` dependency. A `README.md` for the
-    crate is the repository's own, which the field names.
-  - **Two things Phase 2 leaves this phase, both raised in its round 1 and neither
-    fixed there.** After Phase 2 the engine carries **no CI at all** — both workflows
-    were Letur's and left with it — so nothing but a local `cargo test --workspace`
-    stands between a commit and a publish; whether that wants a workflow of its own is
-    this phase's call, at the moment it first matters. And `md_to_html` publishes
-    untested, which OQ-7 holds.
-  - `cargo publish --dry-run -p md2pdf-core` and then `-p md2pdf-cli` both package and
-    build clean. **The publish itself is the author's step**, run by hand in the order
-    the dependency requires, `md2pdf-core` first; this spec does not run it.
-  - Once published, Letur's `app/Cargo.toml` and `web/Cargo.toml` replace the git
-    revision with the version per OQ-5, both lockfiles follow, and the harness's install
-    line becomes `cargo install md2pdf-cli`.
+  - `core/Cargo.toml` gains `repository`, `readme` and `keywords`; `cli/Cargo.toml` gains
+    the same and `version = "0.1.0"` beside its `path` dependency — the only one of the
+    four a published crate genuinely cannot do without, per §2's dated note, and written
+    as a literal here so the shape is not guessed. **A
+    `README.md` for the crate is the repository's own**: `readme = "../README.md"` reaches
+    one level out of the package, and cargo copies the file into the archive and rewrites
+    the field to `README.md` — measured, so gate 1 can read it rather than gate 5
+    discovering its absence on the crate page.
+  - **The engine gets CI of its own.** After Phase 2 it carries none — both workflows were
+    Letur's and left with it — so nothing but a local `cargo test --workspace` stands
+    between a commit and an irreversible publish. `.github/workflows/test.yml` runs
+    `cargo test --workspace` on push and on pull request: the whole deterministic suite,
+    some twenty seconds of it, of which nine are `long_document_test.rs`. **This is a
+    decision and not the implementer's call.** Phase 2's round 1 raised the gap, this
+    phase's round 1 found the draft restating it as *"whether that wants a workflow of its
+    own is this phase's call"* — under which two implementers, one adding a workflow and
+    one not, both pass every clause — and the author settled it here.
+  - `cargo publish --dry-run -p md2pdf-core -p md2pdf-cli`, **one invocation naming both**,
+    per §2's dated correction: the tool's own dry run cannot resolve the library until the
+    library is published, so two runs "and then" each other is a sequence nothing can
+    pass. **The publish itself is the author's step**, run by hand in the order the
+    dependency requires, `md2pdf-core` first; this spec does not run it.
+  - Once published, Letur's `app/Cargo.toml` and `web/Cargo.toml` replace the git revision
+    with `md2pdf-core = "0.1"` per OQ-5, **now resolved**; both lockfiles follow; and the
+    harness's install line becomes `cargo install --locked md2pdf-cli` at **four sites in
+    three files**, named because "the harness's install line" reads as one: the header
+    comment and the `INSTALL` constant in `app/harness/serve.mjs`, Letur's `README.md`,
+    and `rules/desktop-panes.md`, which declares `serve.mjs` among its own `sources` and
+    so goes false the moment the constant changes.
+  - `md_to_html` publishes as it is, per OQ-7, **now resolved**: its reader did not
+    disappear, it moved next door with the page it serves.
 - **Exit gate:**
-  1. Both dry runs clean, and the packaged `md2pdf-core` lists `assets/fonts/` and the
-     three `.typ` files, read from `cargo package --list`.
-  2. **The registry's binary is the workspace's.** `cargo install md2pdf-cli` into a
-     scratch prefix, then `md2pdf samples/showcase/showcase.md` from it and from
-     `target/release/md2pdf`, hashed, identical.
-  3. Letur's `cargo test --workspace` is green against the registry version with no
-     `[patch]` and no `git` dependency left in either `Cargo.toml`.
-  4. `crates.io/crates/md2pdf-core` shows the README the repository holds.
-- **Close-out:** `rules/pipeline.md`'s CLI section records the install path and the
-  registry names; the engine README's `## Install` opens with `cargo install
-  md2pdf-cli`. Letur's `rules/desktop.md` records the version dependency. One push per
-  repository.
+  1. **The one dry run is clean** — `cargo publish --dry-run -p md2pdf-core -p md2pdf-cli`
+     exits zero — and `cargo package --list -p md2pdf-core` lists `assets/fonts/`, the
+     three `.typ` files **and `README.md`**. The README is read here rather than only on
+     the crate page, so a `readme` that does not travel is a finding before the publish
+     instead of after it, where the fix is a new version. **`keywords` is deliberately not
+     asserted**: cargo validates none of it, and a missing keyword is the one thing this
+     phase touches that a later version fixes cheaply.
+  2. **A registry install writes the same PDF the workspace does.** `cargo install
+     --locked md2pdf-cli --root <scratch>`; then that binary and `target/release/md2pdf`,
+     each over `samples/showcase/showcase.md`, **`-o` into two different scratch paths** —
+     `cli/src/main.rs:default_output` writes beside its input, so two runs without `-o`
+     write one file and the comparison passes vacuously, which is the trap Phase 2's gate
+     3 already named — hashed with `shasum -a 256`, identical. **`--locked` is the whole
+     claim**: the published crate ships a `Cargo.lock`, `cargo install` ignores it without
+     the flag, and a fresh resolve of this tree moves 48 packages today including
+     `icu_segmenter 2.2.0 → 2.3.0`, Typst's own text segmentation. Without it a failure
+     would be indistinguishable from a regression. **The two binaries are not
+     byte-identical and are not asserted to be**: the workspace's `[profile.release]` does
+     not reach the registry — measured, the packaged manifest carries no `[profile]`
+     section at all — so the claim is about the PDF and never about the executable.
+  3. **Letur builds against the registry, both of its crates.** `cargo test --workspace`
+     green in Letur, which reaches `app` alone; **and `cargo build --locked
+     --manifest-path web/Cargo.toml --target wasm32-unknown-unknown` succeeds**, which is
+     the only thing that compiles the wasm crate whose manifest and lockfile this phase
+     rewrites — `web/Cargo.toml` detaches itself with an empty `[workspace]`, so the
+     workspace command never reaches it. The target needs `rustup target add
+     wasm32-unknown-unknown` if it is not already there.
+     `grep -rn 'git = ' app/Cargo.toml web/Cargo.toml` returns nothing, and neither
+     manifest carries a `[patch]`.
+
+     **This clause was Phase 1's gate 7 — `curl … | grep -c 'data-example='` reading 12 —
+     for exactly one round, and round 2 measured that it is a constant.** The page carries
+     twelve `data-example` rows, `pages.yml` copies `web/index.html` verbatim, the module
+     is a separate runtime import, this phase never touches the page, and `deploy` is
+     `needs: build` — so a `wasm-pack build` that fails against the rewritten manifest
+     skips the deploy, leaves the previous deployment live, and the curl still reads 12.
+     It could not fail on the implementation it was added to catch, which is the same
+     vacuous pass gate 2's `-o` closes one clause up. Phase 1's gate 7 was sound because
+     nothing was served at that URL yet; re-read here the number distinguishes nothing.
+  4. **The harness still compiles through the installed binary.** With `cargo install
+     --locked md2pdf-cli` from the registry on `PATH`, `bun harness/checks.mjs` passes in
+     Chromium — Phase 1's gate 3, re-read against the line this phase rewrites, since a
+     scope bullet that edits an install line and runs nothing is a bullet nothing checks.
+  5. **Both repositories' CI is green on this phase's own push**, read from the run's
+     conclusion — `test.yml` in the engine, which this phase creates, and `pages` in
+     Letur, whose `web/**` trigger the manifest rewrite fires. Without this the workflow
+     is the one scope item no clause reads, and an implementer who simply skipped it
+     would pass every other clause — which is the author's own argument for making it a
+     decision, one level down at the gate.
+  6. `crates.io/crates/md2pdf-core` shows the README the repository holds, confirming
+     after the publish what gate 1 read before it.
+  7. `spec-lint .` by absolute path in **both** repositories: zero errors, and in the
+     engine every warning still one of the four kinds Phase 2's gate 5 names. Both prior
+     phases gated their corpus, and this one edits `rules/` in two of them.
+- **Close-out:** **In the engine** — `rules/pipeline.md`'s CLI section records the install
+  path and the registry names, and **its `max_lines` moves with the edit**: it sits at 1238
+  of 1240 today, so the cap moves rather than the prose being shaved to fit, as Phase 2's
+  close-out said for the same file. The README's `## Install` opens with `cargo install
+  md2pdf-cli`. `specs/INDEX.md` is regenerated, because this phase's `shipped` date flips
+  `mpdf-011`'s derived rollup from `partial` to `done` and `.spec-lint.yaml` runs `index:
+  mode: check`, and `rules/INDEX.md` with it, since that index renders the cap the edit
+  moves. **In Letur** — `rules/desktop.md` records the version dependency;
+  `rules/desktop-panes.md` and `README.md` take the new install line; **`rules/web-demo.md`
+  loses one clause**, its *"the engine is a git dependency of `web/Cargo.toml` now"*, which
+  this phase falsifies — and only that clause, since the trigger reasoning it opens
+  survives a version bump; and `rules/INDEX.md` follows. **The list is named and not
+  counted**, deliberately: round 2 found `web-demo.md` missing from a list round 1 had
+  just widened, so a total here would be the same instrument this spec's own record broke
+  five times — the way to check it is `grep -rln 'git = \|git dependency\|md2pdf-cli'
+  rules README.md` in Letur, which finds the artifacts rather than agreeing with a number.
+  **The third alternative is load-bearing and was measured**: `web-demo.md` states the
+  dependency in prose rather than in a manifest line, so the two-alternative form of this
+  grep returned the other three and missed the one file two rounds were spent finding.
+  `rules/INDEX.md` is derived and matches none of them. One push per repository.

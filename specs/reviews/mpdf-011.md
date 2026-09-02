@@ -2,6 +2,144 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 3 only — 2026-09-02 — three lenses resumed, **one completed** — **INCOMPLETE**
+
+Verdict: **not recorded as converged.** The scope/consistency lens returned `READY` with
+zero blocking. The correctness and exit-gate lenses were resumed at the same moment and
+**both terminated on a session rate limit before reporting** (HTTP 429, resets 16:50
+America/Lima) — a tooling failure mid-round, not a verdict. Phase 3's `reviewed` is
+therefore **left null**, per §7.7's rule that the date records convergence.
+
+**The round-2 blocker is resolved, and was verified by a lens other than the one that
+raised it.** `rules/web-demo.md` is named in the Letur close-out, scoped to the one clause
+— its *"the engine is a git dependency of `web/Cargo.toml` now"* — with the trigger
+reasoning after it left standing, which a version bump does not falsify. The scope lens
+also re-checked the two folds it had not raised: gate 3's replacement *"is sound and
+non-vacuous … unlike the curl it fails when the build fails"*, and gate 5's workflow list
+is complete, `letur/.github/workflows/typecheck.yml` triggering only on paths this phase
+never touches while `pages` does fire, `web/Cargo.toml` and `web/Cargo.lock` sitting under
+its `web/**` trigger.
+
+**One non-blocking finding, folded: the close-out's own verification grep did not find the
+file two rounds were spent finding.** `grep -rln 'git = \|md2pdf-cli' rules README.md`
+returns three of the four artifacts — `web-demo.md` states the dependency in prose rather
+than in a manifest line. Measured both ways; the alternation now carries `git dependency`
+as a third term, and the close-out records that the third alternative is load-bearing.
+
+**What is outstanding is confirmation, not repair.** The exit-gate lens's round-2 blocker
+and the correctness lens's two round-2 non-blocking findings are all folded; neither agent
+has re-read the fold. That is the convergence property §7.4 buys with the same-agent
+resume, and it is the only thing this round did not deliver.
+
+### Round 2 — Phase 3 only — 2026-09-02 — three lenses, all resumed with the author's changelog — **NOT READY**
+
+Verdict: `NOT READY` on **two blockers, both introduced by round 1's own fold** — which is
+§7.3's *"a fix can introduce a blocker"* landing twice in one pass. Correctness returned
+`READY`; scope and exit-gate each returned one blocker.
+
+- **`letur/rules/web-demo.md:264` says the engine is a git dependency of `web/Cargo.toml`,
+  and this phase falsifies it.** Round 1's fold had just widened the Letur close-out from
+  one rule to three and still missed the fourth. Scoped to the one clause on the reviewer's
+  own precision.
+- **Gate 3's Pages check was a constant.** Round 1 substituted Phase 1's gate 7 —
+  `curl … | grep -c 'data-example=' == 12` — into a place where it distinguishes nothing.
+  Four measurements: `pages.yml` copies `web/index.html` verbatim, the page already carries
+  twelve rows, the module is a separate runtime import at `web/index.html:760`, and
+  `deploy` is `needs: build`, so a `wasm-pack build` that fails against the rewritten
+  manifest **skips the deploy and leaves the previous deployment answering 12**. Phase 1's
+  gate 7 was sound because nothing was served at that URL yet. Replaced with
+  `cargo build --locked --manifest-path web/Cargo.toml --target wasm32-unknown-unknown`,
+  and the gate now carries the reason the curl was withdrawn so it is not helpfully
+  restored — the same service the counts note does one clause up.
+
+Non-blocking, all folded: no gate clause read `.github/workflows/test.yml`, the very
+workflow round 1 had just made a decision (**new gate 5** reads both repositories' run
+conclusions); two surviving §2 sentences still prescribed the unlocked install; a round-1
+`CORRECTED` blockquote had split the sentence it sat beside, leaving the body resuming
+mid-sentence; `rules/INDEX.md` was missing from the engine half; and `cli/Cargo.toml`'s new
+field had no literal, now `version = "0.1.0"`.
+
+**The two `--locked` corrections record a distinction rather than adding a flag.** The
+plain `cargo install md2pdf-cli` is right as a *consumer's* install story and stays in §1's
+usage example and the engine README; `--locked` is what anything *comparing two builds*
+needs — §2's two sentences, gate 2, and the harness's four sites.
+
+**One count was written and removed before the round closed.** The author's first draft of
+the Letur close-out read *"Five Letur artifacts, not three"* — a total over a tree this
+phase edits, which is the instrument this document's own record broke five times across
+Phase 2. It was replaced with the named list and a grep, before the reviewers saw it;
+round 3 then found the grep itself incomplete.
+
+### Round 1 — Phase 3 only — 2026-09-02 — three fresh lenses (correctness/grounding, exit-gate testability, scope/cross-file consistency) — **NOT READY**
+
+Verdict: `NOT READY` from all three, on **six blockers after deduplication**.
+
+**Round 0, asked once for this episode and answered by the author.** Phase 3 produces no
+observable, and that is argued rather than assumed: §1.1 makes the observable the *gate* of
+every phase in this spec rather than its product, and Phase 3's own line says the gate is
+that the registry's binary writes the same bytes the workspace's does. It is the right
+thing to build — §1's goal is the shape a finished library has, *"a crate on the
+registry"*, and without this phase the split stops half-done with Letur pinned to a git
+revision.
+
+The blockers, and how each resolved:
+
+1. **`cargo publish --dry-run -p md2pdf-cli` cannot pass before `md2pdf-core` is
+   published** — measured independently by two lenses and by the author:
+   *`no matching package named md2pdf-core found — location searched: crates.io index`*,
+   because packaging rewrites the path dependency into a registry one. So §2's *"the dry
+   run is the gate"* held for the library and not for the tool, and the phase's only
+   pre-publish clause covered one of the two crates it ships. **One invocation naming
+   both** — `cargo publish --dry-run -p md2pdf-core -p md2pdf-cli` — packages both and
+   verifies the tool against the locally packaged library; measured clean on cargo 1.97.1.
+2. **`cargo install md2pdf-cli` carried no `--locked`**, so a gate keyed to byte-identity
+   was reading a fresh resolve. The published crate *does* ship a `Cargo.lock`, and cargo
+   ignores it without the flag; `cargo update --dry-run` reports **48 semver-compatible
+   updates** over this lock today, `icu_segmenter 2.2.0 → 2.3.0` among them — Typst's own
+   text segmentation, where line breaking is decided. The bytes happen to match today
+   (measured both ways, `e855b511…`), which is why this was a latent gate and not a broken
+   one.
+3. **The CI decision was restated, not made.** *"whether that wants a workflow of its own
+   is this phase's call"* let two implementers, one adding a workflow and one not, both
+   pass every clause. **Decided by the human**: `.github/workflows/test.yml` running
+   `cargo test --workspace` on push and pull request.
+4. **OQ-5 was cited for a literal it had never chosen.** **RESOLVED by the human** to
+   `md2pdf-core = "0.1"`, which is what §1's usage example and Letur's own manifest comment
+   already promised.
+5. **OQ-7 was open immediately before an irreversible publish**, and one of its three
+   answers changes the published surface. **RESOLVED by the human** to its first answer, on
+   a measurement taken this round: the export is not unread, it is read next door —
+   `letur/app/tests/page_examples_test.rs:42` imports `md2pdf_core::{Asset, md_to_html,
+   md_to_pdf}` and calls `md_to_html` at lines 309 and 656. The third answer was refused on
+   the same fact: removing the `pub fn` would break that suite.
+6. **The close-out omitted artifacts the scope's own edits falsify**, two of them in Letur.
+   Split into an engine half and a Letur half; the install line enumerated as **four sites
+   in three files**, `serve.mjs`'s header comment and its `INSTALL` constant counted
+   separately.
+
+**Numbers re-derived this round, and each held**: `md2pdf-core` and `md2pdf-cli` are both
+free on crates.io while `md2pdf` is the 2022 `0.0.3` tectonic wrapper §1.2 describes;
+`cargo package --list -p md2pdf-core` lists the eight files under `assets/fonts/` and
+exactly the three `.typ`, plus `README.md` once `readme = "../README.md"` is set — cargo
+copies it in and rewrites the field; the packaged manifests carry **no `[profile]`
+section**, so the workspace's `strip`/`lto`/`codegen-units` do not travel and the two
+binaries are necessarily different objects; `rules/pipeline.md` sits at 1238 of 1240.
+
+**Three shipped sentences took dated `CORRECTED` notes** rather than rewrites, per §6.1:
+§1.1's *"`cargo update --workspace --dry-run` moves nothing"*, which reports `Locking 0
+packages` vacuously because it restricts the update to the two members; §1.2's *"No secret
+is needed for anything in this spec"*, false for a phase whose central act needs a
+crates.io token; and §2's *"three things the registry needs"*, where only `description` and
+`license` are mandatory and the `version` beside the path dependency is the one genuinely
+required.
+
+**One rejection, recorded.** The exit-gate lens asked for a `keywords` clause in gate 1.
+Refused: cargo validates no part of it, and a missing keyword is the one thing this phase
+touches that a later version fixes cheaply — a gate literal with no failure mode worth
+catching is maintenance for nothing. Gate 1 now carries that reasoning in place. The same
+lens's complaint that *"clean"* was undefined against warnings **was** accepted; gate 1 now
+says "exits zero".
+
 ### Rounds 4 and 5 — Phase 2 only — 2026-09-02 — three lenses, resumed — **READY**
 
 Verdict: `READY`, zero blocking from all three lenses. **Converged at round five, two
