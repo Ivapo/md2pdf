@@ -419,12 +419,13 @@ twice, once in each history, which is what a copy of a record is.
   `ltr`, three letters inside the methodology's `[a-z]{2,4}` — **proposed as a default
   and confirmed by the author 2026-09-02**, so it is what Phase 1 writes into Letur's
   `.spec-lint.yaml` and `CLAUDE.md` rather than a value still open to a rename.
-- **OQ-2 — what is Letur's observable, in one sentence?** *(design call, defaulted)* The
-  engine's is "the typeset PDF that Typst compiles from the user's markdown". Letur's is
-  *"the page the author sees beside their text, redrawn as they write it"*, which is
+- **OQ-2 — what is Letur's observable, in one sentence?** *(design call)* ~~The engine's
+  is "the typeset PDF that Typst compiles from the user's markdown", and Letur's wants
+  one of its own.~~ **RESOLVED 2026-09-02, confirmed by the author:** Letur's observable
+  is *"the page the author sees beside their text, redrawn as they write it"*, which is
   `mpdf-003`'s note and `mpdf-009`'s title in one line. Phase 1 writes that sentence
-  into Letur's `CLAUDE.md`; the author of the product may replace it, and a replacement
-  is one line.
+  into Letur's `CLAUDE.md` as the stanza's observable, and every phase of every Letur
+  spec answers to it the way this corpus's phases answer to the PDF.
 - **OQ-3 — does the engine keep a page of its own?** *(deferred by evidence)* After this
   spec the engine's front door is its README and its registry entry, and the only
   browser build of the dialect is Letur's. A small engine playground — a textarea and a
