@@ -16,7 +16,7 @@ phases:
     by: null
   - name: "Phase 2 — the engine stands alone"
     reviewed: 2026-09-02
-    shipped: null
+    shipped: 2026-09-02
     cut: null
     by: null
   - name: "Phase 3 — the engine is published, and Letur depends on it by version"
