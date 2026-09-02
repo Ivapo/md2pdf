@@ -1,0 +1,2 @@
+- [ ] an unchecked task
+- [x] a checked task

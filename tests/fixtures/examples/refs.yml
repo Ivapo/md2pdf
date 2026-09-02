@@ -1,0 +1,6 @@
+knuth1986:
+  type: book
+  title: "Computers and Typesetting, Volume A: The TeXbook"
+  author: Knuth, Donald E.
+  date: 1986
+  publisher: Addison-Wesley
