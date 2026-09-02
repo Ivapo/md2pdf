@@ -470,6 +470,17 @@ hashed either side.
 warning, and no basename fallback for a path with a directory in it. Gate 6 cannot pass
 without them, measured, so this phase is blocked until they do and is planned only after.
 
+> **SATISFIED 2026-09-02.** All three shipped as `sdd-001` Phase 13, *"a corpus may span
+> two repositories"*, reviewed there over three rounds. The third landed in a better
+> shape than this spec asked for: the basename fallback was **removed** rather than
+> guarded, that session having found it unreachable for a bare filename — the suffix
+> branch already selects exactly the rels whose last segment is the cited name and
+> returns first, so all the fallback ever answered were citations that do carry a
+> directory. Measured against the shipped tool the same day: the Letur corpus simulation
+> lints at **0 errors and 63 warnings**, every one of gate 6's three named kinds, with all
+> 61 unresolved paths under `core/` or `cli/`; and `md2pdf`, `zukai` and `assimilator` are
+> each unchanged at 0 errors. **This phase is no longer blocked.**
+
 - **Scope:**
   - `Ivapo/letur` is created, public, and populated by `git filter-repo` over a fresh
     clone on the paths §2's table names, one `--path` each and one `--path-rename` for
