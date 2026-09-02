@@ -2,6 +2,82 @@
 
 Append-only. One heading per round, newest first.
 
+### Phase 3 shipped — 2026-09-02 — the crates are on the registry, and two greps were kept honest
+
+All seven gates read, in the order the publish forces: everything cargo can check
+locally, then the author's irreversible step, then everything that reads the registry.
+
+**Gate 1, the one dry run.** `cargo publish --dry-run -p md2pdf-core -p md2pdf-cli` exits
+**0**, and the transcript is the evidence for §2's dated correction rather than a
+restatement of it: cargo packages the library, then *"Unpacking md2pdf-core v0.1.0
+(registry `target/package/tmp-registry`)"* and compiles the tool against that. Two `-p`
+runs "and then" each other could not have done it. `cargo package --list -p md2pdf-core`
+lists **26 files** — `assets/fonts/` at seven faces and two licences, all three `.typ`,
+and **`README.md`**, with the packaged manifest carrying `readme = "README.md"`, cargo
+having rewritten `../README.md` on the way in exactly as the scope said it would.
+
+**Two measurements the packaged manifests settled before the publish.** Neither carries a
+`[profile]` section, so gate 2's refusal to compare the two binaries is a fact rather than
+a precaution; and `md2pdf-cli`'s packaged `Cargo.lock` pins `icu_segmenter 2.2.0`, which
+is the resolve `--locked` holds and the one an unlocked install would have moved.
+
+**Gate 2, the claim the phase carries.** `cargo install --locked md2pdf-cli --root
+<scratch>`, then that binary and the workspace's `target/release/md2pdf` over
+`samples/showcase/showcase.md`, `-o` into two different scratch paths, both hashing
+`e855b5119da5cc70e44b44ce48c0b3291c2781b9fc0525cff4a07113ad6b41b1`. The binaries differ by
+15 MB — 49,590,448 bytes from the registry against 34,816,784 from the workspace, which is
+`strip` and `lto` not reaching the registry — and the PDF does not differ by a byte.
+
+**Gate 3.** Letur's `cargo test --workspace` reads 114 passed with one ignored and 12
+passed with one ignored, the counts Phase 1 pinned. `cargo build --locked --manifest-path
+web/Cargo.toml --target wasm32-unknown-unknown` exits **0**. Both lockfiles moved by
+**two lines each** — `md2pdf-core` from `git+…?rev=` to `registry+…` with a checksum, no
+other package's version touched — because they were updated through `cargo metadata` and
+not `cargo generate-lockfile`, which would have thrown the seed away and re-resolved
+Typst's transitive tree.
+
+**Gate 4.** `bun harness/checks.mjs` in Chromium, with the registry-installed binary on
+`PATH`: **15 clauses, 15 passed**.
+
+**Gate 6.** `crates.io/crates/md2pdf-core` serves 45,937 bytes of rendered README carrying
+the repository's own opening sentence and the `cargo install md2pdf-cli` line this phase
+wrote into it.
+
+**Gate 7.** `spec-lint .` by absolute path: **0 errors, 62 warnings in each repository**,
+both unchanged from the reading taken before the phase began.
+
+**Two author decisions the phase's scope had left open.** The keywords, which the scope
+required and never named: `["markdown", "pdf", "typst", "typesetting", "converter"]` for
+the library and the same with `"cli"` last for the tool. And the publish handoff — the
+author ran both `cargo publish` commands, the session pausing between gate 1 and gate 2,
+which is the scope's *"the publish itself is the author's step"* taken literally.
+
+**One close-out artifact the spec's named list missed, and why.**
+`.github/workflows/pages.yml`'s trigger comment carries the same *"the engine is a git
+dependency of `web/Cargo.toml` now"* the close-out sends `rules/web-demo.md` to lose — and
+`web-demo.md` declares that workflow among its own `sources`, so correcting the rule alone
+leaves it contradicting the file it is generated from and `/sync-rules` re-seeds the stale
+claim. That is Phase 2's close-out argument for `rules/pipeline.md` and its doc comment,
+landing one repository over. **The close-out's own instrument could not have found it**,
+for two reasons at once: `grep -rln '…' rules README.md` does not look outside those two
+paths, and the comment wraps *"a git / dependency"* across two lines, so no single-line
+alternative matches. Both files were corrected in the same commit; a sweep of `.github/`
+for the same three terms now returns nothing. **The list being named rather than counted
+is what made this a finding instead of a passing total** — the spec's own defence of that
+choice, five times over, holds a sixth.
+
+**Two rewordings that kept a gate literal rather than bending it.** `app/Cargo.toml`'s new
+note on the git seam was written quoting `{ git = "…", rev = "…" }`, which put the string
+`git = ` back into a manifest gate 3 greps and requires nothing from; the note now spells
+the shape without the `=` and says why. And `rules/desktop-panes.md`'s *"it was `cargo run
+-p md2pdf-cli` until that phase"* began reading as Phase 3 once the sentence before it
+changed, so it names Phase 1, which is the phase that actually moved it.
+
+**What is left open, deliberately.** OQ-3 — whether the engine keeps a page of its own —
+and OQ-6, the unresolvable `by`, which is the methodology's rather than this repository's.
+Neither is Phase 3's, and with this phase `mpdf-011` is done.
+
+
 ### Round 3, resumed — Phase 3 only — 2026-09-02 — the two rate-limited lenses, retried — **READY**
 
 Verdict: `READY`, **zero blocking from all three lenses**. Phase 3's `reviewed` is set to
