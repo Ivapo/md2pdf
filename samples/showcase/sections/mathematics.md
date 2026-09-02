@@ -13,7 +13,8 @@ to carry a name:
 
 $$
 a^2 + b^2 = c^2
-$$ {#eq:pythagoras}
+$$ 
+{#eq:pythagoras}
 
 As [](#eq:pythagoras) shows, the two shorter sides settle the longest one. A
 reference to an equation is the one that needs `equations: numbered` in the
