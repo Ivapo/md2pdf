@@ -2,6 +2,137 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 13 only — 2026-09-02 — the same three lenses, resumed — **READY (converged)**
+
+Verdict: `READY`, **zero blocking from all three**. Phase 13's `reviewed` is set to
+2026-09-02. Converged in two rounds.
+
+**Every lens verified against the files rather than the changelog, and each re-ran its own
+round-1 measurement.** The correctness lens re-downloaded `md2pdf-cli-0.1.1.crate` to
+confirm 1264 and 37041; the gate lens re-ran `spec-lint` and re-checked the GUST literal's
+uniqueness; the scope lens took a class census of the linter's output — 62
+`CIT_UNRESOLVED_PATH` and nothing else — and grepped the spec for
+`(core/src/lib\.rs|cli/src/main\.rs):FONT_LICENSES`, no match, confirming the
+`CIT_SYMBOL_ABSENT` the author had introduced and fixed was gone corpus-wide.
+
+**Both rejections were conceded by the lens that lost them.** The scope lens withdrew its
+1260-line reading — its round-1 python had split on `\n` and counted the trailing-newline
+artifact; `spec-lint` prints `1259/1265` and `wc -l` minus a frontmatter ending at 38 gives
+1259. It also conceded `mpdf-011` §1.2 over its own §1.1. And on the clap rationale it
+conceded the author's split of the two lenses' readings: *"with `Option` alone, bare
+`md2pdf` would exit 0 into `run` and this phase would have to author a message"*, so the
+"acquire no message" goal survives and attaches to the attribute — its round-1 "the whole
+argument dissolves" was true only as an argument against the `Option`.
+
+**Six non-blocking findings, all folded.** Two were the fold's own renumbering debris: the
+phase's opening line still said *"gate (4) is the PDF not moving"* after five cases became
+seven, which is the §3 discharge for producing no observable pointing at the wrong clause;
+and the close-out called `rules/pipeline.md:66` its paragraph's *opening* sentence when it
+is the fourth. Two were pointer precision — the *"a fix can introduce a blocker"* literal
+lives in `loops/review-spec.md`'s §7.3 section rather than in `spec-authoring.md` §7 rule
+3, and the description of a published `md2pdf-cli` archive's contents was incomplete in the
+half that is not load-bearing.
+
+**The two that mattered were a residue the round-1 fold left.** The gate lens found that
+case (4)'s heading claimed *"and the CLI reads it"* while its body asserted only the
+const's shape: an implementation writing the const **and** separately reaching into
+`core/assets/` from `cli` passes in a checkout and breaks for every consumer off the
+registry — the exact failure the scope invokes as its reason for the export existing. And
+case (5) was found to catch a *cwd-relative* run-time read but not a
+`concat!(env!("CARGO_MANIFEST_DIR"), …)` one, the repository still being on the machine.
+**One instrument closes both**: `cargo package -p md2pdf-cli`, which builds the CLI from its
+own archive. Case (4) now carries it and case (5) names its own limit.
+
+**The archive provenance took two rounds and got a route rather than a version number.**
+Round 1 called the draft's `md2pdf-cli-0.1.0.crate` wrong; round 2 found the correction
+naming a `0.1.1` archive not present on the machine. Both were true about the mechanism and
+unreachable as evidence, and the reason is a trap now written into the scope:
+`target/package/md2pdf-cli-0.1.0.crate` is a **local repackage** that does hold both files,
+carrying the version number of a published archive that holds neither. The scope now names
+where a second person can actually look.
+
+**One observation explicitly not folded**, on the lens's own advice: `Option<PathBuf>` means
+`run` unwraps `args.input` on the non-licences path, which is a routine unwrap of a
+clap-guaranteed value under an invariant the scope already states.
+
+### Round 1 — Phase 13 only — 2026-09-02 — three fresh lenses (correctness/grounding, exit-gate testability, scope/YAGNI + cross-file consistency) — **NOT READY**
+
+Verdict: `NOT READY`. **All three lenses independently returned NOT READY**, and between
+them raised three blockers and thirteen non-blocking findings.
+
+**Round 0, asked once for this episode and answered by the author.** Phase 13 produces no
+observable, and the phase argues it rather than assuming it. *Is it the right thing to
+build?* Answered **yes, with a recorded reservation**, and the reservation was deliberately
+kept out of the reviewer prompts so a scope lens would have to find it independently. **It
+did.** `.github/workflows/` holds `test.yml` and nothing else — no release workflow, no
+bottle, no bundle — and both documented install paths build on the reader's own machine,
+leaving the licence files on disk beside the source. So the consumer this phase serves is
+the third party handed a *hand-copied* binary, and this project ships none. The phase's
+opening argument was rewritten down to that, with the `core` half separated out as the part
+that is not hypothetical: `include_str!` cannot reach `core/assets/fonts/` from a published
+`md2pdf-cli` archive, so the CLI's own requirement forces the export whatever anyone
+downstream ever does.
+
+**Blocker 1 — the phase pinned a mechanism as a decision and pinned the one that cannot
+run.** The scope had `input` taking `required_unless_present = "licenses"` and *not*
+becoming `Option<PathBuf>`. **All three lenses built that exact shape against this
+workspace's clap 4.6.6 and ran it**: the derive infers `required(true)` from a non-`Option`
+field, which collides with the attribute, so a **debug** build — the one `cargo test` runs —
+panics on every invocation at exit 101, and a **release** build lets `required` win and
+refuses `--licenses` at exit 2. `required = false` does not rescue it, `clap_derive` emitting
+`ok_or_else(… MissingRequiredArgument …)` for any non-`Option` field. Gate (1)'s first clause
+was unreachable from the prescribed code and gate (5) would have failed with it.
+
+**The recorded rationale was wrong in its shape, not only its answer**, and that is why the
+fold rewrote it rather than deleting it: it framed the two as alternatives trading clap's own
+bare-invocation message against one this phase would author. They are complements. The scope
+now requires both, and says so.
+
+**Blocker 2 — no gate clause read the `core` half of the scope, and the close-out gave the
+new export no home.** Raised from two sides. The gate lens: cases (1)–(5) read only `cli`, so
+an implementation putting all four `include_str!`s in `cli/src/main.rs` passed the entire
+gate unchanged. The scope lens: the scope argued the const's name was a decision *because*
+`rules/pipeline.md` would cite it, then named two close-out sites, both inside `## The CLI`,
+neither of which documents a `core` export — **and missed the sentence the export falsifies**,
+`rules/pipeline.md:66`'s *"`core/src/emit.rs:IMAGE_EXTENSIONS` is the crate's one non-function
+export"*. Following that close-out would have shipped the artifact that must track the code
+asserting something false. Fixed both ways: a new gate case over `core`, and the falsified
+sentence named as the citation's home. `core/src/lib.rs`'s own *"first re-export"* doc comment
+was checked and survives — `FONT_LICENSES` is a definition, not a re-export.
+
+**Blocker 3 — the scope and gate (2) specified two different byte streams.** The scope printed
+each font licence *"under its filename"*; gate (2) asserted stdout equalled *"the four files
+concatenated"*. Raised blocking by one lens and non-blocking by two; taken at the higher
+classification because it forces a guess about a user-facing output format **and** because the
+same implementer writes the arm and the test, so the gate would have pinned the guess. Now
+pinned: four parts joined by `"\n\n"`, font entries rendered `"{filename}\n{text}"`.
+
+**Ten non-blocking findings folded**, of which the substantive ones: the `mpdf-003` OQ-8
+citation was **withdrawn rather than repaired**, a lens having read that OQ and found it about
+toolchain, fonts and signing with nothing about licence text; two attributions to `mpdf-011`
+Phase 3's close-out were corrected to `db69839`, a code-only fix commit, which the phase's own
+step 0 had already contradicted; gate (3) gained a fifth literal, `of the GUST Font License`,
+the maths font's licence having been discriminated by no clause so that a list with both
+entries pointing at `OFL.txt` passed everything; a new case was added for running the binary
+outside the tree, the phase's own title claim being read by nothing; gate (1)'s `extra.md`
+clause now states its dependence on that path not existing; the `spec-lint` absolute path is
+given; the over-listing figure became *"eight crate names, or nine name-version pairs"*; and
+`CLAUDE.md` and the status artifact are now stated as "none needed" with reasons, which §3's
+reconciliation step asks for by name.
+
+**Two rejections.** A lens read `rules/pipeline.md` at 1260 body lines; it is **1259**, by
+`spec-lint`'s own print and by two hand methods. And a lens cited `mpdf-011` §1.1 for the
+distribution non-goal; it is §1.2.
+
+**The fold introduced a blocker of its own and the phase's own rule caught it.** The new
+close-out paragraph spelled the const as a `core/src/lib.rs:FONT_LICENSES` citation —
+precisely what the phase's own gate forbids for a symbol that does not exist yet — and
+`spec-lint` reported `CIT_SYMBOL_ABSENT` on the spot, taking the corpus from 0 errors to 1.
+Rewritten as a file plus a name. Recorded because it is §7.3's *"a fix can introduce a
+blocker"* landing on the author inside the single pass that wrote the fix, and because the
+rule that caught it is one this same phase had argued for two screens earlier.
+
+
 ### Round 3 — Phase 12 only — 2026-08-31 — the same three lenses, resumed — **READY**
 
 Verdict: `READY` from all three, zero blocking. **Converged.** Phase 12's `reviewed` is set to

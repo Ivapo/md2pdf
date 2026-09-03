@@ -69,7 +69,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 13 — the binary carries its own licences"
-    reviewed: null
+    reviewed: 2026-09-02
     shipped: null
     cut: null
     by: null
@@ -1947,12 +1947,24 @@ test lands on step 2 and the steps above it are worked rather than skipped.
 ### Phase 13 — the binary carries its own licences
 
 *Produces the observable: **no**, and the gate is that it does not move.* This phase adds
-a flag that prints text and touches no path a PDF travels. **The argument for a phase that
-produces none** is that the alternative is not "no observable" but "an observable someone
-may not lawfully redistribute": `md2pdf` links Typst, `mitex` and 300-odd other crates
-statically, so their terms follow every copy of the binary, and until this phase the only
-place their text exists is a repository the holder of a binary may never have seen. Gate
-(4) is the PDF not moving, which is what a phase in this position owes.
+a flag that prints text and touches no path a PDF travels; **gate (6)** is the PDF not
+moving, which is what a phase in this position owes. (That read "gate (4)" until round 2:
+the round-1 fold renumbered five cases to seven and this one reference did not travel with
+them — the phase's own §3 discharge pointing at the wrong clause.)
+
+**The argument for producing none, stated at the strength the facts actually support.** A
+draft of this line said the alternative was "an observable someone may not lawfully
+redistribute", and round 1's scope lens measured that claim too strong: `.github/workflows/`
+holds `test.yml` and nothing else, and **this repository distributes no compiled binary at
+all** — no release workflow, no bottle, no bundle. Both documented install paths build on
+the reader's own machine, and since the licence fix of 2026-09-02 both leave `LICENSE` and
+`THIRD-PARTY-LICENSES.md` on disk beside the source. **So everyone who produces a binary
+today already holds the text**, and the consumer this phase serves is the third party who
+receives a *hand-copied* one — real, conventional to serve, and currently hypothetical for
+this project. That is the honest scope of the benefit and it is written here rather than
+inflated, per §5. **What is not hypothetical is the `core` half**: `include_str!` cannot
+reach `core/assets/fonts/` from a published `md2pdf-cli` archive, so the CLI's own
+requirement forces a public const in `core` whatever anyone downstream ever does with it.
 
 **Drafted 2026-09-02**, after `mpdf-011` Phase 3 published the crates and a licence audit
 found the gap. Appended per §6.1 step 2; the steps above it are worked rather than skipped.
@@ -1960,133 +1972,234 @@ found the gap. Appended per §6.1 step 2; the steps above it are worked rather t
 - **Step 0 — a decision, or only the code?** A decision. What the CLI's surface is, and
   whether the binary discharges an attribution obligation on its own or delegates it to a
   README. **The repository half was code and shipped as one** — `LICENSE` and
-  `THIRD-PARTY-LICENSES.md` now travel in both packages, and no spec was owed for it,
+  `THIRD-PARTY-LICENSES.md` now travel in both packages — and no spec was owed for it,
   because a declared `license = "MIT"` shipping without the MIT text is a defect and not a
   decision. What is left over is the part a fix could not settle: a flag.
 - **Step 1 — does it remove or contradict shipped work?** No. Phase 1 set the CLI at
-  `md2pdf input.md [-o output.pdf]` and Phase 1's `--emit-typst` extended it; a third
-  optional flag extends it again. **One shipped statement does narrow**, and it is a
-  grammar rather than a claim: `input` stops being unconditionally required. That is not a
-  contradiction to correct in place, because no prose in this spec states the requirement
-  as a decision — it states the command's shape, which gains an alternative.
+  `md2pdf input.md [-o output.pdf]` and introduced `--emit-typst`; a third optional flag
+  extends it again. **One shipped statement does narrow**, and it is a grammar rather than
+  a claim: `input` stops being unconditionally required. That is not a contradiction to
+  correct in place, because no prose in this spec states the requirement as a decision — it
+  states the command's shape, which gains an alternative.
 - **Step 2 — is its subject one an existing spec owns?** **Yes, and this one.** The CLI
-  contract has been this spec's since Phase 1, and `rules/pipeline.md`'s `covers:` ends
-  with it. The rollup is `done` rather than `abandoned`, so a phase is the mechanism.
+  contract has been this spec's since Phase 1, and `rules/pipeline.md`'s `covers:` ends with
+  it. The rollup is `done` rather than `abandoned`, so a phase is the mechanism. **The one
+  rival a reader would name is disposed of rather than left implicit**: `mpdf-011` shipped
+  the licence *artifacts*, but its subject is the split and the publication, its rollup is
+  `done`, and its §1.2 pushes distribution away outright — *"Not signing, packaging or
+  distribution."*
 - **Step 3 is not reached.**
 
 - **Scope: one export in `core`, one flag in `cli`, and no third place.**
 
   **`core/src/lib.rs` gains a public const carrying the two font licences**, beside the
   `include_bytes!` block that already embeds the faces they cover. The name is given here
-  rather than left to the implementer, for a reason Phase 12's rename established from the
-  other direction: this one is **public API of a published crate**, so choosing it is a
-  decision and not an implementer's call, and `rules/pipeline.md` will cite it.
+  rather than left to the implementer because it is **public API of a published crate**, so
+  choosing it is a decision and not an implementer's call, and the close-out below names the
+  `rules/pipeline.md` sentence that must cite it.
 
       pub const FONT_LICENSES: &[(&str, &str)]
 
   Two entries, `("OFL.txt", …)` and `("GUST-FONT-LICENSE.txt", …)`, each `include_str!` of
-  the file already sitting in `core/assets/fonts/`. **The fonts are `core`'s, so their
-  licences are `core`'s to hand out** — and the consequence is deliberately wider than this
-  phase: any embedder of the library gets them, which is what Letur's bundle will need
-  under `mpdf-003` OQ-8 without a second copy of these files existing anywhere.
+  the file already sitting in `core/assets/fonts/`. **It belongs to `core` because the CLI
+  cannot reach those files**: a published `md2pdf-cli` archive holds **nothing of `core`'s**
+  — its own sources, tests, manifests, README and the two root licence files, and no
+  `assets/` — so `include_str!("../../core/assets/…")` resolves in a checkout and fails on
+  the registry. That the fonts are `core`'s makes it
+  *right*; that the CLI cannot see them makes it *forced*. **An earlier draft justified the
+  width by pointing at `mpdf-003` OQ-8 and round 1 read that OQ**: it asks what it takes to
+  run the app on another machine — toolchain, fonts, signing — and says nothing about licence
+  text, so the citation is withdrawn rather than repaired. Any embedder still gets the
+  const; that is a consequence, not the reason.
 
-  **`cli/src/main.rs:Args` gains `--licenses`**, and `cli/src/main.rs:run` gains an arm
-  that prints and returns before it reads a file, on `--emit-typst`'s exact shape.
+  **`cli/src/main.rs:Args` gains `--licenses`**, and `cli/src/main.rs:run` gains an arm that
+  prints and returns before it reads a file, on `--emit-typst`'s exact shape.
 
-  **`input` becomes `required_unless_present = "licenses"` and does *not* become
-  `Option<PathBuf>`.** Both reach the same grammar and they differ on the failure they
-  leave behind: the attribute keeps clap's own message for a bare `md2pdf`, while an
-  `Option` moves that failure into `run` and makes this phase author a message. Nothing
-  pins that message today — checked, `cli/tests/` asserts no usage string — so this is a
-  choice about not acquiring a liability rather than about keeping a test green.
+  **`input` becomes `Option<PathBuf>` *and* carries `#[arg(required_unless_present =
+  "licenses")]`. Both, not either.** A draft of this bullet prescribed the attribute alone
+  and forbade the `Option`, and **all three round-1 lenses independently built that shape
+  against this workspace's clap 4.6.6 and measured it failing**: the derive infers
+  `required(true)` from a non-`Option` field, which collides with the attribute, so a
+  **debug** build — the one `cargo test` runs — panics on every invocation with *"Argument
+  input: `required` conflicts with `required_unless*`"*, exit 101, and a **release** build
+  lets `required` win and refuses `--licenses` with exit 2. Adding `required = false` does
+  not rescue it, because `clap_derive` generates `ok_or_else(… MissingRequiredArgument …)`
+  for any non-`Option` field and the absent value still errors.
 
-  **What it prints, in this order and joined by nothing but the blank line between them:**
-  this project's own MIT, from `include_str!` of `cli/LICENSE`; then each entry of
-  `FONT_LICENSES` under its filename; then `THIRD-PARTY-LICENSES.md`, from `include_str!`
-  of `cli/THIRD-PARTY-LICENSES.md`. **Both of those two are the symlinks `mpdf-011`'s
-  licence fix put there**, which is why the flag works identically from a checkout and from
-  `cargo install`: cargo resolves a symlink into the archive as an ordinary file, measured
-  at 1264 and 37041 bytes in `md2pdf-cli-0.1.0.crate`.
+  **The rejected rationale is recorded rather than quietly replaced**, because it was wrong
+  in its shape and not only in its answer: it framed the two as alternatives trading clap's
+  own bare-invocation message against a message this phase would have to author. They are
+  complements. `Option` is what lets the field hold "absent"; `required_unless_present` is
+  what keeps clap enforcing the requirement and printing its own message when the flag is
+  missing — measured, bare `md2pdf` still exits 2 on clap's own text. **So the "acquire no
+  message" goal survives intact and attaches to the attribute**, and nothing about it ever
+  argued against the `Option`.
 
-  **Nothing is generated at run time and nothing is read from disk**, so there is no path
-  on which the flag can fail. Four `include_str!`s make the text a compile-time constant,
-  which is also what makes gate (2) a byte comparison rather than a search for phrases.
+  **What it prints, pinned exactly, because gate (2) calls itself a byte comparison.**
+  Four parts, joined by `"\n\n"`:
+
+  1. `include_str!` of `cli/LICENSE`;
+  2. and 3. one part per `FONT_LICENSES` entry, each rendered `"{filename}\n{text}"`;
+  4. `include_str!` of `cli/THIRD-PARTY-LICENSES.md`.
+
+  A draft left this as "under its filename" while the gate said "the four files
+  concatenated", which round 1 caught from two lenses as two different byte streams — and
+  the trap is specific: the implementer writes both the arm and the test, so the gate would
+  have pinned whatever was guessed rather than what was decided.
+
+  **Both `cli/` sources are the symlinks the licence fix of 2026-09-02 put there** —
+  `db69839`, a code-only fix commit and **not** `mpdf-011` Phase 3's close-out, which a draft
+  misattributed and which its own step 0 above already contradicts. Cargo resolves a symlink
+  into the archive as an ordinary file, at 1264 and 37041 bytes.
+
+  **Where to see that, because two rounds were spent on the provenance.** In
+  `md2pdf-core-0.1.1.crate`, which sits in the local registry cache, or in
+  `md2pdf-cli-0.1.1.crate` fetched from `static.crates.io`; both were published after the
+  symlinks landed. **The trap is `target/package/md2pdf-cli-0.1.0.crate`**, which does hold
+  both files and is where the original measurement came from — it is a *local repackage*
+  carrying the version number of a published archive that holds neither, since 0.1.0 went
+  out before the fix. A draft cited `0.1.0` and round 1 called it wrong; round 2 found the
+  correction naming a `0.1.1` archive not present on the machine. Both were pointing at the
+  same true mechanism through an artifact that could not be opened, so the route is written
+  out rather than the version number simply being edited again.
+
+  **Nothing is generated at run time and nothing is read from disk**, so there is no path on
+  which the flag can fail. Four `include_str!`s make the text a compile-time constant.
 
   **`core/src/emit.rs`, the three `.typ` files and every golden are untouched.**
 
-- **Exit gate:** five cases.
+- **Exit gate:** seven cases. **Round 1 added two of them** — one for the `core` half, which
+  no clause read, and one for the phase's own title claim.
 
   (1) **The flag runs without a document and the document runs without the flag.**
   `md2pdf --licenses` exits 0 with no positional argument; `md2pdf --licenses extra.md`
   exits 0 and ignores it, as `--emit-typst` ignores `-o`; a bare `md2pdf` still exits
-  non-zero from clap; and `cli/tests/cli_test.rs:emit_typst_prints_the_golden_file` and
-  `cli/tests/cli_test.rs:the_o_flag_writes_a_pdf` both still pass, which is the statement
-  that making `input` conditional broke neither of the two paths that use it.
+  non-zero from clap's own message; and `cli/tests/cli_test.rs:emit_typst_prints_the_golden_file`
+  and `cli/tests/cli_test.rs:the_o_flag_writes_a_pdf` both still pass. **The `extra.md`
+  clause depends on that path not existing** — no such file is in the tree today, and
+  against one that exists the clause proves only that parsing succeeded rather than that the
+  arm returned before reading. Named so a later implementer does not helpfully create it.
 
   (2) **What it prints is what the repository holds, byte for byte.** One test asserts
-  stdout equals the four files concatenated in the scope's order, read from disk by the
-  test rather than compiled in — so a reordering, a truncation or a dropped section fails.
-  **`include_str!` is what makes drift impossible rather than merely detected**: the
-  compiler reads the same files, so the only thing this case can catch is the assembly.
+  stdout equals the four parts assembled as the scope pins them, each read from disk by the
+  test rather than compiled in — so a reordering, a truncation, a dropped section or a
+  missing filename line fails.
 
   (3) **The text a reader needs is actually in it**, which case (2) cannot say, since two
-  wrong files concatenated correctly pass it. Four literals must appear in stdout:
-  `Apache License`, `MIT License`, `SIL OPEN FONT LICENSE` and `| \`typst\` | 0.15.1 |
-  Apache-2.0 |`. The fourth is the row that carries the single largest thing the binary
-  embeds and the one whose absence this whole phase exists to prevent.
+  wrong files assembled correctly pass it. Five literals must appear in stdout:
+  `MIT License`, `SIL OPEN FONT LICENSE`, `Apache License`, `` | `typst` | 0.15.1 |
+  Apache-2.0 | `` and **`of the GUST Font License`**. The fifth was added in round 1: the
+  other four discriminate three of the four files, and the maths font's licence — the second
+  of `FONT_LICENSES`' two entries — was named by no clause, so a list with both entries
+  pointing at `OFL.txt` and a test mirroring it passed everything. Verified unique: one hit
+  in `core/assets/fonts/GUST-FONT-LICENSE.txt`, zero in the other three.
 
-  (4) **The page does not move.** `target/release/md2pdf` over `samples/showcase/showcase.md`,
-  hashed with `shasum -a 256` before this phase's commit and after, identical, **`-o` into
-  a scratch path** since `cli/src/main.rs:default_output` writes beside its input. One
-  document is enough here, unlike `mpdf-011` Phase 2's three, because this phase adds a
-  branch that returns before the pipeline is entered rather than editing anything inside it.
+  (4) **`core` carries the const, and the CLI reads it *through* the const.** Two
+  instruments, because round 2 found the first does not reach the second half of that
+  sentence. A test in `core` asserts `FONT_LICENSES` has exactly two entries keyed
+  `"OFL.txt"` and `"GUST-FONT-LICENSE.txt"`, each non-empty. **And `cargo package -p
+  md2pdf-cli` succeeds**, which builds the CLI from its own archive and so fails any
+  `include_str!` reaching into `core/assets/` — a path that resolves in a checkout and does
+  not exist on the registry.
 
-  (5) **`cargo test --workspace` passes and `spec-lint .` exits zero with no error**, the
-  second by absolute path, the tool being on no `PATH` here. Its warnings are the four
-  kinds `mpdf-011` Phase 2's gate 5 names and are inherited.
+  **Round 1's gate lens found that cases (1)–(3) and (5)–(7) read only `cli`**, so an
+  implementation putting all four `include_str!`s in `cli/src/main.rs` — the one shape the
+  scope forbids — passed the whole gate unchanged. **Round 2 then found the residue**: the
+  `core` test alone admits an implementation that writes the const *and* separately reaches
+  into `core/assets/` from `cli`, which passes in a checkout and breaks for every consumer.
+  The packaging run is what closes it, and it closes case (5)'s stated limit in the same
+  stroke.
+
+  (5) **The binary carries the text away from the repository.** `target/release/md2pdf`
+  copied to a scratch directory outside the tree, run there as `--licenses` with the working
+  directory elsewhere, produces the same stdout as case (2). Round 1 added this: every other
+  clause runs inside the workspace, so an implementation reading `cli/LICENSE` at run time
+  passed them all while breaking the sentence this phase is named for. **Its limit, named
+  rather than left to be found:** it catches a *cwd-relative* read, which is the realistic
+  wrong shape, and not a `concat!(env!("CARGO_MANIFEST_DIR"), …)` one, since the repository
+  still exists on the machine. Case (4)'s packaging run is what reaches that.
+
+  (6) **The page does not move.** `target/release/md2pdf` over `samples/showcase/showcase.md`,
+  hashed with `shasum -a 256` before this phase's commit and after, identical, **`-o` into a
+  scratch path** since `cli/src/main.rs:default_output` writes beside its input. One document
+  is enough here, unlike `mpdf-011` Phase 2's three, because this phase adds a branch that
+  returns before the pipeline is entered rather than editing anything inside it.
+
+  (7) **`cargo test --workspace` passes and `spec-lint` exits zero with no error** — run as
+  `/Users/ivapo/dev/main/spec-driven-dev/bin/spec-lint .`, the path given because the tool is
+  on no `PATH` here and Phase 12's gate inherited the same omission. Its warnings are the
+  four kinds `mpdf-011` Phase 2's gate 5 names and are inherited; today it reads 0 errors and
+  62 warnings, every one `CIT_UNRESOLVED_PATH`.
 
   **This phase cites `core/src/lib.rs` and `cli/src/main.rs` as files wherever it means
   something it creates**, never as `file:symbol` — and the const's name is given in a code
   block above rather than in a citation for exactly that reason. A draft of this clause did
-  cite the symbol and argued that the resulting `CIT_SYMBOL_ABSENT` was "correct rather
-  than a finding" before the code landed. **That argument is wrong and the draft was
-  measured failing**: this document is append-only and accepted, so the error would stand
-  in the corpus from the moment the phase is written until the moment it ships, failing
-  this same clause for every *other* phase in the meantime and failing `/review-spec`'s own
-  run on the round that is supposed to judge it. Phase 12 wrote the rule from the other
-  direction, for a symbol it deletes; it holds identically for one not yet created.
+  cite the symbol and argued that the resulting `CIT_SYMBOL_ABSENT` was "correct rather than
+  a finding" before the code landed. **That argument is wrong and the draft was measured
+  failing**: this document is append-only and accepted, so the error would stand in the
+  corpus from the moment the phase is written until the moment it ships, failing this same
+  clause for every *other* phase in the meantime and failing `/review-spec`'s own run on the
+  round that is supposed to judge it. Phase 12 wrote the rule from the other direction, for a
+  symbol it deletes; it holds identically for one not yet created.
 
-  **What this gate deliberately does not assert: that `THIRD-PARTY-LICENSES.md` is
-  current.** It is generated by `tools/third-party-licenses.py` from the resolve graph, and
-  regenerating it needs the registry sources unpacked on the machine — which a CI runner
-  that has only fetched crates does not have. So the committed file could in principle lag
-  a dependency change, and no clause here would see it. **Named rather than papered over**,
-  and the honest bound is that it is a superset by construction: the generator walks the
-  resolve rather than an enabled feature set, so it over-lists by eight crates today, and a
-  file that over-lists is the safe direction for the failure this phase is about. **OQ-15
-  holds the three answers that would actually close it**, and this phase takes none of
-  them, because every clause above reads the committed file whatever that file says.
+  **What this gate deliberately does not assert: that `THIRD-PARTY-LICENSES.md` is current.**
+  It is generated by `tools/third-party-licenses.py` from the resolve graph, and regenerating
+  it needs the registry sources unpacked on the machine — which a CI runner that has only
+  fetched crates does not have. So the committed file could in principle lag a dependency
+  change, and no clause here would see it. **Named rather than papered over**, and the honest
+  bound is that it is a superset by construction: the generator walks the resolve rather than
+  an enabled feature set, so it over-lists today by **eight crate names, or nine name-version
+  pairs** — round 1 re-derived both and the two figures differ because `vello_common` appears
+  at two versions, of which `cargo tree -e normal` reaches one. A file that over-lists is the
+  safe direction for the failure this phase is about. **OQ-15 holds the three answers that
+  would actually close it**, and this phase takes none of them, because every clause above
+  reads the committed file whatever that file says.
 
-- **Close-out.** `rules/pipeline.md`'s `## The CLI` section, in two places: the command
-  grammar line `md2pdf input.md [-o output.pdf] [--emit-typst]`, which gains the flag and
-  the condition on `input`; and the licence-artifacts paragraph `mpdf-011` Phase 3's
-  close-out added, which after this phase names a fourth reader of the same four files.
-  **Its `max_lines` is at 1259 of 1265** — six lines of headroom, re-derive it rather than
-  trusting this number, and move the cap with the edit rather than shaving the prose, as
-  the two phases before this one did.
+- **Close-out.** **Three passages in `rules/pipeline.md`, not two** — round 1 found the third
+  and it is the one that goes *false* rather than merely incomplete:
 
-  `README.md`'s `## Licence`, one sentence: it names the shipped files and after this phase
-  the binary can print them, which is the half a reader holding only a binary needs told.
-  **Its `## Use` block is the other site**, and it is the one a draft of this list missed on
-  first pass: it shows the three invocations and would silently become incomplete.
+  1. `## The CLI`'s command-grammar line `md2pdf input.md [-o output.pdf] [--emit-typst]`,
+     which gains the flag and the condition on `input`.
+  2. `## The CLI`'s licence-artifacts paragraph, which after this phase names a fourth reader
+     of the same four files.
+  3. **The API paragraph's fourth sentence — `core/src/emit.rs:IMAGE_EXTENSIONS` "is the
+     crate's one non-function export" — which `pub const FONT_LICENSES` makes untrue.**
+     (Quoted verbatim, so the target is unambiguous; a draft called it the paragraph's
+     opening sentence, which opens on `md_to_typst` instead.) This
+     is the site that must carry the citation of the new const in `core/src/lib.rs` that
+     the scope's naming argument promises — **written here as a file and a name rather than
+     as a `file:symbol` citation, for the reason the gate gives two screens up**, and a
+     draft of this list named neither the sentence nor any home for it. The fold that added
+     this paragraph spelled it as a citation and `spec-lint` reported `CIT_SYMBOL_ABSENT`
+     on the spot: *"a fix can introduce a blocker"* — `loops/review-spec.md`, in the section
+     implementing §7.3 — caught by the phase's own rule inside the pass that wrote it. `rules/` is the artifact that must track the code, so following
+     that draft would have shipped it asserting something false. **`core/src/lib.rs`'s own
+     doc comment survives untouched**: it says `IMAGE_EXTENSIONS` is "the crate's first
+     re-export", and `FONT_LICENSES` is not a re-export.
+
+  **`rules/pipeline.md` is at 1259 of `max_lines: 1265`** — six lines of headroom,
+  re-derived three ways in round 1 after one lens read 1260; `spec-lint` prints `1259/1265`
+  and that is authoritative. Three passages against six lines is tight, so **re-derive it
+  rather than trusting this number, and move the cap with the edit** rather than shaving the
+  prose, as the two phases before this one did.
+
+  `README.md`, two sites: `## Licence`, one sentence — it names the shipped files and after
+  this phase the binary can print them, which is the half a reader holding only a binary
+  needs told; and **`## Use`**, which shows the three invocations and would silently become
+  incomplete.
+
+  **`CLAUDE.md`: none needed** — it carries the workflow stanza and the observable sentence,
+  and this phase moves neither. **Status artifact: none needed** — `.spec-lint.yaml` has
+  `status_artifacts: {}`, so none exists. Both stated because §3's reconciliation step asks
+  for them by name and a draft was silent on both.
 
   **`core/src/lib.rs`'s module doc is deliberately not touched.** It describes the pipeline,
-  and `FONT_LICENSES` is beside the pipeline rather than in it — the same call
-  `mpdf-011` Phase 2 made when it left the four `app/` doc comments standing.
+  and `FONT_LICENSES` is beside the pipeline rather than in it — the same call `mpdf-011`
+  Phase 2 made when it left the four `app/` doc comments standing.
 
   **`specs/INDEX.md` and `rules/INDEX.md` regenerated**, never hand-edited — this spec's
-  rollup goes `done` → `partial` as this phase is appended and back to `done` when it
-  lands. One push.
+  rollup goes `done` → `partial` as this phase is appended and back to `done` when it lands.
+  One push.
 
 <!--
 The review record is a sibling file, not a section: it lives at
