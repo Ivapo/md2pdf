@@ -632,3 +632,86 @@ fn an_error_inside_a_section_reaches_stderr_naming_that_file() {
         "error: math error in sections/two.md at line 3: unsupported command '\\undefinedcmd'\n"
     );
 }
+
+// -- the licences the binary carries ----------------------------------------
+
+/// A file this repository holds, read off disk rather than compiled in.
+///
+/// The point of reading them here is that the binary compiles them in: a test
+/// that used the same `include_str!` would agree with the binary about a file
+/// that had been truncated, reordered or dropped.
+fn licence_file(relative: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
+}
+
+/// The four parts, assembled the way the phase pins them.
+fn expected_licences() -> String {
+    [
+        licence_file("LICENSE"),
+        format!("OFL.txt\n{}", licence_file("../core/assets/fonts/OFL.txt")),
+        format!(
+            "GUST-FONT-LICENSE.txt\n{}",
+            licence_file("../core/assets/fonts/GUST-FONT-LICENSE.txt")
+        ),
+        licence_file("THIRD-PARTY-LICENSES.md"),
+    ]
+    .join("\n\n")
+}
+
+/// The flag runs without a document, and the document still runs without it.
+///
+/// `extra.md` does not exist in this tree and must not be created: the clause
+/// is that the arm returns before anything is read, and against a file that
+/// exists it would prove only that parsing succeeded. A bare `md2pdf` still
+/// exits non-zero, on clap's own message, which is what the optional field
+/// keeps rather than acquires.
+#[test]
+fn licences_run_without_a_document_and_a_document_runs_without_them() {
+    let out = run(&["--licenses".as_ref()]);
+    assert!(out.status.success(), "the run failed: {:?}", out);
+
+    let with_extra = run(&["--licenses".as_ref(), "extra.md".as_ref()]);
+    assert!(
+        with_extra.status.success(),
+        "a positional beside the flag should be ignored: {:?}",
+        with_extra
+    );
+
+    let bare = run(&[]);
+    assert!(
+        !bare.status.success(),
+        "a bare invocation should still be refused"
+    );
+}
+
+/// What it prints is what the repository holds, byte for byte.
+#[test]
+fn licences_print_the_four_files_byte_for_byte() {
+    let out = run(&["--licenses".as_ref()]);
+    assert!(out.status.success(), "the run failed: {:?}", out);
+
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), expected_licences());
+}
+
+/// The text a reader actually needs is in it, which the byte comparison
+/// cannot say: two wrong files assembled correctly pass that one.
+///
+/// One literal per file, and the fifth discriminates the maths font's licence
+/// from the OFL the other five faces carry — a list with both entries pointing
+/// at `OFL.txt` passes every other clause.
+#[test]
+fn licences_carry_the_text_a_reader_needs() {
+    let out = run(&["--licenses".as_ref()]);
+    let stdout = String::from_utf8(out.stdout).unwrap();
+
+    for literal in [
+        "MIT License",
+        "SIL OPEN FONT LICENSE",
+        "Apache License",
+        "| `typst` | 0.15.1 | Apache-2.0 |",
+        "of the GUST Font License",
+    ] {
+        assert!(stdout.contains(literal), "{literal:?} is not in the output");
+    }
+}

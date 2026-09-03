@@ -18,7 +18,16 @@ use clap::Parser;
 )]
 struct Args {
     /// The markdown file to convert.
-    input: PathBuf,
+    //
+    // The `Option` and the attribute do different jobs and both are needed.
+    // The `Option` is what lets the field hold "absent": `clap_derive` infers
+    // `required(true)` from a non-`Option` field, which collides with
+    // `required_unless_present` and panics a debug build on every invocation.
+    // The attribute is what keeps clap enforcing the requirement, so a bare
+    // `md2pdf` still exits on clap's own message rather than on one written
+    // here.
+    #[arg(required_unless_present = "licenses")]
+    input: Option<PathBuf>,
 
     /// Where to write the PDF. The default is the input path with a .pdf
     /// extension. This option has no effect with --emit-typst.
@@ -28,6 +37,11 @@ struct Args {
     /// Print the generated Typst source instead of compiling a PDF.
     #[arg(long = "emit-typst")]
     emit_typst: bool,
+
+    /// Print every licence this binary carries and exit: this program's own,
+    /// the bundled fonts' and every compiled-in crate's.
+    #[arg(long = "licenses")]
+    licenses: bool,
 }
 
 fn main() -> ExitCode {
@@ -43,13 +57,33 @@ fn main() -> ExitCode {
 fn run() -> Result<(), String> {
     let args = Args::parse();
 
-    let markdown = std::fs::read_to_string(&args.input)
-        .map_err(|e| format!("cannot read {}: {e}", args.input.display()))?;
+    // Before anything else, and before any file is named: the point of this
+    // flag is that a binary carried away from the repository it was built in
+    // can still state its terms, so it must not need a document, a readable
+    // file or a particular working directory. A positional given beside it is
+    // ignored, as `--emit-typst` ignores `-o`.
+    if args.licenses {
+        print!("{}", licenses());
+        std::io::stdout()
+            .flush()
+            .map_err(|e| format!("cannot write to stdout: {e}"))?;
+        return Ok(());
+    }
+
+    // Clap enforces this. The field is optional only so that `--licenses` can
+    // run without it, and `required_unless_present` refuses every other
+    // invocation that omits it — with clap's own message, before this runs.
+    let input = args
+        .input
+        .expect("clap requires an input unless --licenses");
+
+    let markdown = std::fs::read_to_string(&input)
+        .map_err(|e| format!("cannot read {}: {e}", input.display()))?;
 
     // The sections come first on every path, `--emit-typst` included: a master
     // is not a document until they are joined in, so nothing downstream can be
     // asked anything about it before they are read.
-    let directory = args.input.parent().unwrap_or(Path::new(""));
+    let directory = input.parent().unwrap_or(Path::new(""));
     let sections = read_sections(&markdown, directory)?;
 
     if args.emit_typst {
@@ -65,7 +99,7 @@ fn run() -> Result<(), String> {
     let assets = read_assets(&markdown, sections, directory)?;
 
     let pdf = md2pdf_core::md_to_pdf(&markdown, &assets).map_err(|e| e.to_string())?;
-    let output = args.output.unwrap_or_else(|| default_output(&args.input));
+    let output = args.output.unwrap_or_else(|| default_output(&input));
 
     std::fs::write(&output, pdf).map_err(|e| format!("cannot write {}: {e}", output.display()))
 }
@@ -185,4 +219,31 @@ fn read_sections(markdown: &str, directory: &Path) -> Result<Vec<md2pdf_core::As
 /// The input path with its extension replaced by `.pdf`.
 fn default_output(input: &Path) -> PathBuf {
     input.with_extension("pdf")
+}
+
+/// Every licence this binary carries, as one block of text.
+///
+/// Four parts joined by a blank line: this program's own MIT terms, the two
+/// font licences under the filenames they ship as, and the generated list
+/// covering every crate compiled in.
+///
+/// All four are `include_str!`, so nothing is generated at run time, nothing is
+/// read from disk and there is no path on which this can fail — which is the
+/// point. `md2pdf` is statically linked and its faces are embedded, so the
+/// terms of 300-odd crates and six fonts follow the executable whether or not
+/// the tree it was built from is anywhere near it.
+///
+/// The font pair arrives through `md2pdf_core::FONT_LICENSES` rather than from
+/// `core/assets/` directly, because a published `md2pdf-cli` archive holds no
+/// part of the core crate: an `include_str!` reaching over there resolves in a
+/// checkout and fails for everyone who installs from the registry.
+fn licenses() -> String {
+    let mut parts = vec![include_str!("../LICENSE").to_string()];
+
+    for (filename, text) in md2pdf_core::FONT_LICENSES {
+        parts.push(format!("{filename}\n{text}"));
+    }
+
+    parts.push(include_str!("../THIRD-PARTY-LICENSES.md").to_string());
+    parts.join("\n\n")
 }

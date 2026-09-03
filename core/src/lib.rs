@@ -750,6 +750,29 @@ const MONO: &[u8] = include_bytes!("../assets/fonts/LibertinusMono-Regular.otf")
 /// `assets/fonts/GUST-FONT-LICENSE.txt` is that licence.
 const MATH: &[u8] = include_bytes!("../assets/fonts/NewCMMath-Regular.otf");
 
+/// The licences the six embedded faces are used under, each under the filename
+/// it ships as.
+///
+/// **It lives here rather than in the front end because the front end cannot
+/// reach these files.** A published `md2pdf-cli` archive holds nothing of this
+/// crate — its own sources, tests, manifests, README and the two root licence
+/// files, and no `assets/` — so an `include_str!` reaching into
+/// `core/assets/fonts/` resolves in a checkout and fails on the registry. That
+/// the fonts are this crate's makes the export right; that the CLI cannot see
+/// them makes it forced.
+///
+/// The text is a compile-time constant, so a caller printing it reads no file
+/// and has no path on which to fail. `md2pdf --licenses` is the first such
+/// caller; any embedder shipping a binary with these faces in it has the same
+/// obligation and the same answer.
+pub const FONT_LICENSES: &[(&str, &str)] = &[
+    ("OFL.txt", include_str!("../assets/fonts/OFL.txt")),
+    (
+        "GUST-FONT-LICENSE.txt",
+        include_str!("../assets/fonts/GUST-FONT-LICENSE.txt"),
+    ),
+];
+
 static FONTS: LazyLock<Vec<Font>> = LazyLock::new(|| {
     [REGULAR, BOLD, ITALIC, BOLD_ITALIC, MONO, MATH]
         .into_iter()
@@ -942,5 +965,27 @@ mod tests {
         // Nothing on either side is not a mismatch; it is a document without
         // headings, and the answer is the same empty list.
         assert!(anchors_from(vec![], vec![]).is_empty());
+    }
+
+    /// The two font licences are both there, under the names they ship as.
+    ///
+    /// A list that named one file twice would still print, still concatenate
+    /// and still look like two entries to a caller counting them, so the keys
+    /// are asserted and not only the length: the maths font is under different
+    /// terms from the other five, and dropping its text is the whole failure
+    /// this constant exists to prevent.
+    #[test]
+    fn both_font_licences_travel_under_their_own_filenames() {
+        assert_eq!(
+            FONT_LICENSES
+                .iter()
+                .map(|(name, _)| *name)
+                .collect::<Vec<_>>(),
+            vec!["OFL.txt", "GUST-FONT-LICENSE.txt"]
+        );
+
+        for (name, text) in FONT_LICENSES {
+            assert!(!text.is_empty(), "{name} carries no text");
+        }
     }
 }
