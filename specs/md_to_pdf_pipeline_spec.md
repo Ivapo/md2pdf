@@ -70,7 +70,7 @@ phases:
     by: null
   - name: "Phase 13 — the binary carries its own licences"
     reviewed: 2026-09-02
-    shipped: null
+    shipped: 2026-09-02
     cut: null
     by: null
 

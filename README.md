@@ -88,6 +88,7 @@ $ open samples/abstract.pdf
 $ md2pdf paper.md                 # writes paper.pdf
 $ md2pdf paper.md -o report.pdf   # writes report.pdf
 $ md2pdf paper.md --emit-typst    # prints the generated Typst source
+$ md2pdf --licenses               # prints every licence the binary carries
 ```
 
 Without `-o`, the PDF lands at the input path with a `.pdf` extension.
@@ -95,6 +96,9 @@ Without `-o`, the PDF lands at the input path with a `.pdf` extension.
 `--emit-typst` prints the Typst source instead of compiling it. That output imports the
 look the frontmatter chose, which exists only inside the compiler's virtual filesystem, so
 it serves inspection rather than a standalone `typst compile`.
+
+`--licenses` is the one invocation that takes no document. It prints this program's own
+terms, the two font licences and the full third-party list — see `## Licence` below.
 
 ## What the markdown may contain
 
@@ -834,7 +838,9 @@ house style.
 ## Licence
 
 The code in this repository is MIT; `LICENSE` carries the text, and it travels inside
-both published crates.
+both published crates. **The binary carries all of it too**: `md2pdf --licenses` prints
+that text, the two font licences below and `THIRD-PARTY-LICENSES.md`, all compiled in, so
+someone handed the executable alone has the terms without needing this repository.
 
 **What the binary embeds, and under what terms.** `md2pdf` is statically linked: the
 Typst compiler is not a runtime dependency you install separately but code compiled into
