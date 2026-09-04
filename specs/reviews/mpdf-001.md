@@ -2,6 +2,131 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 14 only — 2026-09-04 — the same three lenses, resumed — **READY (converged)**
+
+Verdict: `READY`, **zero blocking from all three**. Phase 14's `reviewed` is set to
+2026-09-04. Converged in two rounds.
+
+**Every lens verified against the files rather than the changelog, and each re-ran its own
+measurements.** All three rebuilt the pinned derive *with* the doc comment against the locked
+clap 4.6.6 and rendered `--help` at default width, 80 and 40 columns — one line each time — and
+two of them established why beyond `cli/Cargo.toml`: `wrap_help` is off workspace-wide, since
+`Cargo.lock` carries no `terminal_size`, and `clap_derive`'s markdown fallback merges the two
+doc lines into one `help` string with no `long_help`. Each re-extracted the pinned notice and
+counted 39 lines against the new 50-line bound; each re-ran the split rule and got eleven
+terms trimmed, thirteen untrimmed, all eleven substrings of the notice; each confirmed mitex's
+`repository` through `cargo metadata` and the five URLs at 200; each read `5cf8948` and agreed
+`core` already owes a 0.1.3; each re-ran `spec-lint` at 0 errors and 62 warnings and confirmed
+the diff against `HEAD` lands only in the frontmatter, the Phase 13 note and Phase 14.
+
+**The dated note on Phase 13's gate (5) was put to all three, and all three called it the
+right mechanism.** The claim it corrects — that the packaging run reaches a run-time read
+anchored on `CARGO_MANIFEST_DIR` — was false on the day Phase 13 shipped, not made false by
+this phase: `cargo package` builds and never runs, and both root licence files are inside the
+archive it builds from. That is §6.1 step 1's dated note in place, with direct precedent in this
+document at Phase 11's note of 2026-08-31; it is an insertion rather than a scope edit, so
+Phase 13's `reviewed` stands; and it is coherent with this phase's own refusal of a note for
+the flag's output — a decision true when shipped gets none, a claim false when written gets
+one. The scope lens also conceded the author's call on `core`'s doc sentence: the version-bump
+argument does not bite, because `cargo package -p md2pdf-cli` resolves the registry `core`
+whatever a local doc line says.
+
+**Four non-blocking findings, all folded.** Three lenses found the same residue: the falsified
+claim has a **second copy**, in Phase 13's gate (4) — *"it closes case (5)'s stated limit in
+the same stroke"* — which the note now names as well, so no uncorrected copy is left. Two
+found that `clap_derive` **strips the doc comment's final period**, so *"the doc comment's two
+sentences"* was not byte-verbatim; the table row and the paragraph now say *"less its final
+period"*. The scope lens found step 1's *"earns no `CORRECTED` note"* sitting in the phase that
+adds one to Phase 13 with neither passage stating the distinction; step 1 now does. And the
+correctness lens found the **Phase 2 precedent weaker than it read** — Phase 1's own text had
+already said *"Phase 2 parses it"*, so Phase 2 contradicted nothing, where Phase 13 announced
+no successor; step 1 now marks the precedent as supporting and lets the quoted §6.1 rule carry
+the argument.
+
+**Rejections: none.**
+
+### Round 1 — Phase 14 only — 2026-09-04 — three fresh lenses (correctness/grounding, exit-gate testability, scope/YAGNI + cross-file consistency) — **READY**
+
+Verdict: `READY`. **All three lenses independently returned READY with zero blocking**, and
+between them raised thirteen distinct non-blocking findings once deduplicated — six from the
+correctness lens, seven from the gate lens, six from the scope lens, several shared. **The
+author accepted all thirteen and folded them; rejected none outright; deferred none.** One
+adjudication went between two lenses' opposing advice and is recorded below. Because a fold
+happened, the same three lenses were resumed for a round 2 (§7.4), which the loop requires
+after any change at all.
+
+**Round 0, asked once for this episode and answered by the author.** Phase 14 produces no
+observable and argues it on Phase 13's ground — a branch that returns before the pipeline is
+entered, with gate (6) pinning the page. *Is it the right thing to build?* Yes: the bare flag's
+982 lines bury what a binary-only reader needs told, two sibling tools on this machine print
+the notice shape in 32 and 19 lines, and Phase 13's consumer keeps the texts at
+`--licenses=full`. The episode proceeded.
+
+**What the three lenses re-derived, each on its own, and all agree on.** Today's
+`md2pdf --licenses` is 982 lines, from the installed 0.1.2 and from assembling the four files;
+`dbiew --licenses` 32 and `oko --licenses` 19; 334 table rows, 23 distinct expressions, and
+exactly eleven terms by the stated split rule, the set equal to the notice's eleven with
+nothing extra and nothing missing; `typst` 0.15.1 and `mitex` 0.2.4 in the table and in
+`Cargo.lock`; one `WITH LLVM-exception` row (`wasmparser`); the case-insensitive copyleft grep
+over rows hits exactly `simplecss`, `thiserror-impl`, `unic-langid-impl` and
+`unic-langid-macros-impl`, and zero terms; five `Libertinus*.otf` and one
+`NewCMMath-Regular.otf`; `LICENSE` line 3 is the copyright line; `rules/pipeline.md` at
+1279/1280 with both quoted sentences verbatim under `## The CLI`; `spec-lint` 0 errors and 62
+`CIT_UNRESOLVED_PATH`; the showcase PDF hash-stable across two compiles, so gate (6) is a real
+check; every cited symbol present; all URLs answering 200. **All three lenses built the
+prescribed clap derive against `=4.6.6` in a debug build and reproduced every row of the
+grammar table**, `require_equals` doing the job the scope says — the shape Phase 13's round 1
+found unmeasured was measured before this phase was written, and the panel confirmed it three
+times over.
+
+**The thirteen findings, and the fold.** The three the author counts as substantive:
+
+1. **The `--help` text was the one user-facing surface neither pinned nor reconciled** (all
+   three lenses). The field's doc comment today — *"Print every licence this binary carries and
+   exit…"* — goes false for the bare flag, and the grammar table's `--help` row had been
+   measured with no doc comment at all. Folded: the derive snippet carries a two-sentence doc
+   comment, the row describes what renders, and a paragraph records the measurement — one line
+   at any width, `cli/Cargo.toml` enabling `derive` and not `wrap_help`.
+2. **Gate (3)'s split rule omitted "trimmed"** (gate lens). `fnv`'s cell is `Apache-2.0 / MIT`
+   with spaces about the slash; followed literally the rule yields thirteen terms where the
+   prose says eleven, and the substring assertions pass by accident. Folded, with the example
+   written into the case. This is §7.3's *"a fix can introduce a blocker"* caught one round
+   early: the rule was new in this phase and a lens ran it rather than reading it.
+3. **Gate (5) inherited an overstatement from Phase 13** (gate lens): *"closed by case (7)'s
+   packaging run"*. `cargo package` builds and never runs, and both root licence files are
+   inside the archive, so a run-time read anchored on `CARGO_MANIFEST_DIR` passes (5) and (7)
+   alike. Folded in two places — Phase 14's (5) now states the limit as it stands, and **a
+   dated `CORRECTED` note was added beside Phase 13's gate (5)**, whose *"Case (4)'s packaging
+   run is what reaches that"* is a shipped claim about what a gate proves, now known false.
+   §6.1 step 1's third bullet is the mechanism; the original sentence is kept. This is the
+   one edit outside the phase under review, and round 2 was asked to judge it.
+
+The other ten: gate (3) *"matches"* became *"contains"*, so a future `LGPL-2.1` is caught;
+gate (4)'s *"from `cli/tests/`"* became *"from `CARGO_MANIFEST_DIR`, which is `cli/`"*; gate
+(4) now derives the face-count word from the count rather than pinning `five faces` beside a
+`5`, to gate (3)'s own standard, closing a swap the gate lens named; gate (1)'s
+*"byte-identical stdout"* now says to what; gate (2)'s swap detector was given a home in case
+(1)'s test; the OQ-15 analogy was corrected — case (3) is notice-against-file, OQ-15 is
+file-against-`cargo metadata`, a different pair; step 1's *"no `CORRECTED` note"* argument now
+stands on §6.1's rule for shipped phases, quoted, rather than on the narrower *"§2 never
+states it"*; README `## Use`'s `--licenses` comment line was named as going false; gate (7)
+now says *"no `include_str!`"* reaches outside the archive rather than *"nothing"*; and
+**mitex was filed under Typst's project line** — its manifest's `repository` is
+`github.com/mitex-rs/mitex`, so it has a block of its own, the notice runs 39 lines and gate
+(1)'s bound moved from 40 to 50.
+
+**One call between lenses, recorded.** `core/src/lib.rs:FONT_LICENSES`'s doc comment says
+*"`md2pdf --licenses` is the first such caller"*. The correctness lens said widen the first
+commit by that sentence or state the staleness; the scope lens said leave `core` alone — a
+published crate, an edit costs a bump — and say so. **The author widened**: a doc comment that
+names its caller wrongly is the drift `rules/` refuses, one file over; the edit needs no
+release of its own because `5cf8948` already owes `core` a 0.1.3, and `cargo package -p
+md2pdf-cli` resolves the published 0.1.2 regardless of a local doc line. The scope lens's
+alternative is recorded in the scope with the reason it was not taken.
+
+**Rejections: none outright.** The scope lens's advice on the doc comment was the one partial
+one, above.
+
 ### Round 2 — Phase 13 only — 2026-09-02 — the same three lenses, resumed — **READY (converged)**
 
 Verdict: `READY`, **zero blocking from all three**. Phase 13's `reviewed` is set to

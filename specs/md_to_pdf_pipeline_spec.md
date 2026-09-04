@@ -5,7 +5,7 @@ note: >
   The core .md → .pdf pipeline: pulldown-cmark parses, a hand-written emitter maps
   events to Typst markup, and embedded Typst compiles the PDF, behind a CLI.
 status: accepted
-last_updated: 2026-09-02
+last_updated: 2026-09-04
 
 phases:
   - name: "Phase 1 — end-to-end pipeline behind a CLI"
@@ -71,6 +71,11 @@ phases:
   - name: "Phase 13 — the binary carries its own licences"
     reviewed: 2026-09-02
     shipped: 2026-09-02
+    cut: null
+    by: null
+  - name: "Phase 14 — `--licenses` says what the binary carries, and `--licenses=full` prints it"
+    reviewed: 2026-09-04
+    shipped: null
     cut: null
     by: null
 
@@ -2119,6 +2124,17 @@ found the gap. Appended per §6.1 step 2; the steps above it are worked rather t
   wrong shape, and not a `concat!(env!("CARGO_MANIFEST_DIR"), …)` one, since the repository
   still exists on the machine. Case (4)'s packaging run is what reaches that.
 
+  **CORRECTED 2026-09-04, by Phase 14's review round 1.** The packaging run does not reach
+  it. `cargo package` builds and never runs, and `LICENSE` and `THIRD-PARTY-LICENSES.md` are
+  inside the archive it builds from, so a run-time read anchored on `CARGO_MANIFEST_DIR`
+  compiles and finds its file; what the run reaches is a compile-time `include_str!` of a file
+  the archive lacks, which is the failure case (4) was written for. No shipped clause catches
+  the run-time shape; it is unrealistic for four `include_str!`s, and Phase 14's (5) names the
+  limit as it stands. The sentence above is kept because it is what was thought at the time,
+  and so is its twin two paragraphs up, in case (4)'s *"Round 2 then found the residue"*
+  paragraph — *"it closes case (5)'s stated limit in the same stroke"* — which this note
+  corrects as well.
+
   (6) **The page does not move.** `target/release/md2pdf` over `samples/showcase/showcase.md`,
   hashed with `shasum -a 256` before this phase's commit and after, identical, **`-o` into a
   scratch path** since `cli/src/main.rs:default_output` writes beside its input. One document
@@ -2200,6 +2216,297 @@ found the gap. Appended per §6.1 step 2; the steps above it are worked rather t
   **`specs/INDEX.md` and `rules/INDEX.md` regenerated**, never hand-edited — this spec's
   rollup goes `done` → `partial` as this phase is appended and back to `done` when it lands.
   One push.
+
+### Phase 14 — `--licenses` says what the binary carries, and `--licenses=full` prints it
+
+*Produces the observable: **no**, and the gate is that it does not move.* This phase changes
+what one flag prints and touches no path a PDF travels; **gate (6)** is the PDF not moving, on
+Phase 13's argument: a branch that returns before the pipeline is entered.
+
+**What a reader gets today, measured on the shipped binary.** `md2pdf --licenses` prints
+**982 lines**: the MIT text, the two font licences under their filenames, and
+`THIRD-PARTY-LICENSES.md` whole — a table of 334 crates and the text of every licence among
+them. The facts a reader holding the binary would actually be surprised by — that the Typst
+compiler is compiled in under Apache-2.0, and that six font faces travel under two licences of
+their own — are in there, one row of a table that begins after 160 lines of licence text and
+one filename line in the middle of it. Two sibling tools on this machine print the other
+shape: `dbiew --licenses` is 32 lines and `oko --licenses` is 19. Each is a *provenance
+notice* — the program's own licence with its copyright line and a URL; then every bundled
+thing that is not the author's work, under `Project` / `Bundled` / `Licence`; then the crate
+graph in one paragraph; then *"This records provenance and is not legal advice."* oko's
+source records the reason in its own doc comment: a dependency dump *"would bury the one fact
+that is genuinely surprising"*.
+
+**What is kept, and why this is not the siblings' shape exactly.** Phase 13 put the *texts*
+in the binary for a consumer its round 1 measured and named: the third party handed a
+hand-copied executable with the repository nowhere near them. The siblings point at their
+repositories for the texts, and their reasoning — `cargo install` builds from source, so the
+reader has the files on disk — is the one Phase 13 heard and set aside. The licences in
+question ask for their text, or their notice, to accompany a redistribution; that is not a
+legal opinion, it is the premise Phase 13 stands on. **So this phase changes what the bare
+flag prints and does not change where the texts live.** They stay compiled in, behind
+`--licenses=full`, and the notice's last paragraph names that form.
+
+**Drafted 2026-09-04.** Appended per §6.1 step 2; the steps above it are worked rather than
+skipped.
+
+- **Step 0 — a decision, or only the code?** A decision: what the CLI's one no-document
+  invocation prints, and that the texts move behind a second form of the same flag. Phase 13
+  recorded the opposite answer for the bare flag, so this is not a fix to it.
+- **Step 1 — does it remove or contradict shipped work?** It changes what Phase 13's flag
+  prints when given no value, and three of Phase 13's seven gate cases — (2), (3) and (5) —
+  stop being true of the bare flag as written. **Nothing Phase 13 built is removed**:
+  `core/src/lib.rs:FONT_LICENSES`, the four `include_str!`s in `cli/src/main.rs:licenses`
+  and the byte-for-byte stream all stay, reachable at `--licenses=full`, and the three cases
+  move with them re-pointed rather than weakened. That is the move Phase 2 made on Phase 1's
+  stderr warning, in this spec, as a phase. It is not a `## 0.` cut, because the phase being
+  changed is not being unbuilt. **And it earns no `CORRECTED` note, on §6.1's own rule for
+  shipped phases** — *"Old phases stay as they shipped even where the code has since moved —
+  they are the record of what was decided then"*. Phase 2's removal of Phase 1's warning without
+  one is a supporting precedent rather than the ground: Phase 1's own text already said *"Phase
+  2 parses it"*, where Phase 13 announced no successor, so the rule carries the argument alone.
+  Phase 13's *"What it prints, pinned exactly"* is a decision statement, and it stays true as a
+  statement about what shipped that day; the reader who reaches it reaches this phase one
+  heading later, and §2, where a note would otherwise go, never states the flag's output at
+  all. **The dated note this phase's review added beside Phase 13's gate (5) is the other case,
+  not a contradiction**: that sentence claimed something about what the gate proves which was
+  false on the day it shipped — a claim, corrected in place — where the flag's output was a
+  decision true of its day and superseded here.
+- **Step 2 — is its subject one an existing spec owns?** **Yes, and this one.** The CLI
+  contract has been this spec's since Phase 1, Phase 13 put the flag in it, and the rollup is
+  `done` rather than `abandoned`.
+- **Step 3 is not reached.**
+
+- **Scope: one flag gains a value, one const, and no third place.**
+
+  **`cli/src/main.rs:Args`'s `licenses` field becomes an optional value with two forms.**
+  Written out because clap's derive is where Phase 13's round 1 found three lenses measuring a
+  prescribed shape failing, and this one was **measured before it was written, against this
+  workspace's clap 4.6.6, in a debug build**:
+
+      #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+      enum Licenses { Notice, Full }
+
+      /// Print what this binary carries and under what terms, then exit;
+      /// --licenses=full prints the full licence texts instead.
+      #[arg(long = "licenses", value_enum, num_args = 0..=1,
+            require_equals = true, default_missing_value = "notice")]
+      licenses: Option<Licenses>,
+
+  | invocation | parses as | exit |
+  |---|---|---|
+  | `md2pdf --licenses` | `Some(Notice)`, no input | 0 |
+  | `md2pdf --licenses=full` | `Some(Full)`, no input | 0 |
+  | `md2pdf --licenses=notice` | `Some(Notice)`, no input | 0 |
+  | `md2pdf --licenses extra.md` | `Some(Notice)`, input `extra.md` | 0 |
+  | `md2pdf --licenses full` | `Some(Notice)`, input `full` | 0 |
+  | `md2pdf --licenses=bogus` | clap: *invalid value 'bogus' for '--licenses[=<LICENSES>]'*, *[possible values: notice, full]* | 2 |
+  | `md2pdf` | clap: *the following required arguments were not provided: <INPUT>* | 2 |
+  | `md2pdf --help` | one line for the flag: `--licenses[=<LICENSES>]`, the doc comment's text less its final period, then `[possible values: notice, full]` | 0 |
+
+  **`require_equals` is the load-bearing attribute, and Phase 13's gate (1) is why.** Without
+  it clap takes the next bare token as the value, so `--licenses extra.md` — which that gate
+  pins as *exit 0, positional ignored* — becomes exit 2 on an invalid value. With it, the
+  fourth row above is what it was, and `input`'s `required_unless_present = "licenses"` needs
+  no change: it names the field and tests presence, which every form above has. **The fifth
+  row is the cost, named**: `--licenses full` with a space prints the notice and ignores
+  `full`, exactly as `--licenses extra.md` ignores `extra.md`. It is accepted because refusing
+  a positional beside the flag would reverse a Phase 13 decision this phase has no new reason
+  to touch, and because the notice writes the form with the equals sign, so a reader who
+  follows it types the right thing.
+
+  **The doc comment is the flag's `--help` text, and it is pinned in the snippet above**
+  because the field's current sentence — *"Print every licence this binary carries and exit:
+  this program's own, the bundled fonts' and every compiled-in crate's"* — goes false for the
+  bare flag. Measured: clap 4.6.6 renders the comment — less its final period, which the
+  derive strips — and the value list on one line at any terminal width, `cli/Cargo.toml`
+  enabling `derive` and not `wrap_help`, and `Cargo.lock` carrying no `terminal_size` for
+  any crate to turn it on. No gate reads
+  `--help`; it is pinned so the implementer is not left choosing between an undescribed flag
+  and prose of their own.
+
+  **The rejected shape is a second flag** — `--license-texts` beside `--licenses`, two
+  booleans, no grammar to explain. It costs a second name to choose, document and keep, for a
+  distinction `--help` already renders on one line in the value form, and it would leave two
+  arms in `cli/src/main.rs:run` where one arm matching on the enum does.
+
+  **The notice is a `const NOTICE: &str` in `cli/src/main.rs`, hand-written prose, as oko's
+  is.** `cli/src/main.rs:licenses` keeps its name and its four parts and serves the full form.
+  The arm in `cli/src/main.rs:run` keeps its position — before any file is named — and
+  matches on the value. **The notice's text, pinned here because gates (3) and (4) read facts
+  out of it:**
+
+      md2pdf — its own source is MIT.
+
+          Copyright (c) 2026 ivapo
+          https://github.com/Ivapo/md2pdf/blob/main/LICENSE
+
+      This binary is statically linked, so it carries work that is not md2pdf's and
+      is not covered by that licence:
+
+          Typst 0.15.1
+          Project   https://github.com/typst/typst
+          Bundled   as crates compiled in — typst, typst-pdf and their siblings
+          Licence   Apache-2.0
+
+          mitex 0.2.4
+          Project   https://github.com/mitex-rs/mitex
+          Bundled   as a crate compiled in; it translates LaTeX math into Typst's
+          Licence   Apache-2.0
+
+          Libertinus Serif and Libertinus Mono
+          Project   https://github.com/alerque/libertinus
+          Bundled   five faces, the body and code fonts of every page
+          Licence   SIL Open Font License 1.1
+
+          NewCMMath-Regular
+          Project   New Computer Modern — https://ctan.org/pkg/newcomputermodern
+          Bundled   one face, the math font
+          Licence   GUST Font License
+
+      Everything else is a Rust crate compiled from source. THIRD-PARTY-LICENSES.md
+      names the 334 crates the resolve reaches, each under one or more of MIT,
+      Apache-2.0 (once with the LLVM-exception), BSD-2-Clause, BSD-3-Clause, Zlib,
+      Unicode-3.0, 0BSD, CC0-1.0, BSL-1.0 and the Unlicense. None is copyleft, so
+      what they ask for is attribution, which is this notice. The full texts — the
+      MIT terms, both font licences and that list — are compiled into this binary
+      too:
+
+          md2pdf --licenses=full
+
+      This records provenance and is not legal advice.
+
+  **Every fact in it has a source, and the gate reads the ones it can.** The copyright line is
+  `LICENSE`'s third line. Typst's and mitex's versions are their rows in
+  `THIRD-PARTY-LICENSES.md`'s table; `334` is that table's row count and the eleven licence
+  terms are the set its licence column names — both of which the generated file states in
+  bold above its table, *"334 crates, 23 distinct licence expressions, 11 distinct terms"*,
+  and gate (3) derives both from the rows rather than trusting the sentence. Five OFL faces
+  and one GUST face are `core/assets/fonts/`'s six `.otf` files, by name prefix. **The five
+  URLs are the one kind of fact no clause can read**; all five answered 200 on 2026-09-04, and
+  the implementer opens them again before the plan closes. mitex's is the `repository` its own
+  manifest declares, by `cargo metadata` — a draft filed mitex under Typst's project line, and
+  a lens caught it, which is why it is a block of its own: it is not Typst's work.
+
+  **What `--licenses=full` prints is Phase 13's stream, byte for byte** — four parts joined
+  by `"\n\n"`, in Phase 13's order, unchanged; `cli/tests/cli_test.rs:expected_licences` is
+  not edited.
+
+  **`core/src/emit.rs`, the three `.typ` files and every golden are untouched, and so is
+  `core/src/lib.rs`'s code**: `core/src/lib.rs:FONT_LICENSES` keeps its one reader. **One
+  sentence of its doc comment moves** — *"`md2pdf --licenses` is the first such caller"*
+  becomes `--licenses=full` — because a doc comment that names its caller wrongly is the drift
+  `rules/` exists to refuse, one file over. It costs the first commit one edit in a third file
+  and no release of its own: `5cf8948`, the `line_of` fix, already owes `core` a `0.1.3`, and a
+  doc line rides it. The alternative — leave it and say so — was one lens's advice against
+  another's, and is not taken because a sentence known to be false is not cheaper than a
+  one-line edit.
+
+- **Exit gate:** seven cases.
+
+  (1) **The bare flag prints the notice and the grammar around it holds.** `md2pdf --licenses`
+  exits 0; stdout is at most 50 lines, its first line is `md2pdf — its own source is MIT.`, its
+  last is `This records provenance and is not legal advice.`, and it does not contain
+  `SIL OPEN FONT LICENSE` — the swap detector case (2) leans on, asserted here because this is
+  the test that holds the bare flag's stdout; `md2pdf --licenses extra.md` and
+  `md2pdf --licenses full` exit 0 with stdout byte-identical to the bare flag's — `extra.md`
+  still does not exist in the tree, for Phase 13's reason; `md2pdf --licenses=bogus` exits 2 and stderr names
+  both values; a bare `md2pdf` still exits non-zero on clap's own message.
+  `cli/tests/cli_test.rs:licences_run_without_a_document_and_a_document_runs_without_them` is
+  extended rather than replaced.
+
+  (2) **The full form is Phase 13's stream.**
+  `cli/tests/cli_test.rs:licences_print_the_four_files_byte_for_byte` and
+  `cli/tests/cli_test.rs:licences_carry_the_text_a_reader_needs` invoke `--licenses=full` and
+  change in no other way — `expected_licences` and the five literals stand. **And the notice
+  is not the stream**: case (1) asserts the bare flag's stdout does not contain
+  `SIL OPEN FONT LICENSE`, so two arms swapped fail both cases.
+
+  (3) **The notice's crate facts are the table's, derived and not copied.** One test reads
+  `cli/THIRD-PARTY-LICENSES.md` off disk through `cli/tests/cli_test.rs:licence_file`, takes
+  every line beginning `` | ` `` as a row, and from the rows derives: the `typst` row's
+  version, the `mitex` row's version, the row count, and the set of licence terms — each
+  licence cell split on ` OR `, ` AND `, ` WITH ` and `/`, every piece trimmed of whitespace
+  and parentheses, so `(MIT OR Apache-2.0) AND Unicode-3.0` yields three. **Trimmed is
+  load-bearing**: `fnv`'s cell is `Apache-2.0 / MIT`, spaces about the slash, and untrimmed it
+  yields two extra terms that pass the substring assertions by accident — a lens counted
+  thirteen where the prose says eleven. It asserts the bare flag's stdout contains
+  `Typst {version}`, `mitex {version}`, `the {count} crates`, and every derived term as a
+  substring. **It also asserts no derived term contains `GPL`, `MPL`, `EUPL`, `CDDL`, `EPL`
+  or `OSL` — contains, so a future `LGPL-2.1` or `MPL-2.0` is caught; case-sensitively; and
+  on the terms rather than the rows.** Measured: a
+  case-insensitive grep over the rows hits four crate *names*, `simplecss`, `thiserror-impl`,
+  `unic-langid-impl` and `unic-langid-macros-impl`, and none of them is a licence. That is
+  what keeps *"None is copyleft"* a claim the suite checks rather than one the author
+  remembers to update.
+
+  (4) **The notice's font facts are the directory's, derived the same way.** The same test
+  lists `core/assets/fonts/*.otf` — `../core/assets/fonts/` from `CARGO_MANIFEST_DIR`, which
+  is `cli/`, the path `expected_licences` already reads — counts the names beginning
+  `Libertinus` and the names beginning `NewCMMath`, and asserts stdout contains each count
+  *as the notice spells it*: a table from `one` to `six`, `{word} faces` for many and
+  `one face` for one, so the prose is derived from the count rather than copied beside it,
+  which is case (3)'s standard and closes the gap a lens named — a count edited to six with
+  `five faces` left standing would otherwise pass. It also asserts `NewCMMath-Regular`,
+  `SIL Open Font License 1.1` and `GUST Font License`.
+
+  (5) **Both forms travel away from the repository.** `target/release/md2pdf` copied to a
+  scratch directory outside the tree, run there with the working directory elsewhere, as
+  `--licenses` and as `--licenses=full`, produces the same two stdouts as inside it. Phase
+  13's clause, doubled. **Its limit, stated correctly this time**: a run-time read anchored on
+  `CARGO_MANIFEST_DIR` passes this case, and passes case (7) too — `cargo package` builds and
+  never runs, and `LICENSE` and `THIRD-PARTY-LICENSES.md` are both inside the archive it
+  builds from, so such a read compiles and finds its file. Phase 13 wrote that its packaging
+  run reaches that shape; it reaches a compile-time `include_str!` of a file the archive
+  lacks, which is a different failure, and Phase 13's (5) now carries a dated note saying so.
+  The shape is unrealistic for a hand-written `const` and four `include_str!`s, and is named
+  rather than given a clause.
+
+  (6) **The page does not move.** `target/release/md2pdf` over `samples/showcase/showcase.md`,
+  `-o` into a scratch path, hashed with `shasum -a 256` before this phase's commit and after,
+  identical.
+
+  (7) **`cargo test --workspace` passes; `spec-lint` exits zero with no error; `cargo package
+  -p md2pdf-cli` succeeds.** The last because the arm changes shape and the const is new, and
+  Phase 13's gate (4) is what proves no `include_str!` in `cli/` reaches outside its own
+  archive.
+  `spec-lint`, run as `/Users/ivapo/dev/main/spec-driven-dev/bin/spec-lint .`, today reads 0
+  errors and 62 warnings, every one `CIT_UNRESOLVED_PATH` and inherited.
+
+  **What this gate deliberately does not assert**, as Phase 13's did not: that
+  `THIRD-PARTY-LICENSES.md` is current against `Cargo.lock`. Case (3) checks the *notice*
+  against the committed file, which is a different pair from OQ-15's — that question is the
+  file against `cargo metadata` — so the file's own currency stays OQ-15's, and this phase
+  takes none of its three answers.
+
+- **Close-out.** **Two passages in `rules/pipeline.md`, both in `## The CLI`.** The grammar
+  paragraph, whose sentence *"`--licenses` prints this program's MIT text, the two font
+  licences each under its filename, and `THIRD-PARTY-LICENSES.md`, joined by blank lines"*
+  goes false and becomes the two forms; and the licence-artifacts paragraph, whose closing
+  *"`--licenses` prints them"* goes false the same way. The API paragraph's
+  `core/src/lib.rs:FONT_LICENSES` sentence stays true — the const keeps its reader — and is
+  not touched. **`rules/pipeline.md` is at 1279 of `max_lines: 1280`** as `spec-lint` prints
+  it today; two passages that each grow, against one line of headroom, so **the cap moves to
+  1300 with the edit**, as Phase 13 and the two before it did, rather than the prose being
+  shaved.
+
+  `README.md`, two sites: **`## Use`**, whose four-line invocation block carries a comment on
+  its `--licenses` line — *"prints every licence the binary carries"* — that goes false and
+  becomes the notice's, and gains a fifth line for `--licenses=full`; and whose `--licenses`
+  paragraph says *"prints this program's own terms, the two font licences and the full
+  third-party list"* — the full form's job now, and the notice's to name; and **`## Licence`**,
+  whose first paragraph says the same in its second sentence.
+
+  **`CLAUDE.md`: none needed** — the workflow stanza and the observable sentence do not move.
+  **Status artifact: none needed** — `.spec-lint.yaml` has `status_artifacts: {}`.
+
+  **Commit plan: two commits, one push**, on Phase 13's own shape — `b51d874` then `94c4a34`.
+  First, `feat(mpdf-001)`: `cli/src/main.rs`, `cli/tests/cli_test.rs` and the one doc
+  sentence in `core/src/lib.rs`, nothing else.
+  Second, `spec(mpdf-001)`: this phase's `shipped` date, the two `rules/pipeline.md` passages
+  and the cap, the two README sites, and both indexes regenerated by `spec-lint
+  --write-index`, never by hand. The rollup goes `done` → `partial` as this phase is appended
+  and back to `done` when the second commit lands.
 
 <!--
 The review record is a sibling file, not a section: it lives at
