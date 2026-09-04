@@ -75,7 +75,7 @@ phases:
     by: null
   - name: "Phase 14 — `--licenses` says what the binary carries, and `--licenses=full` prints it"
     reviewed: 2026-09-04
-    shipped: null
+    shipped: 2026-09-04
     cut: null
     by: null
 

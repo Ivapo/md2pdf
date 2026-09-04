@@ -88,7 +88,8 @@ $ open samples/abstract.pdf
 $ md2pdf paper.md                 # writes paper.pdf
 $ md2pdf paper.md -o report.pdf   # writes report.pdf
 $ md2pdf paper.md --emit-typst    # prints the generated Typst source
-$ md2pdf --licenses               # prints every licence the binary carries
+$ md2pdf --licenses               # prints what it carries, and under what terms
+$ md2pdf --licenses=full          # prints the licence texts themselves
 ```
 
 Without `-o`, the PDF lands at the input path with a `.pdf` extension.
@@ -97,8 +98,11 @@ Without `-o`, the PDF lands at the input path with a `.pdf` extension.
 look the frontmatter chose, which exists only inside the compiler's virtual filesystem, so
 it serves inspection rather than a standalone `typst compile`.
 
-`--licenses` is the one invocation that takes no document. It prints this program's own
-terms, the two font licences and the full third-party list — see `## Licence` below.
+`--licenses` is the one invocation that takes no document. It prints a one-page
+provenance notice: what the binary carries and under what terms. `--licenses=full` prints
+the texts themselves — this program's own terms, the two font licences and the full
+third-party list. Both are compiled in, so both work on a binary carried anywhere; see
+`## Licence` below.
 
 ## What the markdown may contain
 
@@ -838,9 +842,11 @@ house style.
 ## Licence
 
 The code in this repository is MIT; `LICENSE` carries the text, and it travels inside
-both published crates. **The binary carries all of it too**: `md2pdf --licenses` prints
-that text, the two font licences below and `THIRD-PARTY-LICENSES.md`, all compiled in, so
-someone handed the executable alone has the terms without needing this repository.
+both published crates. **The binary carries all of it too**: `md2pdf --licenses=full`
+prints that text, the two font licences below and `THIRD-PARTY-LICENSES.md`, all compiled
+in, so someone handed the executable alone has the terms without needing this repository.
+`md2pdf --licenses` on its own prints the short version — a one-page notice naming what is
+bundled and under which licence, with the crate graph in a paragraph.
 
 **What the binary embeds, and under what terms.** `md2pdf` is statically linked: the
 Typst compiler is not a runtime dependency you install separately but code compiled into

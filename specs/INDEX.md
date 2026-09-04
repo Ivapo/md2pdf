@@ -2,7 +2,7 @@
 
 # Specs
 
-- **[md-to-pdf-pipeline](md_to_pdf_pipeline_spec.md)** — `mpdf-001` · accepted · partial
+- **[md-to-pdf-pipeline](md_to_pdf_pipeline_spec.md)** — `mpdf-001` · accepted · done
   The core .md → .pdf pipeline: pulldown-cmark parses, a hand-written emitter maps events to Typst markup, and embedded Typst compiles the PDF, behind a CLI.
 - **[images](images_spec.md)** — `mpdf-002` · accepted · done
   Markdown images become PDF images: the emitter maps ![alt](path), callers supply the named files as bytes, and the CLI reads them from disk.

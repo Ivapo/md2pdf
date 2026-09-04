@@ -33,7 +33,7 @@ covers: >
   key carries and the affiliation each of their markers points at, the heading anchors a
   compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 1280
+max_lines: 1300
 generated: 2026-09-04
 ---
 
@@ -1282,18 +1282,31 @@ superset of what any one feature selection compiles. The two font licences are t
 and are not symlinks: `core/assets/fonts/OFL.txt` and `GUST-FONT-LICENSE.txt` sit inside
 the package already, beside the faces they cover. **The binary is a fourth reader of the
 same four files**: `cli/src/main.rs:licenses` compiles all four in with `include_str!` and
-`--licenses` prints them, so the text reaches someone holding an executable and no crate
-around it.
+`--licenses=full` prints them, so the text reaches someone holding an executable and no
+crate around it.
 
-`md2pdf input.md [-o output.pdf] [--emit-typst]`, or `md2pdf --licenses`, the one
-invocation that needs no input. The positional is an `Option` carrying
+`md2pdf input.md [-o output.pdf] [--emit-typst]`, or `md2pdf --licenses[=notice|=full]`,
+the one invocation that needs no input. The positional is an `Option` carrying
 `required_unless_present`, and it needs both: `clap_derive` infers `required(true)` from a
 non-`Option` field, which collides with the attribute, and the attribute is what keeps
-clap's own message for a bare `md2pdf`. `--licenses` prints this program's MIT text, the
-two font licences each under its filename, and `THIRD-PARTY-LICENSES.md`, joined by blank
-lines, and returns before any file is read — so a positional given beside it is ignored and
-there is no path on which it can fail. Without `-o` the PDF lands at the input
-path with a `.pdf` extension. `--emit-typst` prints the Typst source and ignores `-o`; that
+clap's own message for a bare `md2pdf`. **`--licenses` has two forms and prints something
+different in each.** Bare, or `=notice`, it prints `cli/src/main.rs:NOTICE` — 39 lines of
+hand-written prose saying what the binary carries and under what terms: Typst and `mitex`
+compiled in under Apache-2.0, five Libertinus faces under the OFL and one NewCMMath face
+under the GUST licence, the crate graph in one paragraph, and the sentence that this
+records provenance and is not legal advice. `=full` prints the four files
+`cli/src/main.rs:licenses` joins — this program's MIT text, the two font licences each
+under its filename, and `THIRD-PARTY-LICENSES.md`, joined by blank lines. Both return
+before any file is read, so a positional given beside the flag is ignored and there is no
+path on which either can fail. **`require_equals` is what keeps that true of the
+positional**: without it clap takes the next bare token as the value, so
+`--licenses extra.md` would exit 2 on an invalid value instead of 0 — the cost being that
+`--licenses full` with a space prints the notice and ignores `full`. A value outside the
+set is clap's own exit 2 naming both. **Every fact in the notice is derived by the suite
+from the file that holds it** — the table in `THIRD-PARTY-LICENSES.md` for the two
+versions, the crate count and the licence terms, `core/assets/fonts/` for the two face
+counts — so the prose cannot drift from the resolve without a test failing. Without `-o`
+the PDF lands at the input path with a `.pdf` extension. `--emit-typst` prints the Typst source and ignores `-o`; that
 output imports the selected look, which exists only inside the world, so it serves inspection
 and not a standalone `typst compile`.
 
