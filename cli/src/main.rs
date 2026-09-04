@@ -8,7 +8,21 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+
+/// Which of the two forms of `--licenses` was asked for.
+///
+/// One flag rather than two, because the distinction is one clap renders on a
+/// single `--help` line in the value form, and because one arm in `run`
+/// matching on this does what two booleans would have needed two arms for.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+// No doc comment on either variant: `clap_derive` turns one into a per-value
+// description and expands `--help` from the one line the flag is pinned at into
+// a `Possible values:` block. What each value means is the flag's own sentence.
+enum Licenses {
+    Notice,
+    Full,
+}
 
 #[derive(Parser)]
 #[command(
@@ -38,10 +52,24 @@ struct Args {
     #[arg(long = "emit-typst")]
     emit_typst: bool,
 
-    /// Print every licence this binary carries and exit: this program's own,
-    /// the bundled fonts' and every compiled-in crate's.
-    #[arg(long = "licenses")]
-    licenses: bool,
+    /// Print what this binary carries and under what terms, then exit;
+    /// --licenses=full prints the full licence texts instead.
+    //
+    // `require_equals` is the load-bearing attribute. Without it clap takes the
+    // next bare token as the value, so `--licenses extra.md` — which returns 0
+    // with the positional ignored — would become exit 2 on an invalid value.
+    // The cost is named: `--licenses full` with a space prints the notice and
+    // ignores `full`, exactly as it ignores `extra.md`. The notice writes the
+    // form with the equals sign, so a reader who follows it types the right
+    // thing.
+    #[arg(
+        long = "licenses",
+        value_enum,
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "notice"
+    )]
+    licenses: Option<Licenses>,
 }
 
 fn main() -> ExitCode {
@@ -62,8 +90,11 @@ fn run() -> Result<(), String> {
     // can still state its terms, so it must not need a document, a readable
     // file or a particular working directory. A positional given beside it is
     // ignored, as `--emit-typst` ignores `-o`.
-    if args.licenses {
-        print!("{}", licenses());
+    if let Some(which) = args.licenses {
+        match which {
+            Licenses::Notice => print!("{NOTICE}"),
+            Licenses::Full => print!("{}", licenses()),
+        }
         std::io::stdout()
             .flush()
             .map_err(|e| format!("cannot write to stdout: {e}"))?;
@@ -221,6 +252,61 @@ fn default_output(input: &Path) -> PathBuf {
     input.with_extension("pdf")
 }
 
+/// What the binary carries and under what terms, in one page.
+///
+/// **A provenance notice, not a dependency dump.** The texts `licenses` below
+/// returns run to 982 lines, and the two facts a reader holding the executable
+/// would actually be surprised by — that the Typst compiler is compiled in
+/// under Apache-2.0, and that six font faces travel under two licences of their
+/// own — are one table row and one filename line somewhere inside them. This is
+/// what the bare flag prints; `--licenses=full` still prints the texts.
+///
+/// Hand-written prose, and every fact in it has a source the suite reads back:
+/// the copyright line is `LICENSE`'s, the two versions, the crate count and the
+/// licence terms are `THIRD-PARTY-LICENSES.md`'s table, and the two face counts
+/// are `core/assets/fonts/`. The five URLs are the one kind of fact no test can
+/// check; they are opened by hand when this text is touched.
+const NOTICE: &str = "md2pdf — its own source is MIT.
+
+    Copyright (c) 2026 ivapo
+    https://github.com/Ivapo/md2pdf/blob/main/LICENSE
+
+This binary is statically linked, so it carries work that is not md2pdf's and
+is not covered by that licence:
+
+    Typst 0.15.1
+    Project   https://github.com/typst/typst
+    Bundled   as crates compiled in — typst, typst-pdf and their siblings
+    Licence   Apache-2.0
+
+    mitex 0.2.4
+    Project   https://github.com/mitex-rs/mitex
+    Bundled   as a crate compiled in; it translates LaTeX math into Typst's
+    Licence   Apache-2.0
+
+    Libertinus Serif and Libertinus Mono
+    Project   https://github.com/alerque/libertinus
+    Bundled   five faces, the body and code fonts of every page
+    Licence   SIL Open Font License 1.1
+
+    NewCMMath-Regular
+    Project   New Computer Modern — https://ctan.org/pkg/newcomputermodern
+    Bundled   one face, the math font
+    Licence   GUST Font License
+
+Everything else is a Rust crate compiled from source. THIRD-PARTY-LICENSES.md
+names the 334 crates the resolve reaches, each under one or more of MIT,
+Apache-2.0 (once with the LLVM-exception), BSD-2-Clause, BSD-3-Clause, Zlib,
+Unicode-3.0, 0BSD, CC0-1.0, BSL-1.0 and the Unlicense. None is copyleft, so
+what they ask for is attribution, which is this notice. The full texts — the
+MIT terms, both font licences and that list — are compiled into this binary
+too:
+
+    md2pdf --licenses=full
+
+This records provenance and is not legal advice.
+";
+
 /// Every licence this binary carries, as one block of text.
 ///
 /// Four parts joined by a blank line: this program's own MIT terms, the two
@@ -232,6 +318,9 @@ fn default_output(input: &Path) -> PathBuf {
 /// point. `md2pdf` is statically linked and its faces are embedded, so the
 /// terms of 300-odd crates and six fonts follow the executable whether or not
 /// the tree it was built from is anywhere near it.
+///
+/// **This is what `--licenses=full` prints.** The bare flag prints `NOTICE`,
+/// which names this form in its last paragraph.
 ///
 /// The font pair arrives through `md2pdf_core::FONT_LICENSES` rather than from
 /// `core/assets/` directly, because a published `md2pdf-cli` archive holds no

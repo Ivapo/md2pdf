@@ -3,6 +3,7 @@
 //! These run the real `md2pdf` binary, so they cover the argument contract and
 //! the exit codes that the library tests cannot reach.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -666,17 +667,67 @@ fn expected_licences() -> String {
 /// exists it would prove only that parsing succeeded. A bare `md2pdf` still
 /// exits non-zero, on clap's own message, which is what the optional field
 /// keeps rather than acquires.
+///
+/// **This is the test that holds the bare flag's stdout**, so the notice's
+/// shape is pinned here: bounded at both ends, short enough to read at a
+/// terminal, and not the texts. That last clause is the swap detector — the
+/// four files carry `SIL OPEN FONT LICENSE` and the notice does not, so two
+/// arms exchanged fail this test and
+/// `licences_print_the_four_files_byte_for_byte` both.
 #[test]
 fn licences_run_without_a_document_and_a_document_runs_without_them() {
     let out = run(&["--licenses".as_ref()]);
     assert!(out.status.success(), "the run failed: {:?}", out);
 
-    let with_extra = run(&["--licenses".as_ref(), "extra.md".as_ref()]);
+    let notice = String::from_utf8(out.stdout).unwrap();
+    let lines: Vec<&str> = notice.lines().collect();
     assert!(
-        with_extra.status.success(),
-        "a positional beside the flag should be ignored: {:?}",
-        with_extra
+        lines.len() <= 50,
+        "the notice runs to {} lines",
+        lines.len()
     );
+    assert_eq!(
+        lines.first().copied(),
+        Some("md2pdf — its own source is MIT.")
+    );
+    assert_eq!(
+        lines.last().copied(),
+        Some("This records provenance and is not legal advice.")
+    );
+    assert!(
+        !notice.contains("SIL OPEN FONT LICENSE"),
+        "the bare flag printed the texts: {notice}"
+    );
+
+    // Both positionals are ignored and both print the same thing. The second is
+    // the cost `require_equals` accepts, named: `--licenses full` with a space
+    // ignores `full` exactly as the first ignores `extra.md`.
+    for beside in ["extra.md", "full"] {
+        let out = run(&["--licenses".as_ref(), beside.as_ref()]);
+        assert!(
+            out.status.success(),
+            "a positional beside the flag should be ignored: {:?}",
+            out
+        );
+        assert_eq!(
+            String::from_utf8(out.stdout).unwrap(),
+            notice,
+            "`--licenses {beside}` printed something other than the notice"
+        );
+    }
+
+    // A value outside the set is clap's own refusal, and it names both.
+    let bogus = run(&["--licenses=bogus".as_ref()]);
+    assert_eq!(
+        bogus.status.code(),
+        Some(2),
+        "stderr: {}",
+        String::from_utf8_lossy(&bogus.stderr)
+    );
+    let stderr = String::from_utf8(bogus.stderr).unwrap();
+    for value in ["notice", "full"] {
+        assert!(stderr.contains(value), "stderr: {stderr}");
+    }
 
     let bare = run(&[]);
     assert!(
@@ -685,10 +736,142 @@ fn licences_run_without_a_document_and_a_document_runs_without_them() {
     );
 }
 
-/// What it prints is what the repository holds, byte for byte.
+/// The count of faces as the notice spells it: a word, then `face` or `faces`.
+///
+/// The prose is derived from the count rather than checked beside it, so a
+/// directory that gained a face and a notice still reading `five faces` fails
+/// rather than passing on a number nobody re-read.
+fn faces(count: usize) -> String {
+    let word = ["zero", "one", "two", "three", "four", "five", "six"]
+        .get(count)
+        .unwrap_or_else(|| panic!("the notice has no word for {count} faces"));
+    if count == 1 {
+        format!("{word} face")
+    } else {
+        format!("{word} faces")
+    }
+}
+
+/// Every fact in the notice is derived from the file or the directory that
+/// holds it, never copied beside it.
+///
+/// The notice is hand-written prose, which is the shape that rots: a version
+/// bumped in the generated table, a crate added to the resolve or a face added
+/// to `core/assets/fonts/` leaves a sentence quietly false. So nothing here is
+/// a literal that could have been typed twice — each expectation is read off
+/// the source the sentence claims to be about, and the notice is searched for
+/// the result.
+///
+/// **The copyleft clause is the one that most needs this.** *"None is
+/// copyleft"* is a claim about a resolve of 334 crates that no author will
+/// re-audit by hand, so it is asserted over the derived terms, `contains` so a
+/// future `LGPL-2.1` or `MPL-2.0` is caught, and case-sensitively over the
+/// terms rather than the rows: a case-insensitive sweep over whole rows hits
+/// the crate *names* `simplecss`, `thiserror-impl`, `unic-langid-impl` and
+/// `unic-langid-macros-impl`, none of which is a licence.
+#[test]
+fn the_notice_states_the_facts_the_table_and_the_font_directory_hold() {
+    let out = run(&["--licenses".as_ref()]);
+    assert!(out.status.success(), "the run failed: {:?}", out);
+    let notice = String::from_utf8(out.stdout).unwrap();
+
+    // Every table row, as its three cells. Read off disk, for `licence_file`'s
+    // reason: a test compiling the same file in would agree with the binary
+    // about a table that had been truncated.
+    let table = licence_file("THIRD-PARTY-LICENSES.md");
+    let rows: Vec<Vec<&str>> = table
+        .lines()
+        .filter(|line| line.starts_with("| `"))
+        .map(|line| line.trim_matches('|').split('|').map(str::trim).collect())
+        .collect();
+    assert!(
+        rows.len() > 300,
+        "the table did not parse: {} rows",
+        rows.len()
+    );
+
+    let version_of = |name: &str| -> &str {
+        rows.iter()
+            .find(|row| row[0] == format!("`{name}`"))
+            .unwrap_or_else(|| panic!("{name} is not in the table"))[1]
+    };
+
+    // An expression names one or more terms. Splitting on the four separators
+    // and trimming the parentheses an `AND` puts around an `OR` is what turns
+    // `(MIT OR Apache-2.0) AND Unicode-3.0` into three. **Trimming is
+    // load-bearing**: `fnv`'s cell is `Apache-2.0 / MIT`, spaces about the
+    // slash, and untrimmed it yields two terms that are nobody's licence.
+    let mut terms: BTreeSet<&str> = BTreeSet::new();
+    for row in &rows {
+        let split = row[2]
+            .replace(" OR ", "\u{1}")
+            .replace(" AND ", "\u{1}")
+            .replace(" WITH ", "\u{1}")
+            .replace('/', "\u{1}");
+        for piece in split.split('\u{1}') {
+            let term = piece.trim().trim_matches(['(', ')']).trim();
+            if !term.is_empty() {
+                // The borrow has to outlive `split`, and every term is a slice
+                // of the original cell: find it there.
+                let start = row[2].find(term).expect("a term the cell does not hold");
+                terms.insert(&row[2][start..start + term.len()]);
+            }
+        }
+    }
+    assert!(
+        !terms.is_empty(),
+        "no licence terms parsed out of the table"
+    );
+
+    for term in &terms {
+        for copyleft in ["GPL", "MPL", "EUPL", "CDDL", "EPL", "OSL"] {
+            assert!(
+                !term.contains(copyleft),
+                "the notice says none is copyleft, but the table lists {term}"
+            );
+        }
+        assert!(
+            notice.contains(term),
+            "the table lists {term} and the notice does not name it"
+        );
+    }
+
+    for fact in [
+        format!("Typst {}", version_of("typst")),
+        format!("mitex {}", version_of("mitex")),
+        format!("the {} crates", rows.len()),
+    ] {
+        assert!(notice.contains(&fact), "the notice does not say {fact:?}");
+    }
+
+    // The faces, from the directory the binary embeds them from. `../core` is
+    // the path `expected_licences` already reaches through.
+    let fonts = Path::new(env!("CARGO_MANIFEST_DIR")).join("../core/assets/fonts");
+    let (mut libertinus, mut newcm) = (0usize, 0usize);
+    for entry in std::fs::read_dir(&fonts).unwrap() {
+        let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+        if !name.ends_with(".otf") {
+            continue;
+        }
+        libertinus += usize::from(name.starts_with("Libertinus"));
+        newcm += usize::from(name.starts_with("NewCMMath"));
+    }
+
+    for fact in [
+        faces(libertinus),
+        faces(newcm),
+        "NewCMMath-Regular".to_string(),
+        "SIL Open Font License 1.1".to_string(),
+        "GUST Font License".to_string(),
+    ] {
+        assert!(notice.contains(&fact), "the notice does not say {fact:?}");
+    }
+}
+
+/// What the full form prints is what the repository holds, byte for byte.
 #[test]
 fn licences_print_the_four_files_byte_for_byte() {
-    let out = run(&["--licenses".as_ref()]);
+    let out = run(&["--licenses=full".as_ref()]);
     assert!(out.status.success(), "the run failed: {:?}", out);
 
     assert_eq!(String::from_utf8(out.stdout).unwrap(), expected_licences());
@@ -702,7 +885,7 @@ fn licences_print_the_four_files_byte_for_byte() {
 /// at `OFL.txt` passes every other clause.
 #[test]
 fn licences_carry_the_text_a_reader_needs() {
-    let out = run(&["--licenses".as_ref()]);
+    let out = run(&["--licenses=full".as_ref()]);
     let stdout = String::from_utf8(out.stdout).unwrap();
 
     for literal in [

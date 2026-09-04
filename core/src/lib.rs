@@ -762,8 +762,8 @@ const MATH: &[u8] = include_bytes!("../assets/fonts/NewCMMath-Regular.otf");
 /// them makes it forced.
 ///
 /// The text is a compile-time constant, so a caller printing it reads no file
-/// and has no path on which to fail. `md2pdf --licenses` is the first such
-/// caller; any embedder shipping a binary with these faces in it has the same
+/// and has no path on which to fail. `md2pdf --licenses=full` is the first
+/// such caller; any embedder shipping a binary with these faces in it has the same
 /// obligation and the same answer.
 pub const FONT_LICENSES: &[(&str, &str)] = &[
     ("OFL.txt", include_str!("../assets/fonts/OFL.txt")),
