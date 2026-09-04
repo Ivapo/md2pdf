@@ -717,6 +717,7 @@ pub(crate) struct Include {
 /// Every link this scan declines stays exactly the link it is today.
 pub(crate) fn includes(md: &str) -> Vec<Include> {
     let events: Vec<(Event<'_>, Range<usize>)> = parser(md).into_offset_iter().collect();
+    let lines = Lines::of(md);
     let mut found = Vec::new();
     let mut depth = 0usize;
 
@@ -731,7 +732,7 @@ pub(crate) fn includes(md: &str) -> Vec<Include> {
                 {
                     found.push(Include {
                         path,
-                        line: line_of(md, range.start),
+                        line: lines.line_of(range.start),
                         span: range.clone(),
                     });
                 }
@@ -954,7 +955,7 @@ enum Mode<'a, 'b> {
 /// document's walk reports it where the region stands, so the first error in
 /// document order is still the one the user reads — a frontmatter error
 /// included, which is parsed in that second walk and nowhere here.
-fn collect_definitions(md: &str, sources: &Sources) -> Definitions {
+fn collect_definitions(md: &str, lines: &Lines, sources: &Sources) -> Definitions {
     let mut found = Definitions::default();
     let mut walk = Walk::new();
     let mut open: Option<Label> = None;
@@ -1005,7 +1006,15 @@ fn collect_definitions(md: &str, sources: &Sources) -> Definitions {
         // already holds is the first one in that region, and that is the one
         // to report.
         if failure.is_none()
-            && let Err(error) = step(&mut walk, md, event, range, Mode::Definition, sources)
+            && let Err(error) = step(
+                &mut walk,
+                md,
+                lines,
+                event,
+                range,
+                Mode::Definition,
+                sources,
+            )
         {
             failure = Some(error);
         }
@@ -1054,7 +1063,8 @@ pub(crate) struct Emitted {
 
 /// Translate one markdown document into Typst markup.
 pub(crate) fn emit(md: &str, sources: &Sources) -> Result<Emitted> {
-    let found = collect_definitions(md, sources);
+    let lines = Lines::of(md);
+    let found = collect_definitions(md, &lines, sources);
     let mut notes = Notes {
         found: &found,
         seen: HashSet::new(),
@@ -1067,6 +1077,7 @@ pub(crate) fn emit(md: &str, sources: &Sources) -> Result<Emitted> {
         step(
             &mut walk,
             md,
+            &lines,
             event,
             range,
             Mode::Document(&mut notes),
@@ -1131,6 +1142,7 @@ pub(crate) fn emit(md: &str, sources: &Sources) -> Result<Emitted> {
 fn step(
     walk: &mut Walk,
     md: &str,
+    lines: &Lines,
     event: Event,
     range: Range<usize>,
     mut mode: Mode,
@@ -1221,7 +1233,7 @@ fn step(
             other => {
                 return Err(Error::UnsupportedConstruct {
                     construct: describe(other).to_string(),
-                    location: Location::at(line_of(md, range.start)),
+                    location: Location::at(lines.line_of(range.start)),
                 });
             }
         }
@@ -1248,7 +1260,7 @@ fn step(
             if r#abstract.is_some() {
                 return Err(Error::UnsupportedConstruct {
                     construct: "image inside an abstract".to_string(),
-                    location: Location::at(line_of(md, range.start)),
+                    location: Location::at(lines.line_of(range.start)),
                 });
             }
             *figure = Some(Figure {
@@ -1274,7 +1286,7 @@ fn step(
             Event::Start(Tag::Heading { .. } | Tag::List(_) | Tag::BlockQuote(_)) | Event::Rule
         )
     {
-        return Err(uncaptionable(line_of(md, range.start)));
+        return Err(uncaptionable(lines.line_of(range.start)));
     }
 
     // A front-matter block holds paragraphs and nothing else, which is the
@@ -1298,7 +1310,7 @@ fn step(
     {
         return Err(Error::UnsupportedConstruct {
             construct: format!("block inside {what} that is not a paragraph"),
-            location: Location::at(line_of(md, range.start)),
+            location: Location::at(lines.line_of(range.start)),
         });
     }
 
@@ -1309,7 +1321,7 @@ fn step(
         // frontmatter key is reported before any later construct error.
         Event::End(TagEnd::MetadataBlock(_)) => {
             *in_metadata = false;
-            let first_line = line_of(md, meta_offset.unwrap_or(range.start));
+            let first_line = lines.line_of(meta_offset.unwrap_or(range.start));
             *front = frontmatter::parse(meta, first_line)?;
         }
 
@@ -1355,7 +1367,7 @@ fn step(
                 // stands past the group's own start is what no member wrote:
                 // prose, an inline image, a display equation, two images in one
                 // paragraph. This is `Figure::live`'s content check one level up.
-                return Err(uncaptionable(line_of(md, range.start)));
+                return Err(uncaptionable(lines.line_of(range.start)));
             }
             *para = None;
             *para_end = None;
@@ -1365,7 +1377,7 @@ fn step(
         Event::Start(Tag::Heading { level, .. }) => {
             // The line, for the anchor. It is recorded and never written, so
             // the emitted markup is exactly what it was before this existed.
-            headings.push(line_of(md, range.start));
+            headings.push(lines.line_of(range.start));
 
             let out = top(bufs);
             out.push('\n');
@@ -1498,8 +1510,8 @@ fn step(
                 // Typst as a string literal, like inline code before it.
                 content.push_str(&text);
             } else if *in_metadata {
-                let first = line_of(md, *meta_offset.get_or_insert(range.start));
-                let line = line_of(md, range.start);
+                let first = lines.line_of(*meta_offset.get_or_insert(range.start));
+                let line = lines.line_of(range.start);
                 while lines_in(meta) < line.saturating_sub(first) + 1 {
                     meta.push('\n');
                 }
@@ -1518,7 +1530,7 @@ fn step(
                 // delimiter or a mistyped one and never prose**, so there is no
                 // such thing as a lone `:::` reaching the page.
                 if opens && text.trim().starts_with(":::") {
-                    let line = line_of(md, range.start);
+                    let line = lines.line_of(range.start);
                     // The run has to be the whole paragraph *and* a delimiter's
                     // own shape, and both failures are the same error, on the
                     // sentence above.
@@ -1645,7 +1657,7 @@ fn step(
                 {
                     return Err(Error::UnsupportedConstruct {
                         construct: format!("caption line inside {what}"),
-                        location: Location::at(line_of(md, range.start)),
+                        location: Location::at(lines.line_of(range.start)),
                     });
                 }
 
@@ -1664,7 +1676,7 @@ fn step(
                 if let Some(rest) = marked
                     && attaches
                 {
-                    let line = line_of(md, range.start);
+                    let line = lines.line_of(range.start);
                     // One construct takes one caption, and so does one group.
                     // Neither refusal falls out of the checks around it: a
                     // spliced region carries `#figure(…)`, which the content
@@ -1701,7 +1713,7 @@ fn step(
                     escape_into(top(bufs), rest);
                 } else if let Some(recorded) = equation.as_ref()
                     && recorded.live(bufs)
-                    && let Some(name) = equation_name(&text, line_of(md, range.start))?
+                    && let Some(name) = equation_name(&text, lines.line_of(range.start))?
                 {
                     // A name on the closing `$$`, on the line below it or in the
                     // paragraph below that, written where the equation was
@@ -1714,7 +1726,7 @@ fn step(
                     // consumed rather than escaped, which is what takes the
                     // group off the page.
                     let end = recorded.end();
-                    declare(names, name, line_of(md, range.start), true)?;
+                    declare(names, name, lines.line_of(range.start), true)?;
                     top(bufs).insert_str(end, &format!(" <{name}>"));
                     *equation = None;
                 } else if opens
@@ -1737,7 +1749,7 @@ fn step(
                     // caption's frame, so `opens` is already false inside one.
                     return Err(Error::UnsupportedConstruct {
                         construct: "name group with nothing to name".to_string(),
-                        location: Location::at(line_of(md, range.start)),
+                        location: Location::at(lines.line_of(range.start)),
                     });
                 } else {
                     if let Some(open) = caption.as_mut() {
@@ -1760,12 +1772,12 @@ fn step(
         // and an author told about the second having written the first learns
         // nothing the first name did not tell them.
         Event::Start(Tag::Emphasis) => {
-            refuse_in_keywords(keywords, "emphasis", line_of(md, range.start))?;
+            refuse_in_keywords(keywords, "emphasis", lines.line_of(range.start))?;
             top(bufs).push_str("#emph[");
         }
         Event::End(TagEnd::Emphasis) => top(bufs).push(']'),
         Event::Start(Tag::Strong) => {
-            refuse_in_keywords(keywords, "emphasis", line_of(md, range.start))?;
+            refuse_in_keywords(keywords, "emphasis", lines.line_of(range.start))?;
             top(bufs).push_str("#strong[");
         }
         Event::End(TagEnd::Strong) => top(bufs).push(']'),
@@ -1775,7 +1787,7 @@ fn step(
         // arise. The parser admits a run of one tilde as well as two, so
         // `~struck~` reaches this arm too.
         Event::Start(Tag::Strikethrough) => {
-            refuse_in_keywords(keywords, "strikethrough", line_of(md, range.start))?;
+            refuse_in_keywords(keywords, "strikethrough", lines.line_of(range.start))?;
             top(bufs).push_str("#strike[");
         }
         Event::End(TagEnd::Strikethrough) => top(bufs).push(']'),
@@ -1785,7 +1797,7 @@ fn step(
         Event::Code(inline) => {
             // A `;` inside `#raw("a;b")` is a semicolon the author never wrote
             // as a separator, which is the whole reason a term is plain text.
-            refuse_in_keywords(keywords, "inline code", line_of(md, range.start))?;
+            refuse_in_keywords(keywords, "inline code", lines.line_of(range.start))?;
             let out = top(bufs);
             out.push_str("#raw(");
             out.push_str(&typst_string(&inline));
@@ -1800,8 +1812,8 @@ fn step(
         // reaches the walk as raw code text, so no inline event is produced
         // inside it at all.
         Event::InlineMath(latex) => {
-            refuse_in_keywords(keywords, "formula", line_of(md, range.start))?;
-            let markup = math::convert(&latex, line_of(md, range.start))?;
+            refuse_in_keywords(keywords, "formula", lines.line_of(range.start))?;
+            let markup = math::convert(&latex, lines.line_of(range.start))?;
             let out = top(bufs);
             out.push('$');
             out.push_str(&markup);
@@ -1832,11 +1844,11 @@ fn step(
             if r#abstract.is_some() {
                 return Err(Error::UnsupportedConstruct {
                     construct: "display equation inside an abstract".to_string(),
-                    location: Location::at(line_of(md, range.start)),
+                    location: Location::at(lines.line_of(range.start)),
                 });
             }
-            refuse_in_keywords(keywords, "formula", line_of(md, range.start))?;
-            let markup = math::convert(&latex, line_of(md, range.start))?;
+            refuse_in_keywords(keywords, "formula", lines.line_of(range.start))?;
+            let markup = math::convert(&latex, lines.line_of(range.start))?;
             let written = format!("$ {markup} $");
             let depth = bufs.len();
             let out = top(bufs);
@@ -1881,13 +1893,13 @@ fn step(
             if dest_url.is_empty() {
                 return Err(Error::UnsupportedConstruct {
                     construct: "link with an empty destination".to_string(),
-                    location: Location::at(line_of(md, range.start)),
+                    location: Location::at(lines.line_of(range.start)),
                 });
             }
             if !title.is_empty() {
                 return Err(Error::UnsupportedConstruct {
                     construct: "link with a title".to_string(),
-                    location: Location::at(line_of(md, range.start)),
+                    location: Location::at(lines.line_of(range.start)),
                 });
             }
 
@@ -1913,7 +1925,7 @@ fn step(
             // there, since `para` is never `Some(0)`.
             *link = Some(LinkFrame {
                 url,
-                line: line_of(md, range.start),
+                line: lines.line_of(range.start),
                 link_type,
             });
             bufs.push(String::new());
@@ -2020,7 +2032,7 @@ fn step(
         Event::Start(Tag::Image {
             dest_url, title, ..
         }) => {
-            let line = line_of(md, range.start);
+            let line = lines.line_of(range.start);
             refuse_in_keywords(keywords, "image", line)?;
 
             // The path the master would have written. It is the identity every
@@ -2046,7 +2058,7 @@ fn step(
         // the region itself is never emitted. What it owes is settled at the
         // line it sits on, and the walk then skips it.
         Event::Start(Tag::FootnoteDefinition(label)) => {
-            let line = line_of(md, range.start);
+            let line = lines.line_of(range.start);
             match &mut mode {
                 Mode::Document(notes) => notes.enter(label_of(&label), line)?,
                 // The parser hoists a definition written inside another one to
@@ -2071,14 +2083,14 @@ fn step(
         // placement order, which is the order GFM numbers them in, so the
         // emitter writes no number itself.
         Event::FootnoteReference(label) => {
-            refuse_in_keywords(keywords, "footnote", line_of(md, range.start))?;
+            refuse_in_keywords(keywords, "footnote", lines.line_of(range.start))?;
             let Mode::Document(notes) = &mut mode else {
                 // Resolving a footnote inside a footnote would mean a recursive
                 // substitution with a cycle check, for a construct real
                 // articles do not carry.
                 return Err(Error::UnsupportedConstruct {
                     construct: "footnote reference inside a footnote definition".to_string(),
-                    location: Location::at(line_of(md, range.start)),
+                    location: Location::at(lines.line_of(range.start)),
                 });
             };
 
@@ -2128,7 +2140,7 @@ fn step(
         // is a line break in the middle of an index term. An abstract permits
         // one, so the divergence is the author's to be told about.
         Event::HardBreak => {
-            refuse_in_keywords(keywords, "hard break", line_of(md, range.start))?;
+            refuse_in_keywords(keywords, "hard break", lines.line_of(range.start))?;
             top(bufs).push_str("\\\n");
         }
 
@@ -2138,7 +2150,7 @@ fn step(
         other => {
             return Err(Error::UnsupportedConstruct {
                 construct: describe(&other).to_string(),
-                location: Location::at(line_of(md, range.start)),
+                location: Location::at(lines.line_of(range.start)),
             });
         }
     }
@@ -3626,18 +3638,40 @@ fn line_is_all_digits(out: &str) -> bool {
     !line.is_empty() && line.chars().all(|c| c.is_ascii_digit())
 }
 
-/// The 1-based line that a byte offset falls on.
 /// How many lines a buffer holds — the line its next character would land on.
 fn lines_in(text: &str) -> usize {
     text.bytes().filter(|&byte| byte == b'\n').count() + 1
 }
 
-pub(crate) fn line_of(md: &str, offset: usize) -> usize {
-    md[..offset.min(md.len())]
-        .bytes()
-        .filter(|&b| b == b'\n')
-        .count()
-        + 1
+/// Where every line break in one string falls, so a byte offset finds its line
+/// by binary search.
+///
+/// **A table built once per string, rather than a count.** Counting the line
+/// breaks before an offset is linear in the offset, and the walk asks once per
+/// event, which made the emitter quadratic in document bytes. A running counter
+/// would not do instead: the walk does not meet offsets in order — an `End`
+/// event's range starts where its `Start` did — `meta_offset` reaches back to
+/// where a frontmatter block began, and `collect_definitions` and `emit` each
+/// cover the whole string.
+pub(crate) struct Lines(Vec<usize>);
+
+impl Lines {
+    /// The byte offset of every `'\n'` in `text`, ascending by construction.
+    pub(crate) fn of(text: &str) -> Self {
+        Self(
+            text.bytes()
+                .enumerate()
+                .filter(|&(_, byte)| byte == b'\n')
+                .map(|(at, _)| at)
+                .collect(),
+        )
+    }
+
+    /// The 1-based line a byte offset falls on: one more than the number of
+    /// line breaks before it. An offset past the end lands on the last line.
+    pub(crate) fn line_of(&self, offset: usize) -> usize {
+        self.0.partition_point(|&at| at < offset) + 1
+    }
 }
 
 /// A name for an out-of-dialect construct, for the error message.

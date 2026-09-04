@@ -170,29 +170,38 @@ pub(crate) fn assemble(md: &str, sections: &[Asset]) -> Result<(String, Sources)
         return Ok((md.to_string(), Sources { segments: master() }));
     }
 
+    let master_lines = emit::Lines::of(md);
     let mut joined = String::with_capacity(md.len());
     let mut segments = master();
     let mut cursor = 0usize;
+    // The 1-based line the next character pushed onto `joined` lands on, kept
+    // up as the buffer grows. Counted over the whole buffer at every marker
+    // instead, the join is quadratic in the number of sections.
+    let mut line = 1usize;
 
     for marker in &markers {
         let text = section_text(marker, sections)?;
 
+        let from = joined.len();
         joined.push_str(&md[cursor..marker.span.start]);
         separate(&mut joined);
+        line += breaks_in(&joined[from..]);
         segments.push(Segment {
-            joined_line: line_count(&joined),
+            joined_line: line,
             file: Some(marker.path.clone()),
             source_line: 1,
         });
 
+        let from = joined.len();
         joined.push_str(text);
         separate(&mut joined);
+        line += breaks_in(&joined[from..]);
 
         cursor = resume(md, marker.span.end);
         segments.push(Segment {
-            joined_line: line_count(&joined),
+            joined_line: line,
             file: None,
-            source_line: emit::line_of(md, cursor),
+            source_line: master_lines.line_of(cursor),
         });
     }
 
@@ -307,7 +316,7 @@ fn resume(md: &str, end: usize) -> usize {
     }
 }
 
-/// The 1-based line the next character pushed onto this buffer would land on.
-fn line_count(out: &str) -> usize {
-    out.bytes().filter(|&byte| byte == b'\n').count() + 1
+/// How many line breaks a run of text carries.
+fn breaks_in(text: &str) -> usize {
+    text.bytes().filter(|&byte| byte == b'\n').count()
 }

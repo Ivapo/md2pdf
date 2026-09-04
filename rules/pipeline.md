@@ -34,7 +34,7 @@ covers: >
   compile reports,
   the Typst world and its bundled fonts, and the CLI contract
 max_lines: 1280
-generated: 2026-09-01
+generated: 2026-09-04
 ---
 
 # Pipeline
@@ -276,7 +276,11 @@ and nothing on the page to see. It records a `Segment` per run — master, secti
 and `core/src/sections.rs:Sources` resolves a joined line to a file and a line by one binary
 search over them. **A document naming no section has a one-entry map**, so the translation is
 the identity and every message is exactly what it was: a property of the arithmetic, not of a
-branch.
+branch. **The line itself comes from the same search:** `core/src/emit.rs:Lines` records where
+every line break in a string falls, once per string, and an event's offset finds its line by
+binary search over it, while the join keeps a running count as it pushes. A count from byte
+zero per event is quadratic in the document, and the walk meets offsets out of order, so
+neither a rescan nor a counter serves.
 
 The emitter is handed one string, which is why **every document-wide mechanism crosses a file
 boundary with nothing added for it**: the figure numbering, the cross-references, the footnote
