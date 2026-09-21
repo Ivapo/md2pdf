@@ -19,20 +19,31 @@ use merman::{
 use crate::{Error, Location, Result};
 
 /// The diagram types the dialect allows, keyed on the id merman's detection
-/// reports, with the alt text the image carries.
+/// reports, with the keywords that reach each and the alt text the image
+/// carries.
 ///
 /// **Keyed on the id and not on the keyword**, which is what folds `graph`
-/// into `flowchart` without a second table: both reach `flowchart-v2`.
-/// `flowchart-elk` reports an id of its own, so it is refused here, and the
-/// ELK layout is not compiled in anyway. A type joins with a fixture, one at a
-/// time, the way `math.rs`'s commands do.
-const ALLOWED: [(&str, &str); 2] = [
-    ("flowchart-v2", "flowchart"),
-    ("sequence", "sequence diagram"),
+/// into `flowchart`, and `classDiagram-v2` and `stateDiagram-v2` into their
+/// families, without a second table: detection sends each pair to one id. The
+/// keywords are what a refusal lists, and a test below holds every one of them
+/// to its row's id. `flowchart-elk` reports an id of its own, so it is refused
+/// here, and the ELK layout is not compiled in anyway. A type joins with a
+/// fixture, one at a time, the way `math.rs`'s commands do.
+const ALLOWED: [(&str, &[&str], &str); 5] = [
+    ("flowchart-v2", &["flowchart", "graph"], "flowchart"),
+    ("sequence", &["sequenceDiagram"], "sequence diagram"),
+    (
+        "classDiagram",
+        &["classDiagram", "classDiagram-v2"],
+        "class diagram",
+    ),
+    (
+        "stateDiagram",
+        &["stateDiagram", "stateDiagram-v2"],
+        "state diagram",
+    ),
+    ("er", &["erDiagram"], "entity-relationship diagram"),
 ];
-
-/// The keywords that reach [`ALLOWED`], as a refusal lists them.
-const KEYWORDS: &str = "flowchart, graph and sequenceDiagram";
 
 /// The size merman draws a label at, in px, which the look's `diagram` scales
 /// to its caption size.
@@ -71,12 +82,13 @@ pub(crate) fn render(content: &str, fence: usize) -> Result<Diagram> {
         Err(merman::Error::DetectType(_)) => return Err(no_type(fence)),
         Err(error) => return Err(translate(RenderError::from(error), content, fence)),
     };
-    let Some(&(_, alt)) = ALLOWED.iter().find(|(id, _)| *id == detected) else {
+    let Some(&(_, _, alt)) = ALLOWED.iter().find(|(id, ..)| *id == detected) else {
         let (line, keyword) = keyword(content, fence).unwrap_or((fence, &detected));
         return Err(Error::Diagram {
             location: Location::at(line),
             problem: format!(
-                "diagram type '{keyword}' is not supported; the supported types are {KEYWORDS}"
+                "diagram type '{keyword}' is not supported; the supported types are {}",
+                keywords()
             ),
         });
     };
@@ -88,10 +100,11 @@ pub(crate) fn render(content: &str, fence: usize) -> Result<Diagram> {
     let renderer = Renderer::new()
         .with_engine(engine)
         .with_parse_options(ParseOptions::strict());
-    // The resvg-safe pipeline, always: merman's default SVG puts flowchart
-    // labels in `<foreignObject>` HTML, which usvg, and so Typst, does not
-    // draw. Every other field keeps merman's default — the widths the spec's
-    // fixture was measured at depend on its `viewbox_padding` and its layout.
+    // The resvg-safe pipeline, always: merman's default SVG puts flowchart,
+    // class, state and ER labels in `<foreignObject>` HTML, which usvg, and so
+    // Typst, does not draw. Every other field keeps merman's default — the
+    // widths the spec's fixtures were measured at depend on its
+    // `viewbox_padding` and its layout.
     let request = SvgRequest {
         pipeline: Some(SvgPipeline::resvg_safe()),
         ..Default::default()
@@ -121,7 +134,8 @@ pub(crate) fn render(content: &str, fence: usize) -> Result<Diagram> {
 /// - **The spacing is for print.** Mermaid's defaults are sized for a screen;
 ///   these made the spike's flowchart 18% narrower and its sequence diagram
 ///   24%, and `mirrorActors: false` drops the second row of actor boxes a
-///   sequence diagram repeats at its foot.
+///   sequence diagram repeats at its foot. Class, state and ER diagrams are
+///   the narrow families and keep merman's own spacing.
 /// - **No `fontFamily`.** Mermaid names families `core` does not bundle, so
 ///   Typst draws every label in the look's own text font, and a look with a
 ///   different font gets it with nothing here knowing.
@@ -195,6 +209,17 @@ fn keyword(content: &str, fence: usize) -> Option<(usize, &str)> {
     })
 }
 
+/// Every keyword that reaches [`ALLOWED`], in its order, as a refusal lists
+/// them: `a, b and c`. Built from the rows, so the list cannot drift from them.
+fn keywords() -> String {
+    let all: Vec<&str> = ALLOWED
+        .iter()
+        .flat_map(|(_, keywords, _)| keywords.iter().copied())
+        .collect();
+    let (last, rest) = all.split_last().expect("the list is not empty");
+    format!("{} and {last}", rest.join(", "))
+}
+
 /// A misspelt keyword, an empty block, or one holding only comments.
 fn no_type(fence: usize) -> Error {
     Error::Diagram {
@@ -247,6 +272,18 @@ mod tests {
 
     const FLOWCHART: &str = "flowchart LR\n    a[Read] --> b[Walk] --> c[Write]";
     const SEQUENCE: &str = "sequenceDiagram\n    A->>B: hello\n    B-->>A: hi";
+    const CLASS: &str = "classDiagram\n    class Asset {\n        +String path\n    }\n    Asset <.. ImageRef : names";
+    const STATE: &str = "stateDiagram-v2\n    [*] --> Walking\n    Walking --> Parked: an image\n    Parked --> [*]";
+    const ER: &str = "erDiagram\n    MASTER ||--o{ SECTION : names";
+
+    /// One block of each allowed type, with the alt text its row gives it.
+    const EACH: [(&str, &str); 5] = [
+        (FLOWCHART, "flowchart"),
+        (SEQUENCE, "sequence diagram"),
+        (CLASS, "class diagram"),
+        (STATE, "state diagram"),
+        (ER, "entity-relationship diagram"),
+    ];
 
     /// [`LABEL_PX`] is the size merman actually drew at, for each allowed type.
     ///
@@ -255,7 +292,7 @@ mod tests {
     /// merman writes carries the size its labels were laid out at.
     #[test]
     fn the_label_size_passed_is_the_one_merman_drew_at() {
-        for source in [FLOWCHART, SEQUENCE] {
+        for (source, _) in EACH {
             let diagram = render(source, 1).unwrap();
             assert!(
                 diagram.svg.contains(&format!("font-size:{LABEL_PX}px")),
@@ -268,7 +305,7 @@ mod tests {
     /// alt text its row gives it.
     #[test]
     fn each_allowed_type_yields_a_width_and_its_alt_text() {
-        for (source, alt) in [(FLOWCHART, "flowchart"), (SEQUENCE, "sequence diagram")] {
+        for (source, alt) in EACH {
             let diagram = render(source, 1).unwrap();
             assert_eq!(diagram.alt, alt);
             assert!(
@@ -283,12 +320,82 @@ mod tests {
     /// deterministic runtime policy exists for.
     #[test]
     fn the_same_block_draws_the_same_bytes() {
-        for source in [FLOWCHART, SEQUENCE] {
+        for (source, _) in EACH {
             assert_eq!(
                 render(source, 1).unwrap().svg,
                 render(source, 1).unwrap().svg
             );
         }
+    }
+
+    /// Every keyword a refusal names reaches its own row's id, and the refusal
+    /// names every one.
+    ///
+    /// Detection is what the list is keyed on, so this is the keyword-to-id
+    /// mapping `mpdf-012` §2 records, held mechanically: a merman whose
+    /// detection moved a keyword would otherwise refuse it, or accept it under
+    /// another row's alt text, with nothing else failing. `classDiagram-v2` is
+    /// the fold §2's table did not list; merman sends it to `classDiagram`
+    /// because its class renderer defaults to `dagre-wrapper`.
+    #[test]
+    fn every_keyword_a_refusal_names_reaches_its_rows_id() {
+        let engine = Engine::new().with_site_config(site_config());
+        for (id, keywords, _) in ALLOWED {
+            for keyword in keywords {
+                let detected = engine.parse_metadata_sync(keyword).unwrap().diagram_type;
+                assert_eq!(detected, id, "{keyword} reached {detected}");
+            }
+        }
+        assert_eq!(
+            keywords(),
+            "flowchart, graph, sequenceDiagram, classDiagram, classDiagram-v2, \
+             stateDiagram, stateDiagram-v2 and erDiagram"
+        );
+    }
+
+    /// No allowed type leaves a label where Typst cannot draw it.
+    ///
+    /// merman's default SVG puts flowchart, class, state and ER labels in
+    /// `<foreignObject>` HTML, which usvg ignores, so a diagram would typeset
+    /// with its boxes and without its words. The resvg-safe pipeline rewrites
+    /// them as SVG text; this is the test that fails if it stops being used.
+    #[test]
+    fn no_allowed_type_leaves_a_label_in_a_foreign_object() {
+        for (source, _) in EACH {
+            let diagram = render(source, 1).unwrap();
+            assert!(
+                !diagram.svg.contains("<foreignObject"),
+                "{source:?} left HTML the SVG renderer ignores"
+            );
+        }
+    }
+
+    /// `mpdf-012` Phase 2's gate 3: the class fixture's `Vec~u8~` is drawn as
+    /// Mermaid draws it, `Vec<u8>`.
+    ///
+    /// Mermaid writes a generic's angle brackets as tildes, because `<` would
+    /// open HTML, and converts them back when it draws. This is the conversion
+    /// that separated the two candidate renderers: the one rejected left the
+    /// tildes on the page.
+    #[test]
+    fn the_class_fixture_draws_a_generic_with_angle_brackets() {
+        const FIXTURE: &str = include_str!("../../tests/fixtures/diagrams_class.md");
+        let block = FIXTURE
+            .split("```mermaid\n")
+            .nth(1)
+            .and_then(|rest| rest.split("\n```").next())
+            .expect("the fixture holds a mermaid block");
+        assert!(
+            block.contains("+Vec~u8~ bytes"),
+            "precondition: the fixture no longer writes a generic member"
+        );
+
+        let svg = render(block, 1).unwrap().svg;
+        assert!(
+            svg.contains("Vec&lt;u8&gt;"),
+            "the generic was not converted"
+        );
+        assert!(!svg.contains("Vec~u8~"), "a tilde reached the page");
     }
 
     /// The width is read from the root element and nowhere else, and only as

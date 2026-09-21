@@ -786,7 +786,8 @@ fn a_diagram_refused_in_a_section_names_the_section() {
     assert_eq!(
         String::from_utf8(out.stderr).unwrap(),
         "error: diagram error in sections/one.md at line 4: diagram type 'gantt' is not \
-         supported; the supported types are flowchart, graph and sequenceDiagram\n"
+         supported; the supported types are flowchart, graph, sequenceDiagram, classDiagram, \
+         classDiagram-v2, stateDiagram, stateDiagram-v2 and erDiagram\n"
     );
 }
 

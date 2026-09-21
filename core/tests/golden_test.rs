@@ -5999,36 +5999,26 @@ fn the_diagrams_fixture_compiles_to_a_pdf_in_every_look_and_column_count() {
     }
 }
 
-/// Gate 1, second half: the source has the right shape, asserted by shape and
-/// never by the SVG's bytes, which track merman's output to the last digit and
-/// differ in it between native and `wasm32`.
+/// Asserts every `#diagram(…)` call in `typst` by shape, never by the SVG's
+/// bytes, one row per call in order: its alt text, whether it is captioned, and
+/// the name its caption declares, if any.
 ///
 /// Each call carries its own `viewBox` width verbatim — read here out of the
 /// very SVG the call carries, so a width formatted by the emitter, or taken
 /// from the wrong element, fails — then merman's label size, then the alt text
-/// its type's row gives it. Five are captioned, the uncaptioned fifth is not,
-/// and only the fourth, the sequence diagram, is named. The name goes *into*
-/// the call, because a label written after a `context` lands on the context.
-#[test]
-fn the_diagrams_fixture_writes_six_calls_of_the_right_shape() {
-    let typst = md_to_typst(DIAGRAMS_MD, &[]).unwrap();
+/// its type's row gives it. A name goes *into* the call, because a label
+/// written after a `context` lands on the context, so it is the call's last
+/// argument.
+fn assert_diagram_calls(typst: &str, rows: &[(&str, bool, Option<&str>)]) {
     assert!(
         typst.starts_with("#import \"template.typ\": template, divider, diagram\n"),
         "the import does not name `diagram`: {}",
         typst.lines().next().unwrap()
     );
 
-    let calls = diagram_calls(&typst);
-    assert_eq!(calls.len(), 6, "{} calls", calls.len());
-    let alts = [
-        "flowchart",
-        "flowchart",
-        "flowchart",
-        "sequence diagram",
-        "flowchart",
-        "flowchart",
-    ];
-    for (index, ((svg, rest), alt)) in calls.iter().zip(alts).enumerate() {
+    let calls = diagram_calls(typst);
+    assert_eq!(calls.len(), rows.len(), "{} calls", calls.len());
+    for (index, ((svg, rest), (alt, captioned, name))) in calls.iter().zip(rows).enumerate() {
         let number = index + 1;
         assert!(svg.starts_with("<svg"), "diagram {number} is not an SVG");
         let width = root_view_box_width(svg);
@@ -6039,23 +6029,41 @@ fn the_diagrams_fixture_writes_six_calls_of_the_right_shape() {
         );
         assert_eq!(
             rest.contains(", caption: ["),
-            number != 5,
+            *captioned,
             "diagram {number}'s caption"
         );
-        assert_eq!(
-            rest.contains("name:"),
-            number == 4,
-            "diagram {number}'s name"
-        );
+        match name {
+            Some(name) => assert!(
+                rest.ends_with(&format!(", name: label(\"{name}\"))")),
+                "diagram {number}'s name: {rest:?}"
+            ),
+            None => assert!(!rest.contains("name:"), "diagram {number}'s name"),
+        }
         assert!(
             rest.ends_with(')'),
             "diagram {number} is not one call on one line"
         );
     }
-    assert!(
-        calls[3].1.ends_with(", name: label(\"fig:sequence\"))"),
-        "the sequence diagram's name: {:?}",
-        calls[3].1
+}
+
+/// Gate 1, second half: the source has the right shape, asserted by shape and
+/// never by the SVG's bytes, which track merman's output to the last digit and
+/// differ in it between native and `wasm32`. Five are captioned, the
+/// uncaptioned fifth is not, and only the fourth, the sequence diagram, is
+/// named.
+#[test]
+fn the_diagrams_fixture_writes_six_calls_of_the_right_shape() {
+    let typst = md_to_typst(DIAGRAMS_MD, &[]).unwrap();
+    assert_diagram_calls(
+        &typst,
+        &[
+            ("flowchart", true, None),
+            ("flowchart", true, None),
+            ("flowchart", true, None),
+            ("sequence diagram", true, Some("fig:sequence")),
+            ("flowchart", false, None),
+            ("flowchart", true, None),
+        ],
     );
 
     assert_eq!(
@@ -6078,7 +6086,9 @@ fn the_diagrams_fixture_writes_six_calls_of_the_right_shape() {
 fn every_diagram_refusal_names_what_and_where() {
     const F: &str = "```";
     let block = |body: &str| format!("# H\n\n{F}mermaid\n{body}\n{F}\n");
-    const UNSUPPORTED: &str = "diagram type 'gantt' is not supported; the supported types are flowchart, graph and sequenceDiagram";
+    const UNSUPPORTED: &str = "diagram type 'gantt' is not supported; the supported types are \
+                               flowchart, graph, sequenceDiagram, classDiagram, classDiagram-v2, \
+                               stateDiagram, stateDiagram-v2 and erDiagram";
     const NO_TYPE: &str = "no diagram type is recognised";
     const DIRECTIVE: &str = "directive '%%{' is not allowed in a diagram";
 
@@ -6243,4 +6253,80 @@ fn a_fence_not_tagged_exactly_mermaid_is_still_a_listing() {
         assert!(typst.contains(&listing), "{tag}: {typst}");
         assert!(!typst.contains("diagram"), "{tag}: {typst}");
     }
+}
+
+// -- mpdf-012 Phase 2: class, state and entity-relationship diagrams --------
+
+/// A class diagram with a generic member, `Vec~u8~`, which Mermaid draws as
+/// `Vec<u8>`; `core/src/diagram.rs`'s own tests hold its SVG to that.
+const DIAGRAMS_CLASS_MD: &str = include_str!("../../tests/fixtures/diagrams_class.md");
+/// The same state machine twice, under `stateDiagram` and `stateDiagram-v2`.
+const DIAGRAMS_STATE_MD: &str = include_str!("../../tests/fixtures/diagrams_state.md");
+/// An ER diagram too wide for `article`'s column at caption size and kept in
+/// it by the tolerance; the test that reads that off the compiled document is
+/// in `core/src/lib.rs`.
+const DIAGRAMS_ER_MD: &str = include_str!("../../tests/fixtures/diagrams_er.md");
+
+/// Gate 1, first half: each family's fixture compiles in all four
+/// configurations — both looks, each at one column and at two.
+#[test]
+fn each_familys_fixture_compiles_to_a_pdf_in_every_look_and_column_count() {
+    for (family, fixture) in [
+        ("class", DIAGRAMS_CLASS_MD),
+        ("state", DIAGRAMS_STATE_MD),
+        ("ER", DIAGRAMS_ER_MD),
+    ] {
+        for look in DIAGRAM_LOOKS {
+            let md = fixture.replacen("---\n", &format!("---\n{look}"), 1);
+            let pdf = md_to_pdf(&md, &[]).unwrap_or_else(|e| panic!("{family}, {look:?}: {e}"));
+            assert!(
+                pdf.starts_with(b"%PDF"),
+                "{family}, {look:?}: the output is not a PDF"
+            );
+        }
+    }
+}
+
+/// Gate 1, second half: each family's fixture writes calls of the right shape,
+/// as the Phase 1 fixture's are asserted, and the same string twice.
+#[test]
+fn each_familys_fixture_writes_calls_of_the_right_shape() {
+    for (fixture, rows) in [
+        (DIAGRAMS_CLASS_MD, &[("class diagram", true, None)][..]),
+        (
+            DIAGRAMS_STATE_MD,
+            &[("state diagram", true, None), ("state diagram", true, None)][..],
+        ),
+        (
+            DIAGRAMS_ER_MD,
+            &[("entity-relationship diagram", true, None)][..],
+        ),
+    ] {
+        let typst = md_to_typst(fixture, &[]).unwrap();
+        assert_diagram_calls(&typst, rows);
+        assert_eq!(
+            md_to_typst(fixture, &[]).unwrap(),
+            typst,
+            "the same markdown drew a different source"
+        );
+    }
+}
+
+/// `stateDiagram` and `stateDiagram-v2` are one type: the list is keyed on the
+/// id detection reports, and both keywords reach `stateDiagram`. So the same
+/// machine under each draws the same diagram, which the width it carries shows
+/// without holding the SVG's bytes.
+#[test]
+fn both_state_keywords_draw_the_same_diagram() {
+    let typst = md_to_typst(DIAGRAMS_STATE_MD, &[]).unwrap();
+    let calls = diagram_calls(&typst);
+    let widths: Vec<&str> = calls
+        .iter()
+        .map(|(svg, _)| root_view_box_width(svg))
+        .collect();
+    assert_eq!(widths.len(), 2);
+    assert_eq!(
+        widths[0], widths[1],
+        "the two keywords drew different widths"
+    );
 }

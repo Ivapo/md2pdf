@@ -1002,6 +1002,69 @@ mod tests {
         }
     }
 
+    // -- `mpdf-012`'s sizing rule, restated for the two tests that hold the
+    // looks to it ---------------------------------------------------------
+
+    /// What the frontmatter gains, then the look's caption size in pt, its
+    /// margin in cm, and the column count that results.
+    const LOOKS: [(&str, f64, f64, f64); 4] = [
+        ("", 9.0, 2.5, 2.0),
+        ("columns: 1\n", 9.0, 2.5, 1.0),
+        ("template: press-release\n", 9.5, 3.0, 1.0),
+        ("template: press-release\ncolumns: 2\n", 9.5, 3.0, 2.0),
+    ];
+    const FLOOR: f64 = 8.0;
+    const LABEL_PX: f64 = 16.0;
+    // A4, and Typst's own conversion: 72 pt to the inch.
+    const PAGE: f64 = 210.0 / 25.4 * 72.0;
+    const PT_PER_CM: f64 = 72.0 / 2.54;
+
+    /// The text width and one column's width, with Typst's default gutter,
+    /// which neither look sets.
+    fn geometry(margin: f64, cols: f64) -> (f64, f64) {
+        let text = PAGE - 2.0 * margin * PT_PER_CM;
+        (text, (text - (cols - 1.0) * 0.04 * text) / cols)
+    }
+
+    /// `mpdf-012` §2's rule, restated: the width the image gets, and whether
+    /// its figure floats.
+    fn rule(px: f64, captioned: bool, size: f64, margin: f64, cols: f64) -> (f64, bool) {
+        let (text, column) = geometry(margin, cols);
+        let want = px * size / LABEL_PX;
+        let in_column = want.min(column);
+        let wide = captioned && cols > 1.0 && size * (in_column / want) < FLOOR;
+        (if wide { want.min(text) } else { in_column }, wide)
+    }
+
+    /// The width each call carries, which is the `viewBox`'s. The escaped SVG
+    /// holds no bare `"`, so the literal closes at the first one after the
+    /// root's `</svg>` — merman ends the document with a newline, so not
+    /// immediately after it.
+    fn widths(source: &str) -> Vec<f64> {
+        source
+            .lines()
+            .filter(|line| line.starts_with("#diagram(bytes(\""))
+            .map(|line| {
+                let tail = &line[line.rfind("</svg>").expect("the SVG closes")..];
+                let rest = &tail[tail.find("\"), ").expect("the literal closes") + 4..];
+                rest[..rest.find(',').unwrap()].parse().unwrap()
+            })
+            .collect()
+    }
+
+    /// An image keeps its width as a relative length; the look's is all
+    /// absolute, so anything else is a look that sized by something else.
+    fn points(value: typst::foundations::Value) -> f64 {
+        use typst::foundations::Value;
+        match value {
+            Value::Relative(width) if width.rel.get() == 0.0 && width.abs.em.get() == 0.0 => {
+                width.abs.abs.to_pt()
+            }
+            Value::Length(width) if width.em.get() == 0.0 => width.abs.to_pt(),
+            other => panic!("an image width that is not an absolute length: {other:?}"),
+        }
+    }
+
     /// `mpdf-012` Phase 1's gate 2: the look sizes every diagram by the rule,
     /// read off the compiled document rather than judged by eye.
     ///
@@ -1030,60 +1093,7 @@ mod tests {
         use typst::visualize::ImageElem;
 
         const FIXTURE: &str = include_str!("../../tests/fixtures/diagrams.md");
-        // What the frontmatter gains, then the look's caption size in pt, its
-        // margin in cm, and the column count that results.
-        const LOOKS: [(&str, f64, f64, f64); 4] = [
-            ("", 9.0, 2.5, 2.0),
-            ("columns: 1\n", 9.0, 2.5, 1.0),
-            ("template: press-release\n", 9.5, 3.0, 1.0),
-            ("template: press-release\ncolumns: 2\n", 9.5, 3.0, 2.0),
-        ];
         const CAPTIONED: [bool; 6] = [true, true, true, true, false, true];
-        const FLOOR: f64 = 8.0;
-        const LABEL_PX: f64 = 16.0;
-        // A4, and Typst's own conversion: 72 pt to the inch.
-        const PAGE: f64 = 210.0 / 25.4 * 72.0;
-        const PT_PER_CM: f64 = 72.0 / 2.54;
-
-        // The text width and one column's width, with Typst's default gutter,
-        // which neither look sets.
-        let geometry = |margin: f64, cols: f64| {
-            let text = PAGE - 2.0 * margin * PT_PER_CM;
-            (text, (text - (cols - 1.0) * 0.04 * text) / cols)
-        };
-        // `mpdf-012` §2's rule, restated: the width the image gets, and whether
-        // its figure floats.
-        let rule = |px: f64, captioned: bool, size: f64, margin: f64, cols: f64| {
-            let (text, column) = geometry(margin, cols);
-            let want = px * size / LABEL_PX;
-            let in_column = want.min(column);
-            let wide = captioned && cols > 1.0 && size * (in_column / want) < FLOOR;
-            (if wide { want.min(text) } else { in_column }, wide)
-        };
-        // The width each call carries, which is the `viewBox`'s. The escaped
-        // SVG holds no bare `"`, so the literal closes at the first one after
-        // the root's `</svg>` — merman ends the document with a newline, so not
-        // immediately after it.
-        let widths = |source: &str| -> Vec<f64> {
-            source
-                .lines()
-                .filter(|line| line.starts_with("#diagram(bytes(\""))
-                .map(|line| {
-                    let tail = &line[line.rfind("</svg>").expect("the SVG closes")..];
-                    let rest = &tail[tail.find("\"), ").expect("the literal closes") + 4..];
-                    rest[..rest.find(',').unwrap()].parse().unwrap()
-                })
-                .collect()
-        };
-        // An image keeps its width as a relative length; the look's is all
-        // absolute, so anything else is a look that sized by something else.
-        let points = |value: Value| match value {
-            Value::Relative(width) if width.rel.get() == 0.0 && width.abs.em.get() == 0.0 => {
-                width.abs.abs.to_pt()
-            }
-            Value::Length(width) if width.em.get() == 0.0 => width.abs.to_pt(),
-            other => panic!("an image width that is not an absolute length: {other:?}"),
-        };
 
         for (look, size, margin, cols) in LOOKS {
             let md = FIXTURE.replacen("---\n", &format!("---\n{look}"), 1);
@@ -1198,6 +1208,116 @@ mod tests {
                 Value::Func(ImageElem::ELEM.into()),
                 "{look:?}: the sequence diagram is not numbered with the images"
             );
+        }
+    }
+
+    /// `mpdf-012` Phase 2's gate 2: the narrow families take the column, and
+    /// the ER diagram is kept in it by the tolerance — read off the compiled
+    /// document by Phase 1's method.
+    ///
+    /// Class and state diagrams fit `article`'s column at caption size, so they
+    /// are the in-column branch. The ER fixture is the tolerance's own case: at
+    /// 9 pt it is wider than the column, and shrinking it into the column keeps
+    /// its 16 px labels at 8 pt or more, so a look that dropped the tolerance
+    /// floats it across the page. **The bands are asserted first, as
+    /// preconditions**, then every width and scope is held to the rule in all
+    /// four configurations, and then the outcomes the gate names: nothing
+    /// floats anywhere — the ER diagram, at 404 px, is inside `press-release`'s
+    /// narrower band at two columns as well — and in `article` at two columns
+    /// the ER diagram is the column's width with its labels between 8 and 9 pt.
+    #[test]
+    fn the_narrow_families_take_the_column_and_er_the_tolerance() {
+        use typst::foundations::Value;
+        use typst::model::FigureElem;
+        use typst::visualize::ImageElem;
+
+        // The family, its fixture, and how many diagrams it draws.
+        const FIXTURES: [(&str, &str, usize); 3] = [
+            (
+                "class",
+                include_str!("../../tests/fixtures/diagrams_class.md"),
+                1,
+            ),
+            (
+                "state",
+                include_str!("../../tests/fixtures/diagrams_state.md"),
+                2,
+            ),
+            ("ER", include_str!("../../tests/fixtures/diagrams_er.md"), 1),
+        ];
+
+        // The bands, from `article`'s literals at two columns, whatever the
+        // look under test: they are properties of the diagrams.
+        let (_, column) = geometry(2.5, 2.0);
+        let fits = column * LABEL_PX / 9.0;
+        let tolerated = column * LABEL_PX / FLOOR;
+
+        for (family, fixture, count) in FIXTURES {
+            for (look, size, margin, cols) in LOOKS {
+                let md = fixture.replacen("---\n", &format!("---\n{look}"), 1);
+                let (joined, sources) = sections::assemble(&md, &[]).unwrap();
+                let emitted = emit::emit(&joined, &sources).unwrap();
+                let px = widths(&emitted.source);
+                assert_eq!(px.len(), count, "{family}, {look:?}: {} diagrams", px.len());
+                for &px in &px {
+                    let holds = match family {
+                        "ER" => fits < px && px <= tolerated,
+                        _ => px <= fits,
+                    };
+                    assert!(
+                        holds,
+                        "precondition: the {family} diagram at {px} px has left its band \
+                         (edges {fits:.2}, {tolerated:.2})"
+                    );
+                }
+
+                let assets = collect(&emitted, &[]).unwrap();
+                let world = TypstWorld::new(emitted.source, assets).unwrap();
+                let Warned { output, .. } = typst::compile(&world);
+                let document =
+                    output.unwrap_or_else(|diags| panic!("{family}, {look:?}: {}", join(&diags)));
+                typst_pdf::pdf(&document, &PdfOptions::default())
+                    .unwrap_or_else(|diags| panic!("{family}, {look:?}: {}", join(&diags)));
+                let introspector = document.introspector();
+
+                // Every diagram in these fixtures is captioned, so images and
+                // figures pair one to one, in source order.
+                let images = introspector.query(&ImageElem::ELEM.select());
+                let figures = introspector.query(&FigureElem::ELEM.select());
+                assert_eq!(images.len(), count, "{family}, {look:?}: images");
+                assert_eq!(figures.len(), count, "{family}, {look:?}: figures");
+                for ((image, figure), &px) in images.iter().zip(&figures).zip(&px) {
+                    let (width, wide) = rule(px, true, size, margin, cols);
+                    let found = points(image.get_by_name("width").unwrap());
+                    assert!(
+                        (found - width).abs() < 0.01,
+                        "{family}, {look:?}: {found:.3} pt wide, and the rule gives {width:.3}"
+                    );
+                    let Value::Str(scope) = figure.get_by_name("scope").unwrap() else {
+                        panic!("{family}, {look:?}: the scope is not a string");
+                    };
+                    let want = if wide { "parent" } else { "column" };
+                    assert_eq!(scope.as_str(), want, "{family}, {look:?}: the scope");
+                    // The rule restated above could share a mistake with the
+                    // look's, so the outcome is held as a literal too.
+                    assert_eq!(scope.as_str(), "column", "{family}, {look:?}: it floated");
+                }
+
+                // The gate's own clause. The label size is read back from the
+                // width the look gave the image, not from the rule.
+                if family == "ER" && size == 9.0 && cols == 2.0 {
+                    let found = points(images[0].get_by_name("width").unwrap());
+                    assert!(
+                        (found - column).abs() < 0.01,
+                        "the ER diagram is {found:.3} pt, not the column's {column:.3}"
+                    );
+                    let label = found / px[0] * LABEL_PX;
+                    assert!(
+                        (8.0..9.0).contains(&label),
+                        "the ER diagram's labels set at {label:.2} pt"
+                    );
+                }
+            }
         }
     }
 }
