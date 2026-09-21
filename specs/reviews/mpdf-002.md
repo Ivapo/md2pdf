@@ -2,6 +2,96 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 3 only — 2026-09-21 — same reviewer, resumed with the author's changelog — **READY (converged)**
+
+**Verdict: READY**, with zero blocking findings. The reviewer checked the
+working tree, not the changelog.
+
+**What it confirmed:**
+- **All ten round-1 fixes landed.** It re-derived the three hash literals
+  itself: `""` → `cbf29ce484222325`, `"a"` → `af63dc4c8601ec8c`, and
+  `https://example.com/figures/plot.png` → `e195045359e9f05c`.
+- **The any-of wording in §2 is exact.** Compared against image 0.25.10,
+  `guess_format`'s signatures for the four raster formats match `bytes_match`
+  byte for byte. Any other format `guess_format` recognises converts to `None`
+  and falls through to `is_svg` and `is_pdf`, so Typst's `detect` returns
+  something exactly when the any-of passes.
+- **Moving the empty and title checks ahead of `resolve` changes nothing for
+  a local path.** `resolve` is pure and cannot fail, and those two checks read
+  only the written destination and the title.
+- **The gate's renumbered cross-references resolve.** Clauses now run 1 to 12.
+
+**One non-blocking finding, accepted and folded in at convergence (§7.5).**
+There was no third round, because the refinement changes which of two refusals
+wins on documents that already fail, and nothing else:
+- **The collision rationale was wrong for the bibliography case.** The draft
+  returned `Error::Internal` at once, because "neither case is a line the
+  author can fix". But a bibliography that collides is a file the author *can*
+  rename, and its own citation refusal is already queued at the frontmatter
+  line.
+- **§2 now enters the collision into the earliest-line contest** at the second
+  name's line, so a refusal the author can act on still wins.
+- **Gate clause 9 is unchanged.** It tests the helper alone.
+
+`reviewed: 2026-09-21` is set on Phase 3. Phase 4 has not been reviewed; it
+needs its own episode, with its own round 0.
+
+### Round 1 — Phase 3 only — 2026-09-21 — fresh clean-room reviewer with repo access — **READY**
+
+**Round 0**, asked by the author before this round: yes. Phase 3 produces the
+observable at the library level, a typeset PDF of the user's markdown with a
+URL-named image on the page, and says plainly that the CLI still refuses until
+Phase 4. It is the right observable. What prompted it was Letur refusing a
+document whose only image was an `https://` URL, and Phase 3 is exactly what
+Letur needs from the engine in order to fetch the image itself.
+
+**Verdict: READY**, with zero blocking findings.
+
+**Grounding confirmed against the code:**
+- `Sources::resolve` really does normalise `https://` into `https:/`: in
+  `typst-syntax` 0.15.1, `components` maps a non-leading empty segment to
+  `Current`.
+- A 16-hex-digit segment has no extension, so `check_image` refuses every
+  local destination that could land on `remote/<hash>`.
+- `Packed<ImageElem>::determine_format` checks the `format` argument, then the
+  path, then `ImageFormat::detect`.
+- A PDF that md2pdf compiled embeds as an image with no extension. The
+  reviewer checked this with the built binary.
+- The three golden rows and the laundering row exist as described, and no
+  other test asserts the wording.
+- `Error` is not `#[non_exhaustive]`, so the release is 0.3.0.
+
+**Ten non-blocking findings, all accepted and folded in before round 2:**
+1. **`core/tests/messages_test.rs`** promises one row per `Error` variant, so
+   `UnfetchedImage` gains a row in both of its tests.
+2. **Collision refusal.** It is specified as one helper over every insert in
+   `collect`, the bibliography's included, and a unit test pins it as gate
+   clause 9. The bibliography route to a collision is named. Round 2 then
+   corrected how the refusal is ordered.
+3. **Detection.** §2 now calls `collect`'s check an any-of over Typst's
+   predicates, not "the same detection". It records the limit: HTML whose
+   first 2048 bytes hold the SVG namespace passes the check and fails at
+   compile time, the same class as the existing corrupt-past-magic limit.
+4. **`CORRECTED` coverage.** Two notes became four, adding §2's format-gate
+   paragraph and its validation decision.
+5. **The `CLAUDE.md` stanza** is stated as needing nothing, with the reason.
+6. **The corpus check** names `mpdf-008`'s method and its three roots:
+   `tests/fixtures/`, `samples/`, and the README's markdown examples.
+7. **Hash pinning.** The spec states the FNV-1a algorithm, adds known answers
+   for `""` and `"a"` and a literal for clause 1, and adds a clause with the
+   URL inside a footnote definition to pin §2's reason for using a hash.
+8. **CLI line order.** It is documented, not fixed: `read_assets` stops at its
+   first failure in document order before `core` runs, so an unreadable file
+   on a later line can be reported ahead of a URL on an earlier one.
+9. **A typo of http(s) got a misleading message.** This is resolved by a
+   design change: `is_url` reads the scheme alone, so a malformed `https:/…`
+   is a URL and fails at the fetch naming itself. Phase 4's guard 2 was
+   reworded to match.
+10. **Release.** It is a separate commit and push after `shipped` is written,
+    because a publish cannot be undone. Packaging follows 0.2.0's method,
+    `cargo package --workspace` through `target/package/tmp-registry`, and
+    the `Path::join` wording is corrected.
+
 ### Phase 2 implementation — 2026-08-09 — **SHIPPED**
 
 One departure from the reviewed text, and one risk that did not materialize.

@@ -21,7 +21,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 3 — a URL is a name the caller fills"
-    reviewed: null
+    reviewed: 2026-09-21
     shipped: null
     cut: null
     by: null
@@ -223,8 +223,12 @@ fetches only under `--fetch` (OQ-3). The desktop app opens files it has never
 seen, and a document that fetches on open tells a server who opened it and
 when. One rule in `core` could not be right for both.
 
-Only `http://` and `https://` are URLs here. `data:` stays refused: it is not
-a fetch, but decoding it is a separate feature this decision does not take.
+A URL here is a destination whose scheme is `http` or `https`, matched
+ASCII-case-insensitively, and nothing else. The scheme alone decides, so a
+malformed `https:/example.com/x.png` is still a URL: it fails at the fetch,
+naming itself, and is not refused under a sentence about other schemes. `data:`
+stays refused: it is not a fetch, but decoding it is a separate feature this
+decision does not take.
 
 ### Why a URL's format is read from its bytes (decision, recorded)
 
@@ -239,21 +243,39 @@ name with **no extension**. That sends Typst to content detection:
 `typst-library` 0.15.1's `Packed<ImageElem>::determine_format` takes the `format`
 argument first, then the extension, and only then `ImageFormat::detect` on the
 data, which recognises all eight formats in `IMAGE_EXTENSIONS`. Verified in
-that source on 2026-09-21. `core/src/lib.rs:collect` runs the same detection
-before the compile: the bytes must satisfy `core/src/lib.rs:bytes_match` for
-some extension in the table. An HTML error page served where an image should be
-is then refused naming the URL and the line, instead of by the compiler against
-a `main.typ` the author has never seen.
+that source on 2026-09-21. Before the compile, `core/src/lib.rs:collect`
+requires the bytes to satisfy `core/src/lib.rs:bytes_match` for *some*
+extension in the table. That is an any-of over the same predicates Typst's
+detection reads, not its first-match order, and the difference does not
+matter: Typst accepts whatever it detects, so the question both answer is
+whether any format matches at all. An HTML error page served where an image
+should be is then refused naming the URL and the line, instead of by the
+compiler against a `main.typ` the author has never seen. **The recorded limit
+is the one §2 already records for files corrupt past their magic.** Bytes that
+carry a format's marker without being that format pass the check and fail at
+compile time with the compiler's own message. For example, an HTML page whose
+first 2048 bytes hold the SVG namespace, as a `data:image/svg+xml` favicon in
+its `<head>` would.
 
 **The missing extension is also what keeps the name from colliding with a
 file.** `core/src/emit.rs:check_image` refuses every local destination with no
 extension, so no image the author names can land on `remote/<hash>`. The name
 is a hash and not a counter so that it depends on the URL alone, not on where
 the URL is first met or in which walk: a footnote definition's images are
-walked separately, by `core/src/emit.rs:collect_definitions`. Two URLs that
-share a hash would share a name, so `collect` refuses as `Error::Internal` any
-insert under a `FileId` that another name already holds, rather than silently
-using the first set of bytes for both images.
+walked separately, by `core/src/emit.rs:collect_definitions`.
+
+Two names can still meet on one `FileId` in two ways. Two URLs could share a
+hash. Or a bibliography could be named `remote/<hash>`, because it is checked
+by `core/src/emit.rs:portable_path` alone, may have no extension, and is
+inserted into the map first. Both are absurd in practice, but silently using
+one set of bytes for both names would be worse than refusing. So **every**
+insert in `collect`, the bibliography's included, goes through one helper
+that refuses an id already held under a different name. The refusal is
+`Error::Internal`, entered into the earliest-line contest at the second name's
+line rather than returned at once. That way a refusal the author can act on
+still wins. A bibliography that collides has usually already failed to parse,
+and that refusal sits queued at the frontmatter line, which is earlier than any
+image's.
 
 ## 3. Open questions
 
@@ -410,47 +432,56 @@ writes a PDF that shows the figure.*
 through `md_to_pdf` with the image on the page; today it is refused as
 `image with a URL destination`. The CLI supplies nothing for a URL until
 Phase 4, and after it only under `--fetch`, so a URL document still fails
-there, but now with
-`no image fetched for '…'`, which names what is missing instead of calling the
-construct unsupported. Phase 1 shipped the same mid-state for local files.
-It is also everything Letur needs, since the fetch belongs to the caller and
-Letur's own spec decides when it fetches.*
+there, but now with `no image fetched for '…'`, which names what is missing
+instead of calling the construct unsupported. Phase 1 shipped the same
+mid-state for local files. It is also everything Letur needs, since the fetch
+belongs to the caller and Letur's own spec decides when it fetches.*
 
 **§6.1, worked:** step 0 — a decision: §1.1 says a URL destination is an
 error, never a download. Step 1 — it removes no shipped work. Every document
 that compiles today compiles byte-identically, and the only change is a refusal
-becoming legal. What it contradicts is prose (§1.1's non-goal and two sentences
-of §2), which gets dated `CORRECTED` notes at close-out rather than a new spec.
-Step 2 — an image destination is this spec's subject. So: an appended phase.
-Letur cannot do this alone: its own §1.1 refuses exactly what `core` refuses.
+becoming legal. What it contradicts is prose, in four places the close-out
+names, and prose gets dated `CORRECTED` notes, not a new spec. Step 2 — an
+image destination is this spec's subject. So: an appended phase. Letur cannot
+do this alone: its own §1.1 refuses exactly what `core` refuses.
 
 - **Scope:**
-  - **Which destinations.** `http://` and `https://`, with the scheme matched
-    ASCII-case-insensitively, and nothing else; a new `emit::is_url` answers
-    the question. `data:`, `file:`, every
-    other scheme, and the drive path `C:\figure.png` stay refused by
-    `core/src/emit.rs:written_shape`, exactly as today. The image rendering of
-    `core/src/emit.rs:PathShape`'s `Scheme` changes to **`a URL scheme other
-    than http or https`**, because "a URL destination" would read as a
-    contradiction once one is accepted. `PathShape::key` keeps `a URL`: the
-    `bibliography` key and the include marker still refuse every URL, and
-    neither changes.
-  - **The arm.** In `core/src/emit.rs:step`'s `Tag::Image` arm, a URL still
-    passes the empty-destination and title checks. After that **it never
-    reaches `core/src/sections.rs:Sources::resolve`, on either branch.**
-    `resolve` normalises through `VirtualPath`, which drops a non-leading empty
-    segment. The master's own `https://example.com/x.png` would arrive as
-    `https:/example.com/x.png`, and a section's as
-    `sections/https:/example.com/x.png`. A URL is an address, not a path
-    relative to anything, and its identity is the string the author wrote. It
-    reaches neither `core/src/emit.rs:landed_path` nor the extension table
-    either, per §2's decision on a URL's format.
+  - **Which destinations.** A destination whose scheme is `http` or `https`,
+    matched ASCII-case-insensitively, and nothing else, per §2. A new
+    `emit::is_url` answers the question by reading the scheme the way
+    `core/src/emit.rs:has_scheme` does, then comparing it; it does not look
+    for a `//`. `data:`, `file:`, every other scheme, and the drive path
+    `C:\figure.png` stay refused by `core/src/emit.rs:written_shape`, exactly
+    as today. The image rendering of `core/src/emit.rs:PathShape`'s `Scheme`
+    changes to **`a URL scheme other than http or https`**, because "a URL
+    destination" would read as a contradiction once one is accepted.
+    `PathShape::key` keeps `a URL`: the `bibliography` key and the include
+    marker still refuse every URL, and neither changes.
+  - **The arm.** In `core/src/emit.rs:step`'s `Tag::Image` arm, the order
+    changes. Today `sources.resolve` runs first and `check_image` second.
+    After the change:
+    1. The empty-destination and title checks run on the written
+       destination.
+    2. An `is_url` destination then returns: **it never reaches
+       `core/src/sections.rs:Sources::resolve`, on either branch**, nor
+       `written_shape`, `core/src/emit.rs:landed_path` or the extension table.
+    3. Only a destination that is not a URL is resolved and then checked for
+       its shape and extension, as today.
+
+    How `check_image` is split to allow this is the implementer's choice, and
+    the gate pins the behaviour either way. `resolve` normalises through
+    `VirtualPath`, which drops a non-leading empty segment. The master's own
+    `https://example.com/x.png` would arrive as `https:/example.com/x.png`,
+    and a section's as `sections/https:/example.com/x.png`. A URL is an
+    address, not a path relative to anything, and its identity is the string
+    the author wrote.
   - **The name the source asks for.** A new `emit::remote_name(url)` returns
-    `remote/` followed by the sixteen lowercase hex digits of a 64-bit FNV-1a
-    hash of the URL, written by hand with no new dependency.
-    `core/src/emit.rs:image_call` writes that name, and the `ImageRef`'s
-    `path` carries the URL. §2 records why the name has no extension and why
-    it is a hash.
+    `remote/` followed by the sixteen lowercase hex digits of the 64-bit
+    FNV-1a hash of the URL's UTF-8 bytes: offset basis `0xcbf29ce484222325`,
+    prime `0x100000001b3`, xor then multiply, written by hand with no new
+    dependency. `core/src/emit.rs:image_call` writes that name, and the
+    `ImageRef`'s `path` carries the URL. §2 records why the name has no
+    extension and why it is a hash.
   - **The shopping list.** `core/src/lib.rs:ImageRef` gains
     `pub fn is_url(&self) -> bool`, which reads `emit::is_url`. It is a method
     rather than a field, so no caller that builds or destructures an
@@ -463,89 +494,130 @@ Letur cannot do this alone: its own §1.1 refuses exactly what `core` refuses.
       **`no image fetched for '{url}' {location}`**. It is a sibling of
       `MissingImage` on the argument `MissingBibliography` was added under:
       the words are the point, and "no image file supplied" names a file
-      that does not exist.
+      that does not exist. `Error::location_mut`'s exhaustive match takes the
+      new arm.
     - Bytes that match no format in the table reuse `Error::ImageFormat` with
       `core/src/lib.rs:format_name`'s existing `"image"` fallback, reading
       `image file '{url}' {location} does not hold image data`. The usual case
       is an HTML error page served with a 200, and a new variant would buy one
       word.
-    - Accepted bytes go into the map under `file_id(&remote_name(url))`, and
-      the collision refusal §2 records sits at that insert.
+    - Accepted bytes go into the map under `file_id(&remote_name(url))`,
+      through the one insert helper §2 records.
 
     The earliest-line rule covers both new refusals unchanged.
-  - **The CLI, for this phase only.** `cli/src/main.rs:read_assets` skips
-    every entry whose `is_url()` holds, so `core`'s own refusal is what names
-    it. Without the skip it would join the URL onto the directory and fail
-    with an OS error about a file called `https:/…`.
-  - **Tests that move.** `core/tests/golden_test.rs` has three rows asserting
-    `image with a URL destination`. The `https://` row becomes a compile; the
-    `data:` and `C:/figure.png` rows keep their input and take the new
-    wording. In `the_prefix_launders_no_path_the_dialect_refuses`, a `data:`
-    row replaces the `https://` row. That test proves the prefix launders
-    nothing, and a URL no longer meets the prefix at all, so gate clause 3
-    takes over what the old row checked.
+  - **The CLI skips a URL.** `cli/src/main.rs:read_assets` skips every entry
+    whose `is_url()` holds, so `core`'s own refusal is what names it. Phase 4
+    keeps the skip as its behaviour without `--fetch`. Without the skip,
+    `Path::join` would hand the OS `dir/https://…`, and the author would get
+    an OS error about a file that was never meant to exist. **One consequence
+    is accepted and documented, not fixed.** `read_assets` stops at its first
+    failure in document order, and it runs before `core`'s check. So with a
+    URL on line 3 and an unreadable local file on line 9, the CLI reports
+    line 9 before `core` could report line 3: the earliest-line rule holds
+    inside `collect`, not across the two.
+  - **Tests that move.**
+    - `core/tests/golden_test.rs` has three rows asserting
+      `image with a URL destination`. The `https://` row becomes a compile;
+      the `data:` and `C:/figure.png` rows keep their input and take the new
+      wording.
+    - In `the_prefix_launders_no_path_the_dialect_refuses`, a `data:` row
+      replaces the `https://` row. That test proves the prefix launders
+      nothing, and a URL no longer meets the prefix at all, so gate clause 3
+      takes over what the old row checked.
+    - `core/tests/messages_test.rs` promises one hand-written row per `Error`
+      variant, so `UnfetchedImage` gains a row in both
+      `every_variant_prints_the_sentence_it_always_printed` and
+      `every_variant_names_the_file_where_there_is_one`.
 
 - **Exit gate:** In the workspace suite, with no network:
   1. A document naming `https://example.com/figures/plot.png` once standalone
      and once inline, with `tests/fixtures/dot.png`'s bytes supplied under
-     that URL: `md_to_pdf` returns `%PDF` bytes, and `md_to_typst` writes the
-     same `remote/` name, followed by sixteen hex digits, in both calls. A
-     second URL gets a different name.
-  2. `image_paths` returns the URL twice, byte-identical to what was written,
-     with `is_url()` true. A local image in the same document has `is_url()`
-     false.
-  3. **The prefix does not touch a URL.** A section `sections/one.md` naming
-     `https://example.com/a/../b//c.png?w=800` yields an `ImageRef` whose path
-     is exactly that string and whose location names the section.
+     that URL: `md_to_pdf` returns `%PDF` bytes, and `md_to_typst` writes
+     `remote/e195045359e9f05c` in both calls. A second URL gets a different
+     name.
+  2. **The hash is FNV-1a, pinned by known answers.** A unit test in
+     `core/src/emit.rs` holds `remote_name("")` to
+     `remote/cbf29ce484222325` and `remote_name("a")` to
+     `remote/af63dc4c8601ec8c`, the published FNV-1a 64 vectors. Clause 1's
+     literal was computed by the same algorithm, by hand, on 2026-09-21.
+  3. **The prefix does not touch a URL, and neither does the walk.** A
+     section `sections/one.md` naming `https://example.com/a/../b//c.png?w=800`
+     yields an `ImageRef` whose path is exactly that string and whose location
+     names the section. The same URL inside a footnote definition is written
+     under the same `remote/` name as a body reference to it. That clause pins
+     §2's reason for a hash.
      `the_prefix_launders_no_path_the_dialect_refuses` passes with its `data:`
      row.
-  4. With nothing supplied for the URL, the error is
+  4. `image_paths` returns clause 1's URL twice, byte-identical to what was
+     written, with `is_url()` true. A local image in the same document has
+     `is_url()` false.
+  5. With nothing supplied for the URL, the error is
      `no image fetched for 'https://example.com/figures/plot.png' at line N`;
      written in a section, it ends `in sections/one.md at line N`.
-  5. **The bytes decide, not the ending.** `tests/fixtures/mark.svg` supplied
+  6. **The bytes decide, not the ending.** `tests/fixtures/mark.svg` supplied
      under a URL ending `.png` compiles. A PDF the test compiles itself,
      supplied under a URL with no extension, compiles. HTML bytes supplied
      under a URL ending `.png` are refused as
      `image file '…' at line N does not hold image data`.
-  6. `data:image/png;base64,…`, `file:///x.png`, `ftp://example.com/x.png` and
+  7. `data:image/png;base64,…`, `file:///x.png`, `ftp://example.com/x.png` and
      `C:/figure.png` are each refused as
-     `image with a URL scheme other than http or https`, and
-     `HTTPS://example.com/x.png` is accepted.
-  7. The `bibliography` key naming `https://example.com/refs.bib` is refused
+     `image with a URL scheme other than http or https`.
+     `HTTPS://example.com/x.png` and the malformed `https:/example.com/x.png`
+     are both URLs: `is_url()` is true, and with nothing supplied each is
+     clause 5's error.
+  8. The `bibliography` key naming `https://example.com/refs.bib` is refused
      in its existing words, byte-identical. `[](https://example.com/one.md)`
      is a plain link, not an include marker.
-  8. The CLI on a document naming a URL exits 1 with clause 4's message and
-     reads no file for it.
-  9. **The corpus check:** every document in this tree compiles to
-     byte-identical Typst source and a byte-identical PDF on either side of
-     the change.
-  10. `cargo test --workspace` passes.
+  9. **The collision helper refuses.** A unit test in `core/src/lib.rs` asks
+     the insert helper for one `FileId` under two different names, and gets
+     `Error::Internal`.
+  10. The CLI on a document naming a URL exits 1 with clause 5's message and
+      reads no file for it.
+  11. **The corpus check,** by `mpdf-008`'s method: every markdown document
+      under `tests/fixtures/` and `samples/`, and every markdown example in
+      `README.md`, compiles to byte-identical Typst source and a byte-identical
+      PDF on either side of the change. None of them names a URL image, so
+      this is a regression check on the path the phase must leave alone.
+  12. `cargo test --workspace` passes.
 
 - **Close-out:**
   - **`rules/pipeline.md`:** "Images and their files" (the refused shapes,
-    plus a paragraph on a URL: the bypass, the name and the check), the intro's
-    API paragraph (`is_url` and `UnfetchedImage`), and the CLI section's skip.
-    **The rule is at 1367 of its 1380 lines**, so the pass either tightens it
-    or raises `max_lines` with a stated reason, not quietly.
+    plus a paragraph on a URL: the bypass, the name, the check and the
+    collision helper), the intro's API paragraph (`is_url` and
+    `UnfetchedImage`), and the CLI section's skip, with the line-order
+    consequence above. **The rule is at 1367 of its 1380 lines**, so the pass
+    either tightens it or raises `max_lines` with a stated reason, not
+    quietly.
   - **`README.md`:** the paragraph that refuses "a URL and a `data:` URI,
     because nothing is fetched over the network" is rewritten. A URL is now
     accepted, its bytes are the caller's to supply, and the CLI does not
     supply them yet.
-  - **Dated `CORRECTED` notes** beside §1.1's "No fetching, ever" and beside
-    §2's "A scheme is a fetch request, and nothing fetches". Both say that
-    `core` still fetches nothing and that what changed is that a URL is a
-    name.
-  - **The release is its own commit afterwards, as 0.2.0's was.**
-    `UnfetchedImage` is a new variant of an exhaustive enum, so the release is
-    0.3.0. Its notes tell callers that joined every `ImageRef` onto a
+  - **Dated `CORRECTED` notes, four of them.** Each says the passage holds
+    for a local path, and that a URL is taken up by §2's two new subsections:
+    1. §1.1's "No fetching, ever". `core` still fetches nothing; what changed
+       is that a URL is a name.
+    2. §2's "A scheme is a fetch request, and nothing fetches", in the
+       relative-paths decision.
+    3. §2's format-gate paragraph: "a missing extension included, is a
+       construct error".
+    4. §2's validation decision: "for everything that reaches validation the
+       extension decides", and "Typst's own fallback … is deliberately not
+       mirrored".
+  - **The `CLAUDE.md` stanza needs nothing:** its observable, "plus the images
+    they name", already covers an image named by a URL.
+  - **One push, and the release comes after it, in a separate commit and
+    push,** once this phase's `shipped` date is written, as 0.2.0 followed
+    `mpdf-012`. The publish is outside the phase's push because it cannot be
+    undone. `UnfetchedImage` is a new variant of an exhaustive enum, so the
+    release is 0.3.0. Its notes tell callers that join every `ImageRef` onto a
     directory, as Letur's asset reader does, to check `is_url()` first.
-    Otherwise a URL image turns into an OS error about a file called
-    `https:/…`. Letur takes the caller side from there, under its own spec.
-    **Packaging:** the CLI's skip already calls `ImageRef::is_url`, which is
-    new `core` API. Until 0.3.0 is on the registry, `cargo package -p
-    md2pdf-cli` resolves the published 0.2.0 `core` and fails, so the release
-    verifies the CLI from the unpacked archives instead.
-  - One push.
+    Otherwise a URL image turns into an OS error about a file that was never
+    meant to exist. Letur takes the caller side from there, under its own
+    spec. **Packaging** follows 0.2.0's method: the CLI's skip calls
+    `ImageRef::is_url`, which is new `core` API, so the CLI is verified by
+    `cargo package --workspace` against the `core` archive it has just
+    packaged, through `target/package/tmp-registry`, not against the
+    published 0.2.0.
 
 ### Phase 4 — the CLI fetches, when asked
 *Produces the observable: **yes**. `md2pdf --fetch paper.md` on a document
@@ -582,9 +654,12 @@ a dated `CORRECTED` note naming the one exception, not a supersession.
     `Cargo.toml` line, not by a client default that a version bump could
     move:
     1. **Opt-in.** Nothing is fetched without `--fetch` (above).
-    2. **Two schemes.** Only `http://` and `https://` reach the client,
-       because `core` has already refused every other scheme. A redirect
-       leads only where the client can follow, which is those two.
+    2. **Two schemes.** Only a destination whose scheme is `http` or `https`
+       reaches the client, because `core` has already refused every other
+       scheme. A malformed one, like `https:/example.com/x.png`, fails at
+       the client's own URL parse and is reported like any other failed
+       fetch. A redirect leads only where the client can follow, which is
+       those two schemes.
     3. **Time.** `FETCH_TIMEOUT` is 30 s per request, set as the agent's
        global timeout so that a slow trickle of bytes counts against it, not
        only the connect.
