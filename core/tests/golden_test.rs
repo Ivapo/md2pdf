@@ -939,10 +939,11 @@ fn image_paths_lists_every_reference_in_document_order() {
 
 /// Every destination shape the pipeline cannot carry names itself and its line.
 ///
-/// The first two mirror the link arm. The next four are the relative-path rule.
-/// The last two are the format gate's first half: Typst reads the extension
-/// before the content, so an extension it does not name leaves the format
-/// undecided, and the dialect refuses to guess.
+/// The first two mirror the link arm. The next five are the relative-path rule;
+/// an `http` or `https` URL is not among them, because it is a name the caller
+/// fills. The last three are the format gate's first half: Typst reads the
+/// extension before the content, so an extension it does not name leaves the
+/// format undecided, and the dialect refuses to guess.
 #[test]
 fn each_bad_image_destination_names_its_shape_and_its_line() {
     for (md, construct) in [
@@ -955,17 +956,13 @@ fn each_bad_image_destination_names_its_shape_and_its_line() {
             "image with a title",
         ),
         (
-            "# H\n\nA ![alt](https://example.com/a.png) here.\n",
-            "image with a URL destination",
-        ),
-        (
             "# H\n\nA ![alt](data:image/png;base64,iVBOR) here.\n",
-            "image with a URL destination",
+            "image with a URL scheme other than http or https",
         ),
         // A Windows drive path reads as a scheme, and the error says so.
         (
             "# H\n\nA ![alt](C:/figure.png) here.\n",
-            "image with a URL destination",
+            "image with a URL scheme other than http or https",
         ),
         (
             "# H\n\nA ![alt](/figures/a.png) here.\n",
@@ -1101,6 +1098,244 @@ fn each_format_check_reads_the_magic_its_extension_names() {
         let rejected = matches!(result, Err(Error::ImageFormat { .. }));
         assert_eq!(!rejected, ok, "for {path} with {} bytes", bytes.len());
     }
+}
+
+// -- mpdf-002 Phase 3: a URL is a name the caller fills ---------------------
+
+/// The URL most of this block names.
+const PLOT_URL: &str = "https://example.com/figures/plot.png";
+
+/// One URL named twice: standalone on line 3, inline on line 5.
+const URL_MD: &str = "# H\n\n![A plot](https://example.com/figures/plot.png)\n\nA small ![plot](https://example.com/figures/plot.png) inline.\n";
+
+/// **The observable Phase 3 produces, at the library level.** A document naming
+/// an image by URL, with that image's bytes supplied under the URL, compiles.
+///
+/// The source asks for `remote/` and the URL's FNV-1a hash in both forms, and
+/// never for the URL itself. A second URL gets a name of its own.
+#[test]
+fn a_url_image_compiles_from_bytes_supplied_under_the_url() {
+    let pdf = md_to_pdf(URL_MD, &[asset(PLOT_URL, DOT_PNG)]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+
+    let source = md_to_typst(URL_MD, &[]).unwrap();
+    for call in [
+        r#"#image("remote/e195045359e9f05c", alt: "A plot")"#,
+        r#"#box(image("remote/e195045359e9f05c", alt: "plot"))"#,
+    ] {
+        assert!(source.contains(call), "missing {call}: {source}");
+    }
+    assert!(
+        !source.contains(PLOT_URL),
+        "the URL reached the source: {source}"
+    );
+
+    let other = md_to_typst("![A plot](https://example.com/figures/other.png)\n", &[]).unwrap();
+    assert!(
+        other.contains(r#"#image("remote/"#) && !other.contains("e195045359e9f05c"),
+        "a second URL did not get a name of its own: {other}"
+    );
+}
+
+/// A URL written in a section is listed exactly as written, and located in the
+/// section.
+///
+/// `Sources::resolve` would have prefixed it with `sections/` and normalised it
+/// through `VirtualPath`, which drops a non-leading empty segment and resolves a
+/// `..`. This URL carries both, and a query string, so any of that happening
+/// changes the string.
+#[test]
+fn a_url_in_a_section_is_listed_exactly_as_written() {
+    const URL: &str = "https://example.com/a/../b//c.png?w=800";
+    let master = "---\ntitle: A Report\n---\n\n[](sections/one.md)\n";
+    let sections = [section(
+        "sections/one.md",
+        &format!("# One\n\n![A figure]({URL})\n"),
+    )];
+
+    assert_eq!(
+        image_paths(master, &sections).unwrap(),
+        vec![ImageRef {
+            path: URL.to_string(),
+            location: Location {
+                file: Some("sections/one.md".to_string()),
+                line: 3,
+            },
+        }]
+    );
+}
+
+/// One URL is one name, wherever the walk meets it.
+///
+/// A footnote definition's images are walked separately, by
+/// `collect_definitions`, and before the body. A name counted by where it was
+/// first met would differ between the two walks; a hash of the URL cannot.
+#[test]
+fn a_url_in_a_footnote_definition_gets_the_body_references_name() {
+    let md = format!(
+        "# H\n\nText.[^1]\n\n![A plot]({PLOT_URL})\n\n[^1]: See ![the plot]({PLOT_URL}) again.\n"
+    );
+
+    let source = md_to_typst(&md, &[]).unwrap();
+    assert_eq!(
+        source.matches("remote/e195045359e9f05c").count(),
+        2,
+        "{source}"
+    );
+    assert_eq!(source.matches("remote/").count(), 2, "{source}");
+
+    let pdf = md_to_pdf(&md, &[asset(PLOT_URL, DOT_PNG)]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// The shopping list carries a URL as written, and says which entries are URLs.
+#[test]
+fn image_paths_lists_a_url_as_written_and_says_it_is_one() {
+    let md = format!("{URL_MD}\n![A dot](dot.png)\n");
+    let images = image_paths(&md, &[]).unwrap();
+
+    assert_eq!(
+        images
+            .iter()
+            .map(|image| (image.path.as_str(), image.location.line, image.is_url()))
+            .collect::<Vec<_>>(),
+        vec![
+            (PLOT_URL, 3, true),
+            (PLOT_URL, 5, true),
+            ("dot.png", 7, false)
+        ]
+    );
+}
+
+/// A URL with no bytes is refused in its own words, at its first reference.
+#[test]
+fn a_url_with_nothing_supplied_names_what_was_not_fetched() {
+    match md_to_pdf(URL_MD, &[]) {
+        Err(error) => assert_eq!(
+            error.to_string(),
+            "no image fetched for 'https://example.com/figures/plot.png' at line 3"
+        ),
+        Ok(_) => panic!("a URL image with no bytes compiled"),
+    }
+
+    let master = "---\ntitle: A Report\n---\n\n[](sections/one.md)\n";
+    let sections = [section(
+        "sections/one.md",
+        &format!("# One\n\n![A plot]({PLOT_URL})\n"),
+    )];
+    match md_to_pdf(master, &sections) {
+        Err(error) => assert_eq!(
+            error.to_string(),
+            "no image fetched for 'https://example.com/figures/plot.png' \
+             in sections/one.md at line 3"
+        ),
+        Ok(_) => panic!("a URL image in a section with no bytes compiled"),
+    }
+}
+
+/// **The bytes decide a URL's format, not its ending.**
+///
+/// An SVG served under a path ending `.png` compiles, and so does a PDF served
+/// under a path with no ending at all. An HTML error page served where an image
+/// should be is refused naming the URL, rather than by the compiler against a
+/// `main.typ` the author has never seen.
+#[test]
+fn a_urls_bytes_decide_its_format_and_not_its_ending() {
+    let md = "![A mark](https://example.com/x.png)\n";
+    let pdf = md_to_pdf(md, &[asset("https://example.com/x.png", MARK_SVG)]).unwrap();
+    assert!(
+        pdf.starts_with(b"%PDF"),
+        "an SVG under .png did not compile"
+    );
+
+    let figure = md_to_pdf("# A figure\n\nText.\n", &[]).unwrap();
+    let md = "![A page](https://example.com/figure)\n";
+    let pdf = md_to_pdf(md, &[asset("https://example.com/figure", &figure)]).unwrap();
+    assert!(
+        pdf.starts_with(b"%PDF"),
+        "a PDF with no ending did not compile"
+    );
+
+    let html = b"<!DOCTYPE html>\n<html><head><title>404 Not Found</title></head>\
+                 <body>Not Found</body></html>\n";
+    let md = "# H\n\n![A plot](https://example.com/x.png)\n";
+    match md_to_pdf(md, &[asset("https://example.com/x.png", html)]) {
+        Err(error) => assert_eq!(
+            error.to_string(),
+            "image file 'https://example.com/x.png' at line 3 does not hold image data"
+        ),
+        Ok(_) => panic!("an HTML page compiled as an image"),
+    }
+}
+
+/// Two schemes, in any case, and the scheme alone decides.
+///
+/// Every other scheme, and the drive path that reads as one, is still refused
+/// at the image arm. A malformed `https:/` is a URL, so it fails where it would
+/// be fetched, naming itself.
+#[test]
+fn only_http_and_https_destinations_are_urls() {
+    for dest in [
+        "data:image/png;base64,iVBOR",
+        "file:///x.png",
+        "ftp://example.com/x.png",
+        "C:/figure.png",
+    ] {
+        match md_to_typst(&format!("# H\n\n![alt]({dest})\n"), &[]) {
+            Err(error) => assert_eq!(
+                error.to_string(),
+                "unsupported markdown construct \
+                 'image with a URL scheme other than http or https' at line 3",
+                "for {dest}"
+            ),
+            Ok(_) => panic!("'{dest}' was accepted"),
+        }
+    }
+
+    for url in ["HTTPS://example.com/x.png", "https:/example.com/x.png"] {
+        let md = format!("# H\n\n![alt]({url})\n");
+
+        let images = image_paths(&md, &[]).unwrap();
+        assert_eq!(images.len(), 1);
+        assert_eq!(images[0].path, url);
+        assert!(images[0].is_url(), "{url} is a URL");
+
+        match md_to_pdf(&md, &[]) {
+            Err(error) => assert_eq!(
+                error.to_string(),
+                format!("no image fetched for '{url}' at line 3")
+            ),
+            Ok(_) => panic!("'{url}' compiled with no bytes"),
+        }
+    }
+}
+
+/// A URL is a name only where an image names it.
+///
+/// The `bibliography` key and the include marker still refuse every URL, in
+/// the words they printed before, so neither reader was widened by accident.
+#[test]
+fn a_url_is_still_no_bibliography_and_no_section() {
+    let md = "---\nbibliography: https://example.com/refs.bib\n---\n\n# H\n";
+    match md_to_typst(md, &[]) {
+        Err(error) => assert_eq!(
+            error.to_string(),
+            "frontmatter error at line 2: key 'bibliography' takes a path beside \
+             the document, not a URL"
+        ),
+        Ok(_) => panic!("a bibliography URL was accepted"),
+    }
+
+    let md = "# H\n\n[](https://example.com/one.md)\n";
+    assert!(
+        md2pdf_core::section_paths(md).unwrap().is_empty(),
+        "a URL was read as an include marker"
+    );
+    let source = md_to_typst(md, &[]).unwrap();
+    assert!(
+        source.contains(r#"#link("https://example.com/one.md")"#),
+        "the link did not survive as a link: {source}"
+    );
 }
 
 // -- Phase 7: footnotes -----------------------------------------------------
@@ -4735,16 +4970,21 @@ fn a_file_with_no_directory_of_its_own_prefixes_with_nothing() {
 /// is the second row of the same argument: prefixed first it would have stopped
 /// being empty and been refused for having no extension instead.
 ///
-/// **These rows are what proves the shape check was split and not flipped**, and
-/// they are byte-identical to the ones that shipped before `..` was allowed to
-/// land back inside the folder.
+/// **These rows are what proves the shape check was split and not flipped.** The
+/// scheme row was `https://example.com/x.png` until `mpdf-002` Phase 3 made an
+/// `http` or `https` URL a name the prefix never meets; `data:` is a scheme the
+/// dialect still refuses, and
+/// `a_url_in_a_section_is_listed_exactly_as_written` holds the URL instead.
 #[test]
 fn the_prefix_launders_no_path_the_dialect_refuses() {
     let master = "---\ntitle: A Report\n---\n\n[](sections/method.md)\n";
 
     for (dest, shape) in [
         ("/x.png", "an absolute path"),
-        ("https://example.com/x.png", "a URL destination"),
+        (
+            "data:image/png;base64,iVBOR",
+            "a URL scheme other than http or https",
+        ),
         ("", "an empty destination"),
     ] {
         let sections = [section(

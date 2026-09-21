@@ -197,6 +197,35 @@ fn a_missing_image_file_names_the_path_the_line_and_the_reason() {
     assert!(stderr.contains("os error"), "stderr: {stderr}");
 }
 
+/// A document naming an image by URL exits 1 in `core`'s own words, and the
+/// binary reads no file for the URL.
+///
+/// A real PNG sits at `https:/example.com/figures/plot.png` under the scratch
+/// directory, which is where joining the URL onto that directory would land. A
+/// binary that read it would compile the document and exit 0, so the exact
+/// stderr is what proves the URL was skipped rather than opened.
+#[test]
+fn a_url_image_exits_non_zero_and_reads_no_file_for_it() {
+    let dir = scratch_dir("url-doc");
+    let input = dir.join("url.md");
+    std::fs::write(
+        &input,
+        "# H\n\n![A plot](https://example.com/figures/plot.png)\n",
+    )
+    .unwrap();
+    let decoy = dir.join("https:/example.com/figures");
+    std::fs::create_dir_all(&decoy).unwrap();
+    std::fs::copy(fixture("dot.png"), decoy.join("plot.png")).unwrap();
+
+    let out = run(&[input.as_ref()]);
+    assert_eq!(out.status.code(), Some(1), "the run: {:?}", out);
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        "error: no image fetched for 'https://example.com/figures/plot.png' at line 3\n"
+    );
+    assert!(!input.with_extension("pdf").exists(), "a PDF was written");
+}
+
 /// A document, its bibliography and the PDF that carries the reference list.
 ///
 /// The second channel the caller reads, tested the way the image channel

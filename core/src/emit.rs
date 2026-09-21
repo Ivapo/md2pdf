@@ -60,9 +60,10 @@ const PRELUDE_NAMES: &str =
 /// The file extensions Typst's own `determine_format_from_path` names.
 ///
 /// An extension outside this table is a construct error at the image arm, so
-/// everything that survives the walk has an extension the table names. That is
-/// what lets the pre-compile check say "the extension decides the format" and
-/// mean it.
+/// every local path that survives the walk has an extension the table names.
+/// That is what lets the pre-compile check say "the extension decides the
+/// format" and mean it. A URL is not a file name and is not read for one: its
+/// bytes must hold some format in this table, whichever it is.
 ///
 /// **It is public, and `crate::IMAGE_EXTENSIONS` re-exports it.** A caller that
 /// wants to know which files this dialect will accept as a figure — the desktop
@@ -114,7 +115,8 @@ enum Container {
 /// `alt` is a plain string too. So the walk collects rather than emits between
 /// the image's two events.
 struct AltCapture {
-    /// The destination, exactly as the markdown wrote it.
+    /// The name the generated source asks for: the path a local image landed
+    /// on, or [`remote_name`] of a URL.
     path: String,
     /// Whether the image opened its paragraph. Half of the standalone test; the
     /// next event settles the other half.
@@ -2082,8 +2084,17 @@ fn step(
 
         // An image is the one construct that needs a file, so this arm is
         // where the pipeline decides which files it will ever ask for. What
-        // survives both halves of the check opens the alt capture and joins
-        // the shopping list.
+        // survives the checks opens the alt capture and joins the shopping
+        // list.
+        //
+        // **A URL returns before any path is made of it.** It is an address,
+        // not a path relative to anything, so its identity is the string the
+        // author wrote: `Sources::resolve` normalises through `VirtualPath`,
+        // which drops a non-leading empty segment and would turn `https://`
+        // into `https:/`, and a section's prefix would put `sections/` in front
+        // of it. Only the two checks that read the written destination and the
+        // title run first. The list carries the URL as written, and the source
+        // asks for `remote_name` of it, which a local path can never land on.
         //
         // **`check_image` is handed both the written destination and the one it
         // landed on, and the division is which string each shape is read off —
@@ -2106,20 +2117,27 @@ fn step(
             let line = lines.line_of(range.start);
             refuse_in_keywords(keywords, "image", line)?;
 
-            // The path the master would have written. It is the identity every
-            // downstream reader keys on — the Typst source, the world's
-            // `FileId`, and both wrappers' dedupe — which is why it is settled
-            // here, at the one place that knows both the destination and the
-            // file it was written in.
-            let dest = sources.resolve(line, &dest_url);
-            check_image(&dest_url, &dest, &title, line)?;
+            check_destination(&dest_url, &title, line)?;
+
+            // For a local image, the path the master would have written. It is
+            // the identity every downstream reader keys on — the Typst source,
+            // the world's `FileId`, and both wrappers' dedupe — which is why it
+            // is settled here, at the one place that knows both the destination
+            // and the file it was written in.
+            let (listed, name) = if is_url(&dest_url) {
+                (dest_url.to_string(), remote_name(&dest_url))
+            } else {
+                let dest = sources.resolve(line, &dest_url);
+                check_image(&dest_url, &dest, line)?;
+                (dest.clone(), dest)
+            };
             images.push(ImageRef {
-                path: dest.clone(),
+                path: listed,
                 location: Location::at(line),
             });
             *alt = Some(AltCapture {
                 opened: *para == Some(top(bufs).len()),
-                path: dest,
+                path: name,
                 text: String::new(),
                 depth: 0,
             });
@@ -2255,10 +2273,15 @@ pub(crate) enum PathShape {
 }
 
 impl PathShape {
-    /// The fragment the image arm names, unchanged since it was written.
+    /// The fragment the image arm names.
+    ///
+    /// `Scheme` names the schemes it leaves out, because an `http` or `https`
+    /// destination never reaches this check: the image arm takes it as a URL
+    /// first, and "a URL destination" would read as a contradiction beside one
+    /// that compiles.
     fn image(self) -> &'static str {
         match self {
-            PathShape::Scheme => "a URL destination",
+            PathShape::Scheme => "a URL scheme other than http or https",
             PathShape::Absolute => "an absolute path",
             PathShape::Backslash => "a backslash in its path",
             PathShape::Escapes => "a path that leaves the document's folder",
@@ -2282,10 +2305,12 @@ impl PathShape {
 
 /// The shapes a destination is refused for by how it is *written*.
 ///
-/// A scheme is a fetch request and nothing fetches, which catches `data:` and
-/// the drive path `C:\figure.png` with it; an absolute path converts on one
-/// machine only; a Windows separator writes a segment Typst's own virtual
-/// filesystem cannot hold.
+/// A scheme names something other than a file beside the document, which
+/// catches `data:`, `file:` and the drive path `C:\figure.png`. An image arm
+/// has already taken an `http` or `https` destination as a URL by the time it
+/// asks, and the `bibliography` key and the include marker refuse every URL. An
+/// absolute path converts on one machine only; a Windows separator writes a
+/// segment Typst's own virtual filesystem cannot hold.
 ///
 /// **These are read off the destination the author wrote and never off the one
 /// it resolved to**, which is load-bearing rather than tidy: `Sources::resolve`
@@ -2349,28 +2374,52 @@ pub(crate) fn portable_path(dest: &str) -> std::result::Result<(), PathShape> {
 
 // -- images -----------------------------------------------------------------
 
-/// Refuse every image destination the pipeline cannot carry, naming the shape.
+/// Refuse the two image destinations the link arm refuses too, for the same
+/// two reasons: an empty destination, and a title.
+///
+/// **These run before anything else, on the destination as written**, because
+/// they are the only checks a URL and a local path share. `![alt]()` stays an
+/// empty destination rather than whatever it would look like with `sections/`
+/// in front of it.
+fn check_destination(written: &str, title: &str, line: usize) -> Result<()> {
+    let refuse = |construct: &str| {
+        Err(Error::UnsupportedConstruct {
+            construct: construct.to_string(),
+            location: Location::at(line),
+        })
+    };
+
+    if written.is_empty() {
+        return refuse("image with an empty destination");
+    }
+    if !title.is_empty() {
+        return refuse("image with a title");
+    }
+    Ok(())
+}
+
+/// Refuse every local image path the pipeline cannot carry, naming the shape.
 ///
 /// **Two destinations rather than one, because the shapes divide by what each is
 /// a property of.** `written` is what the author typed; `landed` is where it
 /// resolved to — the same string for an image the master names, and prefixed
-/// with the section's own directory for one written in a section.
+/// with the section's own directory for one written in a section. A URL never
+/// arrives here: the image arm takes it before anything is resolved.
 ///
-/// The first two mirror the link arm, for the same two reasons. The next three
-/// are [`written_shape`]'s and are read off `written`, which is what keeps
-/// `![alt]()` an empty destination and `/x.png` an absolute path rather than
-/// whatever they would look like with `sections/` in front of them. The next is
-/// [`landed_path`]'s and is read off `landed`, because leaving the document's
-/// folder is a property of where a path ends up: `../figures/plot.svg` written
-/// under `sections/` lands inside the folder and only `../../escape.png` climbs
-/// out. **Which string reaches which check is the whole of the division** — not
-/// when the prefix is computed. The last is the format gate's first half: Typst
-/// reads the extension before the content, so an extension it does not name
-/// leaves the format undecided, and the dialect refuses to guess.
+/// The first three are [`written_shape`]'s and are read off `written`, which is
+/// what keeps `/x.png` an absolute path rather than whatever it would look like
+/// with `sections/` in front of it. The next is [`landed_path`]'s and is read
+/// off `landed`, because leaving the document's folder is a property of where a
+/// path ends up: `../figures/plot.svg` written under `sections/` lands inside
+/// the folder and only `../../escape.png` climbs out. **Which string reaches
+/// which check is the whole of the division** — not when the prefix is
+/// computed. The last is the format gate's first half: Typst reads the
+/// extension before the content, so an extension it does not name leaves the
+/// format undecided, and the dialect refuses to guess about a file.
 ///
 /// A shape is named before an extension, as it always has been, so `../../a.bmp`
 /// is refused for leaving the folder and not for its ending.
-fn check_image(written: &str, landed: &str, title: &str, line: usize) -> Result<()> {
+fn check_image(written: &str, landed: &str, line: usize) -> Result<()> {
     let refuse = |construct: String| {
         Err(Error::UnsupportedConstruct {
             construct,
@@ -2378,12 +2427,6 @@ fn check_image(written: &str, landed: &str, title: &str, line: usize) -> Result<
         })
     };
 
-    if written.is_empty() {
-        return refuse("image with an empty destination".to_string());
-    }
-    if !title.is_empty() {
-        return refuse("image with a title".to_string());
-    }
     if let Err(shape) = written_shape(written) {
         return refuse(format!("image with {}", shape.image()));
     }
@@ -2428,8 +2471,10 @@ pub(crate) fn normalise(path: &str) -> Option<String> {
 
 /// True when the destination opens with a URI scheme, as RFC 3986 writes one.
 ///
-/// This is what turns `https:` and `data:` into errors, and the Windows drive
-/// path `C:\figure.png` with them. The relative form is the portable one.
+/// This is what turns `data:` and `file:` into errors, and the Windows drive
+/// path `C:\figure.png` with them. The relative form is the portable one. An
+/// image arm asks [`is_url`] first, so `http:` and `https:` reach this only from
+/// a reader that refuses every URL.
 fn has_scheme(dest: &str) -> bool {
     let Some(colon) = dest.find(':') else {
         return false;
@@ -2437,6 +2482,43 @@ fn has_scheme(dest: &str) -> bool {
     let mut chars = dest[..colon].chars();
     chars.next().is_some_and(|c| c.is_ascii_alphabetic())
         && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+}
+
+/// True when an image destination is a URL: its scheme, read the way
+/// [`has_scheme`] reads one, is `http` or `https` in any case.
+///
+/// **The scheme alone decides.** Nothing looks for a `//`, so the malformed
+/// `https:/example.com/x.png` is a URL too. It then fails where it is fetched,
+/// naming itself, rather than being refused under a sentence about other
+/// schemes.
+pub(crate) fn is_url(dest: &str) -> bool {
+    has_scheme(dest)
+        && dest.split_once(':').is_some_and(|(scheme, _)| {
+            scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")
+        })
+}
+
+/// The name the generated source asks for in place of a URL.
+///
+/// `remote/`, then the sixteen lowercase hex digits of the URL's 64-bit FNV-1a
+/// hash. `specs/images_spec.md` §2 records the two choices:
+///
+/// - **No extension**, so Typst detects the format from the bytes. A URL is not
+///   a file name, and its ending says nothing reliable about what it serves.
+///   It also keeps the name clear of every local path, since [`check_image`]
+///   refuses a local path with no extension.
+/// - **A hash and not a counter**, so the name depends on the URL alone and not
+///   on which walk meets it first. A footnote definition's images are walked
+///   separately, by [`collect_definitions`].
+///
+/// Written by hand, with no dependency, because the algorithm is two lines.
+pub(crate) fn remote_name(url: &str) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in url.bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    format!("remote/{hash:016x}")
 }
 
 /// One image as a Typst call, without the leading `#`.
@@ -3828,5 +3910,54 @@ fn describe(event: &Event) -> &'static str {
         | Event::Rule
         | Event::InlineMath(_)
         | Event::DisplayMath(_) => "supported construct",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The name is FNV-1a 64, pinned by the published vectors.
+    ///
+    /// The two short inputs are the algorithm's own known answers, so a wrong
+    /// basis, a wrong prime or a multiply before the xor fails here rather than
+    /// in a golden file someone regenerates. The third is the literal the
+    /// library-level gate asserts in the generated source, computed by the same
+    /// algorithm outside this crate.
+    #[test]
+    fn a_remote_name_is_the_fnv1a_hash_of_the_url() {
+        assert_eq!(remote_name(""), "remote/cbf29ce484222325");
+        assert_eq!(remote_name("a"), "remote/af63dc4c8601ec8c");
+        assert_eq!(
+            remote_name("https://example.com/figures/plot.png"),
+            "remote/e195045359e9f05c"
+        );
+    }
+
+    /// Two schemes, in any case, and the scheme alone decides.
+    #[test]
+    fn a_url_is_an_http_or_https_scheme_and_nothing_else() {
+        for url in [
+            "https://example.com/x.png",
+            "http://example.com/x.png",
+            "HTTPS://example.com/x.png",
+            "Http://example.com/x.png",
+            "https:/example.com/x.png",
+        ] {
+            assert!(is_url(url), "{url} is a URL");
+        }
+
+        for dest in [
+            "data:image/png;base64,iVBOR",
+            "file:///x.png",
+            "ftp://example.com/x.png",
+            "C:/figure.png",
+            "httpx://example.com/x.png",
+            "figures/https://x.png",
+            "x.png",
+            "",
+        ] {
+            assert!(!is_url(dest), "{dest} is not a URL");
+        }
     }
 }

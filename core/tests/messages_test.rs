@@ -4,7 +4,7 @@
 //! nothing was watching.** `mpdf-008` gave every line-carrying variant a
 //! `Location` so a message could name the file the author wrote it in, and a
 //! document that names no section must still print, character for character, the
-//! sentence it printed before that type existed. **Forty-eight** places in
+//! sentence it printed before that type existed. **Fifty-one** places in
 //! `golden_test.rs` — `grep -c "Err(Error::"`, the instrument written down so a
 //! later reader re-derives the number rather than trusting it — reach these
 //! variants, and every one of them destructures the fields — none produces a
@@ -13,12 +13,13 @@
 //! `page_examples_test.rs:every_refusal_prints_the_sentence_beside_it`, which
 //! covers three rows across two of the nine.
 //!
-//! So the nine are enumerated here by hand, twice: once with no file, which is
-//! the inertness half, and once with one, which pins the `in FILE at line N`
-//! phrasing in the other direction. **The list is the spec's table**
-//! (`specs/multi_file_documents_spec.md` §2) written out a second time on
+//! So every line-carrying variant is enumerated here by hand, twice: once with
+//! no file, which is the inertness half, and once with one, which pins the
+//! `in FILE at line N` phrasing in the other direction. **The list is the spec's
+//! table** (`specs/multi_file_documents_spec.md` §2) written out a second time on
 //! purpose — a test that derived its rows from the enum would agree with
-//! whatever the enum said.
+//! whatever the enum said. Two rows are later than that table: `Diagram`, from
+//! `mpdf-012`, and `UnfetchedImage`, from `mpdf-002` Phase 3.
 //!
 //! The sentence a user sees is exactly this one: `cli/src/main.rs` prints it
 //! after its `error: ` prefix, `web/src/lib.rs:render` hands it to the page
@@ -39,7 +40,7 @@ fn within(file: &str, line: usize) -> Location {
     }
 }
 
-/// One of each of the nine line-carrying variants, located by `place`.
+/// One of each of the eleven line-carrying variants, located by `place`.
 ///
 /// The two callers differ only in what they hand in here, so nothing but the
 /// location can differ between the two sentences a variant prints.
@@ -73,6 +74,10 @@ fn every_variant(place: impl Fn(usize) -> Location) -> Vec<Error> {
             path: "figures/mark.svg".to_string(),
             location: place(5),
         },
+        Error::UnfetchedImage {
+            url: "https://example.com/figures/plot.png".to_string(),
+            location: place(5),
+        },
         Error::MissingBibliography {
             path: "refs.yml".to_string(),
             location: place(3),
@@ -104,6 +109,7 @@ fn every_variant_prints_the_sentence_it_always_printed() {
         "name error at line 9: nothing declares the name 'fig:absent'",
         "citation error at line 8: '@nosuchkey' is cited and the bibliography does not hold it",
         "no image file supplied for 'figures/mark.svg' at line 5",
+        "no image fetched for 'https://example.com/figures/plot.png' at line 5",
         "no bibliography file supplied for 'refs.yml' at line 3",
         "no section file supplied for 'sections/method.md' at line 7",
         "image file 'mark.svg' at line 5 does not hold SVG data",
@@ -120,7 +126,7 @@ fn every_variant_prints_the_sentence_it_always_printed() {
 /// With a file, every sentence names it, and names it once.
 ///
 /// **The two paths never collide, because only one of them is quoted.** An asset
-/// is `'mark.svg'` and a source file is bare after `in`, so the four rows below
+/// is `'mark.svg'` and a source file is bare after `in`, so the five rows below
 /// that carry both read once and correctly.
 #[test]
 fn every_variant_names_the_file_where_there_is_one() {
@@ -132,6 +138,7 @@ fn every_variant_names_the_file_where_there_is_one() {
         "name error in sections/method.md at line 9: nothing declares the name 'fig:absent'",
         "citation error in sections/method.md at line 8: '@nosuchkey' is cited and the bibliography does not hold it",
         "no image file supplied for 'figures/mark.svg' in sections/method.md at line 5",
+        "no image fetched for 'https://example.com/figures/plot.png' in sections/method.md at line 5",
         "no bibliography file supplied for 'refs.yml' in sections/method.md at line 3",
         "no section file supplied for 'sections/method.md' in sections/method.md at line 7",
         "image file 'mark.svg' in sections/method.md at line 5 does not hold SVG data",

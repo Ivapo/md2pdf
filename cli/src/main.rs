@@ -159,6 +159,13 @@ fn run() -> Result<(), String> {
 /// the file that drew it. This function needed nothing for that, which is why
 /// the app inherits the rule rather than carrying a copy of it.
 ///
+/// **An image named by a URL is skipped**, so `core` refuses it as
+/// `no image fetched for '…'`. One consequence is accepted rather than fixed:
+/// this stops at its first failure in document order and runs before `core`
+/// checks anything, so with a URL on line 3 and an unreadable file on line 9,
+/// line 9 is what the author hears. The earliest-line rule holds inside `core`,
+/// not across the two.
+///
 /// `core` reads nothing itself, on any of the three channels. That split is what
 /// lets the same crate compile natively and to `wasm32`.
 fn read_assets(
@@ -191,7 +198,11 @@ fn read_assets(
     }
 
     for image in images {
-        if !seen.insert(image.path.clone()) {
+        // Nothing here fetches, so a URL gets no bytes and `core`'s own
+        // refusal is what names it. Joined onto the directory instead, it would
+        // hand the OS `dir/https://…` and the author an OS error about a file
+        // that was never meant to exist.
+        if image.is_url() || !seen.insert(image.path.clone()) {
             continue;
         }
 

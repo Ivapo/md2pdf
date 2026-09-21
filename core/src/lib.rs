@@ -17,8 +17,9 @@ mod sections;
 /// The file extensions this dialect accepts as an image.
 ///
 /// **The crate's first re-export**, and it is one because the constant belongs
-/// beside its only other reader, `emit::check_image` — moving it here would
-/// split the table from the refusal it decides. A caller listing the files a
+/// beside `emit::check_image`, the refusal it decides — moving it here would
+/// split the table from that refusal. `collect` reads it too, for a URL, whose
+/// bytes may hold any format in it. A caller listing the files a
 /// document could draw reads this rather than keeping a list of its own.
 pub use emit::IMAGE_EXTENSIONS;
 
@@ -51,7 +52,7 @@ use typst_pdf::PdfOptions;
 /// for character. With one it renders `in sections/method.md at line 4`.
 ///
 /// **A source file is never quoted and an asset path always is.** That is what
-/// keeps the two apart in the four messages carrying both: `no image file
+/// keeps the two apart in the five messages carrying both: `no image file
 /// supplied for 'fig.png' in sections/two.md at line 3` reads once and
 /// correctly.
 ///
@@ -149,6 +150,17 @@ pub enum Error {
     #[error("no image file supplied for '{path}' {location}")]
     MissingImage { path: String, location: Location },
 
+    /// The document names an image by URL, and the caller supplied no bytes for
+    /// it.
+    ///
+    /// A sibling of [`Error::MissingImage`] on the argument
+    /// [`Error::MissingBibliography`] was added under: the words are the point.
+    /// "No image file supplied" names a file that does not exist. This crate
+    /// fetches nothing, so whether a URL is fetched at all is the caller's
+    /// decision, and this is what a caller that did not fetch it hears.
+    #[error("no image fetched for '{url}' {location}")]
+    UnfetchedImage { url: String, location: Location },
+
     /// The frontmatter names a bibliography file that the caller did not supply.
     ///
     /// A sibling of [`Error::MissingImage`] rather than a reuse of it: the words
@@ -194,7 +206,7 @@ impl Error {
     ///
     /// **This is the whole of the relocation surface**, which is why it is one
     /// exhaustive match and not a `_` arm: `sections::Sources` translates through
-    /// it, and a tenth line-carrying variant added later cannot slip past the
+    /// it, and a line-carrying variant added later cannot slip past the
     /// translation without the compiler saying so.
     pub(crate) fn location_mut(&mut self) -> Option<&mut Location> {
         match self {
@@ -205,6 +217,7 @@ impl Error {
             | Error::Name { location, .. }
             | Error::Citation { location, .. }
             | Error::MissingImage { location, .. }
+            | Error::UnfetchedImage { location, .. }
             | Error::MissingBibliography { location, .. }
             | Error::MissingSection { location, .. }
             | Error::ImageFormat { location, .. } => Some(location),
@@ -227,11 +240,24 @@ pub struct Asset {
     pub bytes: Vec<u8>,
 }
 
-/// One place where a document names an image file.
+/// One place where a document names an image: a file, or a URL.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImageRef {
     pub path: String,
     pub location: Location,
+}
+
+impl ImageRef {
+    /// Whether this image is named by an `http` or `https` URL rather than by a
+    /// path beside the document.
+    ///
+    /// A caller that joins every path onto a directory checks this first.
+    /// Otherwise a URL becomes an OS error about a file that was never meant to
+    /// exist. It is a method rather than a field, so no caller that builds or
+    /// destructures an `ImageRef` breaks.
+    pub fn is_url(&self) -> bool {
+        emit::is_url(&self.path)
+    }
 }
 
 /// The bibliography file a document names, and the frontmatter line that named
@@ -342,6 +368,13 @@ pub fn md_to_html(md: &str) -> String {
 /// named it on.
 ///
 /// The list may name one path more than once. The caller deduplicates it.
+///
+/// **A URL is a name on this list like any other.** It comes back exactly as the
+/// author wrote it, never prefixed or normalised, and [`ImageRef::is_url`] says
+/// which entries are URLs. This crate fetches nothing: a caller that fetches a
+/// URL supplies its bytes under the URL itself, and a caller that does not
+/// supplies nothing for it, which [`md_to_pdf`] refuses as
+/// [`Error::UnfetchedImage`].
 ///
 /// `sections` is the same channel [`md_to_typst`] takes, and for the same
 /// reason: an image named inside a section is only visible once that section's
@@ -534,6 +567,19 @@ fn anchors_from(lines: Vec<usize>, pages: Vec<usize>) -> Vec<Anchor> {
 /// One path is checked once, at its first reference, so a figure used twice
 /// reports one error rather than two.
 ///
+/// **A URL is looked up by the URL itself**, and served under
+/// [`emit::remote_name`] of it, which is the name the source asks for. Its
+/// ending names no format, so its bytes must hold *some* format in
+/// [`IMAGE_EXTENSIONS`]: that is an any-of over [`bytes_match`], the same
+/// predicates Typst's own detection reads. No bytes at all is
+/// [`Error::UnfetchedImage`].
+///
+/// **Every insert goes through [`insert`]**, which refuses a `FileId` already
+/// held under a different name. Two URLs could share a hash, and a bibliography
+/// could be named `remote/<hash>`; serving one set of bytes for both names would
+/// be worse than refusing. The refusal joins the contest below at the second
+/// name's line, so a refusal the author can act on still wins.
+///
 /// **The bibliography goes in unchecked by [`bytes_match`], and first.**
 /// Unchecked because the file is parsed for its keys a few lines down and names
 /// its own error there, where an image's magic bytes are the only thing that
@@ -576,7 +622,9 @@ fn collect(emitted: &emit::Emitted, assets: &[Asset]) -> Result<HashMap<FileId, 
                 },
             )),
             Some(bytes) => {
-                map.insert(file_id(&named.path)?, Bytes::new(bytes.to_vec()));
+                if let Err(error) = insert(&mut map, file_id(&named.path)?, &named.path, bytes) {
+                    refusals.push((named.location.line, error));
+                }
                 match bibliography::keys(&named.path, bytes) {
                     // A file that does not parse has no key set, so the two
                     // checks below have nothing to run against. Its own line is
@@ -599,38 +647,96 @@ fn collect(emitted: &emit::Emitted, assets: &[Asset]) -> Result<HashMap<FileId, 
             continue;
         }
 
+        let url = emit::is_url(&image.path);
+
         let Some(bytes) = supplied.get(image.path.as_str()) else {
-            refusals.push((
-                image.location.line,
+            let error = if url {
+                Error::UnfetchedImage {
+                    url: image.path.clone(),
+                    location: image.location.clone(),
+                }
+            } else {
                 Error::MissingImage {
                     path: image.path.clone(),
                     location: image.location.clone(),
-                },
-            ));
+                }
+            };
+            refusals.push((image.location.line, error));
             continue;
         };
 
-        // The emitter has already refused every extension outside Typst's own
-        // table, so the extension is known here and it alone names the format.
-        let extension = emit::extension_of(&image.path).unwrap_or_default();
-        if !bytes_match(&extension, bytes) {
+        // For a file, the emitter has already refused every extension outside
+        // Typst's own table, so the extension is known here and it alone names
+        // the format. A URL names none, and `None` takes whichever format its
+        // bytes hold.
+        let expected = if url {
+            None
+        } else {
+            Some(emit::extension_of(&image.path).unwrap_or_default())
+        };
+        let holds_image = match &expected {
+            Some(extension) => bytes_match(extension, bytes),
+            None => IMAGE_EXTENSIONS
+                .iter()
+                .any(|extension| bytes_match(extension, bytes)),
+        };
+        if !holds_image {
             refusals.push((
                 image.location.line,
                 Error::ImageFormat {
                     path: image.path.clone(),
                     location: image.location.clone(),
-                    format: format_name(&extension).to_string(),
+                    format: format_name(expected.as_deref().unwrap_or_default()).to_string(),
                 },
             ));
             continue;
         }
 
-        map.insert(file_id(&image.path)?, Bytes::new(bytes.to_vec()));
+        let id = if url {
+            file_id(&emit::remote_name(&image.path))?
+        } else {
+            file_id(&image.path)?
+        };
+        if let Err(error) = insert(&mut map, id, &image.path, bytes) {
+            refusals.push((image.location.line, error));
+        }
     }
 
     match refusals.into_iter().min_by_key(|(line, _)| *line) {
         Some((_, error)) => Err(error),
-        None => Ok(map),
+        None => Ok(map
+            .into_iter()
+            .map(|(id, (_, bytes))| (id, bytes))
+            .collect()),
+    }
+}
+
+/// Put one named file into the world's map, refusing an id another name holds.
+///
+/// Two names on one `FileId` would be served one set of bytes, silently. That
+/// cannot happen between two local paths, whose id is built from the path
+/// itself. It can happen between a URL and something else, because a URL's id
+/// is built from [`emit::remote_name`]. The same name twice is not a collision,
+/// and the first bytes stay.
+///
+/// The refusal is `Error::Internal` because nothing the author wrote says which
+/// name should win, and [`collect`] enters it into its earliest-line contest
+/// rather than returning it at once.
+fn insert(
+    map: &mut HashMap<FileId, (String, Bytes)>,
+    id: FileId,
+    name: &str,
+    bytes: &[u8],
+) -> Result<()> {
+    match map.get(&id) {
+        Some((held, _)) if held != name => Err(Error::Internal(format!(
+            "'{name}' and '{held}' would be served as one file"
+        ))),
+        Some(_) => Ok(()),
+        None => {
+            map.insert(id, (name.to_string(), Bytes::new(bytes.to_vec())));
+            Ok(())
+        }
     }
 }
 
@@ -688,8 +794,9 @@ fn unresolved(keys: &HashSet<String>, emitted: &emit::Emitted) -> Vec<(usize, Er
 /// This mirrors `typst-library` 0.15.1's own detection: the magic bytes for the
 /// raster formats and for PDF, the gzip magic for `svgz`, and a namespace
 /// search over the first 2048 bytes for `svg`. Typst's fallback — detect the
-/// content when the extension says nothing — is deliberately not mirrored, so
-/// an extension outside the table never reaches this function.
+/// content when the extension says nothing — is deliberately not mirrored for a
+/// file, so an extension outside the table never reaches this function. A URL,
+/// which is not a file name, is asked of every extension in the table in turn.
 ///
 /// The recorded limit: a file that is corrupt past its magic bytes still fails
 /// at compile time, with the compiler's own message. Catching that would mean
@@ -935,6 +1042,38 @@ impl World for TypstWorld {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One `FileId` under two names is refused, and under one name is not.
+    ///
+    /// Neither collision can be reached from a document without finding two
+    /// URLs that share an FNV-1a hash, so the helper is asked directly. The
+    /// second half pins that a bibliography and an image naming one file stay
+    /// legal, as they were before the helper existed.
+    #[test]
+    fn one_file_id_under_two_names_is_refused() {
+        let id = file_id("remote/e195045359e9f05c").unwrap();
+        let mut map = HashMap::new();
+
+        insert(&mut map, id, "https://example.com/figures/plot.png", b"one").unwrap();
+        match insert(&mut map, id, "remote/e195045359e9f05c", b"two") {
+            Err(Error::Internal(message)) => assert_eq!(
+                message,
+                "'remote/e195045359e9f05c' and 'https://example.com/figures/plot.png' \
+                 would be served as one file"
+            ),
+            other => panic!("expected an internal error, got {other:?}"),
+        }
+
+        insert(
+            &mut map,
+            id,
+            "https://example.com/figures/plot.png",
+            b"three",
+        )
+        .unwrap();
+        assert_eq!(map.len(), 1);
+        assert_eq!(map[&id].1.as_slice(), b"one", "the first bytes stay");
+    }
 
     /// The zip pairs by ordinal, and refuses to when the counts disagree.
     ///
