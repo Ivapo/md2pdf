@@ -16,5 +16,5 @@
   A document may be written as several markdown files: a master names its sections in the order they are read, `core` joins them into the one stream the emitter already walks, and every error, every asset and every anchor learns which file it came from.
 - **[repository-split](repository_split_spec.md)** — `mpdf-011` · accepted · done
   The engine and the desktop app part ways: `md2pdf-core` and its CLI stay in this repository and are published as crates, Letur moves to a repository of its own with its history, its page and its gates, and depends on the engine by version.
-- **[diagrams-mermaid](diagrams_mermaid_spec.md)** — `mpdf-012` · accepted · pending
+- **[diagrams-mermaid](diagrams_mermaid_spec.md)** — `mpdf-012` · accepted · partial
   A fenced `mermaid` block becomes a typeset diagram: merman renders it to SVG in process, the dialect allows a closed list of diagram types, and the look sizes it so its labels set at caption size, floating across the page when a column is too narrow.

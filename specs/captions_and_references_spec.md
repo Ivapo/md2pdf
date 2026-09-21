@@ -9,7 +9,7 @@ note: >
   for a multi-member figure also carries the front matter a paper opens with: the
   abstract, and the keywords it is indexed by.
 status: accepted
-last_updated: 2026-09-01
+last_updated: 2026-09-21
 
 phases:
   - name: "Phase 1 — a captioned figure"
@@ -653,6 +653,17 @@ OQ-2's answer rather than on captions.
 no frontmatter key, so nothing crosses in Phase 2 either, and the two bundled
 looks reach a table and a listing with the rules they already carry. The sentence
 above is left standing because it was true when written.
+
+> **CORRECTED 2026-09-21, by `mpdf-012` Phase 1.** *"The look contract does not
+> widen for a caption"* now has one exception, a diagram's. Whether a figure
+> floats is set when it is constructed, through `placement` and `scope`, and a
+> diagram's depends on its width against the page, which exists only at layout
+> time inside the look. So the look builds that figure itself, and the caption
+> and the name cross into its `diagram` function as arguments. The reason
+> recorded above still holds for styling: the look styles a diagram's caption
+> with the `show figure.caption` rule it already carries, and an image, a
+> table, a code block and a group still cross nothing for their captions. See
+> `specs/diagrams_mermaid_spec.md` §2.
 
 ### Where a figure sits is the look's, and a listing sits flush left (decision, recorded)
 

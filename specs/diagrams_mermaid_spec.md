@@ -11,7 +11,7 @@ last_updated: 2026-09-21
 phases:
   - name: "Phase 1 — flowcharts and sequence diagrams on the page"
     reviewed: 2026-09-21
-    shipped: null
+    shipped: 2026-09-21
     cut: null
     by: null
   - name: "Phase 2 — class, state and entity-relationship diagrams"

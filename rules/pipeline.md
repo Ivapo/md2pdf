@@ -7,6 +7,7 @@ sources:
   - core/src/frontmatter.rs
   - core/src/bibliography.rs
   - core/src/math.rs
+  - core/src/diagram.rs
   - core/assets/math.typ
   - core/assets/template.typ
   - core/assets/press-release.typ
@@ -27,13 +28,14 @@ covers: >
   channel refuses,
   the extension table the crate re-exports and why,
   the LaTeX subset a formula may hold and the prelude
-  it compiles against, the bundled looks and the call contract they meet, the equation numbering
+  it compiles against, the diagram a `mermaid` fence becomes and the rule that sizes it,
+  the bundled looks and the call contract they meet, the equation numbering
   the author asks for and the look formats, the figure numbering a document may
   section by, the depth a document numbers its headings to, the several authors one
   key carries and the affiliation each of their markers points at, the heading anchors a
   compile reports,
   the Typst world and its bundled fonts, and the CLI contract
-max_lines: 1300
+max_lines: 1380
 generated: 2026-09-04
 ---
 
@@ -93,11 +95,11 @@ demo to Letur, so that column is Letur's own, generated there by
 
 ## The dialect
 
-Twenty-six things are supported: headings at levels 1–6, paragraph text, soft breaks,
+Twenty-seven things are supported: headings at levels 1–6, paragraph text, soft breaks,
 emphasis, strong emphasis, strikethrough, inline code, math in both its forms, hard line
 breaks, thematic breaks, links, cross-references, citations, include markers, images,
 captions, figure groups, abstracts, keywords, bullet lists, ordered lists, code blocks,
-block quotes,
+diagrams, block quotes,
 pipe tables, footnotes, and a leading YAML frontmatter block. Heading levels map to Typst
 headings of the same level.
 
@@ -139,7 +141,8 @@ Lists become `- ` and `N. ` items, every ordered item carrying its own number, s
 other than 1 needs no mechanism of its own. A code block becomes
 `#raw(block: true, lang: …)` — or `#figure(raw(…), caption: […])` where a caption follows
 it — the tag the first word of the fence's info string and absent
-for an indented block; one trailing newline is stripped, because pulldown-cmark reports the
+for an indented block, and a fence tagged exactly `mermaid` the one exception, a diagram
+(`## Diagrams`); one trailing newline is stripped, because pulldown-cmark reports the
 final line's terminator as part of the content and a literal that kept it would typeset a
 phantom empty line. A block quote becomes `#quote(block: true)[…]`. Neither lists nor
 quotes get a template rule: the Typst defaults stand.
@@ -216,7 +219,7 @@ document was written in — the translation to a file and a line happens after, 
 out.
 
 **Every error the pipeline raises names a place, and a place is a
-`core/src/lib.rs:Location`.** Nine of the twelve `core/src/lib.rs:Error` variants carry
+`core/src/lib.rs:Location`.** Ten of the thirteen `core/src/lib.rs:Error` variants carry
 one; `Compile`, `PdfExport` and `Internal` do not. A location renders `at line 12` where it
 carries no file, which is every message a single-file document produces, and
 `in sections/method.md at line 4` where it carries one. **A source file is never quoted and
@@ -356,6 +359,56 @@ command, where a missing definition is a compile error. `core/src/emit.rs:header
 those names, and only for a document that has math, so every golden file written before
 still opens with the same two lines. The flag rides a footnote definition's content the way
 its images do, because that walk is discarded before the header is written.
+
+## Diagrams
+
+A fenced block whose tag is exactly `mermaid` — case-sensitive, so ` ```Mermaid ` and
+` ```text ` stay listings, and never an indented block, which has no tag — becomes
+`#diagram(bytes("<svg …>"), <width>, 16, alt: "…")`, the look's function over an SVG
+`core/src/diagram.rs:render` drew in process with merman, pinned `=0.8.0-alpha.6` with its
+`svg` feature alone. **The SVG crosses inline**, as a string literal `typst_string`
+escapes, so a diagram adds nothing to the asset channels, `core/src/lib.rs:image_paths`
+does not list one, and the world is unchanged. The width is the root `viewBox`'s third
+number copied verbatim — checked to be a plain decimal before it enters the source — and
+`16` is `core/src/diagram.rs:LABEL_PX`, merman's own label size, which a unit test holds
+against the CSS merman writes.
+
+`core/src/diagram.rs:ALLOWED` is the list, keyed on the id merman's detection reports rather
+than on the keyword, which is what folds `graph` into `flowchart`: `flowchart-v2` (alt text
+`flowchart`) and `sequence` (`sequence diagram`). A type is refused **before any layout**,
+named by the keyword the author wrote — the first word of the first non-blank line not
+opening `%%` — at that line. Before detection, `core/src/diagram.rs:scan` refuses `%%{`
+anywhere in the block, because merman applies a directive wherever it finds one, and a
+first non-blank line that trims to `---`, which is front matter; both would set the theme or
+the label size the sizing rule assumes. The scan is textual because merman silently ignores
+a malformed directive and renders. `Error::Diagram` carries the problem and the line:
+`no diagram type is recognised` at the fence's; a syntax error in merman's own words at the
+line its byte span starts on, the fence's plus one plus the newlines before it; any other
+render failure at the fence's.
+
+The configuration is fixed in `core`, in `core/src/diagram.rs:site_config`: the `neutral`
+theme, print spacing for flowcharts and sequence diagrams, `mirrorActors: false`, and no
+`fontFamily`, so Typst draws every label in the look's own text font. The render always
+uses `SvgPipeline::resvg_safe()` — merman's default puts flowchart labels in
+`<foreignObject>`, which Typst does not draw — and always `Engine::new()`, whose runtime
+policy fixes the clock, time zone and seed, so the same block draws the same bytes;
+`wasm32` and native agree on the fixture's source byte for byte.
+
+**A diagram stands only at the top level of a file.** `core/src/emit.rs:step` refuses one
+in a list item, a block quote, a footnote definition or a `:::` group, at the fence's line
+and before anything is drawn, because the look sizes it against the column from the page's
+geometry, which is the wrong width in all four. Its call goes through `write_block` like any
+block's, so it is recorded and captionable, and `core/src/emit.rs:header` imports `diagram`
+only for a document that drew one.
+
+**The look sizes it**, at layout time, in each look's `diagram`: labels at that look's
+caption size (9pt, 9.5pt) and never enlarged; if that is wider than the column, kept in the
+column while shrinking keeps its labels at 8pt or more; otherwise a captioned diagram floats
+across the page (`placement: auto, scope: "parent"`) in a look with more than one column,
+and one wider than the page shrinks to it. An uncaptioned diagram never floats, since only a
+caption gives a reader the number to find a float by. A test in `core/src/lib.rs` reads each
+image's width and each figure's scope off the introspector and holds them to the rule in both
+looks at one and two columns.
 
 ## Images and their files
 
@@ -502,8 +555,10 @@ another, with nothing on the page to tell an author which they had written.
 The attachment is a **splice at a recorded point**, not a longer hold on the pending slot:
 the flush timing is load-bearing for `core/src/emit.rs:Walk::finish`, for
 `core/src/emit.rs:collect_definitions` and for `Walk.para`'s offset, and it does not move.
-`core/src/emit.rs:Figure` records where a call was written;
-`core/src/emit.rs:splice_caption` truncates back to it and writes the wrapper, unwinding
+`core/src/emit.rs:Figure` records where a call was written, and what a caption makes of
+it — its `Splice`;
+`core/src/emit.rs:splice_caption` truncates back to it and writes the wrapper — or, for a
+diagram, the call again with `caption: […]` and `name: label("…")` inside it — unwinding
 the two `'\n'` the paragraph arms pushed for a paragraph that is consumed rather than
 printed. `core/src/emit.rs:Figure::live` verifies the point where it is spent rather than
 clearing it from the walk's other arms — same frame depth, same recorded call, only
@@ -648,7 +703,8 @@ paragraph's own end and the closer's start.
 
 **A caption line may end in a `{#name}` group, which names the figure that caption makes.**
 It becomes a Typst label written into the same string the record keeps —
-`#figure(…, caption: […]) <name>` — and the label has to ride that string rather than the
+`#figure(…, caption: […]) <name>`, or `name: label("…")` inside a diagram's call, since a
+label written after a `context` lands on the context — and the label has to ride that string rather than the
 buffer alone, or `Figure::live`'s content check — `core/src/emit.rs:still_standing`'s, the
 one test a caption's record and an equation's share — fails and the second-caption refusal
 silently stops firing. The group leaves the caption, and that is not a substring removal
@@ -1009,15 +1065,16 @@ Two looks are bundled, and `core/src/frontmatter.rs:Template` names both:
 count — and the emitter passes the frontmatter through and adds no styling of its own, so a
 third look is a third `.typ` file and one enum variant.
 
-Every look exports `template`, `divider`, `abstract` and `keywords`, and its `template`
-takes `title`,
+Every look exports `template`, `divider`, `abstract`, `keywords` and `diagram`, and its
+`template` takes `title`,
 `author`, `affiliation`, `columns`, `date`, `equations`, `figures`, `headings` and
 `citations` before the trailing `doc`. That is the contract, because
 `core/src/emit.rs:header` names all nine on
 every call and imports the first two names on every document, the third on one that opened
-an abstract and the fourth on one that opened a keywords block; a look missing one would
-fail the compile with an error naming neither the document nor the key. **The export list is
-four and the call is nine** — both front-matter blocks cross as functions beside `divider`
+an abstract, the fourth on one that opened a keywords block and the fifth on one that drew a
+diagram; a look missing one would fail the compile with an error naming neither the document
+nor the key. **The export list is five and the call is nine** — both front-matter blocks and
+the diagram cross as functions beside `divider`
 rather than as arguments, and the call stood at eight from `mpdf-001` Phase 11 until
 `citations` made it nine in `mpdf-007` Phase 5.
 No golden file pins it, so a test in `core/tests/golden_test.rs` reads each look's source and
@@ -1101,7 +1158,11 @@ a sibling of `the_two_forms_of_the_default_compile_to_the_same_bytes` could only
 wrong default in `frontmatter.rs`. The same instrument held `citations`: the two citation
 fixtures, one per look, hash identically either side of `mpdf-007` Phase 5.
 
-A caption crosses no argument at all, and neither does a group. Each look carries
+A caption crosses no argument at all, and neither does a group — **with one exception, a
+diagram's**. Whether a figure floats is set when it is built, through `placement` and
+`scope`, and a diagram's depends on its width against the page, which exists only at layout
+time, so the look builds that figure and the caption and the name cross into `diagram` to
+reach it. The look still styles that caption with the rules below. Each look carries
 `set figure.caption(…)`, `show figure: set block(…)`, `show figure.caption: …`,
 `show figure: set grid(gutter: …)`, `show figure.where(kind: raw): set align(left)` and
 `show figure.caption.where(kind: raw): …` of its own, plus one rule that reaches past a
@@ -1274,8 +1335,8 @@ cannot depend on a path, and `cargo publish` refuses it outright without one.
 **Each package carries four licence artifacts, and three of them are symlinks.** `LICENSE`
 and `THIRD-PARTY-LICENSES.md` sit at the repository root and are linked into `core/` and
 `cli/`, which cargo resolves into the archive as ordinary files — one file of truth, no
-copy to keep in step. They travel because the binary is statically linked: Typst, `mitex`
-and 300-odd other crates are compiled into `md2pdf` rather than installed beside it, so
+copy to keep in step. They travel because the binary is statically linked: Typst, `mitex`,
+merman and 360-odd other crates are compiled into `md2pdf` rather than installed beside it, so
 their terms follow it and their text has to as well. `THIRD-PARTY-LICENSES.md` is
 generated by `tools/third-party-licenses.py` from the resolve graph and is deliberately a
 superset of what any one feature selection compiles. The two font licences are the fourth
@@ -1290,11 +1351,13 @@ the one invocation that needs no input. The positional is an `Option` carrying
 `required_unless_present`, and it needs both: `clap_derive` infers `required(true)` from a
 non-`Option` field, which collides with the attribute, and the attribute is what keeps
 clap's own message for a bare `md2pdf`. **`--licenses` has two forms and prints something
-different in each.** Bare, or `=notice`, it prints `cli/src/main.rs:NOTICE` — 39 lines of
+different in each.** Bare, or `=notice`, it prints `cli/src/main.rs:NOTICE` — 46 lines of
 hand-written prose saying what the binary carries and under what terms: Typst and `mitex`
-compiled in under Apache-2.0, five Libertinus faces under the OFL and one NewCMMath face
-under the GUST licence, the crate graph in one paragraph, and the sentence that this
-records provenance and is not legal advice. `=full` prints the four files
+compiled in under Apache-2.0 and merman under MIT or Apache-2.0, five Libertinus faces under
+the OFL and one NewCMMath face under the GUST licence, the crate graph in one paragraph —
+naming the four MPL-2.0 crates merman's `lol_html` brings, copyleft per file and unmodified,
+and where their source is — and the sentence that this records provenance and is not legal
+advice. `=full` prints the four files
 `cli/src/main.rs:licenses` joins — this program's MIT text, the two font licences each
 under its filename, and `THIRD-PARTY-LICENSES.md`, joined by blank lines. Both return
 before any file is read, so a positional given beside the flag is ignored and there is no
@@ -1303,9 +1366,11 @@ positional**: without it clap takes the next bare token as the value, so
 `--licenses extra.md` would exit 2 on an invalid value instead of 0 — the cost being that
 `--licenses full` with a space prints the notice and ignores `full`. A value outside the
 set is clap's own exit 2 naming both. **Every fact in the notice is derived by the suite
-from the file that holds it** — the table in `THIRD-PARTY-LICENSES.md` for the two
-versions, the crate count and the licence terms, `core/assets/fonts/` for the two face
-counts — so the prose cannot drift from the resolve without a test failing. Without `-o`
+from the file that holds it** — the table in `THIRD-PARTY-LICENSES.md` for the three
+versions, the crate count, the licence terms and the MPL-2.0 crates, `core/assets/fonts/`
+for the two face counts — so the prose cannot drift from the resolve without a test failing.
+The copyleft check is a function a second test hands three failures: a copyleft term other
+than MPL-2.0, an MPL-2.0 crate the notice does not name, and "None is copyleft". Without `-o`
 the PDF lands at the input path with a `.pdf` extension. `--emit-typst` prints the Typst source and ignores `-o`; that
 output imports the selected look, which exists only inside the world, so it serves inspection
 and not a standalone `typst compile`.

@@ -5,7 +5,7 @@ note: >
   The core .md → .pdf pipeline: pulldown-cmark parses, a hand-written emitter maps
   events to Typst markup, and embedded Typst compiles the PDF, behind a CLI.
 status: accepted
-last_updated: 2026-09-04
+last_updated: 2026-09-21
 
 phases:
   - name: "Phase 1 — end-to-end pipeline behind a CLI"
@@ -907,6 +907,15 @@ blocks, and quotes.*
   for exactly that rejection: without it, pulldown-cmark reads a pipe
   table as paragraph text, so the pipes would reach the PDF as prose and
   the reject arm would never see the construct it is meant to name.
+
+  > **CORRECTED 2026-09-21, by `mpdf-012` Phase 1.** *"Fenced and indented
+  > code blocks become block-level raw content"* is no longer true of one tag:
+  > a fence tagged exactly `mermaid` becomes a diagram, drawn to SVG in
+  > process and sized by the look's `diagram` function. Every other tag, the
+  > case-varied ` ```Mermaid ` among them, and every indented block are still
+  > raw content with the language carried through, so Mermaid source can still
+  > be shown as a listing. See `specs/diagrams_mermaid_spec.md`;
+  > `rules/pipeline.md` is what tracks the code.
 - **Exit gate:** Golden-file tests, three cases, plus the full existing
   suite, which the option change and the test migration touch — no
   shipped golden file changes, because no existing fixture contains a
@@ -2376,6 +2385,16 @@ skipped.
 
       This records provenance and is not legal advice.
 
+  > **CORRECTED 2026-09-21, by `mpdf-012` Phase 1.** The notice pinned above is
+  > the record of what shipped in September 2026, and it is kept. Its
+  > *"None is copyleft"* is no longer true: merman, which `mpdf-012` compiles in
+  > to draw diagrams, brings `cssparser`, `cssparser-macros`, `dtoa-short` and
+  > `selectors` under MPL-2.0 through Cloudflare's `lol_html`. The notice now
+  > names merman in the mitex shape, counts 365 crates, lists MPL-2.0 among the
+  > terms, and names those four crates as copyleft per file, compiled in
+  > unmodified, with their source on crates.io. It is 46 lines, inside the cap
+  > this phase set. `cli/src/main.rs:NOTICE` is what tracks the code.
+
   **Every fact in it has a source, and the gate reads the ones it can.** The copyright line is
   `LICENSE`'s third line. Typst's and mitex's versions are their rows in
   `THIRD-PARTY-LICENSES.md`'s table; `334` is that table's row count and the eleven licence
@@ -2439,6 +2458,16 @@ skipped.
   `unic-langid-impl` and `unic-langid-macros-impl`, and none of them is a licence. That is
   what keeps *"None is copyleft"* a claim the suite checks rather than one the author
   remembers to update.
+
+  > **CORRECTED 2026-09-21, by `mpdf-012` Phase 1.** The copyleft clause of
+  > this case was rewritten, not deleted, when MPL-2.0 entered the tree. It is
+  > now `cli/tests/cli_test.rs:copyleft_findings`, called on the real table
+  > and notice: a term containing `GPL`, `MPL`, `EUPL`, `CDDL`, `EPL` or `OSL`
+  > that is not exactly `MPL-2.0` still fails, `contains` and case-sensitive
+  > over the terms as above; an MPL-2.0 crate the notice does not name as a
+  > whole word fails; and a notice still carrying *"None is copyleft"* fails. A
+  > second test hands the function each of the three, so the check is
+  > falsified in the suite rather than once by hand.
 
   (4) **The notice's font facts are the directory's, derived the same way.** The same test
   lists `core/assets/fonts/*.otf` — `../core/assets/fonts/` from `CARGO_MANIFEST_DIR`, which

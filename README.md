@@ -108,7 +108,8 @@ third-party list. Both are compiled in, so both work on a binary carried anywher
 
 This release supports **headings, paragraph text, the inline constructs, the block
 constructs, links, cross-references, citations, include markers, tables, images, captions,
-figure groups, abstracts, keywords, footnotes, strikethrough, and math in both its forms**:
+figure groups, abstracts, keywords, footnotes, strikethrough, math in both its forms, and
+diagrams**:
 
 ````markdown
 # Introduction
@@ -245,8 +246,9 @@ escaped for you, so a `$5` that markdown does not read as a formula stays five d
 Code reaches the PDF verbatim too, by a different route: its content travels as a string
 rather than as markup, so nothing inside a pair of backticks or a fence is escaped and
 nothing needs to be. ``` `` #5 $5 \ `x` `` ``` prints exactly those characters. A fence's
-language tag is carried through, so Typst highlights the block. A link's destination takes
-that same route, so a `#` fragment in a URL arrives intact.
+language tag is carried through, so Typst highlights the block — except `mermaid`, which
+draws the diagram instead (see [Diagrams](#diagrams)). A link's destination takes that same
+route, so a `#` fragment in a URL arrives intact.
 
 ## Images
 
@@ -404,6 +406,51 @@ Only a standalone image takes a caption; an image inside a sentence is not a fig
 `: ` paragraph anywhere else — after prose, after a heading, after a list — is ordinary
 text, unchanged. Two things are errors, each naming the line: a `: ` with nothing after
 it, and a second caption under one block.
+
+## Diagrams
+
+A fenced block tagged `mermaid` is drawn as the diagram it describes — the same spelling
+GitHub and GitLab draw, so the file reads the same way there:
+
+````markdown
+```mermaid
+flowchart LR
+    md[Markdown source] --> parse[pulldown-cmark parses]
+    parse --> emit{Emitter maps events}
+    emit -->|Typst markup| pdf[(PDF)]
+```
+
+: The pipeline, drawn. {#fig:pipeline}
+
+As [](#fig:pipeline) shows, the emitter sits in the middle.
+````
+
+Two kinds are drawn in this release: **flowcharts** (`flowchart` or `graph`) and
+**sequence diagrams** (`sequenceDiagram`). Any other kind is an error naming the keyword
+you wrote and its line, as is a syntax error inside the block. Everything is drawn on your
+machine, inside `md2pdf`, with no browser and no network.
+
+**A caption makes it a figure**, exactly as it does for an image: numbered with the images,
+*Figure 1*, and referenceable by the name its caption declares. Without one it is a plain
+diagram with no number.
+
+**How big a diagram is, the look decides.** Its labels set at the size of the look's
+captions (9 pt in `article`, 9.5 pt in `press-release`), and a diagram is never enlarged.
+One too wide for its column at that size stays in the column while shrinking it keeps its
+labels at 8 pt or more; past that, a captioned diagram floats across the whole page, and
+one wider than the page shrinks to fit it. So a long left-to-right chain gets small: in
+`article`, a chain of four-word labels sets at about 9 pt page-wide at four nodes and 5 pt
+at eight. **If a diagram comes out too small, lay it out top to bottom** — `flowchart TB`
+in place of `flowchart LR` — which keeps the same chain one column wide.
+
+The look owns how a diagram looks, so a block may not carry its own configuration: a
+`%%{init: …}%%` directive anywhere in it, or YAML front matter opening it, is an error.
+`%%` comments are fine. A diagram stands at the top level of a file, not inside a list item,
+a block quote, a footnote or a figure group.
+
+**To show Mermaid source as code rather than draw it**, tag the fence anything else —
+` ```text ` or ` ```mmd ` — and it sets as a listing, as it always has. The tag must be
+exactly `mermaid`, lowercase: ` ```Mermaid ` is a listing too.
 
 ## Figures with more than one member
 
@@ -820,10 +867,11 @@ the rule a thematic break draws, the title block, and the column count. Two ship
 the emitter do not need to know.
 
 A third look is a third `.typ` file plus one name in `core/src/frontmatter.rs`. It has one
-contract to meet: export `template`, `divider`, `abstract` and `keywords`, and let
-`template` take `title`, `author`, `affiliation`, `columns`, `date`, `equations`, `figures`,
-`headings` and `citations` before its trailing document argument. `md2pdf` names all nine on
-every call, and imports `abstract` and `keywords` separately, each for a document that opened one.
+contract to meet: export `template`, `divider`, `abstract`, `keywords` and `diagram`, and
+let `template` take `title`, `author`, `affiliation`, `columns`, `date`, `equations`,
+`figures`, `headings` and `citations` before its trailing document argument. `md2pdf` names
+all nine on every call, and imports `abstract`, `keywords` and `diagram` separately, each for
+a document that has one.
 `author` arrives as an
 array of `(name, markers)` dictionaries and `affiliation` as an array of strings: what
 crosses is the relation between the two lists, and every question of how it looks — that a
@@ -834,7 +882,10 @@ rules, taking no argument at all. A table's header row, a code block's font, a f
 caption, the space between a group's members and how far off the margin a block of code
 sits all reach a look that way — which is why neither a caption nor a group widened the
 call at all. Neither front-matter block does either: they are the third and fourth exported
-names beside `divider`, not arguments. An argument is added only where the *author* has something to ask for, which is
+names beside `divider`, not arguments. `diagram` is the fifth, and the one place a caption
+crosses into a look: whether a diagram floats across the page depends on its width against
+the page, so the look builds that figure itself, around the caption and the name it is
+handed. An argument is added only where the *author* has something to ask for, which is
 what `equations`, `figures`, `headings` and `citations` are: the four questions a look cannot
 answer on its own, because the answer is a fact about the document rather than about the
 house style.
@@ -851,9 +902,13 @@ bundled and under which licence, with the crate graph in a paragraph.
 **What the binary embeds, and under what terms.** `md2pdf` is statically linked: the
 Typst compiler is not a runtime dependency you install separately but code compiled into
 the executable, so its licence follows the binary wherever it goes. **Typst** and its
-crates, and **mitex**, are Apache-2.0. Everything else in the tree is permissive too —
-MIT, BSD, Zlib, Unicode-3.0 and the rest — and there is no copyleft anywhere in it.
-`THIRD-PARTY-LICENSES.md` is the full list, 334 crates with the text of every licence
+crates, and **mitex**, are Apache-2.0, and **merman**, which draws the diagrams, is MIT or
+Apache-2.0. Almost everything else is permissive too — MIT, BSD, Zlib, Unicode-3.0 and the
+rest. **Four crates are MPL-2.0**, which is copyleft per file: `cssparser`,
+`cssparser-macros`, `dtoa-short` and `selectors`, which merman's HTML sanitiser brings. They
+are compiled in unmodified, their source is on crates.io under the name and version the list
+gives each, and their terms reach those files and nothing around them.
+`THIRD-PARTY-LICENSES.md` is the full list, 365 crates with the text of every licence
 among them, generated from the resolve by `tools/third-party-licenses.py` and shipped in
 both crates.
 
