@@ -84,3 +84,23 @@ even though it is named without a prefix at all, and [](#unprefixed) says so.
 ![A mark, standing alone](mark.svg)
 
 : A figure named with no prefix. {#unprefixed}
+
+## A diagram, drawn from its source
+
+A fenced block tagged `mermaid` is drawn as the diagram it describes, the
+spelling GitHub and GitLab draw too. Its caption makes it a figure like any
+other, numbered with the images, so [](#fig:walk) is found by its name.
+
+```mermaid
+flowchart LR
+    md[Markdown source] --> parse[pulldown-cmark parses]
+    parse --> emit{Emitter maps events}
+    emit -->|Typst markup| pdf[(PDF)]
+    emit -.->|rejected| err[Error naming the line]
+```
+
+: The walk, drawn from five lines of Mermaid. {#fig:walk}
+
+Its labels set at the size of the captions. In two columns, a diagram too wide
+for one floats across the page; this document has one column, so it stays
+where it is written. `samples/diagrams.md`, beside this folder, draws every kind.

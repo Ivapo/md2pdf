@@ -42,8 +42,8 @@ and its own bundle.
 
 Locally, **`samples/showcase/` is one document that uses every construct in the dialect** —
 every inline and block form, the abstract it opens with and the keywords beside it, captions,
-groups, names and cross-references, both forms of math, footnotes, and citations against the
-fake bibliography beside it, under all eleven frontmatter keys, and written across six files
+groups, names and cross-references, both forms of math, a diagram, footnotes, and citations
+against the fake bibliography beside it, under all eleven frontmatter keys, and written across six files
 because that is a construct too. It is the fastest way to see the whole surface set on a page:
 
 ```console
@@ -80,6 +80,17 @@ at all — and the terms under it keeping theirs:
 ```console
 $ ./target/release/md2pdf samples/abstract.md
 $ open samples/abstract.pdf
+```
+
+`samples/diagrams.md` is every kind of diagram md2pdf draws, with a little text between them:
+flowcharts, a sequence diagram, class diagrams, a state diagram and an entity-relationship
+diagram, under every keyword that reaches them. In two columns, the wide ones float across
+the page, and the same flowchart laid out top to bottom stays in one. The showcase carries
+one diagram, in a single column, where nothing floats:
+
+```console
+$ ./target/release/md2pdf samples/diagrams.md
+$ open samples/diagrams.pdf
 ```
 
 ## Use
