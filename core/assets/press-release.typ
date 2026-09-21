@@ -3,17 +3,18 @@
 // does, and the parser and the emitter know nothing about either.
 //
 // The emitter names every argument on every call, so this file takes the same
-// nine the article look takes, and exports the same four names beside it:
-// `template`, `divider`, and the `abstract` and `keywords` a document that
-// opened one of them gets. `author` arrives as an array of `(name, markers)`
-// dictionaries and `affiliation` an array of strings, the relation between the
-// two crossing as structure and every question of how it looks answered here.
-// It sets almost no fixed text of its own — which is why `abstract` here is a
-// standfirst under no label: the look is this file's job, and the words on the
-// page are the author's. **`keywords` is the one exception, and it is one
-// deliberately**: a bare comma list under a lede reads as a stray sentence
-// rather than as index terms, so the label is what makes the author's own words
-// legible instead of standing in for them.
+// nine the article look takes, and exports the same five names beside it:
+// `template`, `divider`, the `abstract` and `keywords` a document that opened
+// one of them gets, and the `diagram` a `mermaid` fence becomes. `author`
+// arrives as an array of `(name, markers)` dictionaries and `affiliation` an
+// array of strings, the relation between the two crossing as structure and
+// every question of how it looks answered here. It sets almost no fixed text of
+// its own — which is why `abstract` here is a standfirst under no label: the
+// look is this file's job, and the words on the page are the author's.
+// **`keywords` is the one exception, and it is one deliberately**: a bare comma
+// list under a lede reads as a stray sentence rather than as index terms, so
+// the label is what makes the author's own words legible instead of standing in
+// for them.
 
 // A thematic break, and the rule under the masthead below. The emitter calls
 // this by name on every look, so every look exports it.
@@ -286,3 +287,48 @@
   text(weight: "bold", style: "italic", "Keywords: ")
   terms.join(", ")
 })
+
+// A diagram a `mermaid` fence drew, sized so its labels set at this look's
+// caption size. The emitter writes `#diagram(bytes("<svg …>"), 993.2, 16, alt:
+// "flowchart")` — the SVG inline, its width in px as its `viewBox` gives it,
+// and the size its labels were drawn at — and names this in the import only for
+// a document that has one. The rule, decided here because it needs the page:
+//
+// 1. Labels set at the caption size, 9.5pt. A diagram is never enlarged.
+// 2. Wider than the column at that size, it stays in the column while shrinking
+//    it to fit keeps its labels at 8pt or more.
+// 3. Otherwise a captioned diagram floats across the page, in more than one
+//    column. An uncaptioned one never floats: a float leaves the text that
+//    mentions it, and only a caption gives a reader the number to find it by.
+// 4. Wider than the page, it shrinks to the page.
+//
+// **The caption and the name cross into this call, and nowhere else does one.**
+// Whether a figure floats is set when it is built, through `placement` and
+// `scope`, and that needs the diagram's width against the page, which exists
+// only here at layout time — so this builds the figure, and a `#figure(…)`
+// written around the call would have decided both first. The name is attached
+// inside, because a label written after a `context` lands on the context rather
+// than on the figure. `kind: image` numbers a diagram with the images.
+//
+// The two literals track this file's own rules — the caption's `set text`
+// and the page's `margin` above — and the suite holds both to the rule.
+// `0.04 * text-w` is Typst's default column gutter, which this look does not
+// set.
+#let diagram(svg, px-width, label-px, alt: none, caption: none, name: none) = context {
+  let label-size = 9.5pt                    // this look's caption size
+  let floor = 8pt
+  let text-w = page.width - 2 * 3cm     // this look's margin
+  let cols = page.columns
+  let col-w = (text-w - (cols - 1) * 0.04 * text-w) / cols
+  let want = px-width * label-size / label-px
+  let in-col = calc.min(want, col-w)
+  let wide = caption != none and cols > 1 and label-size * (in-col / want) < floor
+  let img = image(svg, format: "svg", alt: alt,
+    width: if wide { calc.min(want, text-w) } else { in-col })
+  if caption == none { img } else {
+    let f = figure(img, kind: image, caption: caption,
+      placement: if wide { auto } else { none },
+      scope: if wide { "parent" } else { "column" })
+    if name == none { f } else { [#f#name] }
+  }
+}

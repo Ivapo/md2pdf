@@ -57,6 +57,10 @@ fn every_variant(place: impl Fn(usize) -> Location) -> Vec<Error> {
             location: place(1),
             problem: "unsupported command '\\includegraphics'".to_string(),
         },
+        Error::Diagram {
+            location: place(4),
+            problem: "diagram type 'gantt' is not supported; the supported types are flowchart, graph and sequenceDiagram".to_string(),
+        },
         Error::Name {
             location: place(9),
             problem: "nothing declares the name 'fig:absent'".to_string(),
@@ -96,6 +100,7 @@ fn every_variant_prints_the_sentence_it_always_printed() {
         "unsupported markdown construct 'raw HTML block' at line 3",
         "frontmatter error at line 3: the key 'subtitle' is not one this dialect reads",
         "math error at line 1: unsupported command '\\includegraphics'",
+        "diagram error at line 4: diagram type 'gantt' is not supported; the supported types are flowchart, graph and sequenceDiagram",
         "name error at line 9: nothing declares the name 'fig:absent'",
         "citation error at line 8: '@nosuchkey' is cited and the bibliography does not hold it",
         "no image file supplied for 'figures/mark.svg' at line 5",
@@ -123,6 +128,7 @@ fn every_variant_names_the_file_where_there_is_one() {
         "unsupported markdown construct 'raw HTML block' in sections/method.md at line 3",
         "frontmatter error in sections/method.md at line 3: the key 'subtitle' is not one this dialect reads",
         "math error in sections/method.md at line 1: unsupported command '\\includegraphics'",
+        "diagram error in sections/method.md at line 4: diagram type 'gantt' is not supported; the supported types are flowchart, graph and sequenceDiagram",
         "name error in sections/method.md at line 9: nothing declares the name 'fig:absent'",
         "citation error in sections/method.md at line 8: '@nosuchkey' is cited and the bibliography does not hold it",
         "no image file supplied for 'figures/mark.svg' in sections/method.md at line 5",

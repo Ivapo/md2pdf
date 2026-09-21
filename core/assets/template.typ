@@ -6,9 +6,9 @@
 // The emitter names every argument on every call, so every bundled look takes
 // title, author, affiliation, columns, date, equations, figures, headings and
 // citations.
-// Every look also exports `divider`, `abstract` and `keywords` beside
-// `template`, the last two of which the emitter imports only for a document
-// that opened one — separately, so a document may have either, both or neither.
+// Every look also exports `divider`, `abstract`, `keywords` and `diagram`
+// beside `template`, the last three of which the emitter imports only for a
+// document that has one — separately, so a document may have any of them.
 // That is the contract a third look has to meet. `author` arrives as an array of
 // `(name, markers)` dictionaries and `affiliation` as an array of strings, both
 // `none` where the document wrote the key out: what crosses is the relation
@@ -437,3 +437,48 @@
     terms.join(", ")
   }),
 )
+
+// A diagram a `mermaid` fence drew, sized so its labels set at this look's
+// caption size. The emitter writes `#diagram(bytes("<svg …>"), 993.2, 16, alt:
+// "flowchart")` — the SVG inline, its width in px as its `viewBox` gives it,
+// and the size its labels were drawn at — and names this in the import only for
+// a document that has one. The rule, decided here because it needs the page:
+//
+// 1. Labels set at the caption size, 9pt. A diagram is never enlarged.
+// 2. Wider than the column at that size, it stays in the column while shrinking
+//    it to fit keeps its labels at 8pt or more.
+// 3. Otherwise a captioned diagram floats across the page, in more than one
+//    column. An uncaptioned one never floats: a float leaves the text that
+//    mentions it, and only a caption gives a reader the number to find it by.
+// 4. Wider than the page, it shrinks to the page.
+//
+// **The caption and the name cross into this call, and nowhere else does one.**
+// Whether a figure floats is set when it is built, through `placement` and
+// `scope`, and that needs the diagram's width against the page, which exists
+// only here at layout time — so this builds the figure, and a `#figure(…)`
+// written around the call would have decided both first. The name is attached
+// inside, because a label written after a `context` lands on the context rather
+// than on the figure. `kind: image` numbers a diagram with the images.
+//
+// The two literals track this file's own rules — the caption's `set text`
+// and the page's `margin` above — and the suite holds both to the rule.
+// `0.04 * text-w` is Typst's default column gutter, which this look does not
+// set.
+#let diagram(svg, px-width, label-px, alt: none, caption: none, name: none) = context {
+  let label-size = 9pt                    // this look's caption size
+  let floor = 8pt
+  let text-w = page.width - 2 * 2.5cm     // this look's margin
+  let cols = page.columns
+  let col-w = (text-w - (cols - 1) * 0.04 * text-w) / cols
+  let want = px-width * label-size / label-px
+  let in-col = calc.min(want, col-w)
+  let wide = caption != none and cols > 1 and label-size * (in-col / want) < floor
+  let img = image(svg, format: "svg", alt: alt,
+    width: if wide { calc.min(want, text-w) } else { in-col })
+  if caption == none { img } else {
+    let f = figure(img, kind: image, caption: caption,
+      placement: if wide { auto } else { none },
+      scope: if wide { "parent" } else { "column" })
+    if name == none { f } else { [#f#name] }
+  }
+}

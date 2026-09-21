@@ -8,6 +8,7 @@
 //! named bytes rather than as a path this crate would have to open.
 
 mod bibliography;
+mod diagram;
 mod emit;
 mod frontmatter;
 mod math;
@@ -110,6 +111,17 @@ pub enum Error {
     #[error("math error {location}: {problem}")]
     Math { location: Location, problem: String },
 
+    /// A `mermaid` fence the dialect refuses, or one the renderer could not
+    /// draw.
+    ///
+    /// This is not an `UnsupportedConstruct`, on the argument [`Error::Math`]
+    /// was added under: the construct is a fenced block, which the dialect
+    /// supports, and what the error names is what the author wrote inside it —
+    /// a diagram type outside the list, a directive, a syntax error at its own
+    /// line — or where the block stood.
+    #[error("diagram error {location}: {problem}")]
+    Diagram { location: Location, problem: String },
+
     /// A figure's name, or a reference to one, that the dialect refuses.
     ///
     /// This is not an `UnsupportedConstruct`, on the same argument `Math` was
@@ -189,6 +201,7 @@ impl Error {
             Error::UnsupportedConstruct { location, .. }
             | Error::Frontmatter { location, .. }
             | Error::Math { location, .. }
+            | Error::Diagram { location, .. }
             | Error::Name { location, .. }
             | Error::Citation { location, .. }
             | Error::MissingImage { location, .. }
@@ -986,6 +999,205 @@ mod tests {
 
         for (name, text) in FONT_LICENSES {
             assert!(!text.is_empty(), "{name} carries no text");
+        }
+    }
+
+    /// `mpdf-012` Phase 1's gate 2: the look sizes every diagram by the rule,
+    /// read off the compiled document rather than judged by eye.
+    ///
+    /// **Here and not in `tests/`**, because the public API returns only bytes
+    /// and the answer is in the introspector: each image's `width` and each
+    /// figure's `scope`, as the look's `diagram` set them at layout time. So the
+    /// test runs `render`'s own steps inline — the compiled document's type
+    /// cannot be written down, so it cannot be handed to a helper — and pins
+    /// that type through `typst_pdf::pdf` exactly as `render` does.
+    ///
+    /// The fixture's six diagrams each sit in a band of their own, measured
+    /// under merman's shipped configuration, and **the bands are asserted first,
+    /// as preconditions**: a renderer that moved a diagram out of its band then
+    /// fails as a precondition, loudly, rather than as a wrong placement. The
+    /// rule is then computed here from each look's own literals and compared,
+    /// within 0.01 pt, in all four configurations — which is what pins
+    /// `press-release`'s literals as well as `article`'s. #3 is the case a look
+    /// that dropped the float fails, and #2 the one that dropped the tolerance;
+    /// between them and `press-release`'s two columns the floor is pinned to
+    /// (7.93, 8.46] pt.
+    #[test]
+    fn diagrams_are_sized_by_the_looks_rule_in_all_four_configurations() {
+        use typst::foundations::{Label, Value};
+        use typst::model::FigureElem;
+        use typst::utils::PicoStr;
+        use typst::visualize::ImageElem;
+
+        const FIXTURE: &str = include_str!("../../tests/fixtures/diagrams.md");
+        // What the frontmatter gains, then the look's caption size in pt, its
+        // margin in cm, and the column count that results.
+        const LOOKS: [(&str, f64, f64, f64); 4] = [
+            ("", 9.0, 2.5, 2.0),
+            ("columns: 1\n", 9.0, 2.5, 1.0),
+            ("template: press-release\n", 9.5, 3.0, 1.0),
+            ("template: press-release\ncolumns: 2\n", 9.5, 3.0, 2.0),
+        ];
+        const CAPTIONED: [bool; 6] = [true, true, true, true, false, true];
+        const FLOOR: f64 = 8.0;
+        const LABEL_PX: f64 = 16.0;
+        // A4, and Typst's own conversion: 72 pt to the inch.
+        const PAGE: f64 = 210.0 / 25.4 * 72.0;
+        const PT_PER_CM: f64 = 72.0 / 2.54;
+
+        // The text width and one column's width, with Typst's default gutter,
+        // which neither look sets.
+        let geometry = |margin: f64, cols: f64| {
+            let text = PAGE - 2.0 * margin * PT_PER_CM;
+            (text, (text - (cols - 1.0) * 0.04 * text) / cols)
+        };
+        // `mpdf-012` §2's rule, restated: the width the image gets, and whether
+        // its figure floats.
+        let rule = |px: f64, captioned: bool, size: f64, margin: f64, cols: f64| {
+            let (text, column) = geometry(margin, cols);
+            let want = px * size / LABEL_PX;
+            let in_column = want.min(column);
+            let wide = captioned && cols > 1.0 && size * (in_column / want) < FLOOR;
+            (if wide { want.min(text) } else { in_column }, wide)
+        };
+        // The width each call carries, which is the `viewBox`'s. The escaped
+        // SVG holds no bare `"`, so the literal closes at the first one after
+        // the root's `</svg>` — merman ends the document with a newline, so not
+        // immediately after it.
+        let widths = |source: &str| -> Vec<f64> {
+            source
+                .lines()
+                .filter(|line| line.starts_with("#diagram(bytes(\""))
+                .map(|line| {
+                    let tail = &line[line.rfind("</svg>").expect("the SVG closes")..];
+                    let rest = &tail[tail.find("\"), ").expect("the literal closes") + 4..];
+                    rest[..rest.find(',').unwrap()].parse().unwrap()
+                })
+                .collect()
+        };
+        // An image keeps its width as a relative length; the look's is all
+        // absolute, so anything else is a look that sized by something else.
+        let points = |value: Value| match value {
+            Value::Relative(width) if width.rel.get() == 0.0 && width.abs.em.get() == 0.0 => {
+                width.abs.abs.to_pt()
+            }
+            Value::Length(width) if width.em.get() == 0.0 => width.abs.to_pt(),
+            other => panic!("an image width that is not an absolute length: {other:?}"),
+        };
+
+        for (look, size, margin, cols) in LOOKS {
+            let md = FIXTURE.replacen("---\n", &format!("---\n{look}"), 1);
+            let (joined, sources) = sections::assemble(&md, &[]).unwrap();
+            let emitted = emit::emit(&joined, &sources).unwrap();
+            let px = widths(&emitted.source);
+            assert_eq!(
+                px.len(),
+                6,
+                "{look:?}: the fixture drew {} diagrams",
+                px.len()
+            );
+
+            // The bands, from `article`'s literals at two columns, whatever the
+            // look under test: they are properties of the diagrams.
+            let (text, column) = geometry(2.5, 2.0);
+            let fits = column * LABEL_PX / 9.0;
+            let tolerated = column * LABEL_PX / FLOOR;
+            let seven = column * LABEL_PX / 7.0;
+            let page = text * LABEL_PX / 9.0;
+            for (number, holds) in [
+                (1, px[0] <= fits),
+                (2, fits < px[1] && px[1] <= tolerated),
+                (3, tolerated < px[2] && px[2] < seven),
+                (4, tolerated < px[3] && px[3] < seven),
+                (5, tolerated < px[4]),
+                (6, page < px[5]),
+            ] {
+                assert!(
+                    holds,
+                    "precondition: diagram {number} at {} px has left its band \
+                     (edges {fits:.2}, {tolerated:.2}, {seven:.2}, {page:.2})",
+                    px[number - 1]
+                );
+            }
+
+            let assets = collect(&emitted, &[]).unwrap();
+            let world = TypstWorld::new(emitted.source, assets).unwrap();
+            let Warned { output, .. } = typst::compile(&world);
+            let document = output.unwrap_or_else(|diags| panic!("{look:?}: {}", join(&diags)));
+            typst_pdf::pdf(&document, &PdfOptions::default())
+                .unwrap_or_else(|diags| panic!("{look:?}: {}", join(&diags)));
+            let introspector = document.introspector();
+
+            let expected: Vec<(f64, bool)> = px
+                .iter()
+                .zip(CAPTIONED)
+                .map(|(&px, captioned)| rule(px, captioned, size, margin, cols))
+                .collect();
+
+            let images = introspector.query(&ImageElem::ELEM.select());
+            assert_eq!(images.len(), 6, "{look:?}: {} images", images.len());
+            for (index, (image, (width, _))) in images.iter().zip(&expected).enumerate() {
+                let found = points(image.get_by_name("width").unwrap());
+                assert!(
+                    (found - width).abs() < 0.01,
+                    "{look:?}: diagram {} is {found:.3} pt wide, and the rule gives {width:.3}",
+                    index + 1
+                );
+            }
+
+            // Only a captioned diagram is a figure, so the five pair with the
+            // captioned rows in order: query order follows the source, floats
+            // included.
+            let figures = introspector.query(&FigureElem::ELEM.select());
+            let captioned: Vec<(usize, bool)> = expected
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| CAPTIONED[*index])
+                .map(|(index, (_, wide))| (index + 1, *wide))
+                .collect();
+            assert_eq!(
+                figures.len(),
+                captioned.len(),
+                "{look:?}: {} figures",
+                figures.len()
+            );
+            for (figure, (number, wide)) in figures.iter().zip(&captioned) {
+                let Value::Str(scope) = figure.get_by_name("scope").unwrap() else {
+                    panic!("{look:?}: figure {number}'s scope is not a string");
+                };
+                let want = if *wide { "parent" } else { "column" };
+                assert_eq!(scope.as_str(), want, "{look:?}: diagram {number}'s scope");
+            }
+
+            // The rule restated above could share a mistake with the look's, so
+            // the outcomes the spec names are held as well: in two columns,
+            // `article` floats #3, #4 and #6, and `press-release`, whose column
+            // is narrower, #2 besides; in one column nothing floats.
+            let floated: Vec<usize> = captioned
+                .iter()
+                .filter(|(_, wide)| *wide)
+                .map(|(number, _)| *number)
+                .collect();
+            let named: &[usize] = match (size == 9.0, cols == 2.0) {
+                (true, true) => &[3, 4, 6],
+                (false, true) => &[2, 3, 4, 6],
+                (_, false) => &[],
+            };
+            assert_eq!(floated, named, "{look:?}: what floats");
+
+            // The name crossed into the call and reached the figure the look
+            // built, which the compile resolving `[](#fig:sequence)` also says.
+            let label = Label::new(PicoStr::intern("fig:sequence")).unwrap();
+            let named = introspector.query_label(label).unwrap();
+            assert!(
+                named.is::<FigureElem>(),
+                "{look:?}: the name is not on a figure"
+            );
+            assert_eq!(
+                named.get_by_name("kind").unwrap(),
+                Value::Func(ImageElem::ELEM.into()),
+                "{look:?}: the sequence diagram is not numbered with the images"
+            );
         }
     }
 }

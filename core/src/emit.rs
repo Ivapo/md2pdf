@@ -26,6 +26,7 @@ use pulldown_cmark::{
 use typst::syntax::{PathError, VirtualPath};
 use unicase::UniCase;
 
+use crate::diagram::{self, Diagram};
 use crate::frontmatter::{self, Author, Equations, Frontmatter, Listed};
 use crate::math;
 use crate::sections::Sources;
@@ -149,7 +150,8 @@ struct Figure {
     start: usize,
     /// Exactly what stands there, checked before the point is spent.
     written: String,
-    /// The same call without its `#`, which is what a `#figure(…)` wraps.
+    /// The same call without its `#`, which is what a `#figure(…)` wraps — or,
+    /// for a diagram, what its caption extends.
     ///
     /// Stale once `captioned` is set, and unread after that: one construct
     /// takes one caption, so a spent point is never wrapped a second time.
@@ -161,6 +163,26 @@ struct Figure {
     /// without this flag a second `: ` line would print as prose where the
     /// dialect names an error.
     captioned: bool,
+    /// What a caption makes of the call.
+    splice: Splice,
+}
+
+/// What a caption makes of a recorded call, which is one of two things.
+///
+/// **Every block but a diagram is wrapped**: the emitter builds the `#figure`
+/// and the look styles it with a `show` rule, so the caption crosses no
+/// argument. **A diagram's call takes the caption itself**, because the look
+/// has to build that figure: whether it floats across the page is set when the
+/// figure is constructed, through `placement` and `scope`, and it depends on
+/// the diagram's width against the page, which exists only at layout time,
+/// inside the look. A `#figure(diagram(…), …)` written here would fix both
+/// before the look could decide anything. `mpdf-012` records the exception.
+#[derive(Clone, Copy)]
+enum Splice {
+    /// `#figure(call, caption: […]) <name>`.
+    Wrap,
+    /// `#diagram(…, caption: […], name: label("…"))`.
+    Diagram,
 }
 
 impl Figure {
@@ -509,6 +531,12 @@ struct Walk {
     /// one**: a document may open either block, both, or neither, and `header`
     /// reads them separately because the import names each separately.
     wrote_keywords: bool,
+    /// Whether this walk wrote a diagram.
+    ///
+    /// The third flag of the kind, and for the same reason: `header` names the
+    /// look's `diagram` in the import only for a document that has one, which is
+    /// what keeps every shipped golden file still.
+    wrote_diagram: bool,
     /// Where the document's front matter ends in the body buffer.
     ///
     /// **The position rule generalised, which is what makes two front-matter
@@ -569,6 +597,7 @@ impl Walk {
             wrote_abstract: false,
             keywords: None,
             wrote_keywords: false,
+            wrote_diagram: false,
             front_matter: 0,
             link: None,
             names: Names::default(),
@@ -1105,6 +1134,7 @@ pub(crate) fn emit(md: &str, sources: &Sources) -> Result<Emitted> {
         walk.math,
         walk.wrote_abstract,
         walk.wrote_keywords,
+        walk.wrote_diagram,
     );
     let (body, images) = walk.finish();
     out.push_str(body.trim_end_matches('\n'));
@@ -1170,6 +1200,7 @@ fn step(
         wrote_abstract,
         keywords,
         wrote_keywords,
+        wrote_diagram,
         front_matter,
         link,
         names,
@@ -1269,6 +1300,7 @@ fn step(
                 written: top(bufs)[start..].to_string(),
                 body: call,
                 captioned: false,
+                splice: Splice::Wrap,
             });
             take_member(group, figure, bufs)?;
         }
@@ -1455,7 +1487,7 @@ fn step(
         }
         Event::End(TagEnd::Table) => {
             let frame = table.take().expect("a table end follows its start");
-            write_block(bufs, figure, table_call(&frame));
+            write_block(bufs, figure, table_call(&frame), Splice::Wrap);
             take_member(group, figure, bufs)?;
         }
 
@@ -1495,13 +1527,52 @@ fn step(
             if content.ends_with('\n') {
                 content.pop();
             }
-            // One arm serves the fenced block and the indented one, differing
-            // only in whether a `lang` argument is written, so both take a
-            // caption. Splitting them would make a `: ` line a caption after
-            // one kind of block and prose after another, with nothing on the
-            // page to tell an author which they had written.
-            write_block(bufs, figure, raw_call(lang.as_deref(), &content));
-            take_member(group, figure, bufs)?;
+            // A fence tagged exactly `mermaid` is a diagram: the spelling
+            // GitHub and GitLab draw, case-sensitively, so ` ```Mermaid ` and
+            // ` ```text ` stay listings and an author writing *about* Mermaid
+            // keeps an exit. An indented block has no tag, so it never is one.
+            if lang.as_deref() == Some("mermaid") {
+                // The end event's range starts where the start's did, at the
+                // fence, so nothing is kept between the two events.
+                let fence = lines.line_of(range.start);
+                // **The look sizes a diagram against the column, from the
+                // page's geometry**, which is the right width at the top level
+                // and the wrong one everywhere below: a list item and a quote
+                // are narrower than the column, a group lays its members out
+                // in a grid, and a float can leave none of them. So those are
+                // refused, before anything is drawn. `mpdf-012` OQ-1 carries
+                // the lifting.
+                let place = match (containers.last(), &mode, group.as_ref()) {
+                    (Some(Container::Item), ..) => Some("a list item"),
+                    (Some(Container::Quote), ..) => Some("a block quote"),
+                    (None, Mode::Definition, _) => Some("a footnote definition"),
+                    // `take_member`'s own test for a member.
+                    (None, _, Some(open)) if bufs.len() == open.depth => Some("a figure group"),
+                    _ => None,
+                };
+                if let Some(place) = place {
+                    return Err(Error::Diagram {
+                        location: Location::at(fence),
+                        problem: format!("a diagram cannot stand inside {place}"),
+                    });
+                }
+                let drawn = diagram::render(&content, fence)?;
+                write_block(bufs, figure, diagram_call(&drawn), Splice::Diagram);
+                *wrote_diagram = true;
+            } else {
+                // One arm serves the fenced block and the indented one,
+                // differing only in whether a `lang` argument is written, so
+                // both take a caption. Splitting them would make a `: ` line a
+                // caption after one kind of block and prose after another, with
+                // nothing on the page to tell an author which they had written.
+                write_block(
+                    bufs,
+                    figure,
+                    raw_call(lang.as_deref(), &content),
+                    Splice::Wrap,
+                );
+                take_member(group, figure, bufs)?;
+            }
         }
 
         Event::Text(text) => {
@@ -2415,8 +2486,9 @@ fn write_image(bufs: &mut [String], call: &str, standalone: bool) {
 ///
 /// The call arrives without its `#`, the way `image_call` returns one, because
 /// that bare call is what a `#figure(…)` wraps: a `#` inside a code context is
-/// a syntax error rather than a mismatch.
-fn write_block(bufs: &mut [String], figure: &mut Option<Figure>, call: String) {
+/// a syntax error rather than a mismatch. `splice` says whether a caption will
+/// wrap it or extend it.
+fn write_block(bufs: &mut [String], figure: &mut Option<Figure>, call: String, splice: Splice) {
     let depth = bufs.len();
     let out = top(bufs);
     out.push('\n');
@@ -2431,6 +2503,7 @@ fn write_block(bufs: &mut [String], figure: &mut Option<Figure>, call: String) {
         written: format!("#{call}"),
         body: call,
         captioned: false,
+        splice,
     });
 }
 
@@ -2528,13 +2601,35 @@ fn splice_caption(bufs: &mut [String], figure: &mut Option<Figure>, words: &Word
     let recorded = figure
         .as_mut()
         .expect("a caption opens only over a recorded figure or a group");
-    let mut call = format!("#figure({}, caption: [{}])", recorded.body, words.content);
-    // The label rides the same string the record keeps. Appended to the buffer
-    // alone it would fail `Figure::live`'s content check, and Phase 1's
-    // second-caption refusal would silently stop firing over a named figure.
-    if let Some(name) = &words.name {
-        call.push_str(&format!(" <{name}>"));
-    }
+    let call = match recorded.splice {
+        Splice::Wrap => {
+            let mut call = format!("#figure({}, caption: [{}])", recorded.body, words.content);
+            // The label rides the same string the record keeps. Appended to
+            // the buffer alone it would fail `Figure::live`'s content check,
+            // and Phase 1's second-caption refusal would silently stop firing
+            // over a named figure.
+            if let Some(name) = &words.name {
+                call.push_str(&format!(" <{name}>"));
+            }
+            call
+        }
+        // **The name goes into the call, not after it.** The look builds the
+        // figure inside `context`, and a label written after the call lands on
+        // the context element: Typst refuses it with `cannot reference
+        // context`. Passed in, the look attaches it to the figure it built.
+        Splice::Diagram => {
+            let args = recorded
+                .body
+                .strip_suffix(')')
+                .expect("a diagram call ends with its closing parenthesis");
+            let mut call = format!("#{args}, caption: [{}]", words.content);
+            if let Some(name) = &words.name {
+                call.push_str(&format!(", name: label({})", typst_string(name)));
+            }
+            call.push(')');
+            call
+        }
+    };
 
     let out = top(bufs);
     out.truncate(recorded.start);
@@ -3372,6 +3467,24 @@ fn raw_call(lang: Option<&str>, content: &str) -> String {
     out
 }
 
+/// Render one diagram as a call to the look's `diagram`, without the leading
+/// `#`.
+///
+/// The SVG crosses **inline**, as a string literal read as bytes, so a diagram
+/// adds nothing to what a caller must supply and nothing to the world. The
+/// width is the `viewBox`'s own text and the label size merman's, and the look
+/// sizes the image from the two: its labels at the look's caption size, never
+/// enlarged, floating across the page when a column is too narrow.
+fn diagram_call(drawn: &Diagram) -> String {
+    format!(
+        "diagram(bytes({}), {}, {}, alt: {})",
+        typst_string(&drawn.svg),
+        drawn.width,
+        diagram::LABEL_PX,
+        typst_string(drawn.alt),
+    )
+}
+
 /// Render one table as a Typst `table` call, without the leading `#`, one
 /// markdown row to one line.
 ///
@@ -3476,21 +3589,30 @@ fn align_name(align: &Alignment) -> &'static str {
 /// crosses on the same rule as the scheme's name and never as a style's: the
 /// look maps `author-date` to one of Typst's bundled styles, so no style name
 /// reaches this file either.
-fn header(front: &Frontmatter, math: bool, has_abstract: bool, has_keywords: bool) -> String {
+fn header(
+    front: &Frontmatter,
+    math: bool,
+    has_abstract: bool,
+    has_keywords: bool,
+    has_diagram: bool,
+) -> String {
     let prelude = match math {
         true => format!("#import \"{PRELUDE_NAME}\": {PRELUDE_NAMES}\n"),
         false => String::new(),
     };
-    // **Two independent flags and not one.** A document may open either block,
-    // both or neither, so the list is built rather than matched: the import
-    // names each construct separately, and widening it for a document that has
-    // neither would move every shipped golden file.
+    // **Independent flags and not one.** A document may open either block, both
+    // or neither, and may draw a diagram or not, so the list is built rather
+    // than matched: the import names each construct separately, and widening it
+    // for a document that has none would move every shipped golden file.
     let mut names = vec!["template", "divider"];
     if has_abstract {
         names.push("abstract");
     }
     if has_keywords {
         names.push("keywords");
+    }
+    if has_diagram {
+        names.push("diagram");
     }
     let exports = names.join(", ");
     format!(

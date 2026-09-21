@@ -1551,6 +1551,7 @@ fn every_bundled_template_meets_the_call_contract() {
             "#let divider(",
             "#let abstract(",
             "#let keywords(",
+            "#let diagram(",
             "title:",
             "author:",
             "affiliation",
@@ -5922,5 +5923,324 @@ fn each_nameless_group_refusal_names_its_line() {
             }
             other => panic!("expected a nameless-group refusal for {what}, got {other:?}"),
         }
+    }
+}
+
+// -- mpdf-012 Phase 1: a `mermaid` fence becomes a diagram ---------------------
+
+/// Six diagrams, each in a band of its own under the look's sizing rule; the
+/// test that reads the bands off the compiled document is in `core/src/lib.rs`.
+const DIAGRAMS_MD: &str = include_str!("../../tests/fixtures/diagrams.md");
+
+/// The four configurations the sizing rule is gated in: each look, at one
+/// column and at two. Written into the frontmatter the fixture already opens.
+const DIAGRAM_LOOKS: [&str; 4] = [
+    "",
+    "columns: 1\n",
+    "template: press-release\n",
+    "template: press-release\ncolumns: 2\n",
+];
+
+/// Every `#diagram(…)` call in a Typst source, as the SVG's string literal —
+/// still escaped — and the rest of the call after it.
+///
+/// A call is one line whatever the SVG holds, because `typst_string` escapes
+/// its newlines. The literal ends at the first `"` no backslash escapes, which
+/// is found by walking it rather than by searching, since the SVG is full of
+/// escaped quotes.
+fn diagram_calls(source: &str) -> Vec<(&str, &str)> {
+    const OPEN: &str = "#diagram(bytes(\"";
+    source
+        .lines()
+        .filter(|line| line.starts_with(OPEN))
+        .map(|line| {
+            let literal = &line[OPEN.len()..];
+            let mut bytes = literal.bytes().enumerate();
+            let end = loop {
+                match bytes.next().expect("the string literal is closed") {
+                    (_, b'\\') => {
+                        bytes.next();
+                    }
+                    (at, b'"') => break at,
+                    _ => {}
+                }
+            };
+            (&literal[..end], &literal[end + 1..])
+        })
+        .collect()
+}
+
+/// The third number of the SVG root's `viewBox`, read out of the escaped
+/// literal the way it stands in the source.
+fn root_view_box_width(svg: &str) -> &str {
+    let root = &svg[svg.find("<svg").expect("an SVG root")..];
+    let root = &root[..root.find('>').expect("the root tag closes")];
+    let values = &root[root
+        .find("viewBox=\\\"")
+        .expect("the root carries a viewBox")
+        + 10..];
+    let values = &values[..values.find("\\\"").expect("the viewBox closes")];
+    values
+        .split_whitespace()
+        .nth(2)
+        .expect("a viewBox has four numbers")
+}
+
+/// Gate 1, first half: the fixture compiles in all four configurations.
+#[test]
+fn the_diagrams_fixture_compiles_to_a_pdf_in_every_look_and_column_count() {
+    for look in DIAGRAM_LOOKS {
+        let md = DIAGRAMS_MD.replacen("---\n", &format!("---\n{look}"), 1);
+        let pdf = md_to_pdf(&md, &[]).unwrap_or_else(|e| panic!("{look:?}: {e}"));
+        assert!(
+            pdf.starts_with(b"%PDF"),
+            "{look:?}: the output is not a PDF"
+        );
+    }
+}
+
+/// Gate 1, second half: the source has the right shape, asserted by shape and
+/// never by the SVG's bytes, which track merman's output to the last digit and
+/// differ in it between native and `wasm32`.
+///
+/// Each call carries its own `viewBox` width verbatim — read here out of the
+/// very SVG the call carries, so a width formatted by the emitter, or taken
+/// from the wrong element, fails — then merman's label size, then the alt text
+/// its type's row gives it. Five are captioned, the uncaptioned fifth is not,
+/// and only the fourth, the sequence diagram, is named. The name goes *into*
+/// the call, because a label written after a `context` lands on the context.
+#[test]
+fn the_diagrams_fixture_writes_six_calls_of_the_right_shape() {
+    let typst = md_to_typst(DIAGRAMS_MD, &[]).unwrap();
+    assert!(
+        typst.starts_with("#import \"template.typ\": template, divider, diagram\n"),
+        "the import does not name `diagram`: {}",
+        typst.lines().next().unwrap()
+    );
+
+    let calls = diagram_calls(&typst);
+    assert_eq!(calls.len(), 6, "{} calls", calls.len());
+    let alts = [
+        "flowchart",
+        "flowchart",
+        "flowchart",
+        "sequence diagram",
+        "flowchart",
+        "flowchart",
+    ];
+    for (index, ((svg, rest), alt)) in calls.iter().zip(alts).enumerate() {
+        let number = index + 1;
+        assert!(svg.starts_with("<svg"), "diagram {number} is not an SVG");
+        let width = root_view_box_width(svg);
+        let head = format!("), {width}, 16, alt: \"{alt}\"");
+        assert!(
+            rest.starts_with(&head),
+            "diagram {number}: {rest:?} does not open {head:?}"
+        );
+        assert_eq!(
+            rest.contains(", caption: ["),
+            number != 5,
+            "diagram {number}'s caption"
+        );
+        assert_eq!(
+            rest.contains("name:"),
+            number == 4,
+            "diagram {number}'s name"
+        );
+        assert!(
+            rest.ends_with(')'),
+            "diagram {number} is not one call on one line"
+        );
+    }
+    assert!(
+        calls[3].1.ends_with(", name: label(\"fig:sequence\"))"),
+        "the sequence diagram's name: {:?}",
+        calls[3].1
+    );
+
+    assert_eq!(
+        md_to_typst(DIAGRAMS_MD, &[]).unwrap(),
+        typst,
+        "the same markdown drew a different source"
+    );
+}
+
+/// Gate 3: every refusal in `mpdf-012`'s error table that a fixture reaches,
+/// each naming its line.
+///
+/// The fence stands on line 3 of every case built by `block`, so the block's
+/// own lines are 4 onward. **The directive rows are the ones a weaker scan
+/// passes**: the malformed one is silently ignored by merman, so a check on
+/// the parsed config would pass it, and the two after it are not at a line's
+/// start, so a line-start check would pass them — and merman would apply all
+/// three.
+#[test]
+fn every_diagram_refusal_names_what_and_where() {
+    const F: &str = "```";
+    let block = |body: &str| format!("# H\n\n{F}mermaid\n{body}\n{F}\n");
+    const UNSUPPORTED: &str = "diagram type 'gantt' is not supported; the supported types are flowchart, graph and sequenceDiagram";
+    const NO_TYPE: &str = "no diagram type is recognised";
+    const DIRECTIVE: &str = "directive '%%{' is not allowed in a diagram";
+
+    for (what, md, line, problem) in [
+        (
+            "a type outside the list, named at its keyword",
+            block(
+                "gantt\n    title A plan\n    dateFormat YYYY-MM-DD\n    section One\n    Task :a1, 2026-01-01, 3d",
+            ),
+            4,
+            UNSUPPORTED,
+        ),
+        (
+            "a misspelt keyword",
+            block("flowchat LR\n    a --> b"),
+            3,
+            NO_TYPE,
+        ),
+        (
+            "an empty block",
+            format!("# H\n\n{F}mermaid\n{F}\n"),
+            3,
+            NO_TYPE,
+        ),
+        (
+            "a syntax error on the block's third line",
+            block("sequenceDiagram\n    A->>B: hello\n    A->>: missing\n    B-->>A: hi"),
+            6,
+            "Diagram parse error (sequence): ",
+        ),
+        (
+            "a directive on a line of its own",
+            block("%%{init: {\"theme\": \"dark\"}}%%\nflowchart LR\n    a --> b"),
+            4,
+            DIRECTIVE,
+        ),
+        (
+            "a malformed directive, which merman ignores",
+            block("%%{init: {\"theme\": }}%%\nflowchart LR\n    a --> b"),
+            4,
+            DIRECTIVE,
+        ),
+        (
+            "a directive after diagram text on the same line",
+            block(
+                "flowchart LR\n    a --> b %%{init: {\"themeVariables\": {\"fontSize\": \"30px\"}}}%%",
+            ),
+            5,
+            DIRECTIVE,
+        ),
+        (
+            "a directive inside a comment",
+            block("flowchart LR\n    %% a note %%{init: {\"theme\": \"dark\"}}%%\n    a --> b"),
+            5,
+            DIRECTIVE,
+        ),
+        (
+            "front matter holding only a title",
+            block("---\ntitle: A plan\n---\nflowchart LR\n    a --> b"),
+            4,
+            "front matter is not allowed in a diagram",
+        ),
+        (
+            "a diagram in a list item",
+            format!("# H\n\n- item\n\n  {F}mermaid\n  flowchart LR\n      a --> b\n  {F}\n"),
+            5,
+            "a diagram cannot stand inside a list item",
+        ),
+        (
+            "a diagram in a block quote",
+            format!("# H\n\n> {F}mermaid\n> flowchart LR\n>     a --> b\n> {F}\n"),
+            3,
+            "a diagram cannot stand inside a block quote",
+        ),
+        (
+            "a diagram in a footnote definition",
+            format!(
+                "# H\n\nText.[^n]\n\n[^n]: A note.\n\n    {F}mermaid\n    flowchart LR\n        a --> b\n    {F}\n"
+            ),
+            7,
+            "a diagram cannot stand inside a footnote definition",
+        ),
+        (
+            "a diagram as a group member",
+            format!(
+                "# H\n\n:::\n\n{F}mermaid\nflowchart LR\n    a --> b\n{F}\n\n![b](dot.png)\n\n: Two.\n\n:::\n"
+            ),
+            5,
+            "a diagram cannot stand inside a figure group",
+        ),
+    ] {
+        match md_to_typst(&md, &[]) {
+            Err(Error::Diagram {
+                location:
+                    Location {
+                        file: None,
+                        line: found,
+                    },
+                problem: said,
+            }) => {
+                assert_eq!(found, line, "for {what}");
+                assert!(said.starts_with(problem), "for {what}: {said:?}");
+            }
+            other => panic!("expected a diagram error for {what}, got {other:?}"),
+        }
+    }
+}
+
+/// A refusal inside a section file names that file, and the line in it.
+#[test]
+fn a_diagram_refused_in_a_section_names_the_section() {
+    let master = "---\ntitle: T\n---\n\n[](sections/one.md)\n";
+    let one = section(
+        "sections/one.md",
+        "# One\n\n```mermaid\ngantt\n    title A plan\n```\n",
+    );
+    match md_to_typst(master, &[one]) {
+        Err(Error::Diagram {
+            location:
+                Location {
+                    file: Some(file),
+                    line,
+                },
+            ..
+        }) => {
+            assert_eq!(file, "sections/one.md");
+            assert_eq!(line, 4);
+        }
+        other => panic!("expected a diagram error in the section, got {other:?}"),
+    }
+}
+
+/// A diagram takes one caption, as every figure does. The record's `written`
+/// is what the second-caption refusal checks, and a named diagram's name rides
+/// inside its call, so this is the case that fails if the splice forgot to
+/// update it.
+#[test]
+fn a_diagram_takes_one_caption() {
+    let md = "# H\n\n```mermaid\ngraph TD\n    a --> b\n```\n\n: One. {#fig:a}\n\n: Two.\n";
+    match md_to_typst(md, &[]) {
+        Err(Error::UnsupportedConstruct {
+            construct,
+            location,
+        }) => {
+            assert_eq!(construct, "second caption for one figure");
+            assert_eq!(location, Location::at(10));
+        }
+        other => panic!("expected a second-caption refusal, got {other:?}"),
+    }
+}
+
+/// Gate 4: only the exact, case-sensitive tag draws. Mermaid source under any
+/// other tag is still a listing — ` ```text ` is how an author writing *about*
+/// Mermaid shows it — and ` ```Mermaid ` is the case a case-insensitive match
+/// would fail. Neither widens the import.
+#[test]
+fn a_fence_not_tagged_exactly_mermaid_is_still_a_listing() {
+    for tag in ["text", "Mermaid"] {
+        let md = format!("# H\n\n```{tag}\nflowchart LR\n    a --> b\n```\n");
+        let typst = md_to_typst(&md, &[]).unwrap();
+        let listing = format!("#raw(block: true, lang: \"{tag}\", \"flowchart LR\\n    a --> b\")");
+        assert!(typst.contains(&listing), "{tag}: {typst}");
+        assert!(!typst.contains("diagram"), "{tag}: {typst}");
     }
 }

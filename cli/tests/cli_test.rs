@@ -634,6 +634,162 @@ fn an_error_inside_a_section_reaches_stderr_naming_that_file() {
     );
 }
 
+// -- diagrams -----------------------------------------------------------------
+
+/// A document whose `mermaid` fences become diagrams converts from disk.
+#[test]
+fn a_document_with_diagrams_writes_a_pdf() {
+    let out_path = scratch("diagrams.pdf");
+    let out = run(&[
+        fixture("diagrams.md").as_ref(),
+        "-o".as_ref(),
+        out_path.as_ref(),
+    ]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let bytes = std::fs::read(&out_path).unwrap();
+    assert!(bytes.starts_with(b"%PDF"), "the output is not a PDF");
+}
+
+/// Every refusal `mpdf-012`'s error table gates exits non-zero at the CLI,
+/// naming what was refused and its line.
+///
+/// The library test `every_diagram_refusal_names_what_and_where` proves the
+/// error; this one proves the user sees it. The fence stands on line 3 of every
+/// document `block` builds, so the block's own lines are 4 onward.
+#[test]
+fn each_refused_diagram_exits_non_zero_and_names_its_line() {
+    const F: &str = "```";
+    let block = |body: &str| format!("# H\n\n{F}mermaid\n{body}\n{F}\n");
+
+    for (name, md, line, named) in [
+        (
+            "diagram_gantt.md",
+            block("gantt\n    title A plan\n    section One\n    Task :a1, 2026-01-01, 3d"),
+            4,
+            "diagram type 'gantt' is not supported",
+        ),
+        (
+            "diagram_flowchat.md",
+            block("flowchat LR\n    a --> b"),
+            3,
+            "no diagram type is recognised",
+        ),
+        (
+            "diagram_empty.md",
+            format!("# H\n\n{F}mermaid\n{F}\n"),
+            3,
+            "no diagram type is recognised",
+        ),
+        (
+            "diagram_syntax.md",
+            block("sequenceDiagram\n    A->>B: hello\n    A->>: missing\n    B-->>A: hi"),
+            6,
+            "Diagram parse error (sequence)",
+        ),
+        (
+            "diagram_init.md",
+            block("%%{init: {\"theme\": \"dark\"}}%%\nflowchart LR\n    a --> b"),
+            4,
+            "directive '%%{'",
+        ),
+        (
+            "diagram_malformed.md",
+            block("%%{init: {\"theme\": }}%%\nflowchart LR\n    a --> b"),
+            4,
+            "directive '%%{'",
+        ),
+        (
+            "diagram_same_line.md",
+            block("flowchart LR\n    a --> b %%{init: {\"theme\": \"dark\"}}%%"),
+            5,
+            "directive '%%{'",
+        ),
+        (
+            "diagram_in_comment.md",
+            block("flowchart LR\n    %% a note %%{init: {\"theme\": \"dark\"}}%%\n    a --> b"),
+            5,
+            "directive '%%{'",
+        ),
+        (
+            "diagram_front.md",
+            block("---\ntitle: A plan\n---\nflowchart LR\n    a --> b"),
+            4,
+            "front matter is not allowed",
+        ),
+        (
+            "diagram_list.md",
+            format!("# H\n\n- item\n\n  {F}mermaid\n  flowchart LR\n      a --> b\n  {F}\n"),
+            5,
+            "inside a list item",
+        ),
+        (
+            "diagram_quote.md",
+            format!("# H\n\n> {F}mermaid\n> flowchart LR\n>     a --> b\n> {F}\n"),
+            3,
+            "inside a block quote",
+        ),
+        (
+            "diagram_footnote.md",
+            format!(
+                "# H\n\nText.[^n]\n\n[^n]: A note.\n\n    {F}mermaid\n    flowchart LR\n        a --> b\n    {F}\n"
+            ),
+            7,
+            "inside a footnote definition",
+        ),
+        (
+            "diagram_group.md",
+            format!(
+                "# H\n\n:::\n\n{F}mermaid\nflowchart LR\n    a --> b\n{F}\n\n![b](dot.png)\n\n: Two.\n\n:::\n"
+            ),
+            5,
+            "inside a figure group",
+        ),
+    ] {
+        let path = scratch(name);
+        std::fs::write(&path, md).unwrap();
+
+        let out = run(&[path.as_ref()]);
+        assert!(!out.status.success(), "{name} should have failed");
+
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(stderr.contains("diagram error"), "{name} stderr: {stderr}");
+        assert!(stderr.contains(named), "{name} stderr: {stderr}");
+        assert!(
+            stderr.contains(&format!("at line {line}:")),
+            "{name} stderr: {stderr}"
+        );
+    }
+}
+
+/// A diagram refused inside a section file names that file at the terminal.
+#[test]
+fn a_diagram_refused_in_a_section_names_the_section() {
+    let dir = scratch_dir("diagram-in-a-section");
+    std::fs::create_dir_all(dir.join("sections")).unwrap();
+
+    let input = dir.join("master.md");
+    std::fs::write(&input, "[](sections/one.md)\n").unwrap();
+    std::fs::write(
+        dir.join("sections/one.md"),
+        "# One\n\n```mermaid\ngantt\n    title A plan\n```\n",
+    )
+    .unwrap();
+
+    let out = run(&[input.as_ref()]);
+    assert!(!out.status.success(), "the run should have failed");
+
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        "error: diagram error in sections/one.md at line 4: diagram type 'gantt' is not \
+         supported; the supported types are flowchart, graph and sequenceDiagram\n"
+    );
+}
+
 // -- the licences the binary carries ----------------------------------------
 
 /// A file this repository holds, read off disk rather than compiled in.
