@@ -22,7 +22,7 @@ phases:
     by: null
   - name: "Phase 3 — a URL is a name the caller fills"
     reviewed: 2026-09-21
-    shipped: null
+    shipped: 2026-09-21
     cut: null
     by: null
   - name: "Phase 4 — the CLI fetches, when asked"
@@ -83,6 +83,12 @@ the CLI, where every dialect phase of `mpdf-001` widened the emitter alone.
   rule per `mpdf-001` §2's styling decision.
 - **No new frontmatter keys.**
 
+> **CORRECTED 2026-09-21, by Phase 3.** The first bullet holds for a local path, not
+> for every destination. `core` still fetches nothing. What changed is that an `http`
+> or `https` URL is a name the caller fills rather than an error. §2's "Why a URL is a
+> name, and the caller fetches it" and "Why a URL's format is read from its bytes" take
+> it up. A `data:` URI is still an error.
+
 ## 2. Design
 
 `core` stays OS-free. The caller supplies every image as named bytes, and the
@@ -138,6 +144,12 @@ failure is an error naming the path and the line — two new variants beside
 `Error::UnsupportedConstruct`, one for a missing asset, one for bytes that
 are not the image their name claims.
 
+> **CORRECTED 2026-09-21, by Phase 3.** The extension gate, "a missing extension
+> included", holds for a local path. A URL never reaches it. The generated source names
+> a URL `remote/<hash>`, with no extension on purpose, and the content check requires its
+> bytes to hold *some* format in the table rather than the one an ending names. The two
+> new subsections below take a URL up.
+
 ### Why the caller supplies bytes (decision, recorded)
 
 The `mpdf-001` §2 split — `core` takes strings and returns bytes, the caller
@@ -169,6 +181,12 @@ at compile time with the compiler's own message. Catching that would mean
 decoding every image twice, and the failure is in the user's file, not in
 generated markup, so the guarantee this decision protects is not broken.
 
+> **CORRECTED 2026-09-21, by Phase 3.** "For everything that reaches validation the
+> extension decides" and "Typst's own fallback … is deliberately not mirrored" hold for
+> a local file. A URL's name has no extension, so Typst's content detection is exactly
+> what decides its format. `core`'s check for it is an any-of over the same predicates,
+> for the reasons "Why a URL's format is read from its bytes" records.
+
 ### Why paths are relative and stay inside the document's directory (decision, recorded)
 
 Three shapes are errors naming the construct and its line: a destination with
@@ -181,6 +199,12 @@ escape the virtual root, where relative paths resolve cleanly beside
 `main.typ` by construction. One recorded consequence: a Windows drive path
 like `C:\figure.png` reads as a scheme and errors; the relative form is the
 portable one, and the error says so.
+
+> **CORRECTED 2026-09-21, by Phase 3.** "A scheme is a fetch request, and nothing
+> fetches" holds for every scheme except `http` and `https`. The image arm takes those
+> as a URL before this rule is read, and every other scheme, the drive path included,
+> is refused as `a URL scheme other than http or https`. The absolute and `..` rules are
+> unchanged. The two new subsections below take a URL up.
 
 ### Why a standalone image is bare and an inline one is boxed (decision, recorded)
 

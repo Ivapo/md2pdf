@@ -296,9 +296,18 @@ $ md2pdf paper.md
 error: cannot read figures/pipeline.svg for the image at line 12: No such file or directory (os error 2)
 ```
 
-Bytes that disagree with their extension are an error too. So are four destinations:
-a URL and a `data:` URI, because nothing is fetched over the network; an absolute path,
+Bytes that disagree with their extension are an error too. So are three destinations:
+any URI scheme other than `http` or `https`, a `data:` URI included; an absolute path,
 which converts on one machine only; and a path that leaves the document's own folder.
+
+An `http` or `https` URL is accepted as an image's name, but the library fetches
+nothing: a program that embeds it supplies the image's bytes under the URL. `md2pdf`
+does not fetch them yet, so a document naming an image by URL stops at that image:
+
+```console
+$ md2pdf paper.md
+error: no image fetched for 'https://example.com/figures/plot.png' at line 7
+```
 
 That last one is about where a path *lands*, not about the `..` written in it. A document
 and the files it names travel as one folder, so `../../plot.svg` climbs out of that folder

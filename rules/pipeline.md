@@ -17,7 +17,8 @@ covers: >
   escape rule, the rejection rule, the two walks footnotes need, the three asset
   channels, the marker a master names a section with, the join that makes several
   files one stream and the map that translates a line of it back, the directory a
-  section's own images resolve against, the location
+  section's own images resolve against, the URL an image may name in place of a file and
+  the name the source asks for it by, the location
   every message carries, the caption that makes an image, a table or a code block a figure and
   the splice that attaches it, the `:::` group that makes several of them one figure,
   the two words on an opener the dialect reads, the abstract one opens and the keywords
@@ -48,7 +49,9 @@ and write Typst markup; the embedded Typst compiler produces the PDF.
 markdown and a slice of `core/src/lib.rs:Asset` — one image file each, named by the path
 the markdown wrote — and returns the bytes; `core/src/lib.rs:image_paths` is the shopping
 list that names those files, in the order a reader meets them, which puts an image inside
-a footnote definition at the first reference to that footnote.
+a footnote definition at the first reference to that footnote. An image named by an `http`
+or `https` URL is on it as written, and `core/src/lib.rs:ImageRef::is_url` says so: its
+bytes are the caller's to supply under the URL, or not, which is `Error::UnfetchedImage`.
 `core/src/lib.rs:bibliography_path` is the shopping list's second half — the one file a
 document names in its frontmatter rather than in its body, with the line it was named on.
 `core/src/lib.rs:section_paths` is its third — every markdown file a master names, in the
@@ -442,76 +445,84 @@ Alt text is flattened, not emitted, because Typst's `alt` is a plain string.
 `core/src/emit.rs:AltCapture` takes every event between the image's two: text and code
 contribute their text, a soft or hard break contributes one space, emphasis, strong,
 strikethrough and link wrappers contribute nothing, and an out-of-dialect construct still
-errors. A nested
-image flattens the same way under a depth count, contributing only its inner text; its
-destination and title are not content under that reading, so they are neither checked nor
-listed.
+errors. A nested image flattens the same way under a depth count, contributing only its
+inner text; its destination and title are not content under that reading, so they are
+neither checked nor listed.
 
-`core/src/emit.rs:check_image` refuses seven destination shapes, each an
-`UnsupportedConstruct` naming the shape and the line, so `--emit-typst` rejects them too.
-An empty destination and a title mirror the link arm. The middle four are
-`core/src/emit.rs:portable_path`'s, which the `bibliography` frontmatter key reads too —
-one rule about what a path in this dialect may be, rendered twice by
-`core/src/emit.rs:PathShape` because an image arm says what the image is and a key says
-what the key takes. **The four divide by what each is a property of**, which is why
-`check_image` is handed both the written destination and the one it landed on. Three are
-properties of what the author *wrote*, and
-`core/src/emit.rs:written_shape` reads them: a URI scheme is a fetch request and nothing
-fetches, which catches `data:` and the drive path `C:\figure.png` with it; an absolute path
-converts on one machine only; a backslash is a segment `VirtualPath` cannot hold, tested
-directly rather than inferred from an error now that a second error can arrive there. The
-fourth is a property of where the path *lands*: `core/src/emit.rs:landed_path` refuses one
-that leaves the document's folder, which is `PathError::Escapes` from
-`typst-syntax`'s own `Segments::push_component` — it pops a segment for each parent
-component and fails only when there is nothing left to pop. So a `..` is not refused for
-being a `..`: `../figures/plot.svg` written under `sections/` lands inside the folder and is
-legal, where `../../escape.png` climbs out and is not. The resolution happens inside
-`landed_path` rather than after it, so the extension is read off the same `VirtualPath`
-`core/src/lib.rs:file_id` will build and no caller hands `file_id` a path it cannot
-build — `Error::Internal` means a broken build rather than bad input. Last, the extension
-must sit in Typst's own table — `png`, `jpg`, `jpeg`, `gif`, `webp`, `svg`, `svgz`, `pdf` —
-read case-sensitively through `VirtualPath::extension`, the function Typst's own detection
-reads. Where a shape and a bad extension both apply, the shape is named first.
+Seven destination shapes are refused, each an `UnsupportedConstruct` naming the shape and
+the line, so `--emit-typst` rejects them too. `core/src/emit.rs:check_destination` refuses
+the two that mirror the link arm, an empty destination and a title, first and on what the
+author wrote. `core/src/emit.rs:check_image` refuses the rest, for a local path only. The
+middle four are `core/src/emit.rs:portable_path`'s, which the `bibliography` key reads too —
+one rule rendered twice by `core/src/emit.rs:PathShape`, because an image arm says what the
+image is and a key says what the key takes. **The four divide by what each is a property
+of**, which is why `check_image` is handed both the written destination and the one it
+landed on. Three are properties of what the author *wrote*, read by
+`core/src/emit.rs:written_shape`: a URI scheme other than `http` or `https` names no file
+beside the document, which catches `data:`, `file:` and the drive path `C:\figure.png`,
+read `a URL scheme other than http or https`; an absolute path converts on one machine
+only; a backslash is a segment `VirtualPath` cannot hold, tested directly because
+`landed_path` can fail for a second reason. The fourth is a property of where the path
+*lands*: `core/src/emit.rs:landed_path` refuses one that leaves the document's folder, which
+is `PathError::Escapes` from `typst-syntax`'s own `Segments::push_component` — it pops a
+segment for each parent component and fails only when there is nothing left to pop. So
+`../figures/plot.svg` written under `sections/` lands inside the folder and is legal, where
+`../../escape.png` climbs out and is not. The extension is read off the same `VirtualPath`
+`core/src/lib.rs:file_id` will build, so no caller hands `file_id` a path it cannot build —
+`Error::Internal` means a broken build. Last, the extension must sit in Typst's own table —
+`png`, `jpg`, `jpeg`, `gif`, `webp`, `svg`, `svgz`, `pdf` — read case-sensitively through
+`VirtualPath::extension`, which Typst's own detection reads. A shape is named before an
+extension.
 
-**A destination written inside a section is prefixed with that section's own directory**, by the
-`Tag::Image` arm of `core/src/emit.rs:step` — the one place that knows both the destination and
-the file it was written in. It is the emitter's because the written path is an *identity*:
+**A destination written inside a section is prefixed with that section's own directory**,
+by the `Tag::Image` arm of `core/src/emit.rs:step`, the one place that knows both the
+destination and its file. It is the emitter's because the written path is an *identity*:
 `core/src/emit.rs:image_call` writes it into the source, `core/src/lib.rs:collect` keys
 `supplied`, `seen` and the world's `FileId` on it, and both wrappers dedupe on it, so two
-sections each naming `figure.png` would emit two identical calls and a caller resolving them
-differently would set one figure twice, silently. `core/src/emit.rs:collect_definitions` takes
-the map beside `core/src/emit.rs:emit`, or an image inside a footnote definition would keep its
-written path. **The written half of the shape check runs before the prefix and the landing
-half after**, since `typst-syntax` drops a non-leading empty segment and `/x.png` prefixed to
-`one//x.png` would read as `/one/x.png` — an absolute path laundered into a relative one — and
-`![alt]()` prefixed to `one/` would stop being an empty destination at all. **A file with no
-directory of its own prefixes with nothing**, where `format!("{dir}/{dest}")` yields
-`/dot.png`. **`core/src/sections.rs:Sources::resolve` then normalises, on both branches**,
-because the identity above is a string comparison: `figures/plot.svg` written by the master
-and `../figures/plot.svg` written by a section under `sections/` are one file and must arrive
-as one key, and normalising only the prefixed branch would fail the same identity the other
-way round. It stays infallible — a path that will not normalise falls through as it was
-written, so `check_landed_image` is still what refuses it, at the author's own file and line.
+sections each naming `figure.png` would otherwise set one figure twice, silently.
+`core/src/emit.rs:collect_definitions` takes the map beside `core/src/emit.rs:emit`, or an
+image inside a footnote definition would keep its written path. **The written half of the
+shape check reads the destination before the prefix**, since `typst-syntax` drops a
+non-leading empty segment and `/x.png` prefixed to `one//x.png` would read as `/one/x.png` —
+an absolute path laundered into a relative one. **A file with no directory of its own
+prefixes with nothing**, where `format!("{dir}/{dest}")` yields `/dot.png`.
+**`core/src/sections.rs:Sources::resolve` then normalises, on both branches**, because the
+identity is a string comparison: `figures/plot.svg` written by the master and
+`../figures/plot.svg` written under `sections/` are one file and must arrive as one key. It
+stays infallible — a path that will not normalise falls through as written, so
+`check_image` still refuses it, at the author's own file and line.
 
-`core/src/lib.rs:collect` then checks the bytes before the compile, once per path at its
-first reference: no asset is `Error::MissingImage`, bytes that disagree with the extension
-are `Error::ImageFormat`, and both name the path and the line. **The bibliography goes
-into that same map, first and past no magic bytes** — first because its line comes from
-the frontmatter and is earlier than every image's, and past no magic bytes because the
-citation section's own reader parses it a few lines later and names a real error, where
-for an image the magic bytes are the only thing that could.
-A file the caller did not supply is `Error::MissingBibliography`, the sibling of
-`MissingImage`: without it the compile says "file not found (searched at refs.yml)"
-against a span in a `main.typ` the user has never seen. `core/src/lib.rs:Asset` and
-`core/src/lib.rs:TypstWorld` needed nothing for this — an `Asset` is a named blob with
-nothing image-specific in it, and `TypstWorld::file` already answers from the map by
-`FileId`. That order is the point —
-Typst's own error would name a span in `main.typ`, which the user has never seen.
+`core/src/lib.rs:collect` then checks the bytes before the compile — Typst's own error
+would name a span in a `main.typ` the user has never seen — once per path at its first
+reference: no asset is `Error::MissingImage`, bytes that disagree with the extension are
+`Error::ImageFormat`, and both name the path and the line. **The bibliography goes into
+that same map, first and past no magic bytes**: its frontmatter line is earlier than every
+image's, and the citation section's reader parses it and names a real error. A file the
+caller did not supply is `Error::MissingBibliography`, the sibling of `MissingImage`;
+without it the compile says "file not found (searched at refs.yml)".
 `core/src/lib.rs:bytes_match` mirrors typst-library 0.15.1 by hand: the magic bytes for
 the raster formats and PDF, the gzip magic for `svgz`, and a search for the SVG namespace
-over the first 2048 bytes. Typst's fallback to content detection is not mirrored, because
-the emitter has already refused every extension it would apply to. A file corrupt past its
-magic still fails at compile time, with the compiler's own message.
+over the first 2048 bytes. Typst's fallback to content detection is not mirrored for a
+file, because the emitter has already refused every extension it would apply to. A file
+corrupt past its magic still fails at compile time, with the compiler's own message.
+
+**An `http` or `https` destination is a URL, and a URL is a name the caller fills.**
+`core/src/emit.rs:is_url` reads the scheme alone, as `has_scheme` does, in any case, so
+`https:/x.png` is a URL too and fails where it is fetched. The `Tag::Image` arm takes a URL
+after `check_destination` and before `Sources::resolve`, which would prefix it and turn
+`https://` into `https:/`, so `image_paths` lists it exactly as written and
+`core/src/lib.rs:ImageRef::is_url` says so. The source asks for
+`core/src/emit.rs:remote_name` of it, `remote/` and its FNV-1a 64 hash in sixteen hex
+digits: **no extension**, so Typst detects the format from the bytes and no local path can
+land there, and **a hash, not a counter**, so a footnote definition's copy, walked apart by
+`collect_definitions`, gets the same name. `collect` looks the bytes up by the URL: none is
+`Error::UnfetchedImage`, `no image fetched for '…'`; bytes `bytes_match` accepts for no
+extension in the table are `ImageFormat`, `does not hold image data`, so an HTML error page
+is refused naming the URL, while HTML with the SVG namespace in its first 2048 bytes passes
+and fails at compile time. **Every insert, the bibliography's included, goes through
+`core/src/lib.rs:insert`**, which refuses a `FileId` held under another name — two URLs
+sharing a hash, a bibliography named `remote/<hash>` — as `Error::Internal`, entered into
+the earliest-line contest rather than returned at once.
 
 ## Captions and cross-references
 
@@ -1399,7 +1410,10 @@ current directory, and a repeated path is read once — **a section's own images
 since `core` wrote the folder into the path before this saw it. The asset keeps the path the
 markdown wrote, never the resolved one, because that is the name the generated source
 asks for. A file that will not read is exit 1 naming the resolved path, the line, and the
-message the OS gave. The bibliography is read first, from `bibliography_path` rather than
+message the OS gave. An image whose `is_url()` holds is skipped, so `core`'s own
+`no image fetched for '…'` names it rather than an OS error about `dir/https://…`. This runs
+before `core` and stops at its first failure, so an unreadable file on a later line is
+reported ahead of a URL on an earlier one: the earliest-line rule holds inside `collect`. The bibliography is read first, from `bibliography_path` rather than
 from the image list, because it is one frontmatter value that no walk would ever meet and
 the line it names is the earliest in the file. `--emit-typst` returns before that call but
 after the sections, so

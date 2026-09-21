@@ -2,6 +2,53 @@
 
 Append-only. One heading per round, newest first.
 
+### Phase 3 implementation — 2026-09-21 — **SHIPPED**
+
+No departure from the reviewed text. Four choices the phase left open, recorded:
+
+- **`check_image` was split in two.** `check_destination` holds the two link-arm
+  checks, the empty destination and the title, and runs first. `check_image` keeps
+  the four path shapes and the extension gate. It is called for a local path only,
+  so §2's "`check_image` refuses every local destination with no extension" stays
+  true as a citation.
+- **The collision helper, `core/src/lib.rs:insert`, treats the same name twice as
+  no collision** and keeps the first bytes. That is how a bibliography and an image
+  naming one file behaved before the helper existed, and gate clause 9 pins both
+  halves.
+- **Gate clause 10 plants a real PNG at `https:/example.com/figures/plot.png`**
+  under the scratch directory, which is where `Path::join` would land the URL. A
+  binary that read the file would compile the document and exit 0, so the exact
+  stderr proves the skip. Two mutations confirmed that the gate bites:
+  - dropping the CLI's skip makes the binary exit 0;
+  - serving a URL's bytes under the wrong `FileId` fails the three compile
+    clauses.
+- **`emit.rs` gained a second unit test beside clause 2's**: a table of what
+  `is_url` accepts and refuses, `httpx:` and a scheme-shaped segment after a `/`
+  included.
+
+**The corpus check (clause 11) passed with no gap.** It ran `mpdf-008`'s method with
+the binaries built either side of the change, over 96 documents:
+- every `.md` under `tests/fixtures/` and `samples/`, plus the README's 14
+  `markdown` examples;
+- for each, the `--emit-typst` output and a PDF, with stderr and exit codes;
+- all 551 outputs are byte-identical, the 71 PDFs included.
+
+No corpus document names a URL image. `cargo test --workspace` passes at 318 tests,
+with no network.
+
+**Close-out.**
+- **`rules/pipeline.md`** changed in the images section, the intro's API paragraph
+  and the CLI section. It was tightened to stand at 1380 of its 1380 lines, so
+  `max_lines` did not move. The tightening also fixed a stale name,
+  `check_landed_image`, a function that does not exist.
+- **The README's refusal paragraph** now names the other schemes. A new paragraph
+  says that a URL is accepted and that `md2pdf` does not fetch yet. Its console
+  line was reproduced from the binary.
+- **§1.1 and §2 carry the four dated `CORRECTED` notes.**
+- **`core/tests/messages_test.rs`'s counts were re-measured.** It had said
+  "Forty-eight" for an instrument that read 51 before this phase and still reads 51,
+  and "nine variants" for a list of ten that is now eleven.
+
 ### Round 2 — Phase 4 only — 2026-09-21 — same reviewer, resumed with the author's changelog — **READY (converged)**
 
 **Verdict: READY**, with zero blocking findings, checked against the working
