@@ -4,8 +4,8 @@
 
 - **[md-to-pdf-pipeline](md_to_pdf_pipeline_spec.md)** — `mpdf-001` · accepted · done
   The core .md → .pdf pipeline: pulldown-cmark parses, a hand-written emitter maps events to Typst markup, and embedded Typst compiles the PDF, behind a CLI.
-- **[images](images_spec.md)** — `mpdf-002` · accepted · done
-  Markdown images become PDF images: the emitter maps ![alt](path), callers supply the named files as bytes, and the CLI reads them from disk.
+- **[images](images_spec.md)** — `mpdf-002` · accepted · partial
+  Markdown images become PDF images: the emitter maps ![alt](path), callers supply the named files as bytes, and the CLI reads them from disk. An http(s) URL is a name like any other: core still fetches nothing, and the caller supplies its bytes.
 - **[math](math_spec.md)** — `mpdf-004` · accepted · done
   LaTeX math in markdown becomes typeset math in the PDF: the dialect allows a closed list of LaTeX commands, mitex converts them in process, and a command outside the list is an error naming the command and its line.
 - **[captions-and-references](captions_and_references_spec.md)** — `mpdf-005` · accepted · done
