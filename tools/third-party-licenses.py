@@ -60,6 +60,10 @@ def identify(body):
     from its filename — `bytemuck`'s `LICENSE-APACHE` is Apache-2.0 and not the
     Zlib its manifest also offers, and `adler2`'s `LICENSE-0BSD` is not MIT."""
     b = " ".join(body.split()).lower()
+    # First, because it is the one copyleft text in the tree, reached through
+    # `lol_html` under merman, and the branches below would file it nowhere.
+    if "mozilla public license" in b and "version 2.0" in b:
+        return "MPL-2.0"
     if "apache license" in b and "version 2.0" in b:
         return "Apache-2.0"
     if "boost software license" in b:
@@ -131,6 +135,12 @@ def main():
         "This file is that list and the licence texts those crates carry, reproduced "
         "from the crates' own files. It is generated — run `python3 "
         "tools/third-party-licenses.py` after a dependency change.", 88))
+    w.append("")
+    w.append(textwrap.fill(
+        "Every crate below is published on crates.io, and its source is there under "
+        "the name and version this file gives it: "
+        "`https://crates.io/crates/<name>/<version>`. The MPL-2.0 asks a binary that "
+        "carries files under it to say where their source is, and this is where.", 88))
     w.append("")
     w.append(textwrap.fill(
         f"Resolved for `{triple}`, normal dependencies only: a build-dependency "

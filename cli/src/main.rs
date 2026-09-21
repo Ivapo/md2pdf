@@ -255,17 +255,18 @@ fn default_output(input: &Path) -> PathBuf {
 /// What the binary carries and under what terms, in one page.
 ///
 /// **A provenance notice, not a dependency dump.** The texts `licenses` below
-/// returns run to 982 lines, and the two facts a reader holding the executable
+/// returns run to 1398 lines, and the two facts a reader holding the executable
 /// would actually be surprised by — that the Typst compiler is compiled in
 /// under Apache-2.0, and that six font faces travel under two licences of their
 /// own — are one table row and one filename line somewhere inside them. This is
 /// what the bare flag prints; `--licenses=full` still prints the texts.
 ///
 /// Hand-written prose, and every fact in it has a source the suite reads back:
-/// the copyright line is `LICENSE`'s, the two versions, the crate count and the
-/// licence terms are `THIRD-PARTY-LICENSES.md`'s table, and the two face counts
-/// are `core/assets/fonts/`. The five URLs are the one kind of fact no test can
-/// check; they are opened by hand when this text is touched.
+/// the copyright line is `LICENSE`'s; the three versions, the crate count, the
+/// licence terms and the MPL-2.0 crates are `THIRD-PARTY-LICENSES.md`'s table;
+/// and the two face counts are `core/assets/fonts/`. The six URLs are the one
+/// kind of fact no test can check; they are opened by hand when this text is
+/// touched.
 const NOTICE: &str = "md2pdf — its own source is MIT.
 
     Copyright (c) 2026 ivapo
@@ -284,6 +285,11 @@ is not covered by that licence:
     Bundled   as a crate compiled in; it translates LaTeX math into Typst's
     Licence   Apache-2.0
 
+    merman 0.8.0-alpha.6
+    Project   https://github.com/Latias94/merman
+    Bundled   as a crate compiled in; it draws Mermaid diagrams as SVG
+    Licence   MIT OR Apache-2.0
+
     Libertinus Serif and Libertinus Mono
     Project   https://github.com/alerque/libertinus
     Bundled   five faces, the body and code fonts of every page
@@ -295,12 +301,14 @@ is not covered by that licence:
     Licence   GUST Font License
 
 Everything else is a Rust crate compiled from source. THIRD-PARTY-LICENSES.md
-names the 334 crates the resolve reaches, each under one or more of MIT,
+names the 365 crates the resolve reaches, each under one or more of MIT,
 Apache-2.0 (once with the LLVM-exception), BSD-2-Clause, BSD-3-Clause, Zlib,
-Unicode-3.0, 0BSD, CC0-1.0, BSL-1.0 and the Unlicense. None is copyleft, so
-what they ask for is attribution, which is this notice. The full texts — the
-MIT terms, both font licences and that list — are compiled into this binary
-too:
+Unicode-3.0, 0BSD, CC0-1.0, BSL-1.0, the Unlicense and MPL-2.0. Of those,
+cssparser, cssparser-macros, dtoa-short and selectors are MPL-2.0, which is
+copyleft per file: they are compiled in unmodified, and their source is on
+crates.io under the name and version that list gives each. What the rest ask
+for is attribution, which is this notice. The full texts — the MIT terms,
+both font licences and that list — are compiled into this binary too:
 
     md2pdf --licenses=full
 

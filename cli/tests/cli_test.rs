@@ -762,13 +762,9 @@ fn faces(count: usize) -> String {
 /// the source the sentence claims to be about, and the notice is searched for
 /// the result.
 ///
-/// **The copyleft clause is the one that most needs this.** *"None is
-/// copyleft"* is a claim about a resolve of 334 crates that no author will
-/// re-audit by hand, so it is asserted over the derived terms, `contains` so a
-/// future `LGPL-2.1` or `MPL-2.0` is caught, and case-sensitively over the
-/// terms rather than the rows: a case-insensitive sweep over whole rows hits
-/// the crate *names* `simplecss`, `thiserror-impl`, `unic-langid-impl` and
-/// `unic-langid-macros-impl`, none of which is a licence.
+/// **The copyleft clause is the one that most needs this**, and
+/// `copyleft_findings` holds it: the notice's account of copyleft is a claim
+/// about a resolve of 365 crates that no author will re-audit by hand.
 #[test]
 fn the_notice_states_the_facts_the_table_and_the_font_directory_hold() {
     let out = run(&["--licenses".as_ref()]);
@@ -796,49 +792,25 @@ fn the_notice_states_the_facts_the_table_and_the_font_directory_hold() {
             .unwrap_or_else(|| panic!("{name} is not in the table"))[1]
     };
 
-    // An expression names one or more terms. Splitting on the four separators
-    // and trimming the parentheses an `AND` puts around an `OR` is what turns
-    // `(MIT OR Apache-2.0) AND Unicode-3.0` into three. **Trimming is
-    // load-bearing**: `fnv`'s cell is `Apache-2.0 / MIT`, spaces about the
-    // slash, and untrimmed it yields two terms that are nobody's licence.
-    let mut terms: BTreeSet<&str> = BTreeSet::new();
-    for row in &rows {
-        let split = row[2]
-            .replace(" OR ", "\u{1}")
-            .replace(" AND ", "\u{1}")
-            .replace(" WITH ", "\u{1}")
-            .replace('/', "\u{1}");
-        for piece in split.split('\u{1}') {
-            let term = piece.trim().trim_matches(['(', ')']).trim();
-            if !term.is_empty() {
-                // The borrow has to outlive `split`, and every term is a slice
-                // of the original cell: find it there.
-                let start = row[2].find(term).expect("a term the cell does not hold");
-                terms.insert(&row[2][start..start + term.len()]);
-            }
-        }
-    }
+    let terms: BTreeSet<&str> = rows.iter().flat_map(|row| terms_of(row[2])).collect();
     assert!(
         !terms.is_empty(),
         "no licence terms parsed out of the table"
     );
 
     for term in &terms {
-        for copyleft in ["GPL", "MPL", "EUPL", "CDDL", "EPL", "OSL"] {
-            assert!(
-                !term.contains(copyleft),
-                "the notice says none is copyleft, but the table lists {term}"
-            );
-        }
         assert!(
             notice.contains(term),
             "the table lists {term} and the notice does not name it"
         );
     }
+    let findings = copyleft_findings(&rows, &notice);
+    assert!(findings.is_empty(), "{findings:#?}");
 
     for fact in [
         format!("Typst {}", version_of("typst")),
         format!("mitex {}", version_of("mitex")),
+        format!("merman {}", version_of("merman")),
         format!("the {} crates", rows.len()),
     ] {
         assert!(notice.contains(&fact), "the notice does not say {fact:?}");
@@ -868,6 +840,131 @@ fn the_notice_states_the_facts_the_table_and_the_font_directory_hold() {
     }
 }
 
+/// The terms a licence expression names, each a slice of the cell.
+///
+/// Splitting on the four separators and trimming the parentheses an `AND` puts
+/// around an `OR` is what turns `(MIT OR Apache-2.0) AND Unicode-3.0` into
+/// three. **Trimming is load-bearing**: `fnv`'s cell is `Apache-2.0 / MIT`,
+/// spaces about the slash, and untrimmed it yields two terms that are nobody's
+/// licence.
+fn terms_of(cell: &str) -> Vec<&str> {
+    let split = cell
+        .replace(" OR ", "\u{1}")
+        .replace(" AND ", "\u{1}")
+        .replace(" WITH ", "\u{1}")
+        .replace('/', "\u{1}");
+    let mut terms = Vec::new();
+    for piece in split.split('\u{1}') {
+        let term = piece.trim().trim_matches(['(', ')']).trim();
+        if !term.is_empty() {
+            // The borrow has to outlive `split`, and every term is a slice of
+            // the original cell: find it there.
+            let start = cell.find(term).expect("a term the cell does not hold");
+            terms.push(&cell[start..start + term.len()]);
+        }
+    }
+    terms
+}
+
+/// Everything the table and the notice say about copyleft that they must not.
+///
+/// `mpdf-012` let MPL-2.0 into the tree, through the four crates Cloudflare's
+/// `lol_html` brings under merman, and its §2 settled what may follow: MPL-2.0
+/// is copyleft per file, it is accepted, and a crate under it is named in the
+/// notice, which says where its source is. So there are three findings:
+///
+/// - **a term containing `GPL`, `MPL`, `EUPL`, `CDDL`, `EPL` or `OSL` that is
+///   not exactly `MPL-2.0`** — `contains`, so an `LGPL-2.1` is caught, and
+///   case-sensitively over the terms rather than the rows: a case-insensitive
+///   sweep over whole rows hits the crate *names* `simplecss`,
+///   `thiserror-impl`, `unic-langid-impl` and `unic-langid-macros-impl`, none
+///   of which is a licence;
+/// - **an MPL-2.0 crate the notice does not name**, as a whole word, so that
+///   `cssparser-macros` in the prose does not stand in for `cssparser`;
+/// - **the sentence `mpdf-001` Phase 14 wrote**, "None is copyleft", which a
+///   notice naming an MPL-2.0 crate may no longer carry.
+///
+/// A function rather than inline assertions so that
+/// `the_copyleft_check_fails_each_way_it_is_meant_to` can hand it a table
+/// this tree does not hold.
+fn copyleft_findings(rows: &[Vec<&str>], notice: &str) -> Vec<String> {
+    let words: BTreeSet<&str> = notice
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+        .collect();
+    let mut findings = Vec::new();
+    for row in rows {
+        let name = row[0].trim_matches('`');
+        for term in terms_of(row[2]) {
+            if !["GPL", "MPL", "EUPL", "CDDL", "EPL", "OSL"]
+                .iter()
+                .any(|copyleft| term.contains(copyleft))
+            {
+                continue;
+            }
+            if term != "MPL-2.0" {
+                findings.push(format!(
+                    "`{name}` is under {term}, and MPL-2.0 is the one copyleft term accepted"
+                ));
+            } else if !words.contains(name) {
+                findings.push(format!(
+                    "`{name}` is MPL-2.0 and the notice does not name it"
+                ));
+            }
+        }
+    }
+    if notice.contains("None is copyleft") {
+        findings.push("the notice still says \"None is copyleft\"".to_string());
+    }
+    findings
+}
+
+/// The check fails in each of the three ways `mpdf-012`'s §2 says it must.
+///
+/// The real table passes it, which alone would pass a check that finds
+/// nothing. So each failure is handed to it here, one at a time, over a table
+/// and a notice that pass until the one change is made.
+#[test]
+fn the_copyleft_check_fails_each_way_it_is_meant_to() {
+    let notice = "Of those, cssparser and selectors are MPL-2.0, which is copyleft per file.";
+    let clean: Vec<Vec<&str>> = vec![
+        vec!["`cssparser`", "0.36.0", "MPL-2.0"],
+        vec!["`selectors`", "0.37.0", "MPL-2.0"],
+        vec!["`fnv`", "1.0.7", "Apache-2.0 / MIT"],
+    ];
+    assert_eq!(copyleft_findings(&clean, notice), Vec::<String>::new());
+
+    let mut gpl = clean.clone();
+    gpl.push(vec!["`readline`", "8.2.0", "LGPL-2.1-or-later OR MIT"]);
+    assert_eq!(
+        copyleft_findings(&gpl, notice).len(),
+        1,
+        "an LGPL row passed"
+    );
+
+    // A prefix of a name the notice does carry, which is what the whole-word
+    // match is for.
+    let mut unnamed = clean.clone();
+    unnamed.push(vec!["`cssparser-macros`", "0.6.1", "MPL-2.0"]);
+    let unnamed_notice = notice.replace("cssparser", "cssparser-macros");
+    assert_eq!(
+        copyleft_findings(&clean, &unnamed_notice).len(),
+        1,
+        "`cssparser-macros` stood in for `cssparser`"
+    );
+    assert_eq!(
+        copyleft_findings(&unnamed, notice).len(),
+        1,
+        "an unnamed MPL row passed"
+    );
+
+    let stale = format!("{notice} None is copyleft, so what they ask for is attribution.");
+    assert_eq!(
+        copyleft_findings(&clean, &stale).len(),
+        1,
+        "the old sentence passed"
+    );
+}
+
 /// What the full form prints is what the repository holds, byte for byte.
 #[test]
 fn licences_print_the_four_files_byte_for_byte() {
@@ -882,7 +979,9 @@ fn licences_print_the_four_files_byte_for_byte() {
 ///
 /// One literal per file, and the fifth discriminates the maths font's licence
 /// from the OFL the other five faces carry — a list with both entries pointing
-/// at `OFL.txt` passes every other clause.
+/// at `OFL.txt` passes every other clause. The last three are `mpdf-012`'s: the
+/// MPL-2.0 text, the heading `identify` files it under, and the renderer whose
+/// tree brought it.
 #[test]
 fn licences_carry_the_text_a_reader_needs() {
     let out = run(&["--licenses=full".as_ref()]);
@@ -894,7 +993,24 @@ fn licences_carry_the_text_a_reader_needs() {
         "Apache License",
         "| `typst` | 0.15.1 | Apache-2.0 |",
         "of the GUST Font License",
+        "Mozilla Public License Version 2.0",
+        "### MPL-2.0",
+        "| `merman` | 0.8.0-alpha.6 | MIT OR Apache-2.0 |",
     ] {
         assert!(stdout.contains(literal), "{literal:?} is not in the output");
+    }
+
+    // The MPL-2.0 crates are reproduced under the text above, not listed among
+    // the crates whose text is missing, whose prose says they ship no licence
+    // file: three of the four do.
+    for name in ["cssparser", "cssparser-macros", "dtoa-short", "selectors"] {
+        assert!(
+            stdout.contains(&format!("| `{name}` | ")),
+            "`{name}` is not in the table"
+        );
+        assert!(
+            !stdout.contains(&format!("\n- `{name}` ")),
+            "`{name}` is listed as a crate whose text is not reproduced"
+        );
     }
 }
