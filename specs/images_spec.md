@@ -26,7 +26,7 @@ phases:
     cut: null
     by: null
   - name: "Phase 4 — the CLI fetches, when asked"
-    reviewed: null
+    reviewed: 2026-09-21
     shipped: null
     cut: null
     by: null
@@ -635,7 +635,7 @@ a dated `CORRECTED` note naming the one exception, not a supersession.
   - **The flag.** `--fetch`, a clap `bool` beside `--emit-typst` in
     `cli/src/main.rs`, is off by default, per OQ-3.
     - **Without it,** `read_assets` keeps Phase 3's skip, and `core`'s own
-      `no image fetched for '…'` is the error. The CLI then adds one line of
+      `no image fetched for '…'` is the error. The CLI then prints one line of
       its own under it: **`hint: pass --fetch to download images named by a
       URL`**. `core` cannot say this, because the flag is the CLI's and Letur
       has none. The hint is printed only for `Error::UnfetchedImage`, so every
@@ -647,92 +647,199 @@ a dated `CORRECTED` note naming the one exception, not a supersession.
       reads no image file today.
   - **The failure message.** A fetch that fails is exit 1 in the shape of the
     file-read message: `cannot fetch {url} for the image {location}:
-    {reason}`. The reason is the HTTP status (`404 Not Found`), the transport
-    error, the timeout, or the cap. `read_assets` already stops at the first
-    failure in document order, and fetching keeps that.
-  - **The guards.** OQ-4's limits, each held by a named constant or a
-    `Cargo.toml` line, not by a client default that a version bump could
-    move:
+    {reason}`. `read_assets` already stops at the first failure in document
+    order, and fetching keeps that. The reason is one of the following:
+    - **A status outside 2xx.** The CLI writes it itself as the code and its
+      canonical reason, `404 Not Found`, read from `ureq::http::StatusCode`'s
+      `as_u16` and `canonical_reason`, not from `ureq`'s own
+      `http status: 404` rendering. A code with no canonical reason, such as
+      599, is written as the bare code.
+    - **The cap**, as `larger than 20 MB`. The CLI matches
+      `ureq::Error::BodyExceedsLimit` and writes that phrase itself. `ureq`'s
+      own rendering would name the limit `+ 1` guard 4 sets.
+    - **The timeout, or any other transport error,** as `ureq::Error`
+      displays it.
+  - **The guards.** OQ-4's limits, each held by a named constant or an
+    explicit call, not by a client default that a version bump could move:
     1. **Opt-in.** Nothing is fetched without `--fetch` (above).
     2. **Two schemes.** Only a destination whose scheme is `http` or `https`
        reaches the client, because `core` has already refused every other
-       scheme. A malformed one, like `https:/example.com/x.png`, fails at
-       the client's own URL parse and is reported like any other failed
-       fetch. A redirect leads only where the client can follow, which is
-       those two schemes.
+       scheme. A malformed one, like `https:/example.com/x.png`, fails at the
+       client's own URL parse (`http: invalid format`) and is reported like
+       any other failed fetch. A redirect cannot leave the two schemes either.
+       Round 1 probed `ureq` 3.4.0 against local servers: a `Location: ftp:…`
+       fails with `bad uri: unknown scheme: ftp`, and a `file:` or `data:`
+       location is joined as a path on the same host.
     3. **Time.** `FETCH_TIMEOUT` is 30 s per request, set as the agent's
-       global timeout so that a slow trickle of bytes counts against it, not
-       only the connect.
-    4. **Size.** `FETCH_LIMIT` is 20 MB (20 × 1024 × 1024 bytes), set on the
-       body read with `with_config().limit(…)`. `ureq`'s own default is 10 MB,
-       per OQ-4. **`ureq` is built with `default-features = false,
-       features = ["rustls"]`, which leaves `gzip` out.** Its `LimitReader`
-       sits *under* its content decoder: the reader chain is
-       `ContentDecoder<LimitReader<…>>`, read in `ureq` 3.4.0's
-       `body/mod.rs`. With `gzip` on, the cap would count the compressed wire
-       bytes, and a small body could inflate past any size in memory. With it
-       off, the cap counts exactly the bytes handed to `core`. An image format
-       is already compressed, so the loss is SVG's transfer size and nothing
-       else.
-    5. **Redirects.** At most 10, set explicitly with `max_redirects` even
+       `timeout_global`. Round 1 confirmed that this bounds the body read as
+       well as the connect: a 1.5 s global timeout against a trickling body
+       failed at 1.50 s with `timeout: global`.
+    4. **Size.** `FETCH_LIMIT` is 20 MB (20 × 1024 × 1024 = 20,971,520 bytes),
+       and a body of up to exactly that many bytes is accepted.
+       - **`ureq`'s `LimitReader` refuses a body that reaches its limit**,
+         not only one that passes it. Round 1 measured this: with a limit of
+         100, a 99-byte body passed and a 100-byte body failed, both for a
+         `Content-Length` body and for one delimited by the connection
+         closing. So the read is `with_config().limit(FETCH_LIMIT + 1)`, and
+         the `+ 1` carries a comment saying why.
+       - **`ureq` is built with `default-features = false, features =
+         ["rustls"]`, which leaves `gzip` out.** Its reader chain is
+         `ContentDecoder<LimitReader<…>>` (`ureq` 3.4.0's `body/mod.rs`), so
+         with `gzip` on the cap would count the compressed wire bytes, and a
+         small body could inflate past any size in memory.
+       - With `gzip` off, no `Accept-Encoding` is sent and a gzip body passes
+         through undecoded, both confirmed in round 1. The cap therefore
+         counts exactly the bytes handed to `core`. An image format is already
+         compressed, so the loss is SVG's transfer size and nothing else.
+    5. **Redirects.** At most 10, set explicitly with `max_redirects(10)` even
        though 10 is also the default.
-    6. **Status.** Anything outside 2xx is a failure, which is the client's
-       `http_status_as_error` default. The status is kept, and the message
-       names it.
+    6. **Status.** Only 2xx succeeds. The agent is built with
+       `http_status_as_error(false)`, and the CLI tests
+       `status().is_success()` itself. `ureq`'s own check refuses only 4xx
+       and 5xx, so a 304 would reach `core` as an empty body and be refused
+       as "does not hold image data", which names the wrong problem.
     7. **No state.** No cookie store (the `cookies` feature stays off), no
        cache, and nothing is written to disk. A second run fetches again,
        which is the honest reading of a flag its user repeated.
     8. **No trust in the header.** `Content-Type` is not read, because
        `core`'s byte check is the authority, per §2, and a header is one more
        thing a server can get wrong.
-  - **The dependency.** `ureq` goes into `cli/Cargo.toml` only, pinned to 3.4.
-    `core`'s dependency tree is unchanged, and the gate checks that.
+  - **Proxies are honoured, and this is recorded as a decision.** `ureq`'s
+    default `Config` takes the first of `ALL_PROXY`, `HTTPS_PROXY` and
+    `HTTP_PROXY` that is set, in either case, and routes **every** fetch
+    through it, whatever the fetch's scheme. `NO_PROXY` exempts hosts, and
+    loopback gets no exemption of its own. That is not `curl`'s rule, which
+    matches a proxy to each scheme and ignores an uppercase `HTTP_PROXY`, but
+    the point is the same: a run inside a network that requires a proxy should
+    still reach the image. So the CLI keeps `ureq`'s behaviour, and the README
+    says a fetch goes "through any proxy the environment names". The tests are
+    what must not depend on it (see the gate).
+  - **The dependency.** `ureq = { version = "3.4", default-features = false,
+    features = ["rustls"] }` goes into `cli/Cargo.toml` only. That is a caret
+    requirement (≥ 3.4.0, < 4), not an exact pin. The gate and every release
+    build against `Cargo.lock`, so what the caret requirement changes is only
+    when an upgrade is taken, and each upgrade re-runs the gate. Three guards
+    rest on `ureq`'s behaviour, and not all equally:
+    - The meaning of the `gzip` feature: clauses 7 and 9 re-check it.
+    - `LimitReader`'s boundary, behind guard 4's `+ 1`: clause 5 re-checks it.
+    - The global timeout bounding the body read (guard 3): **no clause
+      re-checks it**, for the reason the gate states. Round 1 measured it on
+      3.4.0, and a `Cargo.lock` upgrade of `ureq` past 3.4 re-runs that
+      probe by hand and records the result in the review record.
+
+    `core`'s dependency tree is unchanged, and the gate checks that. Round 1
+    resolved the addition offline in a scratch copy: 15 packages are added and
+    no existing version changes.
+  - **The licence file is regenerated inside the phase, not at close-out,**
+    because the existing suite checks it (clause 10). Three things move
+    together:
+    - **`tools/third-party-licenses.py:identify` is corrected.** Today it
+      files every ISC text as 0BSD: both texts carry "with or without fee",
+      and the rule `"0BSD" if "with or without fee" in b else "ISC"` keys on
+      it. The comment claiming "the two differ by the fee clause" is wrong.
+      What actually separates them is ISC's proviso, "provided that the above
+      copyright notice and this permission notice appear in all copies", which
+      0BSD lacks. The rule becomes ISC if and only if that proviso is present,
+      and the comment is rewritten. Nothing shipped is misfiled today, because
+      no crate in the current tree is ISC: the only 0BSD crates are `adler2`
+      and `roman-numerals-rs`. The TLS stack is the first ISC this tree
+      carries (`ring`, `rustls`, `rustls-webpki`, `untrusted`). `identify`
+      also gains a case for CDLA-Permissive-2.0, `webpki-roots`' licence,
+      which it returns `None` for today.
+    - **`THIRD-PARTY-LICENSES.md`** is regenerated by the script, and the CLI
+      crate's copy of it is a symlink to that file.
+    - **`cli/src/main.rs:NOTICE`** is updated to the regenerated table's crate
+      count and licence terms. The existing test
+      `the_notice_states_the_facts_the_table_and_the_font_directory_hold`
+      holds `NOTICE` to the table, and fails until the two agree. Round 1's
+      scratch resolve moved the table from 365 crates under 12 terms to 379
+      under 14. Those numbers are an observation, not a gate literal: the
+      test compares `NOTICE` against whatever the regenerated table says.
+  - **Tests that move.** The CLI test that Phase 3 adds for its gate clause 10
+    asserts stderr, which now gains the hint line; the test is updated to
+    match, or folded into clause 2 below.
   - **No sample names a URL.** `samples/` converts in CI, and CI must not need
     the network.
 
 - **Exit gate:** CLI tests in `cli/tests/cli_test.rs`, against a server the
   test runs itself on `127.0.0.1` with `std::net::TcpListener` in a thread. No
-  new dev-dependency, and no internet.
+  new dev-dependency, and no internet. **Every test that spawns the binary
+  against that server removes `ALL_PROXY`, `HTTPS_PROXY`, `HTTP_PROXY` and
+  `NO_PROXY`, in both cases, with `Command::env_remove`.** Round 1 showed that
+  one `HTTP_PROXY` in the developer's environment otherwise fails every
+  fetching clause with `Connection refused`.
   1. With `--fetch`, a document naming `http://127.0.0.1:<port>/plot.png`
-     twice, the server serving `dot.png`: exit 0, a `%PDF` file, and exactly
-     one request seen by the server.
+     twice, the server serving `tests/fixtures/dot.png`: exit 0, a `%PDF`
+     file, and exactly one request seen by the server.
   2. **Without `--fetch`**, the same document: exit 1, stderr reading
      `error: no image fetched for 'http://127.0.0.1:<port>/plot.png' at line
-     N` followed by the hint line, and zero requests seen by the server.
-  3. With `--fetch`, the server answering 404: exit 1, stderr reading
-     `cannot fetch http://127.0.0.1:<port>/plot.png for the image at line N: `
-     followed by the status.
-  4. With `--fetch`, a port nothing listens on: exit 1 naming the URL and the
-     line.
-  5. With `--fetch`, a body of `FETCH_LIMIT + 1` bytes: exit 1 naming the cap.
-  6. With `--fetch`, a redirect to a second path serving `dot.png`: exit 0.
-     Eleven chained redirects: exit 1.
-  7. With `--fetch`, a response carrying `Content-Encoding: gzip` over gzip
-     bytes: the bytes reach `core` undecoded, which pins guard 4's feature
-     line. `core` then reads the gzip magic as SVGZ, which is §2's recorded
-     limit for bytes corrupt past their magic.
+     N` and then `hint: pass --fetch to download images named by a URL`, and
+     zero requests seen by the server.
+  3. With `--fetch`, the server answering 404: exit 1, with stderr reading
+     `error: cannot fetch http://127.0.0.1:<port>/plot.png for the image at
+     line N: 404 Not Found`. The server answering 304 fails the same way,
+     ending `304 Not Modified`, which pins guard 6's 2xx-only rule where
+     `ureq`'s default would have let it through.
+  4. With `--fetch`, a port nothing listens on: exit 1, with stderr naming
+     the URL and the line.
+  5. **The cap, at its boundary,** with `--fetch`, the server serving zero
+     bytes:
+     - `FETCH_LIMIT` of them: exit 1 with `core`'s `image file '…' at line N
+       does not hold image data`. The cap let the body through.
+     - `FETCH_LIMIT + 1` of them: exit 1 with `cannot fetch … larger than
+       20 MB`.
+  6. **Redirects,** with `--fetch`: a chain of ten redirects ending at
+     `dot.png` is exit 0, and a chain of eleven is exit 1. Round 1's probe
+     observed this boundary, and the two clauses together pin the limit at
+     exactly 10.
+  7. **gzip is not decoded.** With `--fetch`, the server serves
+     `tests/fixtures/dot.png.gz` with `Content-Encoding: gzip`. That fixture
+     is checked in, made once with `gzip -n -9 -c tests/fixtures/dot.png`, and
+     `-n` keeps it byte-stable. The result is exit 1, with stderr beginning
+     `error: typst compilation failed`. The undecoded bytes carry the gzip
+     magic, so `core` passes them as SVGZ, which is §2's recorded limit for
+     bytes corrupt past their marker, and Typst's SVG reader then refuses the
+     PNG inside. A build with `gzip` on would decode the body to `dot.png` and
+     exit 0, so this clause tells the two apart.
   8. `--emit-typst --fetch`: exit 0, and zero requests seen by the server.
-  9. `cargo tree -p md2pdf-core -e normal` lists no HTTP client, so `core` has
-     stayed network-free. `cargo tree -p md2pdf-cli -e features -i ureq` shows
-     neither `gzip` nor `cookies`.
-  10. `cargo test --workspace` passes.
+  9. **The feature lines, three commands:**
+     - `cargo tree -p md2pdf-core -e normal` lists no HTTP client, so `core`
+       has stayed network-free.
+     - `cargo tree -p md2pdf-cli -e features -i ureq` shows neither `gzip`
+       nor `cookies`.
+     - The same output **does** show `rustls` and `rustls-webpki-roots`,
+       which is what proves TLS is compiled in. A build with no features at
+       all would pass every other clause and fetch no `https://` URL.
+  10. **The licence file:**
+      - after `python3 tools/third-party-licenses.py`, `THIRD-PARTY-LICENSES.md`
+        has an `### ISC` section and a `### CDLA-Permissive-2.0` section;
+      - its "ships no licence file" list names no crate it did not name
+        before;
+      - `### 0BSD` is still reproduced from `adler2`;
+      - `the_notice_states_the_facts_the_table_and_the_font_directory_hold`
+        passes.
+  11. `cargo test --workspace` passes.
 
   **Two things the gate does not cover, and why.** No clause fetches over TLS,
-  because a test certificate is more machinery than the check is worth; the
-  README's own `https://` example is converted once, by hand, at close-out. No
-  clause waits out the timeout, because 30 s per run is more than the suite
-  should pay; `FETCH_TIMEOUT` is one constant, passed to the client unchanged.
+  because a test certificate is more machinery than the check is worth.
+  Clause 9 proves the TLS stack is compiled in, and at close-out one document
+  is converted by hand with `--fetch` against a live `https://` URL: the image
+  whose refusal in Letur began this phase,
+  `https://cdn.prod.website-files.com/68a44d4040f98a4adf2207b6/6a8739a1b934ffe55bfc9715_44592f18.png`.
+  If that URL has gone, any public `https://` PNG serves, and the record names
+  which one was used. No clause waits out the timeout, because 30 s per run is
+  more than the suite should pay; `FETCH_TIMEOUT` is one constant, passed to
+  the client unchanged, and round 1 measured that the global timeout does
+  bound a trickling body.
 - **Close-out:**
-  - **`rules/pipeline.md`'s CLI section:** the flag, the hint and the eight
-    guards.
-  - **The README's images section:** a URL is fetched only under `--fetch`,
-    within the limits above.
-  - **`THIRD-PARTY-LICENSES.md`**, regenerated with
-    `tools/third-party-licenses.py`. The TLS stack brings `webpki-roots`,
-    which is CDLA-Permissive-2.0. The script's licence-text identifier does
-    not recognise that licence today, so it gains the case. `ring` and
-    `rustls-webpki` bring ISC. The script already identifies ISC, but the file
-    carries no ISC text yet, so the regenerated file gains a section for it.
+  - **`rules/pipeline.md`'s CLI section:** the flag, the hint, the eight
+    guards and the proxy decision. The rule is near its 1380-line cap, as it
+    was for Phase 3, so the pass either tightens it or raises `max_lines` with
+    a stated reason, not quietly.
+  - **`README.md`:** the images section says a URL is fetched only under
+    `--fetch`, within the limits above, through any proxy the environment
+    names. `## Use` lists the flag. `## Licence`'s crate count follows the
+    regenerated table.
   - **A dated `CORRECTED` note** beside `mpdf-001` §2's "the running app stays
     fully offline", naming `--fetch` as the one exception.
   - **The `CLAUDE.md` stanza needs nothing:** "plus the images they name"

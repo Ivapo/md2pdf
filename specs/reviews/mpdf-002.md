@@ -2,6 +2,114 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 4 only — 2026-09-21 — same reviewer, resumed with the author's changelog — **READY (converged)**
+
+**Verdict: READY**, with zero blocking findings, checked against the working
+tree. The reviewer re-derived each new literal in a scratch copy:
+
+- **The blocker's fix works as scoped.** With `identify` corrected and the
+  file regenerated, the table has 379 crates under 14 terms:
+  - `### ISC` is reproduced from `ring` 0.17.14 (`LICENSE-other-bits`);
+  - `### CDLA-Permissive-2.0` from `webpki-roots` 1.0.9;
+  - `### 0BSD` still from `adler2` 2.0.1;
+  - there is no "not reproduced" section, as there is none today.
+
+  The unfixed script fails clause 10, because it adds `rustls-webpki` and
+  `untrusted` to that section.
+- **The `FETCH_LIMIT + 1` boundary.** With the limit at 100 + 1, a 100-byte
+  body is accepted and a 101-byte body fails with
+  `ureq::Error::BodyExceedsLimit(101)`.
+- **Clause 7's outcome.** `gzip -n -9 -c tests/fixtures/dot.png` is
+  byte-stable across runs. Served undecoded, it ends in `error: typst
+  compilation failed: failed to parse SVG (file is not valid UTF-8 …)`,
+  because `typst-library`'s `is_svg` accepts the gzip magic.
+- **Clause 3's 304 path.** With `http_status_as_error(false)`, a 304 returns
+  `Ok`. `canonical_reason()` gives `Not Modified` and `Not Found`. Ten chained
+  redirects still end in a 200, and eleven fail.
+- **Clause 9.** The `-e features -i ureq` output names `rustls` and
+  `rustls-webpki-roots`, and neither `gzip` nor `cookies`.
+- **Proxies.** Every variable name the tests remove matches `proxy.rs`.
+
+**Three non-blocking findings, accepted and folded in at convergence
+(§7.5).** They change wording and one fallback, and nothing a gate clause
+tests:
+- **A status with no canonical reason** (599, say) is written as the bare
+  code.
+- **The proxy decision no longer claims to match `curl`.** `ureq` routes every
+  fetch through the first of `ALL_PROXY`, `HTTPS_PROXY` and `HTTP_PROXY` that
+  is set, whatever the scheme, and reads an uppercase `HTTP_PROXY`, which
+  `curl` ignores. The decision's point, that a proxied network still reaches
+  the image, stands.
+- **The caret requirement's reason is now honest.** Three guards rest on
+  `ureq`'s behaviour. Clauses 7 and 9 re-check gzip, and clause 5 re-checks
+  the `LimitReader` boundary. No clause re-checks the global timeout bounding
+  the body. So a `Cargo.lock` upgrade of `ureq` past 3.4 re-runs round 1's
+  timeout probe by hand, and records the result here.
+
+`reviewed: 2026-09-21` is set on Phase 4.
+
+### Round 1 — Phase 4 only — 2026-09-21 — fresh clean-room reviewer with repo access — **NOT READY**
+
+**Round 0**, asked by the author before this round: yes. Phase 4 produces the
+observable directly: `md2pdf --fetch paper.md` writes a PDF with the image
+typeset in it, where Phase 3 reached that only at the library level. It is
+the right one: the CLI is this repository's own caller, and it fetches only
+under the opt-in the user chose (OQ-3).
+
+**Verdict: NOT READY**, with one blocking finding.
+
+**How the reviewer checked `ureq`.** It read `ureq` 3.4.0 and `ureq-proto`
+0.6.1, resolved the new dependency offline in a scratch copy of the repo, and
+ran `tools/third-party-licenses.py` there. It also built a probe crate that
+ran `ureq` against std `TcpListener` servers. **Every OQ-4 fact held**, and
+the probes added these:
+- a global timeout bounds a trickling body (1.5 s, failing at 1.50 s);
+- ten chained redirects are followed, and the eleventh fails;
+- with `gzip` off, no `Accept-Encoding` is sent and a gzip body passes
+  through undecoded;
+- a redirect to `ftp:` fails, and a `file:` or `data:` location is joined as
+  a path on the same host;
+- `https:/example.com/x.png` fails with `http: invalid format`;
+- the addition brings 15 packages and moves no existing version.
+
+**The blocker, fixed in scope:** `tools/third-party-licenses.py:identify`
+filed every ISC text as 0BSD. Both texts carry "with or without fee", and the
+script keyed on it. It returned `0BSD` for all four ISC files the TLS stack
+brings, and listed `rustls-webpki` and `untrusted` as shipping no licence
+file. **The author checked that nothing shipped is misfiled today:** the tree
+has no ISC crate, and the only 0BSD rows are `adler2` and
+`roman-numerals-rs`. The rule is now ISC if and only if ISC's "provided that
+… appear in all copies" proviso is present. Regeneration moved into the
+phase, and clause 10 checks the result.
+
+**Eight non-blocking findings, all accepted:**
+1. **Regeneration breaks
+   `the_notice_states_the_facts_the_table_and_the_font_directory_hold`**
+   until `cli/src/main.rs:NOTICE` follows the table. The phase now updates
+   `NOTICE`, and the close-out names README `## Use` and `## Licence`.
+2. **Clause 7 left its payload and outcome open.** It now names a checked-in
+   `dot.png.gz`, made with `gzip -n`, and the expected outcome, `typst
+   compilation failed`.
+3. **Nothing proved TLS was compiled in, and the manual check named an
+   `https://` example that does not exist.** Clause 9 now requires `rustls`
+   and `rustls-webpki-roots`. The check by hand names the URL of the Letur
+   document that began this work.
+4. **The cap was off by one.** `LimitReader` refuses a body that *reaches*
+   its limit, so the read uses `limit(FETCH_LIMIT + 1)`. Clause 5 tests
+   exactly `FETCH_LIMIT` against one byte more.
+5. **Clause 6 did not pin 10 redirects.** Ten redirects is now exit 0, and
+   eleven is exit 1.
+6. **Guard 6 leaned on a default that refuses only 4xx and 5xx.** The CLI
+   now tests `is_success()` with `http_status_as_error(false)`, and writes
+   the status as `404 Not Found`. A 304 is a clause. The dependency is stated
+   as a caret requirement, with its reason.
+7. **`ureq` honours proxy variables, with no exemption for loopback,** and
+   one `HTTP_PROXY` would fail the gate. The author decided the CLI honours
+   proxies, and every fetching test calls `env_remove` on all eight
+   variables.
+8. **The close-out missed two things:** the `rules/pipeline.md` cap, and
+   Phase 3's CLI test, which gains the hint line. Both are now named.
+
 ### Round 2 — Phase 3 only — 2026-09-21 — same reviewer, resumed with the author's changelog — **READY (converged)**
 
 **Verdict: READY**, with zero blocking findings. The reviewer checked the
