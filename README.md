@@ -425,8 +425,10 @@ flowchart LR
 As [](#fig:pipeline) shows, the emitter sits in the middle.
 ````
 
-Two kinds are drawn in this release: **flowcharts** (`flowchart` or `graph`) and
-**sequence diagrams** (`sequenceDiagram`). Any other kind is an error naming the keyword
+Five kinds are drawn in this release: **flowcharts** (`flowchart` or `graph`), **sequence
+diagrams** (`sequenceDiagram`), **class diagrams** (`classDiagram` or `classDiagram-v2`),
+**state diagrams** (`stateDiagram` or `stateDiagram-v2`) and **entity-relationship
+diagrams** (`erDiagram`). Any other kind is an error naming the keyword
 you wrote and its line, as is a syntax error inside the block. Everything is drawn on your
 machine, inside `md2pdf`, with no browser and no network.
 

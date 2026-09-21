@@ -374,10 +374,16 @@ number copied verbatim — checked to be a plain decimal before it enters the so
 against the CSS merman writes.
 
 `core/src/diagram.rs:ALLOWED` is the list, keyed on the id merman's detection reports rather
-than on the keyword, which is what folds `graph` into `flowchart`: `flowchart-v2` (alt text
-`flowchart`) and `sequence` (`sequence diagram`). A type is refused **before any layout**,
-named by the keyword the author wrote — the first word of the first non-blank line not
-opening `%%` — at that line. Before detection, `core/src/diagram.rs:scan` refuses `%%{`
+than on the keyword, with the keywords that reach each id and its alt text:
+`flowchart-v2` (`flowchart`, `graph`; alt text `flowchart`), `sequence`
+(`sequenceDiagram`; `sequence diagram`), `classDiagram` (`classDiagram`, `classDiagram-v2`;
+`class diagram`), `stateDiagram` (`stateDiagram`, `stateDiagram-v2`; `state diagram`) and
+`er` (`erDiagram`; `entity-relationship diagram`). Keying on the id is what folds each pair
+of keywords into one type; `classDiagram-v2` reaches `classDiagram` because merman's class
+renderer defaults to `dagre-wrapper`, and a unit test holds every keyword to its row's id. A
+type is refused **before any layout**, named by the keyword the author wrote — the first
+word of the first non-blank line not opening `%%` — at that line, with every keyword the
+rows name, built from them. Before detection, `core/src/diagram.rs:scan` refuses `%%{`
 anywhere in the block, because merman applies a directive wherever it finds one, and a
 first non-blank line that trims to `---`, which is front matter; both would set the theme or
 the label size the sizing rule assumes. The scan is textual because merman silently ignores
@@ -387,12 +393,16 @@ line its byte span starts on, the fence's plus one plus the newlines before it; 
 render failure at the fence's.
 
 The configuration is fixed in `core`, in `core/src/diagram.rs:site_config`: the `neutral`
-theme, print spacing for flowcharts and sequence diagrams, `mirrorActors: false`, and no
-`fontFamily`, so Typst draws every label in the look's own text font. The render always
-uses `SvgPipeline::resvg_safe()` — merman's default puts flowchart labels in
-`<foreignObject>`, which Typst does not draw — and always `Engine::new()`, whose runtime
-policy fixes the clock, time zone and seed, so the same block draws the same bytes;
-`wasm32` and native agree on the fixture's source byte for byte.
+theme, print spacing for flowcharts and sequence diagrams (class, state and ER diagrams keep
+merman's own), `mirrorActors: false`, and no `fontFamily`, so Typst draws every label in
+the look's own text font. The render always uses `SvgPipeline::resvg_safe()` — merman's
+default puts flowchart, class, state and ER labels in `<foreignObject>`, which Typst does
+not draw, and a unit test holds every allowed type free of it — and always `Engine::new()`,
+whose runtime policy fixes the clock, time zone and seed, so the same block draws the same
+bytes. `wasm32` and native agree on the flowchart, sequence, class and ER fixtures' sources
+byte for byte; the state fixture's differs in the last digit of some trig-derived
+coordinates, and its PDF is byte-identical, because usvg reads coordinates at a precision
+that digit does not survive.
 
 **A diagram stands only at the top level of a file.** `core/src/emit.rs:step` refuses one
 in a list item, a block quote, a footnote definition or a `:::` group, at the fence's line
@@ -406,9 +416,11 @@ caption size (9pt, 9.5pt) and never enlarged; if that is wider than the column, 
 column while shrinking keeps its labels at 8pt or more; otherwise a captioned diagram floats
 across the page (`placement: auto, scope: "parent"`) in a look with more than one column,
 and one wider than the page shrinks to it. An uncaptioned diagram never floats, since only a
-caption gives a reader the number to find a float by. A test in `core/src/lib.rs` reads each
-image's width and each figure's scope off the introspector and holds them to the rule in both
-looks at one and two columns.
+caption gives a reader the number to find a float by. Two tests in `core/src/lib.rs` read
+each image's width and each figure's scope off the introspector and hold them to the rule in
+both looks at one and two columns: one over six flowcharts and sequence diagrams, one in each
+band, and one over the class, state and ER fixtures, which stay in their column — the ER
+diagram, too wide at caption size, by the 8pt tolerance.
 
 ## Images and their files
 

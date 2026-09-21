@@ -16,7 +16,7 @@ phases:
     by: null
   - name: "Phase 2 — class, state and entity-relationship diagrams"
     reviewed: 2026-09-21
-    shipped: null
+    shipped: 2026-09-21
     cut: null
     by: null
 
@@ -267,6 +267,14 @@ through `Engine::parse_metadata_sync`, which runs before any layout:
 
 The keyword-to-id mapping was probed on 2026-09-20. `flowchart-elk` reports its own id,
 so the list refuses it, and ELK is not compiled in anyway.
+
+> **CORRECTED 2026-09-21, by Phase 2.** The table's second column is incomplete for one row:
+> `classDiagram-v2` reaches `classDiagram` too. merman's class renderer defaults to
+> `dagre-wrapper`, under which its `detector_class_v2` takes both spellings, so keying on
+> the id accepts it, as it accepts `stateDiagram-v2`. By the user's decision it is named
+> beside `stateDiagram-v2` in the refusal and in the README, and a unit test in
+> `core/src/diagram.rs` now holds every listed keyword to its row's id. `rules/pipeline.md`
+> is what tracks the code.
 
 A type outside the list is refused with the keyword as the author wrote it. **Keying on
 the id and not the keyword** is what folds `graph` into `flowchart`, and
