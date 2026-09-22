@@ -4,8 +4,12 @@
 //! the exit codes that the library tests cannot reach.
 
 use std::collections::BTreeSet;
+use std::io::{Read, Write};
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 const BIN: &str = env!("CARGO_BIN_EXE_md2pdf");
 
@@ -197,8 +201,8 @@ fn a_missing_image_file_names_the_path_the_line_and_the_reason() {
     assert!(stderr.contains("os error"), "stderr: {stderr}");
 }
 
-/// A document naming an image by URL exits 1 in `core`'s own words, and the
-/// binary reads no file for the URL.
+/// Without `--fetch`, a document naming an image by URL exits 1 in `core`'s own
+/// words with the hint under them, and the binary reads no file for the URL.
 ///
 /// A real PNG sits at `https:/example.com/figures/plot.png` under the scratch
 /// directory, which is where joining the URL onto that directory would land. A
@@ -221,9 +225,307 @@ fn a_url_image_exits_non_zero_and_reads_no_file_for_it() {
     assert_eq!(out.status.code(), Some(1), "the run: {:?}", out);
     assert_eq!(
         String::from_utf8(out.stderr).unwrap(),
-        "error: no image fetched for 'https://example.com/figures/plot.png' at line 3\n"
+        "error: no image fetched for 'https://example.com/figures/plot.png' at line 3\n\
+         hint: pass --fetch to download images named by a URL\n"
     );
     assert!(!input.with_extension("pdf").exists(), "a PDF was written");
+}
+
+// -- mpdf-002 Phase 4: the CLI fetches, when asked ---------------------------
+
+/// `cli/src/main.rs:FETCH_LIMIT`, written out again rather than shared: the
+/// test holds the binary to the number the spec names.
+const FETCH_LIMIT: usize = 20 * 1024 * 1024;
+
+/// One answer from [`serve`]: the status line's code and reason, any header
+/// beyond the two every answer carries, and the body.
+struct Reply {
+    status: &'static str,
+    headers: Vec<(&'static str, String)>,
+    body: Vec<u8>,
+}
+
+impl Reply {
+    fn ok(body: &[u8]) -> Self {
+        Self {
+            status: "200 OK",
+            headers: Vec::new(),
+            body: body.to_vec(),
+        }
+    }
+
+    fn status(status: &'static str) -> Self {
+        Self {
+            status,
+            headers: Vec::new(),
+            body: Vec::new(),
+        }
+    }
+}
+
+/// A server on `127.0.0.1` that answers every request with `answer(path)` and
+/// counts the requests it was sent.
+///
+/// `std::net::TcpListener` in a thread, so the suite needs no new dependency
+/// and no internet. One request per connection, answered with `Connection:
+/// close`, is all a client fetching one image at a time needs. A failed write
+/// is ignored, because the cap clause hangs up in the middle of a body on
+/// purpose. The count is taken before the answer is written, so it is final by
+/// the time the binary has exited.
+fn serve(answer: impl Fn(&str) -> Reply + Send + 'static) -> (u16, Arc<AtomicUsize>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let requests = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&requests);
+
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else {
+                continue;
+            };
+
+            let mut head = Vec::new();
+            let mut byte = [0u8; 1];
+            while !head.ends_with(b"\r\n\r\n") {
+                match stream.read(&mut byte) {
+                    Ok(1) => head.push(byte[0]),
+                    _ => break,
+                }
+            }
+            let head = String::from_utf8_lossy(&head);
+            let Some(path) = head.split_whitespace().nth(1) else {
+                continue;
+            };
+            counted.fetch_add(1, Ordering::SeqCst);
+
+            let reply = answer(path);
+            let mut out = format!(
+                "HTTP/1.1 {}\r\nContent-Length: {}\r\nConnection: close\r\n",
+                reply.status,
+                reply.body.len()
+            );
+            for (name, value) in &reply.headers {
+                out.push_str(&format!("{name}: {value}\r\n"));
+            }
+            out.push_str("\r\n");
+            let _ = stream
+                .write_all(out.as_bytes())
+                .and_then(|()| stream.write_all(&reply.body));
+        }
+    });
+
+    (port, requests)
+}
+
+/// The binary, with every proxy variable `ureq` reads removed from its
+/// environment.
+///
+/// `ureq` sends every fetch through a proxy the environment names, loopback
+/// included, so one `HTTP_PROXY` in a developer's shell would fail each
+/// fetching clause with a refused connection that says nothing about the code.
+/// Both cases, because `ureq` reads both.
+fn run_fetching(args: &[&std::ffi::OsStr]) -> Output {
+    let mut command = Command::new(BIN);
+    for name in [
+        "ALL_PROXY",
+        "all_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ] {
+        command.env_remove(name);
+    }
+    command.args(args).output().unwrap()
+}
+
+/// A document naming `url` twice, alone in its paragraph on line 3 and inline
+/// on line 5, in a scratch directory of its own.
+fn url_document(name: &str, url: &str) -> PathBuf {
+    let input = scratch_dir(name).join("doc.md");
+    std::fs::write(
+        &input,
+        format!("# H\n\n![A plot]({url})\n\nThe same ![plot]({url}) inline.\n"),
+    )
+    .unwrap();
+    input
+}
+
+/// **The observable Phase 4 produces.** With `--fetch`, a document naming an
+/// image by URL writes a PDF, and a URL named twice is fetched once.
+#[test]
+fn with_fetch_a_url_image_is_downloaded_once_and_converts() {
+    let dot = std::fs::read(fixture("dot.png")).unwrap();
+    let (port, requests) = serve(move |_| Reply::ok(&dot));
+    let input = url_document("fetch-ok", &format!("http://127.0.0.1:{port}/plot.png"));
+
+    let out = run_fetching(&[input.as_ref(), "--fetch".as_ref()]);
+    assert!(out.status.success(), "the run failed: {:?}", out);
+
+    let bytes = std::fs::read(input.with_extension("pdf")).unwrap();
+    assert!(bytes.starts_with(b"%PDF"), "the output is not a PDF");
+    assert_eq!(requests.load(Ordering::SeqCst), 1, "one URL, one request");
+}
+
+/// Without `--fetch`, nothing is sent, and the refusal carries the hint that
+/// names the flag.
+#[test]
+fn without_fetch_nothing_is_sent_and_the_hint_names_the_flag() {
+    let (port, requests) = serve(|_| Reply::ok(b""));
+    let url = format!("http://127.0.0.1:{port}/plot.png");
+    let input = url_document("fetch-off", &url);
+
+    let out = run_fetching(&[input.as_ref()]);
+    assert_eq!(out.status.code(), Some(1), "the run: {:?}", out);
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        format!(
+            "error: no image fetched for '{url}' at line 3\n\
+             hint: pass --fetch to download images named by a URL\n"
+        )
+    );
+    assert_eq!(requests.load(Ordering::SeqCst), 0, "a request was sent");
+}
+
+/// Only 2xx succeeds, and a failure names the status the way a reader knows it.
+///
+/// The 304 is the row `ureq`'s own default would have let through: it refuses
+/// 4xx and 5xx only, and the empty body would have reached `core` as "does not
+/// hold image data", which names the wrong problem.
+#[test]
+fn a_status_outside_2xx_fails_naming_the_code_and_its_reason() {
+    for (status, name) in [
+        ("404 Not Found", "fetch-404"),
+        ("304 Not Modified", "fetch-304"),
+    ] {
+        let (port, _) = serve(move |_| Reply::status(status));
+        let url = format!("http://127.0.0.1:{port}/plot.png");
+        let input = url_document(name, &url);
+
+        let out = run_fetching(&[input.as_ref(), "--fetch".as_ref()]);
+        assert_eq!(out.status.code(), Some(1), "for {status}: {:?}", out);
+        assert_eq!(
+            String::from_utf8(out.stderr).unwrap(),
+            format!("error: cannot fetch {url} for the image at line 3: {status}\n")
+        );
+    }
+}
+
+/// A fetch nothing answers fails naming the URL and the line.
+#[test]
+fn a_fetch_nothing_answers_fails_naming_the_url_and_the_line() {
+    // Bound and dropped, so the port is known and nothing listens on it.
+    let port = {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
+    let url = format!("http://127.0.0.1:{port}/plot.png");
+    let input = url_document("fetch-refused", &url);
+
+    let out = run_fetching(&[input.as_ref(), "--fetch".as_ref()]);
+    assert_eq!(out.status.code(), Some(1), "the run: {:?}", out);
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.starts_with(&format!(
+            "error: cannot fetch {url} for the image at line 3: "
+        )),
+        "stderr: {stderr}"
+    );
+}
+
+/// **The cap, at its boundary.** A body of exactly `FETCH_LIMIT` bytes gets
+/// through, and `core` refuses the zeros as no image. One byte more is refused
+/// by the cap, in the CLI's own words.
+#[test]
+fn the_cap_lets_exactly_twenty_megabytes_through_and_not_one_byte_more() {
+    for (len, name) in [
+        (FETCH_LIMIT, "fetch-at-cap"),
+        (FETCH_LIMIT + 1, "fetch-over-cap"),
+    ] {
+        let (port, _) = serve(move |_| Reply::ok(&vec![0; len]));
+        let url = format!("http://127.0.0.1:{port}/plot.png");
+        let input = url_document(name, &url);
+
+        let out = run_fetching(&[input.as_ref(), "--fetch".as_ref()]);
+        assert_eq!(out.status.code(), Some(1), "for {len} bytes: {:?}", out);
+        let expected = if len == FETCH_LIMIT {
+            format!("error: image file '{url}' at line 3 does not hold image data\n")
+        } else {
+            format!("error: cannot fetch {url} for the image at line 3: larger than 20 MB\n")
+        };
+        assert_eq!(String::from_utf8(out.stderr).unwrap(), expected);
+    }
+}
+
+/// Ten redirects are followed and an eleventh is not, which pins the limit at
+/// exactly 10.
+#[test]
+fn ten_redirects_are_followed_and_an_eleventh_is_not() {
+    let dot = std::fs::read(fixture("dot.png")).unwrap();
+    let (port, _) =
+        serve(
+            move |path| match path.strip_prefix("/r/").and_then(|n| n.parse::<u32>().ok()) {
+                Some(n) if n > 0 => Reply {
+                    status: "302 Found",
+                    headers: vec![("Location", format!("/r/{}", n - 1))],
+                    body: Vec::new(),
+                },
+                _ => Reply::ok(&dot),
+            },
+        );
+
+    for (hops, succeeds) in [(10, true), (11, false)] {
+        let input = url_document(
+            &format!("fetch-redirect-{hops}"),
+            &format!("http://127.0.0.1:{port}/r/{hops}"),
+        );
+        let out = run_fetching(&[input.as_ref(), "--fetch".as_ref()]);
+        assert_eq!(
+            out.status.success(),
+            succeeds,
+            "{hops} redirects: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+}
+
+/// A gzip body is handed on as it arrived, not decoded.
+///
+/// `dot.png.gz` carries the gzip magic, so `core` passes it as SVGZ — its own
+/// recorded limit for bytes corrupt past their marker — and Typst's SVG reader
+/// refuses what is inside. A build with `ureq`'s `gzip` on would decode it to
+/// `dot.png` and exit 0, so this tells the two apart.
+#[test]
+fn a_gzip_body_is_handed_on_undecoded() {
+    let gz = std::fs::read(fixture("dot.png.gz")).unwrap();
+    let (port, _) = serve(move |_| Reply {
+        status: "200 OK",
+        headers: vec![("Content-Encoding", "gzip".to_string())],
+        body: gz.clone(),
+    });
+    let input = url_document("fetch-gzip", &format!("http://127.0.0.1:{port}/plot.png"));
+
+    let out = run_fetching(&[input.as_ref(), "--fetch".as_ref()]);
+    assert_eq!(out.status.code(), Some(1), "the run: {:?}", out);
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.starts_with("error: typst compilation failed"),
+        "stderr: {stderr}"
+    );
+}
+
+/// `--emit-typst` fetches nothing, with `--fetch` or without it, just as it
+/// reads no image file.
+#[test]
+fn emit_typst_fetches_nothing_even_with_fetch() {
+    let (port, requests) = serve(|_| Reply::ok(b""));
+    let input = url_document("fetch-emit", &format!("http://127.0.0.1:{port}/plot.png"));
+
+    let out = run_fetching(&[input.as_ref(), "--emit-typst".as_ref(), "--fetch".as_ref()]);
+    assert!(out.status.success(), "the run failed: {:?}", out);
+    assert_eq!(requests.load(Ordering::SeqCst), 0, "a request was sent");
 }
 
 /// A document, its bibliography and the PDF that carries the reference list.
