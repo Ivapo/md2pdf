@@ -2,6 +2,82 @@
 
 Append-only. One heading per round, newest first.
 
+### Phase 4 implementation — 2026-09-21 — **SHIPPED**
+
+One change goes beyond the reviewed text, and one release decision is recorded.
+
+**`identify` also drops a lone comment marker while normalising.** A standalone
+`//`, `#` or `*` is removed before matching. `untrusted` ships its ISC text as
+`//` comments, which broke the proviso phrase across lines. So the corrected
+rule, which the spec had stated as "ISC if and only if the proviso is present",
+still filed that one file as 0BSD. The generated output was unaffected: the ISC
+text is taken from `ring`, which sorts first, and 0BSD's from `adler2`. The fix
+makes `identify` right for the file anyway. It was checked over all 581 licence
+files of the 365 crates already in the table, plus the new ones. Only the five
+new TLS texts are filed differently, and each is now correct.
+
+**The 0.3.0 publish moved past Phase 4, on purpose.** Phase 3's close-out
+releases right after it. The version was bumped in `22e91c1` and then held, by
+the user's decision:
+- Letur's side of a URL image is not designed yet, so a published core 0.3.0
+  unblocked nobody;
+- a CLI that recognises URL images but cannot fetch them made a thin release.
+
+So 0.3.0 goes to the registry once, carrying both phases. `22e91c1`'s
+packaging check is re-run from the commit that ships.
+
+**The gate passed.**
+- **Clauses 1 to 8** are eight CLI tests against a server on `127.0.0.1`, and
+  every fetching run removes the eight proxy variables. Four mutations make
+  their clauses fail:
+  - dropping the `+ 1`;
+  - `http_status_as_error(true)`;
+  - `MAX_REDIRECTS` at 11;
+  - `features = ["rustls", "gzip"]`.
+- **Clause 9, by hand:**
+  - `cargo tree -p md2pdf-core -e normal` lists no HTTP client;
+  - `cargo tree -p md2pdf-cli -e features -i ureq` shows `rustls`,
+    `rustls-no-provider` and `rustls-webpki-roots`, and neither `gzip` nor
+    `cookies`.
+- **Clause 10.**
+  - The table has 379 crates under 14 terms.
+  - `### ISC` is reproduced from `ring` 0.17.14 (`LICENSE-other-bits`), and
+    `### CDLA-Permissive-2.0` from `webpki-roots` 1.0.9.
+  - `### 0BSD` is still from `adler2` 2.0.1, and there is no "not reproduced"
+    section.
+  - The header's "eight are" superset claim was re-measured against
+    `cargo tree -e normal`, and it is still the same eight crates.
+  - The notice is 47 lines against its cap of 50.
+- **Clause 11:** `cargo test --workspace` passes at 326 tests.
+
+The lockfile gained the 15 packages round 1 measured, resolved with
+`cargo metadata --offline`, and no existing version moved.
+
+**Two checks outside the gate.**
+- The Phase 3 corpus script compared this binary with Phase 3's, without
+  `--fetch`. All 551 outputs over 96 documents are byte-identical.
+- The live fetch over TLS used the URL the spec names, not a stand-in:
+  https://cdn.prod.website-files.com/68a44d4040f98a4adf2207b6/6a8739a1b934ffe55bfc9715_44592f18.png
+  It succeeded in 0.8 s, and the image was checked by eye on the rendered page.
+  `ureq` is locked at 3.4.0, so the by-hand timeout probe that an upgrade past
+  3.4 requires was not due.
+
+**Close-out.**
+- **`rules/pipeline.md`'s CLI section** now covers:
+  - the flag, and the hint and why it is printed for one refusal only;
+  - the three failure reasons and the eight guards, with their constants;
+  - the `ureq` features and the proxy decision.
+
+  **`max_lines` rose from 1380 to 1405**, the body measured after the pass.
+  The reason is that the CLI gained a network channel of its own. The section
+  was tightened first: two overlong lines were reflowed, one of them left by
+  Phase 3's close-out.
+- **The README** documents the flag in `## Use`, its limits and both console
+  lines in `## Images`, and the new count in `## Licence`. Both console lines
+  were reproduced from the binary.
+- **`mpdf-001` §2** carries a dated `CORRECTED` note naming `--fetch` as the
+  one exception to "fully offline".
+
 ### Phase 3 implementation — 2026-09-21 — **SHIPPED**
 
 No departure from the reviewed text. Four choices the phase left open, recorded:

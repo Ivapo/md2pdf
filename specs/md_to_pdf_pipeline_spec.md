@@ -205,6 +205,13 @@ package — `mitex` included — we vendor it as a bundled asset, fetched once a
 build time. The running app stays fully offline and behaves identically on the
 native and WASM targets.
 
+> **CORRECTED 2026-09-21, by `mpdf-002` Phase 4.** "Fully offline" has one exception:
+> `md2pdf --fetch` downloads the images a document names by an `http` or `https` URL.
+> The flag is off by default, so every run without it is as offline as before. The
+> decision this section records is unchanged: the `World` resolves no packages, fonts
+> are bundled, and `core` fetches nothing on any target. `mpdf-002` §2's "Why a URL is a
+> name, and the caller fetches it" records why the fetch is the caller's.
+
 ### Why fonts are bundled, not discovered (decision, recorded)
 
 The `World` receives fonts as in-memory bytes on every target, and a browser

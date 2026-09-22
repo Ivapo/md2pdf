@@ -99,6 +99,7 @@ $ open samples/diagrams.pdf
 $ md2pdf paper.md                 # writes paper.pdf
 $ md2pdf paper.md -o report.pdf   # writes report.pdf
 $ md2pdf paper.md --emit-typst    # prints the generated Typst source
+$ md2pdf paper.md --fetch         # also downloads the images it names by URL
 $ md2pdf --licenses               # prints what it carries, and under what terms
 $ md2pdf --licenses=full          # prints the licence texts themselves
 ```
@@ -108,6 +109,10 @@ Without `-o`, the PDF lands at the input path with a `.pdf` extension.
 `--emit-typst` prints the Typst source instead of compiling it. That output imports the
 look the frontmatter chose, which exists only inside the compiler's virtual filesystem, so
 it serves inspection rather than a standalone `typst compile`.
+
+`--fetch` downloads the images a document names by an `http` or `https` URL. Without it
+`md2pdf` never touches the network, and such a document stops at its first URL image; see
+`## Images` below for the limits a fetch keeps.
 
 `--licenses` is the one invocation that takes no document. It prints a one-page
 provenance notice: what the binary carries and under what terms. `--licenses=full` prints
@@ -300,13 +305,26 @@ Bytes that disagree with their extension are an error too. So are three destinat
 any URI scheme other than `http` or `https`, a `data:` URI included; an absolute path,
 which converts on one machine only; and a path that leaves the document's own folder.
 
-An `http` or `https` URL is accepted as an image's name, but the library fetches
-nothing: a program that embeds it supplies the image's bytes under the URL. `md2pdf`
-does not fetch them yet, so a document naming an image by URL stops at that image:
+An `http` or `https` URL is accepted as an image's name. The library fetches nothing, and
+a program that embeds it supplies the image's bytes under the URL. `md2pdf` fetches only
+when asked, so a document from anywhere reaches the network only when you decide it should:
 
 ```console
 $ md2pdf paper.md
 error: no image fetched for 'https://example.com/figures/plot.png' at line 7
+hint: pass --fetch to download images named by a URL
+```
+
+Under `--fetch`, each distinct URL is downloaded once, within fixed limits: 30 seconds and
+20 MB per image, at most ten redirects, and only a `2xx` answer counts. The format is read
+from the bytes, never from the URL's ending, so an HTML error page served where an image
+should be is refused naming the URL. Nothing is cached or written to disk, and a fetch goes
+through any proxy the environment names. A fetch that fails names the URL, the line and
+the reason:
+
+```console
+$ md2pdf paper.md --fetch
+error: cannot fetch https://example.com/figures/plot.png for the image at line 7: 404 Not Found
 ```
 
 That last one is about where a path *lands*, not about the `..` written in it. A document
@@ -930,7 +948,7 @@ rest. **Four crates are MPL-2.0**, which is copyleft per file: `cssparser`,
 `cssparser-macros`, `dtoa-short` and `selectors`, which merman's HTML sanitiser brings. They
 are compiled in unmodified, their source is on crates.io under the name and version the list
 gives each, and their terms reach those files and nothing around them.
-`THIRD-PARTY-LICENSES.md` is the full list, 365 crates with the text of every licence
+`THIRD-PARTY-LICENSES.md` is the full list, 379 crates with the text of every licence
 among them, generated from the resolve by `tools/third-party-licenses.py` and shipped in
 both crates.
 

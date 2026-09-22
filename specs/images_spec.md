@@ -27,7 +27,7 @@ phases:
     by: null
   - name: "Phase 4 — the CLI fetches, when asked"
     reviewed: 2026-09-21
-    shipped: null
+    shipped: 2026-09-21
     cut: null
     by: null
 
