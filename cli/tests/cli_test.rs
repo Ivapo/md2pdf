@@ -950,7 +950,8 @@ fn faces(count: usize) -> String {
 ///
 /// **The copyleft clause is the one that most needs this**, and
 /// `copyleft_findings` holds it: the notice's account of copyleft is a claim
-/// about a resolve of 365 crates that no author will re-audit by hand.
+/// about a resolve of several hundred crates that no author will re-audit by
+/// hand.
 #[test]
 fn the_notice_states_the_facts_the_table_and_the_font_directory_hold() {
     let out = run(&["--licenses".as_ref()]);

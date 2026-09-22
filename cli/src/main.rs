@@ -266,7 +266,7 @@ fn default_output(input: &Path) -> PathBuf {
 /// What the binary carries and under what terms, in one page.
 ///
 /// **A provenance notice, not a dependency dump.** The texts `licenses` below
-/// returns run to 1398 lines, and the two facts a reader holding the executable
+/// returns run to 1500 lines, and the two facts a reader holding the executable
 /// would actually be surprised by — that the Typst compiler is compiled in
 /// under Apache-2.0, and that six font faces travel under two licences of their
 /// own — are one table row and one filename line somewhere inside them. This is
@@ -312,14 +312,15 @@ is not covered by that licence:
     Licence   GUST Font License
 
 Everything else is a Rust crate compiled from source. THIRD-PARTY-LICENSES.md
-names the 365 crates the resolve reaches, each under one or more of MIT,
-Apache-2.0 (once with the LLVM-exception), BSD-2-Clause, BSD-3-Clause, Zlib,
-Unicode-3.0, 0BSD, CC0-1.0, BSL-1.0, the Unlicense and MPL-2.0. Of those,
-cssparser, cssparser-macros, dtoa-short and selectors are MPL-2.0, which is
-copyleft per file: they are compiled in unmodified, and their source is on
-crates.io under the name and version that list gives each. What the rest ask
-for is attribution, which is this notice. The full texts — the MIT terms,
-both font licences and that list — are compiled into this binary too:
+names the 379 crates the resolve reaches, each under one or more of MIT,
+Apache-2.0 (once with the LLVM-exception), BSD-2-Clause, BSD-3-Clause, ISC,
+Zlib, Unicode-3.0, 0BSD, CC0-1.0, BSL-1.0, the Unlicense, MPL-2.0 and, for the
+TLS root certificates, CDLA-Permissive-2.0. Of those, cssparser,
+cssparser-macros, dtoa-short and selectors are MPL-2.0, which is copyleft per
+file: they are compiled in unmodified, and their source is on crates.io under
+the name and version that list gives each. What the rest ask for is
+attribution, which is this notice. The full texts — the MIT terms, both font
+licences and that list — are compiled into this binary too:
 
     md2pdf --licenses=full
 

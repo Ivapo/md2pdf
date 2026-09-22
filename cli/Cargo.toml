@@ -22,3 +22,10 @@ path = "src/main.rs"
 # workspace build uses and the version is what the registry resolves.
 md2pdf-core = { path = "../core", version = "0.3.0" }
 clap = { version = "4", features = ["derive"] }
+# The client `--fetch` downloads images with, and nothing else reaches it: `core`
+# stays network-free. `rustls` brings TLS with bundled webpki roots, so a fetch
+# trusts the same roots on every machine. **The defaults are off on purpose.**
+# `gzip` would decode after the size cap counts, so a small body could inflate
+# past any limit in memory; without it the cap counts exactly the bytes handed to
+# `core`. `cookies` is not a default and stays off: a fetch keeps no state.
+ureq = { version = "3.4", default-features = false, features = ["rustls"] }

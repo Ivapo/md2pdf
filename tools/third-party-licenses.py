@@ -59,11 +59,18 @@ def identify(body):
     """Which SPDX term a licence file's own text is, read rather than guessed
     from its filename — `bytemuck`'s `LICENSE-APACHE` is Apache-2.0 and not the
     Zlib its manifest also offers, and `adler2`'s `LICENSE-0BSD` is not MIT."""
-    b = " ".join(body.split()).lower()
+    # A comment marker standing alone is dropped with the whitespace, because a
+    # text shipped as a source comment would otherwise break every phrase below
+    # across its lines: `untrusted`'s ISC text is written in `//` comments.
+    b = " ".join(w for w in body.split() if w not in ("//", "#", "*")).lower()
     # First, because it is the one copyleft text in the tree, reached through
     # `lol_html` under merman, and the branches below would file it nowhere.
     if "mozilla public license" in b and "version 2.0" in b:
         return "MPL-2.0"
+    # The licence of `webpki-roots`, the root certificates the TLS stack under
+    # `ureq` bundles. It is a data licence, which is why it names no software.
+    if "community data license agreement" in b and "permissive" in b and "version 2.0" in b:
+        return "CDLA-Permissive-2.0"
     if "apache license" in b and "version 2.0" in b:
         return "Apache-2.0"
     if "boost software license" in b:
@@ -82,8 +89,11 @@ def identify(body):
         return "BSD-2-Clause"
     if "permission to use, copy, modify, and/or distribute this software" in b:
         # Not a bare `"isc" in b`, which matches "d(isc)laims" and so files
-        # every 0BSD text as ISC. The two differ by the fee clause.
-        return "0BSD" if "with or without fee" in b else "ISC"
+        # every 0BSD text as ISC. Both texts grant "with or without fee"; what
+        # separates them is ISC's proviso, which 0BSD drops.
+        proviso = ("provided that the above copyright notice and this permission "
+                   "notice appear in all copies")
+        return "ISC" if proviso in b else "0BSD"
     if "permission is hereby granted, free of charge" in b:
         return "MIT"
     return None

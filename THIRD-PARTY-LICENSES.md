@@ -26,7 +26,7 @@ The bundled fonts are not here — they are not crates. `core/assets/fonts/OFL.t
 `core/assets/fonts/GUST-FONT-LICENSE.txt` travel beside them in the published crate, and
 the README names both.
 
-**365 crates, 25 distinct licence expressions, 12 distinct terms.**
+**379 crates, 29 distinct licence expressions, 14 distinct terms.**
 
 ## What ships
 
@@ -46,6 +46,7 @@ the README names both.
 | `arrayvec` | 0.7.8 | MIT OR Apache-2.0 |
 | `az` | 1.3.0 | MIT/Apache-2.0 |
 | `base64` | 0.22.1 | MIT OR Apache-2.0 |
+| `base64` | 0.23.1 | MIT OR Apache-2.0 |
 | `beef` | 0.5.2 | MIT OR Apache-2.0 |
 | `biblatex` | 0.12.0 | MIT OR Apache-2.0 |
 | `bincode` | 1.3.3 | MIT |
@@ -144,6 +145,8 @@ the README names both.
 | `hayro-write` | 0.7.0 | Apache-2.0 OR MIT |
 | `heck` | 0.5.0 | MIT OR Apache-2.0 |
 | `htmlize` | 1.1.0 | MIT OR Apache-2.0 |
+| `http` | 1.5.0 | MIT OR Apache-2.0 |
+| `httparse` | 1.10.1 | MIT OR Apache-2.0 |
 | `hypher` | 0.1.7 | MIT OR Apache-2.0 |
 | `icu_collator` | 2.2.1 | Unicode-3.0 |
 | `icu_collator_data` | 2.2.0 | Unicode-3.0 |
@@ -260,6 +263,7 @@ the README names both.
 | `rend` | 0.4.2 | MIT |
 | `resvg` | 0.47.0 | Apache-2.0 OR MIT |
 | `rgb` | 0.8.53 | MIT |
+| `ring` | 0.17.14 | Apache-2.0 AND ISC |
 | `rkyv` | 0.7.46 | MIT |
 | `rkyv_derive` | 0.7.46 | MIT |
 | `roman-numerals-rs` | 3.1.0 | 0BSD OR CC0-1.0 |
@@ -269,6 +273,9 @@ the README names both.
 | `rust_decimal` | 1.42.1 | MIT |
 | `rustc-hash` | 1.1.0 | Apache-2.0/MIT |
 | `rustc-hash` | 2.1.3 | Apache-2.0 OR MIT |
+| `rustls` | 0.23.43 | Apache-2.0 OR ISC OR MIT |
+| `rustls-pki-types` | 1.15.1 | MIT OR Apache-2.0 |
+| `rustls-webpki` | 0.103.15 | ISC |
 | `rustybuzz` | 0.20.1 | MIT |
 | `ryu` | 1.0.23 | Apache-2.0 OR BSL-1.0 |
 | `ryu-js` | 1.0.3 | Apache-2.0 OR BSL-1.0 |
@@ -301,6 +308,7 @@ the README names both.
 | `strum` | 0.27.2 | MIT |
 | `strum_macros` | 0.27.2 | MIT |
 | `subsetter` | 0.2.6 | MIT OR Apache-2.0 |
+| `subtle` | 2.6.1 | BSD-3-Clause |
 | `svgtypes` | 0.16.1 | Apache-2.0 OR MIT |
 | `syn` | 1.0.109 | MIT OR Apache-2.0 |
 | `syn` | 2.0.119 | MIT OR Apache-2.0 |
@@ -360,9 +368,13 @@ the README names both.
 | `unicode-width` | 0.2.2 | MIT OR Apache-2.0 |
 | `unsafe-libyaml` | 0.2.11 | MIT |
 | `unscanny` | 0.1.0 | MIT OR Apache-2.0 |
+| `untrusted` | 0.9.0 | ISC |
+| `ureq` | 3.4.0 | MIT OR Apache-2.0 |
+| `ureq-proto` | 0.6.1 | MIT OR Apache-2.0 |
 | `url` | 2.5.8 | MIT OR Apache-2.0 |
 | `usvg` | 0.47.0 | Apache-2.0 OR MIT |
 | `utf16_iter` | 1.0.5 | Apache-2.0 OR MIT |
+| `utf8-zero` | 0.8.1 | MIT OR Apache-2.0 |
 | `utf8_iter` | 1.0.4 | Apache-2.0 OR MIT |
 | `utf8parse` | 0.2.2 | Apache-2.0 OR MIT |
 | `uuid` | 1.24.0 | Apache-2.0 OR MIT |
@@ -375,6 +387,7 @@ the README names both.
 | `wasmi_core` | 1.1.0 | MIT/Apache-2.0 |
 | `wasmi_ir` | 1.1.0 | MIT/Apache-2.0 |
 | `wasmparser` | 0.239.0 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| `webpki-roots` | 1.0.9 | CDLA-Permissive-2.0 |
 | `weezl` | 0.1.12 | MIT OR Apache-2.0 |
 | `winnow` | 0.5.40 | MIT |
 | `write-fonts` | 0.48.1 | MIT OR Apache-2.0 |
@@ -390,6 +403,7 @@ the README names both.
 | `zerocopy-derive` | 0.8.56 | BSD-2-Clause OR Apache-2.0 OR MIT |
 | `zerofrom` | 0.1.8 | Unicode-3.0 |
 | `zerofrom-derive` | 0.1.7 | Unicode-3.0 |
+| `zeroize` | 1.9.0 | Apache-2.0 OR MIT |
 | `zerotrie` | 0.2.4 | Unicode-3.0 |
 | `zerovec` | 0.11.6 | Unicode-3.0 |
 | `zerovec-derive` | 0.11.3 | Unicode-3.0 |
@@ -721,6 +735,94 @@ SHALL THE COPYRIGHT HOLDERS OR ANYONE DISTRIBUTING THE SOFTWARE BE LIABLE
 FOR ANY DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE,
 ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+```
+
+### CDLA-Permissive-2.0
+
+*Reproduced from webpki-roots 1.0.9 (LICENSE).*
+
+```
+# Community Data License Agreement - Permissive - Version 2.0
+
+This is the Community Data License Agreement - Permissive, Version
+2.0 (the "agreement"). Data Provider(s) and Data Recipient(s) agree
+as follows:
+
+## 1. Provision of the Data
+
+1.1. A Data Recipient may use, modify, and share the Data made
+available by Data Provider(s) under this agreement if that Data
+Recipient follows the terms of this agreement.
+
+1.2. This agreement does not impose any restriction on a Data
+Recipient's use, modification, or sharing of any portions of the
+Data that are in the public domain or that may be used, modified,
+or shared under any other legal exception or limitation.
+
+## 2. Conditions for Sharing Data
+
+2.1. A Data Recipient may share Data, with or without modifications, so
+long as the Data Recipient makes available the text of this agreement
+with the shared Data.
+
+## 3. No Restrictions on Results
+
+3.1. This agreement does not impose any restriction or obligations
+with respect to the use, modification, or sharing of Results.
+
+## 4. No Warranty; Limitation of Liability
+
+4.1. All Data Recipients receive the Data subject to the following
+terms:
+
+THE DATA IS PROVIDED ON AN "AS IS" BASIS, WITHOUT REPRESENTATIONS,
+WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED
+INCLUDING, WITHOUT LIMITATION, ANY WARRANTIES OR CONDITIONS OF TITLE,
+NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+
+NO DATA PROVIDER SHALL HAVE ANY LIABILITY FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING
+WITHOUT LIMITATION LOST PROFITS), HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE DATA OR RESULTS,
+EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+## 5. Definitions
+
+5.1. "Data" means the material received by a Data Recipient under
+this agreement.
+
+5.2. "Data Provider" means any person who is the source of Data
+provided under this agreement and in reliance on a Data Recipient's
+agreement to its terms.
+
+5.3. "Data Recipient" means any person who receives Data directly
+or indirectly from a Data Provider and agrees to the terms of this
+agreement.
+
+5.4. "Results" means any outcome obtained by computational analysis
+of Data, including for example machine learning models and models'
+insights.
+```
+
+### ISC
+
+*Reproduced from ring 0.17.14 (LICENSE-other-bits).*
+
+```
+Copyright 2015-2025 Brian Smith.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
+OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
 ### MIT
