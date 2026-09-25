@@ -2,6 +2,70 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 3 — Phase 15 only — 2026-09-25 — one fresh generalist, resumed — **READY (converged)**
+
+Verdict: `READY`, zero blocking. Phase 15's `reviewed` is set to 2026-09-25. Converged in
+three rounds, at the cap.
+
+B1 of round 2 is resolved. The footnote case now has its own fixture with no checklist
+outside the definition, so an implementation whose flag never crosses back fails both the
+import assertion and the compile. The reviewer re-derived the numbers: six `#checklist(`
+calls in the main fixture, `tight: false` on the loose list alone, the refusal lines 5
+(mixed), 1 (ordered) and 3 (the CLI math row), and 10/2 example rows, twelve in total.
+
+One non-blocking finding was folded in: the commit plan said "the README sentence" where
+the close-out names two sites.
+
+### Round 2 — Phase 15 only — 2026-09-25 — one fresh generalist, resumed with the author's changelog — **NOT READY**
+
+**B1 (blocking): the footnote gate case passed for the wrong reason.** It sat in the main
+fixture, whose six other checklists set `has_checklist` whatever the definition did, so an
+implementation that never ORed `Body.checklist` in produced the same golden and a PDF that
+compiled. **Resolved** by moving the case to `tests/fixtures/task_list_footnote.md`, with no
+checklist outside the definition and an inline assertion on Phase 12 gate (1)'s shape. Gate
+(1) returns to six calls.
+
+**N1:** `README.md`'s examples paragraph (lines 31–34) counts nine and three. Accepted and
+named in the close-out. The half of it that describes Letur's live page is reworded to stop
+counting, since the page keeps its three refusals until Letur takes the version.
+
+All three round-1 blockers were confirmed resolved against the files.
+
+### Round 1 — Phase 15 only — 2026-09-25 — one fresh generalist with repo access — **NOT READY**
+
+**Round 0:** yes. The phase produces the observable: a document with a task list compiles
+to a PDF where today it fails, which is §1's "single PDF out" for a construct the dialect
+names. The phase is appended per §6.1 step 2, lifting a refusal Phase 8 named as provisional.
+
+**Measured by the reviewer, by probe:**
+- pulldown-cmark 0.13.4 emits `TaskListMarker` right after `Start(Item)` in a tight item,
+  and inside `Start(Paragraph)` in a loose one.
+- It emits the marker in an ordered list too, so that refusal is reachable, and inside a
+  footnote definition.
+- Typst 0.15.1's `ListItem` has only `body`, and `marker` is set per list.
+- No look file contains `checklist` or `checked` today.
+- `rules/pipeline.md` is at 1405 of 1405.
+
+**Blocking, all accepted and resolved:**
+1. **A checklist inside a footnote definition would have compiled to an unknown-variable
+   error.** The `has_diagram` flag shape does not cross back from `collect_definitions`.
+   The flag now takes `math`'s path through `Body`. Refusing the checklist there was set
+   aside, because a plain list is accepted in a definition.
+2. **`core/tests/examples_test.rs` pins the task list as a refusal row.** The row now moves
+   to `ok/` with its bytes unchanged, which makes a new gate case (6) with counts of 10/2.
+   Letur's `web/index.html` claim is named as a debt for Letur's version bump.
+3. **The hanging-indent clause of gate (3) had nothing long enough to wrap.** The fixture
+   gains an item of at least sixty words.
+
+**Non-blocking, all accepted:**
+- The `escaped_frame` wording is corrected, since it is the group-frame check and not an
+  escape, and the body layout is prescribed.
+- Both refusal tests gain a line per row, and the mixed fixture's pin moves from 3 to 5.
+- The needle is `#let checklist(`. `checked` is kept as knowingly weaker than `super(`.
+- `End(Item)` stores a task item unprefixed.
+- The stale comment in `options` is named.
+- The fixture's blank lines and trailing newline are specified.
+
 ### Round 2 — Phase 14 only — 2026-09-04 — the same three lenses, resumed — **READY (converged)**
 
 Verdict: `READY`, **zero blocking from all three**. Phase 14's `reviewed` is set to
