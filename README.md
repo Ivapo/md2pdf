@@ -29,10 +29,10 @@ $ ./target/release/md2pdf --help
 **With nothing installed: [ivapo.github.io/letur](https://ivapo.github.io/letur/).** The
 same crate compiled to WebAssembly, converting in the page — it sets out what this dialect
 adds to markdown, and every example on it is one click away from a PDF in your own
-browser, the three refusals included. Nothing is sent anywhere, and there is no server to
+browser, the refusals included. Nothing is sent anywhere, and there is no server to
 send it to. **The twelve examples that page shows are fixtures here too**, frozen under
-`tests/fixtures/examples/`, where `core/tests/examples_test.rs` compiles the nine it
-accepts and holds the three it refuses to the sentence they print.
+`tests/fixtures/examples/`, where `core/tests/examples_test.rs` compiles the ten it
+accepts and holds the two it refuses to the sentence they print.
 
 Both that page and the macOS app that draws the PDF while you write it are **Letur**, a
 second front end over this crate: it converts exactly what the command converts and
@@ -215,7 +215,10 @@ That is deliberate. Dropping or flattening content would ship a PDF that lies ab
 source, so the tool names what it cannot yet handle. Support arrives construct by
 construct.
 
-A task list item, `- [ ] a`, is an error for now.
+A task list, `- [ ] a` / `- [x] b`, is supported: the box replaces the bullet, drawn by the
+look. Two shapes are errors — a task marker in a numbered list, `1. [ ] a`, since the number
+and the box would both claim the place in front of the item, and a list mixing task items
+with plain ones.
 
 A formula takes one of two forms. `$…$` sets in the running text, and `$$…$$` sets as a
 block of its own — wherever you write it, so a `$$…$$` in the middle of a sentence breaks

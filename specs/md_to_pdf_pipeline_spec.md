@@ -80,7 +80,7 @@ phases:
     by: null
   - name: "Phase 15 — a task list, the box drawn by the look"
     reviewed: 2026-09-25
-    shipped: null
+    shipped: 2026-09-25
     cut: null
     by: null
 

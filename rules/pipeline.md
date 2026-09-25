@@ -37,7 +37,7 @@ covers: >
   compile reports,
   the Typst world and its bundled fonts, the CLI contract, and the fetch the CLI makes when
   asked and the guards it keeps
-max_lines: 1405
+max_lines: 1418
 generated: 2026-09-04
 ---
 
@@ -99,13 +99,22 @@ demo to Letur, so that column is Letur's own, generated there by
 
 ## The dialect
 
-Twenty-seven things are supported: headings at levels 1–6, paragraph text, soft breaks,
+Twenty-eight things are supported: headings at levels 1–6, paragraph text, soft breaks,
 emphasis, strong emphasis, strikethrough, inline code, math in both its forms, hard line
 breaks, thematic breaks, links, cross-references, citations, include markers, images,
-captions, figure groups, abstracts, keywords, bullet lists, ordered lists, code blocks,
-diagrams, block quotes,
+captions, figure groups, abstracts, keywords, bullet lists, task lists, ordered lists, code
+blocks, diagrams, block quotes,
 pipe tables, footnotes, and a leading YAML frontmatter block. Heading levels map to Typst
 headings of the same level.
+
+A task list crosses as one call per list, `#checklist(tight: …, (checked: …, body: […]), …)`,
+and the look draws the box where the bullet was. One call per list and not one per item,
+because Typst's `list` sets its marker per list: only a function that sees the whole list can
+put a box in the bullet's place. `core/src/emit.rs:ListFrame` records each item's marker
+rather than writing it, and `tight` is the plain arm's `loose`, negated. Two shapes are
+refused where they stand: `task list marker in an ordered list`, at the marker, because the
+number and the box both claim the place in front of the item; and `list mixing task items
+and plain items`, at the first item whose kind differs from the first item's.
 
 The inline constructs reach Typst as function calls, not as its own markup.
 `#emph[…]` and `#strong[…]`, because Typst's `_…_` and `*…*` are word-boundary sensitive
@@ -235,7 +244,7 @@ line 3` reads once. `core/src/lib.rs:ImageRef`, `core/src/lib.rs:BibliographyRef
 joined, so a master carrying both a bad frontmatter key and a marker naming a file the
 caller did not supply reports the missing section.
 
-**Everything else is an error** — raw HTML and a task list marker.
+**Everything else is an error** — raw HTML.
 `core/src/emit.rs:describe` names the construct, `Error::UnsupportedConstruct` carries
 that name with the 1-based line, and the CLI prints it to stderr and exits 1. Nothing is
 dropped or flattened silently. The caption, group and link refusals below carry the same
@@ -243,11 +252,11 @@ error with a name built where they stand rather than through `describe`, which n
 what the walk rejects wholesale.
 
 Every arm of `describe` is reachable, which is a property rather than an accident: a name
-refuses nothing until a parser option produces the event it names, and
-`Options::ENABLE_TASKLISTS` is what makes the marker arrive. Typst has no checkbox element,
-and a drawn marker would be a look decision the template owns. `describe` names no math
-arm: `Options::ENABLE_MATH` now brings a construct the walk handles, in both its forms, and
-the section below holds them.
+refuses nothing until a parser option produces the event it names. Two arms remain, raw HTML
+and a footnote reference. `describe` names no math arm and no task list arm:
+`Options::ENABLE_MATH` and `Options::ENABLE_TASKLISTS` now bring constructs the walk
+handles, and the sections above and below hold them. Typst has no checkbox element, which is
+why a task list's box is drawn by the look rather than named by the emitter.
 
 Two link shapes are errors too, and the link arm names them itself rather than through
 `describe`. An empty destination, legal CommonMark, would reach Typst as `#link("")`,
@@ -1089,16 +1098,17 @@ Two looks are bundled, and `core/src/frontmatter.rs:Template` names both:
 count — and the emitter passes the frontmatter through and adds no styling of its own, so a
 third look is a third `.typ` file and one enum variant.
 
-Every look exports `template`, `divider`, `abstract`, `keywords` and `diagram`, and its
+Every look exports `template`, `divider`, `abstract`, `keywords`, `diagram` and `checklist`, and its
 `template` takes `title`,
 `author`, `affiliation`, `columns`, `date`, `equations`, `figures`, `headings` and
 `citations` before the trailing `doc`. That is the contract, because
 `core/src/emit.rs:header` names all nine on
 every call and imports the first two names on every document, the third on one that opened
-an abstract, the fourth on one that opened a keywords block and the fifth on one that drew a
-diagram; a look missing one would fail the compile with an error naming neither the document
-nor the key. **The export list is five and the call is nine** — both front-matter blocks and
-the diagram cross as functions beside `divider`
+an abstract, the fourth on one that opened a keywords block, the fifth on one that drew a
+diagram and the sixth on one that wrote a task list — including one only a cited footnote
+definition carries, since that flag crosses back on the math flag's path; a look missing one would fail the compile with an error naming neither the document
+nor the key. **The export list is six and the call is nine** — both front-matter blocks,
+the diagram and the task list cross as functions beside `divider`
 rather than as arguments, and the call stood at eight from `mpdf-001` Phase 11 until
 `citations` made it nine in `mpdf-007` Phase 5.
 No golden file pins it, so a test in `core/tests/golden_test.rs` reads each look's source and
@@ -1106,7 +1116,10 @@ asserts it — one needle per exported name; two needles for `equations`, the pa
 `figures`, the parameter and `counter(figure.where(kind:`; two for `headings`, the
 parameter and `int(headings)`; two for `affiliation`, the parameter and `super(`; and two
 for `citations`, the parameter and `harvard-cite-them-right`, the style name only a look
-that maps the scheme can carry —
+that maps the scheme can carry; and two for `checklist`, the export and `checked`, the field a
+look must read to tell a ticked task from an open one — knowingly weaker than `super(`, since
+it names a field read rather than a call made, and no call is common to every way of drawing
+a tick —
 because the parameter alone is satisfied by a look that takes it and ignores it. `headings`' second needle is the conversion rather than the
 comparison: `n.pos().len() <=` is carried by a look that hardcoded its own depth and never
 read the key. `affiliation`'s second is the superscript a marker is rendered as, which no
