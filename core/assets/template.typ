@@ -482,3 +482,35 @@
     if name == none { f } else { [#f#name] }
   }
 }
+
+// A task list. The emitter writes `#checklist(tight: …, (checked: …, body: […]),
+// …)` for a bullet list whose every item carries a marker, and names this in
+// the import only for a document that has one.
+//
+// **The box stands where the bullet was**, which is why the whole list crosses
+// as one call: Typst's `list` sets its marker per list, never per item. A term
+// list gives both halves of that — the box as the term, and a hanging indent
+// equal to the box and its gap, so a wrapped task hangs under its own first line
+// rather than under the box.
+//
+// **The box is drawn, not typed.** `U+2610`/`U+2611` exist only if a bundled face
+// carries them, and a missing glyph compiles silently into tofu. Every length is
+// in `em`, so the box follows the text it sits in — a footnote's included.
+//
+// The separator is weak so it absorbs the space the body's own opening line
+// break becomes; a hard one would set the first line a space right of the rest.
+#let checklist(tight: true, ..items) = {
+  let side = 0.65em                       // a little under the cap height
+  let gap = 0.45em
+  let mark(checked) = box(width: side, height: side, stroke: 0.5pt + luma(25%),
+    if checked {
+      place(curve(
+        stroke: 0.9pt + luma(10%),
+        curve.move((0.14 * side, 0.52 * side)),
+        curve.line((0.4 * side, 0.8 * side)),
+        curve.line((0.88 * side, 0.16 * side)),
+      ))
+    })
+  terms(tight: tight, separator: h(gap, weak: true), hanging-indent: side + gap,
+    ..items.pos().map(item => terms.item(mark(item.checked), item.body)))
+}

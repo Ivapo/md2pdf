@@ -80,8 +80,17 @@ struct ListFrame {
     next: Option<u64>,
     /// Whether the items are separated by a blank line in the output.
     loose: bool,
-    /// Each item, already laid out under its marker.
+    /// Each item, already laid out under its marker — or, for a task item, its
+    /// content alone, since the box the look draws is what stands in front of it.
     items: Vec<String>,
+    /// Whether each item carried a task list marker, and which, parallel to
+    /// `items`.
+    ///
+    /// **The marker is recorded, not written.** The box replaces the bullet, and
+    /// Typst's `list` sets its marker per list rather than per item, so a list
+    /// of task items crosses whole as one `checklist` call and the look lays it
+    /// out. `Start(Item)` opens the slot and the marker arm fills it.
+    marks: Vec<Option<bool>>,
 }
 
 /// The table the walk is inside.
@@ -539,6 +548,14 @@ struct Walk {
     /// look's `diagram` in the import only for a document that has one, which is
     /// what keeps every shipped golden file still.
     wrote_diagram: bool,
+    /// Whether this walk wrote a task list.
+    ///
+    /// The fourth flag of the kind, and for the same reason: `header` names the
+    /// look's `checklist` in the import only for a document that has one. **It
+    /// also crosses back from a footnote definition**, on the math flag's path,
+    /// because a list inside a definition is accepted — a flag set by the main
+    /// walk alone would leave `#checklist(` on the page with no import.
+    wrote_checklist: bool,
     /// Where the document's front matter ends in the body buffer.
     ///
     /// **The position rule generalised, which is what makes two front-matter
@@ -600,6 +617,7 @@ impl Walk {
             keywords: None,
             wrote_keywords: false,
             wrote_diagram: false,
+            wrote_checklist: false,
             front_matter: 0,
             link: None,
             names: Names::default(),
@@ -673,9 +691,9 @@ pub(crate) fn options() -> Options {
     // the escape rule prints the brackets on the page.
     options.insert(Options::ENABLE_FOOTNOTES);
     // The last three carry the same argument, and each closed one arm of
-    // `describe` that nothing could reach. Strikethrough and math are both in
-    // the dialect now, so only the task list marker still names itself as an
-    // error. Without these options `~~x~~`, `- [ ] a`, `$x$` and `$$x$$` arrive
+    // `describe` that nothing could reach. Strikethrough, task lists and math
+    // are all in the dialect now, so `describe` names none of them. Without
+    // these options `~~x~~`, `- [ ] a`, `$x$` and `$$x$$` arrive
     // as text and the escape rule prints their markers on the page — which is
     // the silent flattening the dialect refuses, whether the construct is one
     // it converts or one it rejects.
@@ -882,7 +900,7 @@ fn label_of(text: &str) -> Label {
 
 /// One footnote definition's translation, and everything that travels with it.
 ///
-/// The three parts beside the content are here for one reason: this walk's own
+/// The parts beside the content are here for one reason: this walk's own
 /// `Walk` is thrown away, and the document's walk never enters a definition's
 /// region. So a formula that appears only inside a footnote would reach the page
 /// with no prelude imported, a file named only there would never join the
@@ -892,6 +910,7 @@ struct Body {
     content: String,
     images: Vec<ImageRef>,
     math: bool,
+    checklist: bool,
     names: Names,
 }
 
@@ -1017,12 +1036,14 @@ fn collect_definitions(md: &str, lines: &Lines, sources: &Sources) -> Definition
                 Some(error) => Err(error),
                 None => {
                     let math = walk.math;
+                    let checklist = walk.wrote_checklist;
                     let names = std::mem::take(&mut walk.names);
                     let (content, images) = std::mem::replace(&mut walk, Walk::new()).finish();
                     Ok(Body {
                         content: content.trim_matches('\n').to_string(),
                         images,
                         math,
+                        checklist,
                         names,
                     })
                 }
@@ -1137,6 +1158,7 @@ pub(crate) fn emit(md: &str, sources: &Sources) -> Result<Emitted> {
         walk.wrote_abstract,
         walk.wrote_keywords,
         walk.wrote_diagram,
+        walk.wrote_checklist,
     );
     let (body, images) = walk.finish();
     out.push_str(body.trim_end_matches('\n'));
@@ -1203,6 +1225,7 @@ fn step(
         keywords,
         wrote_keywords,
         wrote_diagram,
+        wrote_checklist,
         front_matter,
         link,
         names,
@@ -1426,26 +1449,87 @@ fn step(
             next: start,
             loose: false,
             items: Vec::new(),
+            marks: Vec::new(),
         }),
+        // The item arm has already refused a list whose items disagree, so the
+        // first item's kind is every item's.
         Event::End(TagEnd::List(_)) => {
             let frame = lists.pop().expect("a list end follows its start");
-            let separator = if frame.loose { "\n\n" } else { "\n" };
-            let rendered = frame.items.join(separator);
             let out = top(bufs);
             out.push('\n');
-            out.push_str(&rendered);
+            if frame.marks.first().is_some_and(Option::is_some) {
+                // `tight` is `loose` negated, so the look decides the spacing
+                // the plain arm expresses through its separator. Each body is
+                // laid out as a quote's content is, and the markup escape is
+                // what keeps a `]` in it from closing its block.
+                let items: Vec<String> = frame
+                    .items
+                    .iter()
+                    .zip(&frame.marks)
+                    .map(|(body, mark)| {
+                        let checked = mark.expect("every item of a task list carries a marker");
+                        format!("(checked: {checked}, body: [\n{}\n])", prefixed("  ", body))
+                    })
+                    .collect();
+                out.push_str(&format!(
+                    "#checklist(tight: {}, {})",
+                    !frame.loose,
+                    items.join(", ")
+                ));
+                *wrote_checklist = true;
+            } else {
+                let separator = if frame.loose { "\n\n" } else { "\n" };
+                out.push_str(&frame.items.join(separator));
+            }
             out.push('\n');
         }
 
         Event::Start(Tag::Item) => {
             containers.push(Container::Item);
             bufs.push(String::new());
+            lists
+                .last_mut()
+                .expect("an item sits inside a list")
+                .marks
+                .push(None);
+        }
+        // pulldown-cmark sends the marker right after `Start(Item)` in a tight
+        // item and inside the item's paragraph, before its text, in a loose
+        // one. Either way the innermost open list is the item's own, since a
+        // nested list opens only after the marker.
+        //
+        // **A number and a box both claim the one place in front of the item**,
+        // and choosing between them is the guess the dialect does not make.
+        Event::TaskListMarker(checked) => {
+            let frame = lists.last_mut().expect("a marker sits inside a list item");
+            if frame.next.is_some() {
+                return Err(Error::UnsupportedConstruct {
+                    construct: "task list marker in an ordered list".to_string(),
+                    location: Location::at(lines.line_of(range.start)),
+                });
+            }
+            *frame.marks.last_mut().expect("the item opened its slot") = Some(checked);
         }
         Event::End(TagEnd::Item) => {
             containers.pop();
             let content = bufs.pop().expect("an item end follows its start");
             escaped_frame(group, bufs)?;
             let frame = lists.last_mut().expect("an item sits inside a list");
+            // **The box replaces the bullet**, so a list mixing the two would
+            // ask the look to set one list two ways. It is refused at the first
+            // item whose kind differs from the first item's, which is the line
+            // the one-keystroke fix belongs on.
+            let task = frame.marks.last().is_some_and(Option::is_some);
+            if task != frame.marks[0].is_some() {
+                return Err(Error::UnsupportedConstruct {
+                    construct: "list mixing task items and plain items".to_string(),
+                    location: Location::at(lines.line_of(range.start)),
+                });
+            }
+            if task {
+                frame.items.push(content.trim_matches('\n').to_string());
+                return Ok(());
+            }
             let marker = match frame.next.as_mut() {
                 Some(number) => {
                     let marker = format!("{number}. ");
@@ -2201,6 +2285,7 @@ fn step(
                         out.push_str(&body.content);
                         images.extend(body.images.iter().cloned());
                         *math |= body.math;
+                        *wrote_checklist |= body.checklist;
                         // A name inside a definition is declared where the
                         // definition is *set*, which is here — so an uncited
                         // definition declares nothing, and a reference to a name
@@ -3677,13 +3762,14 @@ fn header(
     has_abstract: bool,
     has_keywords: bool,
     has_diagram: bool,
+    has_checklist: bool,
 ) -> String {
     let prelude = match math {
         true => format!("#import \"{PRELUDE_NAME}\": {PRELUDE_NAMES}\n"),
         false => String::new(),
     };
     // **Independent flags and not one.** A document may open either block, both
-    // or neither, and may draw a diagram or not, so the list is built rather
+    // or neither, and may draw a diagram or a task list or not, so the list is built rather
     // than matched: the import names each construct separately, and widening it
     // for a document that has none would move every shipped golden file.
     let mut names = vec!["template", "divider"];
@@ -3695,6 +3781,9 @@ fn header(
     }
     if has_diagram {
         names.push("diagram");
+    }
+    if has_checklist {
+        names.push("checklist");
     }
     let exports = names.join(", ");
     format!(
@@ -3900,7 +3989,6 @@ fn describe(event: &Event) -> &'static str {
         },
         Event::Html(_) | Event::InlineHtml(_) => "raw HTML",
         Event::FootnoteReference(_) => "footnote reference",
-        Event::TaskListMarker(_) => "task list marker",
         // The walk handles these, so they never reach this function. The match
         // must still cover them.
         Event::Text(_)
@@ -3909,7 +3997,8 @@ fn describe(event: &Event) -> &'static str {
         | Event::HardBreak
         | Event::Rule
         | Event::InlineMath(_)
-        | Event::DisplayMath(_) => "supported construct",
+        | Event::DisplayMath(_)
+        | Event::TaskListMarker(_) => "supported construct",
     }
 }
 

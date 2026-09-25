@@ -146,13 +146,18 @@ fn a_raw_html_block_exits_non_zero_and_names_it() {
 /// Math was refused in both its forms when this phase shipped, and `mpdf-004`
 /// took both of them into the dialect — the inline form in its Phase 1 and the
 /// display form in its Phase 2. So what the first fixture names is no longer the
-/// span but the LaTeX inside it, and the marker is the only construct left here
-/// that is refused whole.
+/// span but the LaTeX inside it. `mpdf-001` Phase 15 took task lists in, so the
+/// second fixture's markers stand in a list that also holds a plain item, and
+/// what it names is that mixture, at the plain item's line.
 #[test]
 fn math_and_a_task_list_marker_exit_non_zero_and_name_themselves() {
-    for (fixture_name, construct) in [
-        ("unsupported_math.md", r"\includegraphics"),
-        ("unsupported_task_list.md", "task list marker"),
+    for (fixture_name, construct, line) in [
+        ("unsupported_math.md", r"\includegraphics", "line 3"),
+        (
+            "mixed_task_list.md",
+            "list mixing task items and plain items",
+            "line 5",
+        ),
     ] {
         let out = run(&[fixture(fixture_name).as_ref()]);
         assert!(!out.status.success(), "{fixture_name} should have failed");
@@ -162,7 +167,7 @@ fn math_and_a_task_list_marker_exit_non_zero_and_name_themselves() {
             stderr.contains(construct),
             "{fixture_name} stderr: {stderr}"
         );
-        assert!(stderr.contains("line 3"), "{fixture_name} stderr: {stderr}");
+        assert!(stderr.contains(line), "{fixture_name} stderr: {stderr}");
     }
 }
 

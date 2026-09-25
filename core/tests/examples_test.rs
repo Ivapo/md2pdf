@@ -3,7 +3,7 @@
 //! `mpdf-006`'s design was that every claim `web/index.html` makes is a snippet
 //! the suite compiles, and `mpdf-011` Phase 2 sends the page to Letur. The rows
 //! are the only place this dialect's public promises — a caption makes a figure,
-//! a `[@key]` cites, a task list is refused — are checked *as a reader meets
+//! a `[@key]` cites, raw HTML is refused — are checked *as a reader meets
 //! them*, so they stay here as fixtures of their own while the page goes on to
 //! become a landing site somewhere else.
 //!
@@ -40,7 +40,7 @@ const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/examp
 /// own visible `<code>` element at the split. `cli/src/main.rs` prints this same
 /// `Display` after its `error: ` prefix, so a sentence that drifts here is a
 /// sentence that drifted at the terminal.
-const REFUSALS: [(&str, &str); 3] = [
+const REFUSALS: [(&str, &str); 2] = [
     (
         "math-refusal",
         "math error at line 1: unsupported command '\\includegraphics'",
@@ -48,10 +48,6 @@ const REFUSALS: [(&str, &str); 3] = [
     (
         "raw-html",
         "unsupported markdown construct 'raw HTML block' at line 3",
-    ),
-    (
-        "task-list",
-        "unsupported markdown construct 'task list marker' at line 1",
     ),
 ];
 
@@ -112,7 +108,13 @@ fn named(path: &str) -> Asset {
     }
 }
 
-/// The fixture set is the page's: twelve rows, nine of them accepted, and two files.
+/// The fixture set is the page's: twelve rows, ten of them accepted, and two files.
+///
+/// The page showed nine accepted and three refused. `mpdf-001` Phase 15 took
+/// task lists into the dialect, so the task list row moved to `ok/` with its
+/// bytes unchanged: "frozen" meant the page's bytes, not its verdicts, and a
+/// promise the engine no longer keeps is not one this file should keep
+/// asserting.
 ///
 /// **The byte lengths are the point of the assertion, not decoration.** A later
 /// tidy-up that pointed either asset at the engine's own near-copy would leave
@@ -123,8 +125,8 @@ fn the_fixtures_are_the_pages_twelve_rows_and_its_two_assets() {
     let ok = rows("ok");
     let error = rows("error");
 
-    assert_eq!(ok.len(), 9, "the page carried nine accepted rows");
-    assert_eq!(error.len(), 3, "the page carried three refusal rows");
+    assert_eq!(ok.len(), 10, "ten of the page's rows are accepted");
+    assert_eq!(error.len(), 2, "two of the page's rows are refused");
 
     for (path, bytes) in [IMAGE, BIBLIOGRAPHY] {
         assert_eq!(

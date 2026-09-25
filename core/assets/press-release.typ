@@ -332,3 +332,29 @@
     if name == none { f } else { [#f#name] }
   }
 }
+
+// A task list, in the article's shape: the emitter writes one `#checklist(…)`
+// call per list whose every item carries a marker, and names this in the import
+// only for a document that has one. The box stands where the bullet was, drawn
+// rather than typed because a glyph the bundled faces lack compiles into tofu,
+// and a term list's hanging indent keeps a wrapped task under its own first
+// line. Nothing about a release's one wide column asks for a different shape;
+// the lengths are in `em`, so the box follows this look's larger text.
+//
+// The separator is weak so it absorbs the space the body's own opening line
+// break becomes; a hard one would set the first line a space right of the rest.
+#let checklist(tight: true, ..items) = {
+  let side = 0.65em                       // a little under the cap height
+  let gap = 0.5em
+  let mark(checked) = box(width: side, height: side, stroke: 0.5pt + luma(25%),
+    if checked {
+      place(curve(
+        stroke: 0.9pt + luma(10%),
+        curve.move((0.14 * side, 0.52 * side)),
+        curve.line((0.4 * side, 0.8 * side)),
+        curve.line((0.88 * side, 0.16 * side)),
+      ))
+    })
+  terms(tight: tight, separator: h(gap, weak: true), hanging-indent: side + gap,
+    ..items.pos().map(item => terms.item(mark(item.checked), item.body)))
+}

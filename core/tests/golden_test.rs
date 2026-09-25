@@ -25,6 +25,9 @@ const BLOCKS_MD: &str = include_str!("../../tests/fixtures/blocks.md");
 const BLOCKS_TYP: &str = include_str!("../../tests/golden/blocks.typ");
 const LIST_SPACING_MD: &str = include_str!("../../tests/fixtures/list_spacing.md");
 const LIST_SPACING_TYP: &str = include_str!("../../tests/golden/list_spacing.typ");
+const TASK_LIST_MD: &str = include_str!("../../tests/fixtures/task_list.md");
+const TASK_LIST_TYP: &str = include_str!("../../tests/golden/task_list.typ");
+const TASK_LIST_FOOTNOTE_MD: &str = include_str!("../../tests/fixtures/task_list_footnote.md");
 const LINKS_MD: &str = include_str!("../../tests/fixtures/links.md");
 const LINKS_TYP: &str = include_str!("../../tests/golden/links.typ");
 const HTML_MD: &str = include_str!("../../tests/fixtures/unsupported_html.md");
@@ -41,7 +44,7 @@ const MATH_MD: &str = include_str!("../../tests/fixtures/math.md");
 const MATH_TYP: &str = include_str!("../../tests/golden/math.typ");
 const DISPLAY_MATH_MD: &str = include_str!("../../tests/fixtures/display_math.md");
 const DISPLAY_MATH_TYP: &str = include_str!("../../tests/golden/display_math.typ");
-const TASK_LIST_MD: &str = include_str!("../../tests/fixtures/unsupported_task_list.md");
+const MIXED_TASK_LIST_MD: &str = include_str!("../../tests/fixtures/mixed_task_list.md");
 const DATED_MD: &str = include_str!("../../tests/fixtures/dated.md");
 const DATED_TYP: &str = include_str!("../../tests/golden/dated.typ");
 const PRESS_RELEASE_MD: &str = include_str!("../../tests/fixtures/press_release.md");
@@ -539,6 +542,88 @@ fn the_two_list_spacings_differ_only_in_the_blank_lines() {
         LIST_SPACING_TYP.contains("- alpha\n\n- beta\n\n- gamma"),
         "the loose list is not separated by blank lines"
     );
+}
+
+// -- Phase 15: a task list, the box drawn by the look ------------------------
+
+#[test]
+fn the_task_list_fixture_matches_its_golden_file() {
+    assert_eq!(md_to_typst(TASK_LIST_MD, &[]).unwrap(), TASK_LIST_TYP);
+}
+
+/// The golden's shape, which the equality above pins without saying why.
+///
+/// Six lists carry markers, and each crosses as one call — a checklist nested
+/// in a plain item and a plain list nested in a task item included. Only the
+/// loose one is `tight: false`, and the look is named in the import because
+/// this document wrote one.
+#[test]
+fn the_task_list_golden_carries_one_call_per_list() {
+    assert!(
+        TASK_LIST_TYP.starts_with("#import \"template.typ\": template, divider, checklist\n"),
+        "the import does not name `checklist`"
+    );
+    assert_eq!(TASK_LIST_TYP.matches("#checklist(").count(), 6);
+    assert_eq!(TASK_LIST_TYP.matches("tight: false").count(), 1);
+    assert!(
+        TASK_LIST_TYP.contains(r"a body carrying \# and \] and #emph[emph]"),
+        "the body was not escaped by the text arm"
+    );
+    for marker in ["[ ]", "[x]", "[X]"] {
+        assert!(
+            !TASK_LIST_TYP.contains(marker),
+            "the marker `{marker}` reached the markup as text"
+        );
+    }
+}
+
+/// The fixture compiles in both looks, and the page was read by hand.
+///
+/// The suite reads no PDF text, on the precedent `rules/pipeline.md` records
+/// for `figures` and `headings`, so what the page carries is recorded here from
+/// `pdftotext` over `md_to_pdf`'s output on 2026-09-25, in both looks: every
+/// task body's text, and no `[ ]`, `[x]` or `[X]` anywhere — the one `]` on the
+/// page is the escape item's own. A page image of each look was read for the
+/// rest of `mpdf-001` Phase 15 gate (3): the two boxes are told apart at a
+/// glance, the sixty-word task hangs under its own first line, and no item
+/// shows a bullet beside a box.
+#[test]
+fn the_task_list_fixture_compiles_to_a_pdf_in_both_looks() {
+    let press_release = format!("---\ntemplate: press-release\n---\n{TASK_LIST_MD}");
+    for (md, look) in [
+        (TASK_LIST_MD, "the article"),
+        (press_release.as_str(), "the press release"),
+    ] {
+        let pdf = md_to_pdf(md, &[]).unwrap_or_else(|e| panic!("{look}: {e}"));
+        assert!(pdf.starts_with(b"%PDF"), "{look}: the output is not a PDF");
+        assert!(pdf.len() > 1000, "{look}: the PDF is suspiciously small");
+    }
+}
+
+/// A checklist that stands only inside a footnote definition still imports the
+/// look's `checklist`.
+///
+/// Definitions are walked apart from the document, so the flag has to cross
+/// back where the definition is set, on the math flag's path. No checklist
+/// stands outside the definition, which is the point: with one there, the
+/// import would name `checklist` whether or not the flag crossed. An
+/// implementation whose flag stays behind fails here twice — the import lacks
+/// the name, and the compile stops on an unknown variable.
+#[test]
+fn a_checklist_inside_a_footnote_imports_the_look() {
+    let typst = md_to_typst(TASK_LIST_FOOTNOTE_MD, &[]).unwrap();
+    assert!(
+        typst.starts_with("#import \"template.typ\": template, divider, checklist\n"),
+        "the import does not name `checklist`: {typst}"
+    );
+    assert_eq!(typst.matches("#checklist(").count(), 1);
+    assert!(
+        typst.contains("#footnote[#checklist("),
+        "the call does not stand inside the footnote: {typst}"
+    );
+
+    let pdf = md_to_pdf(TASK_LIST_FOOTNOTE_MD, &[]).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "the output is not a PDF");
 }
 
 // -- Phase 5: links ---------------------------------------------------------
@@ -1586,27 +1671,39 @@ fn the_strikethrough_golden_carries_each_form() {
     }
 }
 
-/// The construct beside strikethrough names itself and its line.
+/// Each task list shape the dialect refuses names itself and its line.
 ///
-/// Both arms of `describe` were unreachable until this phase set their parser
-/// options, so both printed their markers on the page while the code claimed to
-/// refuse them.
-///
-/// Math was refused in both its forms when this phase shipped, and this test
-/// held the display half after `mpdf-004` Phase 1 took the inline one. Phase 2
-/// of that spec took the display form too, so the marker is what is left here:
-/// `describe` no longer names math at all. `\$` is still the one-character way
-/// to keep a dollar as prose, and the strikethrough golden above still pins it.
+/// This test was born holding the two constructs this phase's parser options
+/// made reachable, math and the task list marker. `mpdf-004` took math into the
+/// dialect and Phase 15 took task lists, so what is left are the two task list
+/// shapes that phase refuses: a marker in an ordered list, where the number and
+/// the box both claim the place in front of the item, and a list mixing task
+/// items and plain ones, named at the first item whose kind differs from the
+/// first item's. `\$` is still the one-character way to keep a dollar as prose,
+/// and the strikethrough golden above still pins it.
 #[test]
 fn each_refused_construct_names_itself_and_its_line() {
-    for (md, construct, what) in [(TASK_LIST_MD, "task list marker", "the task list marker")] {
+    for (md, construct, what, expected) in [
+        (
+            MIXED_TASK_LIST_MD,
+            "list mixing task items and plain items",
+            "a list mixing task items and plain items",
+            5,
+        ),
+        (
+            "1. [ ] a\n",
+            "task list marker in an ordered list",
+            "a task list marker in an ordered list",
+            1,
+        ),
+    ] {
         match md_to_typst(md, &[]) {
             Err(Error::UnsupportedConstruct {
                 construct: found,
                 location: Location { file: None, line },
             }) => {
                 assert_eq!(found, construct, "for {what}");
-                assert_eq!(line, 3, "for {what}");
+                assert_eq!(line, expected, "for {what}");
             }
             other => panic!("expected `{construct}` for {what}, got {other:?}"),
         }
@@ -1774,6 +1871,13 @@ fn a_template_name_outside_the_set_is_an_error_that_lists_the_names() {
 /// `auto` would render the default's page, and the hash is what holds that,
 /// not a string.
 ///
+/// `checklist` brings its own pair on the same precedent, and the second is
+/// `checked` — the field a look must read to tell a ticked task from an open
+/// one, since a look that took the item and drew one box for both would satisfy
+/// the export alone. It is knowingly weaker than `super(`: it names a field the
+/// look reads, not a call that renders it, and no call is common to every way
+/// of drawing a tick. `mpdf-001` Phase 15 records that as a stated limit.
+///
 /// These needles join the contract test rather than taking one of their own,
 /// where a caption, a gutter and a listing's alignment each took one: those
 /// cross no argument at all, and this is a call-contract parameter, which is
@@ -1787,6 +1891,8 @@ fn every_bundled_template_meets_the_call_contract() {
             "#let abstract(",
             "#let keywords(",
             "#let diagram(",
+            "#let checklist(",
+            "checked",
             "title:",
             "author:",
             "affiliation",
