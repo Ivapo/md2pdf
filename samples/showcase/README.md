@@ -16,10 +16,11 @@ $ open showcase.pdf
 | `sections/*.svg` | the four figures, beside the sections that draw them |
 | `refs.bib` | the bibliography its citations resolve against, entirely invented |
 
-Everything here sits in this folder. A path in this dialect may not be a URL, an
-absolute path, or reach through a `..` segment — a document and the files it
-names travel together — so the figures and the bibliography are beside the
-document rather than shared with the samples above.
+Everything here sits in this folder. A local path in this dialect may not be
+absolute or reach through a `..` segment — a document and the files it names
+travel together — so the figures and the bibliography are beside the document
+rather than shared with the samples above. An image may instead name an `http`
+or `https` URL, which the CLI downloads only when run with `--fetch`; none here does.
 
 **A section's neighbours are its own**, which is why the figures sit one level
 down: `![a mark](mark.svg)` written in `sections/text.md` means
