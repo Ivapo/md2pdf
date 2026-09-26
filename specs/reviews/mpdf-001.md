@@ -2,6 +2,34 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 18 only — 2026-09-25 — the same generalist, resumed with the author's changelog — **READY (converged)**
+
+A confirming round: round 1 was already `READY`, and the author folded three non-blocking
+refinements in. They are the doc comment's summary line, the file's two "at the split"
+provenance claims, and `mpdf-011`'s `last_updated`. All three were confirmed in the files,
+with no new blocking issue. Phase 18's `reviewed` is set to 2026-09-25.
+
+### Round 1 — Phase 18 only — 2026-09-25 — one fresh generalist with repo access — **READY**
+
+Round 0: the phase produces no observable and argues so, because it restores what
+`examples_test.rs` claims to check. It is the right thing to build because Letur's page
+replaced its task list row, so the engine's copy disagreed with the page in both
+directions.
+
+Zero blocking. Every literal reproduced:
+- the page's rows at Letur `50a73dd` (nine `ok`, three `error`);
+- the new row's 42 bytes, ending in `d` with no trailing newline;
+- the refusal sentence, which the CLI prints verbatim;
+- name order `math-refusal` < `ordered-task-list` < `raw-html`;
+- the eleven kept fixtures byte-identical to their page rows.
+
+Deleting `ok/task-list.md` loses no task-list coverage, since `task_list.md` and its
+golden remain. The author's own pre-review measurement corrected the byte count from 41 to
+42 before the round began.
+
+Non-blocking: accepted 1–3 as above. No change for 4 (`spec-lint` is off `PATH` but runs from
+`spec-driven-dev/bin`) or 5 (the preamble is accurate in substance).
+
 ### Round 2 — Phase 17 only — 2026-09-25 — the same generalist, resumed with the author's changelog — **READY (converged)**
 
 Verdict: `READY`, zero blocking. Phase 17's `reviewed` is set to 2026-09-25. Converged in two

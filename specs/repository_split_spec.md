@@ -6,7 +6,7 @@ note: >
   repository and are published as crates, Letur moves to a repository of its own with
   its history, its page and its gates, and depends on the engine by version.
 status: accepted
-last_updated: 2026-09-02
+last_updated: 2026-09-25
 
 phases:
   - name: "Phase 1 — Letur's repository exists, with its history"
@@ -763,6 +763,13 @@ is byte-identical and the three hashed documents hash as they did.
      same commit: `unsupported markdown construct 'raw HTML block' at line 3`,
      `unsupported markdown construct 'task list marker' at line 1`, and
      `math error at line 1: unsupported command '\includegraphics'`.
+
+     > **CORRECTED 2026-09-25, by `mpdf-001` Phase 18.** The clause above is kept as it was
+     > written. Its second sentence is no longer one the page shows or the engine prints.
+     > `md2pdf-core` 0.4.0 took task lists into the dialect (`mpdf-001` Phase 15), and
+     > Letur's page replaced the row (its `mpdf-006` Phase 5) with `1. [ ] a numbered task`,
+     > refused as `unsupported markdown construct 'task list marker in an ordered list' at
+     > line 1`. The counts still hold: twelve rows, nine of which compile.
   3. **The page does not move.** `target/release/md2pdf` over `tests/fixtures/citations.md`,
      `tests/fixtures/citations_press_release.md` and `samples/showcase/showcase.md`,
      hashed before this phase's commit and after, pairwise identical. **`-o` into a

@@ -93,6 +93,11 @@ phases:
     shipped: 2026-09-25
     cut: null
     by: null
+  - name: "Phase 18 — the page's rows, re-mirrored"
+    reviewed: 2026-09-25
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -3168,6 +3173,116 @@ should arrive in one column, and two columns become a choice a paper makes by wr
   `feat(mpdf-001)`: `frontmatter.rs`, `template.typ`, `lib.rs`'s table, `golden_test.rs`,
   the 33 goldens and the three samples. Second, `spec(mpdf-001)`: this phase's `shipped`
   date, the rules passages and cap, the README, and both indexes regenerated.
+
+
+### Phase 18 — the page's rows, re-mirrored
+
+*Produces the observable: no. No document compiles or is refused differently. The phase
+restores what `core/tests/examples_test.rs` claims to check, the public page's twelve rows
+as a reader meets them, and corrects one quoted sentence in `mpdf-011`. It is argued for
+because Phase 15's gate (6) chose the shape this phase reverses, and reversing a recorded
+choice silently is what §6.1 exists to prevent.*
+
+**Drafted 2026-09-25**, after Letur took `md2pdf-core` 0.4.0 under its own `mpdf-006` Phase 5
+(Letur commits `946c060`, `e5e6301`, `50a73dd`). Letur did not keep the page's task list
+row and move it to the accepted examples, the shape Phase 15 gate (6) gave this repository's
+copy. It **replaced** the row with a refused one, so the page still shows twelve rows, nine
+accepted and three refused. The engine's copy now disagrees with the page in both
+directions: it carries an accepted row the page no longer shows, and lacks a refused row
+the page does show.
+
+- **Step 0 — a decision, not only code?** Yes, a small one. Phase 15 gate (6) decided that
+  the frozen row moves to `ok/` "with its bytes unchanged". What stays true is the file's
+  own purpose, that the fixtures are the page's rows. That purpose now asks for the
+  opposite move, and a reversed decision is recorded, not made silently.
+- **Step 1 — does it remove or contradict shipped work?** It reverses one fixture move of
+  Phase 15's, and no phase is cut. Phase 15's text is not misleading: it described the page
+  as it stood when it shipped, and the change is Letur's. So it gets no `CORRECTED` note.
+  `mpdf-011`'s gate (2), at `specs/repository_split_spec.md` in its Phase 2 gate, quotes
+  `unsupported markdown construct 'task list marker' at line 1` as one of the page's three
+  refusal sentences. That sentence is now false twice over, since the page no longer
+  carries it and the engine no longer prints it. It gets a dated `CORRECTED` note in
+  place, which lands in this phase's review-round commit.
+- **Step 2 — the subject.** The dialect's public claims, which `examples_test.rs` holds for
+  this spec. So a phase.
+
+- **Scope.**
+
+  **The fixtures follow the page.** The page's rows, read off Letur's `web/index.html`
+  `data-example`/`data-expect` attributes at `50a73dd`, are:
+  - accepted (nine): `caption-table`, `caption-listing`, `caption-image`, `figure-group`,
+    `name-and-reference`, `display-math`, `frontmatter`, `footnote`, `citation`;
+  - refused (three): `raw-html`, `ordered-task-list`, `math-refusal`.
+
+  So:
+  - `tests/fixtures/examples/ok/task-list.md` is **deleted**. It is not moved to a new name.
+    The task list the page stopped showing is exercised by Phase 15's own
+    `tests/fixtures/task_list.md` and its golden, so nothing about task lists loses a test.
+  - `tests/fixtures/examples/error/ordered-task-list.md` is **added**, holding the page's
+    `<script>` content exactly: the 42 bytes `1. [ ] a numbered task\n2. [x] and a second`,
+    **with no trailing newline**, the shape every frozen row already has.
+  - In `core/tests/examples_test.rs`, `REFUSALS` goes back to `[(&str, &str); 3]`, in name
+    order, as `rows` sorts them:
+    `("math-refusal", …)`, then
+    `("ordered-task-list", "unsupported markdown construct 'task list marker in an ordered list' at line 1")`,
+    then `("raw-html", …)`. The other two sentences are unchanged.
+  - `the_fixtures_are_the_pages_twelve_rows_and_its_two_assets` asserts **9** accepted and
+    **3** refused again. Its doc comment's summary line, *"twelve rows, ten of them
+    accepted"*, says nine. Phase 15's paragraph about moving the row is replaced by one
+    saying the page replaced it, re-mirrored here in Phase 18. Its messages say nine and
+    three.
+  - Two provenance claims in the file stay true by saying when the page changed. The
+    module comment says the fixtures were *"taken out of it at the split and frozen
+    there"*, and `REFUSALS`' doc comment says each sentence was transcribed *"at the
+    split"*. Each gains *"or, for the ordered task list, from Letur's page at `50a73dd`"*,
+    or words to that effect.
+  - The module comment's list of example promises, *"a caption makes a figure, a `[@key]`
+    cites, raw HTML is refused"*, stays true and is left as it is.
+
+  **Phase 15's "frozen meant the page's bytes, not its verdicts"** still holds: every file
+  kept here is byte-identical to its page row. What moved is which rows the page carries.
+
+  **Untouched:** every source file, both looks, every golden, `cli/`, the samples and the
+  two assets `pipeline.svg` and `refs.yml`.
+
+- **Exit gate:** four cases.
+
+  (1) **The directories are the page's rows.** `ls tests/fixtures/examples/ok` lists the
+  nine accepted names above, each with `.md`, and `ls tests/fixtures/examples/error` lists
+  the three refused ones. `wc -c tests/fixtures/examples/error/ordered-task-list.md` reads
+  `42`, and `tail -c 1` of it is `d`, not a newline.
+
+  (2) **Every row behaves as the page says.** `cargo test -p md2pdf-core --test
+  examples_test` passes: the nine compile, the three refuse with their sentences, the
+  names match `REFUSALS` in order, and the two assets keep their byte lengths.
+
+  (3) **Nothing else moves.** `cargo test --workspace` passes with no golden edited.
+
+  (4) **The corpus stays clean.** `spec-lint` exits with zero errors. The build's diff, from
+  the review-round commit to the push, names `core/tests/examples_test.rs`, the deleted
+  `ok/task-list.md`, the added `error/ordered-task-list.md`, `rules/pipeline.md` if its
+  sentence below needs it, `README.md`, this spec (the `shipped` date alone) and the
+  regenerated indices, and nothing else.
+
+- **Close-out.**
+
+  `README.md`'s examples paragraph says `examples_test.rs` *"compiles the ten it accepts and
+  holds the two it refuses"*. It goes back to nine and three. The page paragraph above it
+  already stopped counting, in Phase 15, and stays that way.
+
+  `rules/pipeline.md`: `grep -n "examples_test\|task-list" rules/pipeline.md` decides it. A
+  sentence that counts the rows or names the moved fixture is corrected, and otherwise
+  none is needed.
+
+  **Letur: none.** This follows Letur. Letur's report noted that its own page test became
+  the only check of the middle row against the compiler, and this phase is what makes the
+  engine check it again.
+
+  **Commit plan: two commits, one push**, after the review-round commit that lands this
+  phase's text, `mpdf-011`'s `CORRECTED` note and the review record. First,
+  `test(mpdf-001)`: the two fixture changes and `examples_test.rs`. Second,
+  `spec(mpdf-001)`: this phase's `shipped` date, the README, any rules sentence, and the
+  indices regenerated.
 
 
 <!--
