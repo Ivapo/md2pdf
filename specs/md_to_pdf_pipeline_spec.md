@@ -88,6 +88,11 @@ phases:
     shipped: 2026-09-25
     cut: null
     by: null
+  - name: "Phase 17 — an article is one column until it asks for two"
+    reviewed: 2026-09-25
+    shipped: null
+    cut: null
+    by: null
 
 extends: null
 supersedes: null
@@ -129,6 +134,10 @@ columns: 1        # optional; the default is 2
 
 Body text in an article look.
 ```
+
+> **CORRECTED 2026-09-25, by Phase 17.** The example above is kept as it was written. Its
+> comment, "the default is 2", no longer holds: a document that leaves `columns` out gets
+> `1`, and two columns is the author's `columns: 2`.
 
 The engine is UI-independent. A Tauri desktop app later becomes a second thin
 wrapper around the same core crate. It is not a rewrite.
@@ -559,6 +568,12 @@ described.
   valid, and every default applies. An unknown key, or an invalid `columns`
   value, is an error that names the key. Landed in Phase 2's scope; the §1
   example is settled, not provisional.
+
+  > **CORRECTED 2026-09-25, by Phase 17.** The resolution above, and its "default `2`",
+  > is kept as it was written. The article's default is now one column: a document that
+  > leaves `columns` out gets `1` under either look, and two columns is the author's
+  > `columns: 2`. The per-look resolution stays.
+
 - **OQ-4** — ~~How does code content reach Typst verbatim — always the
   `#raw(...)` function form, or backtick fences with delimiter counting when
   the content itself contains backticks? One mechanism should serve both
@@ -713,6 +728,11 @@ described.
   single column, which is the point of choosing a look. Landed in Phase 9's
   scope.
 
+  > **CORRECTED 2026-09-25, by Phase 17.** The resolution's "`2` for `article`" is kept
+  > as it was written. The article's default is now one column: a document that leaves
+  > `columns` out gets `1` under either look, and two columns is the author's
+  > `columns: 2`. The per-look resolution stays.
+
 - **OQ-11** — ~~with exactly one affiliation, does the marker appear at all? Most
   published templates drop it: one affiliation over any number of authors needs no
   relation, and a lone `¹` on every name is noise that says nothing. Against that, a
@@ -856,6 +876,13 @@ produces and carries a checkable exit gate.
   same for the single-column layout. (3) The generated Typst source contains
   the title and the author. (4) A fixture with an unknown frontmatter key makes
   the CLI exit non-zero with a message that names the key.
+
+  > **CORRECTED 2026-09-25, by Phase 17.** This phase's "two-column layout by default",
+  > and gate (1)'s "the two-column default", are kept as they were written. The
+  > article's default is now one column: a document that leaves `columns` out gets `1`
+  > under either look, and two columns is the author's `columns: 2`. The per-look
+  > resolution stays.
+
 - **Close-out:** Add `core/src/frontmatter.rs` to `rules/pipeline.md`'s
   `sources`, then update the rule against them. One push.
 
@@ -1361,6 +1388,11 @@ like.
   `article`, `1` for `press-release` — so the schema, never the template,
   stays the home of every default, and `Frontmatter::default`'s own comment
   moves with the convention; an explicit `columns` wins over it either way.
+
+  > **CORRECTED 2026-09-25, by Phase 17.** The paragraph above, with its "`2` for
+  > `article`", is kept as it was written. The article's default is now one column: a
+  > document that leaves `columns` out gets `1` under either look, and two columns is
+  > the author's `columns: 2`. The per-look resolution stays.
 
   In `core/assets/`: `template.typ` keeps its filename and becomes the
   `article` look — renaming it would rewrite the import line in all thirteen
@@ -2946,6 +2978,196 @@ reference either.
   phase's text, both `CORRECTED` notes and the review record. First, `refactor(mpdf-001)`:
   the arm and the pinned test. Second, `spec(mpdf-001)`: this phase's `shipped` date, the
   rules passage, and both indexes regenerated.
+
+
+### Phase 17 — an article is one column until it asks for two
+
+*Produces the observable: yes — every document that leaves `columns` out, under the
+`article` look, typesets in one column instead of two.*
+
+**Drafted 2026-09-25**, at the author's request: a document that says nothing about layout
+should arrive in one column, and two columns become a choice a paper makes by writing
+`columns: 2`. The `article` look stays the default look, and nothing else about it changes.
+
+- **Step 0 — a decision, not only code?** Yes. A shipped default is a decision this spec
+  owns. OQ-3 set `columns` to default `2`, Phase 2 built it, and OQ-10 / Phase 9 made it
+  the article's convention.
+- **Step 1 — does it remove or contradict shipped work?** It contradicts a shipped decision
+  of this spec's own, and removes no phase. **No phase is cut.** Phase 2's schema, Phase
+  9's per-look resolution and every construct they carry stay built, and only the
+  article's number moves. So the five statements that name `2` as the article's default
+  each get a dated `CORRECTED` note in place, beside the text, with the original kept:
+  §1's example, OQ-3's resolution, Phase 2's scope and gate, OQ-10's resolution, and
+  Phase 9's scope. The change itself is argued here as a phase, on Phase 16's precedent
+  for a note and a phase together. §6.1 step 1 reads "never a phase" for work that
+  contradicts shipped work. The precedent applies because nothing is cut here: a shipped
+  default moves, and the construct that carries it stays.
+- **Step 2 — the subject.** The frontmatter schema and the looks' contract, which this spec
+  owns. So a phase.
+
+- **Scope: one number, and what states it.**
+
+  **The code.** In `core/src/frontmatter.rs`, `Template::columns` returns `1` for
+  `Template::Article`. Three comments in that file say the old default and are rewritten:
+  `Template::columns`' doc comment, *"An article runs in two columns and a press release in
+  one"*; `Frontmatter::default`'s, *"The article look, in the two columns its convention
+  gives"*; and the comment above the resolution in `parse`, *"so a press release is
+  single-column without saying so"*, which is no longer what tells the looks apart.
+
+  Two unit tests in that file's `tests` module change. In
+  `the_look_gives_the_column_count_the_document_left_out`, the first assertion,
+  `parse("template: article\n", 2)`, expects `1`. Its second, for `press-release`, stays.
+  `an_explicit_column_count_wins_over_the_convention` today holds only
+  `template: press-release` with `columns: 2`, in both key orders. It **gains the same two
+  blocks for `template: article`**, `"template: article\ncolumns: 2\n"` and
+  `"columns: 2\ntemplate: article\n"`, each expecting `2`.
+
+  **The per-look resolution stays, knowingly unobservable for now.** Both looks now give
+  `1`, so `columns.unwrap_or(out.template.columns())` in `core/src/frontmatter.rs:parse`
+  gives the same answer whichever look is read. The mechanism is kept anyway. It is Phase
+  9's decision and costs one match. A look added later with a different convention would
+  need it back, and deleting it is a separate decision this phase does not take. The limit
+  is stated rather than hidden: until two looks differ, no test can tell a resolution that
+  reads `template` from one that ignores it.
+
+  **The look's own fallback follows the schema.** `core/assets/template.typ`'s signature
+  default `columns: 2` becomes `columns: 1`. It applies only to a hand-written call, since
+  `core/src/emit.rs:header` names every argument on every real call, per OQ-10. A
+  hand-written call and a real one then agree about the default.
+
+  **The golden files: thirty-three move, by one token each.** Measured on 2026-09-25, by
+  regenerating every `tests/golden/*.typ` from its same-named fixture with the article
+  default at `1`. 33 of the 36 files change. Each changes only the `columns: 2,` in its
+  `#show: template.with(…)` line, to `columns: 1,`. The three that do not move are the
+  ones whose fixture names `columns` or selects `press-release`. Each golden is
+  regenerated with `md2pdf --emit-typst`, run from `tests/fixtures/`, and never
+  hand-edited. The inline header in
+  `core/tests/golden_test.rs:absent_frontmatter_gets_every_default` moves by the same token.
+  Every other test that failed during the measurement compares against a golden file and
+  passes once the goldens move.
+
+  **The diagram tests keep their four configurations, in two tables.** Two tables read the
+  empty row `""` as article-at-two-columns, and both change the same way: `""` becomes
+  `"columns: 2\n"`, and `"columns: 1\n"` becomes `""`. So the four configurations stay
+  article-two, article-one, press-one and press-two. The first is the `LOOKS` table in
+  `core/src/lib.rs`'s tests, a four-tuple table that also carries each configuration's
+  size, margin and column count. Only the strings are relabelled, and each row's numbers
+  stay: the article row with `2.0` columns now reads `"columns: 2\n"`, and the one with
+  `1.0` reads `""`. The second is
+  `core/tests/golden_test.rs:DIAGRAM_LOOKS`, a table of strings alone, read by
+  `the_diagrams_fixture_compiles_to_a_pdf_in_every_look_and_column_count` and
+  `each_familys_fixture_compiles_to_a_pdf_in_every_look_and_column_count`. Its doc
+  comment, *"each look, at one column and at two"*, stays true only because the swap is
+  made. Left alone, both of its rows would be article-one and the table would silently
+  cover three configurations. The default now
+  stands for article-one, and is still compiled and measured at layout time. The two tests
+  that read the table, `diagrams_are_sized_by_the_looks_rule_in_all_four_configurations`
+  and `the_narrow_families_take_the_column_and_er_the_tolerance`, keep their names and
+  their assertions. Only which row stands for which configuration moves. The comments that
+  say *"from `article`'s literals at two columns"* describe the bands, which are properties
+  of the diagrams, and stay true.
+
+  **What now exercises the article at two columns**, stated because it narrows. No golden
+  fixture does, since every one that left `columns` out moves to one column. The article
+  at two columns is held by the two `columns: 2` rows above, by the new inline case in gate
+  (1), and by `samples/article.md`, which names `columns: 2` and is compiled by the anchors
+  tests. Phase 15's `the_task_list_fixture_compiles_to_a_pdf_in_both_looks` now compiles
+  the article at one column. The sixty-word item was sized to wrap in the article's
+  two-column measure, and in one column it still wraps at least once. The item's reason
+  for existing, a wrapped task hanging under its first line, still holds. The doc comment's
+  record of a page image read on 2026-09-25 stays as written, since that is when it was
+  read.
+
+  **Five sites in three samples say the old default.** Each is reworded **in place, on the
+  same number of lines**, so no heading moves and no anchor the tests pin moves:
+  - `samples/showcase/showcase.md:51`, *"title block, two columns, no numbers on anything"*,
+    becomes *"title block, one column, no numbers on anything"*;
+  - `samples/showcase/showcase.md:67–70`, *"the count your look brings, which is 2 for an
+    article. This file says 1, which is why you are reading one wide column rather than
+    two narrow ones."*, says that both looks bring 1, and that this file names it anyway;
+  - `samples/article.md:31`, *"2 for an article, 1 for a press release"*, and `:33`,
+    *"arrives with no title block and two columns"*, say one column for both;
+  - `samples/press-release.md:32`, the table row `| article | 2 |` under *"Look |
+    Columns"*, becomes `| article | 1 |`.
+
+  The sweep that found them is gate (4)'s own pattern. Every sample already names
+  `columns` or selects `press-release`, so no sample's layout moves. Only the prose moves.
+  The pattern's other hits stay true and are left as they are: a sentence conditional on
+  two columns (*"In two columns, …"*), the diagram bands' comments in `lib.rs`, and
+  README sentences about `samples/abstract.md`, which names `columns: 2` itself.
+
+  **Untouched:** `core/src/emit.rs`, `core/src/sections.rs`, the math and diagram modules,
+  `core/assets/press-release.typ`, `cli/src`, and every fixture's markdown.
+
+- **Exit gate:** five cases.
+
+  (1) **The default is one column, and two is still a key away.** In
+  `core/src/frontmatter.rs`'s tests, `the_look_gives_the_column_count_the_document_left_out`
+  asserts `1` under `article` and under `press-release`, and
+  `an_explicit_column_count_wins_over_the_convention` asserts `2` for `columns: 2` under
+  both looks, in either key order: four blocks, two of them new. In
+  `core/tests/golden_test.rs`, a new inline case asserts that `md_to_typst` of
+  `---\ncolumns: 2\n---\n\n# H\n` carries `columns: 2,` in its show line, and that the same
+  document without the key carries `columns: 1,`.
+
+  (2) **The goldens move by one token and nothing else.** From the review-round commit to
+  the phase's push, the diff under `tests/golden/` touches exactly 33 files. In each, the
+  one changed line differs from its predecessor only by `columns: 2,` → `columns: 1,`.
+  `git diff -U0 <review-round commit> HEAD -- tests/golden` shows 33 removed and 33 added
+  content lines, not counting the `---`/`+++` file headers, and every pair differs by that
+  token alone. No fixture under `tests/fixtures/` changes.
+
+  (3) **It holds at layout time, not only in the markup.** The diagram tests pass with
+  both tables as reassigned above, and each table lists four distinct configurations. Their `""` row compiles the default and measures every
+  diagram against the one-column rule, so a default that reached the header but not the
+  page fails there.
+
+  (4) **The prose is true and the anchors hold.** The sweep
+  `grep -rnE "2 for an article|\| *article *\| *2|two columns|two narrow|default is 2|two-column|runs in two" samples README.md core/src core/assets cli/src`
+  returns, after the build, only the hits named above as staying true: `samples/showcase/sections/figures.md:104`,
+  the five band comments in `core/src/lib.rs`, and `README.md`'s two sentences at `:73` and
+  `:87`. Before the build it also returns the five sample sites and the two doc comments.
+  Each edited sample keeps its line count. `core/tests/golden_test.rs:the_articles_last_heading_is_not_on_the_first_page`
+  and the rest of the suite pass: `cargo test --workspace`.
+
+  (5) **The corpus stays clean.** `spec-lint` exits with zero errors. The build's diff, from
+  the review-round commit to the push, names `core/src/frontmatter.rs`,
+  `core/assets/template.typ`, `core/src/lib.rs`, `core/tests/golden_test.rs`, the 33
+  goldens, the three samples, `rules/pipeline.md`, `README.md`, this spec (the `shipped`
+  date alone) and the two regenerated indices, and nothing else.
+
+- **Close-out.**
+
+  `rules/pipeline.md`, two passages. The frontmatter paragraph's
+  `Frontmatter::default` gives *"… two columns …"* becomes one column. The resolution
+  paragraph, *"An absent `columns` takes the selected look's convention — `2` for
+  `article`, `1` for `press-release`"*, says `1` for both, and keeps one sentence on why the
+  resolution stays. The cap moves to the measured count if the edit changes it.
+
+  `README.md`, the `template` table: the `article` row's *"Columns without a `columns`
+  key"* becomes `1`. The sentence under it, *"so a press release is a single column without
+  saying so"*, is reworded, since that is no longer what tells the looks apart. Any other
+  README sentence that states the article default is found with `grep -n "column"` and
+  corrected in the same pass. Sentences about `samples/article.md` stay, since that sample
+  names `columns: 2` itself.
+
+  **`CLAUDE.md`: none needed.** The observable sentence does not move. **Status artifact:
+  none**, as before. **Letur: none in this repository, and a debt named there.** Letur
+  gains the default by taking the version. Its `tests/fixtures/samples/` holds copies of
+  `samples/article.md` and `samples/showcase/showcase.md` that carry the old prose, and its
+  own specs mention "one or two columns". Those belong to Letur's bump, in the same change
+  as Phase 15's task-list debt.
+
+  **Versioning, stated because it decides the release.** This changes the output of every
+  existing document that leaves `columns` out, without the author writing anything. It
+  ships in the same minor release as Phase 15, not in a patch, so a caller on `0.3` never
+  receives it silently.
+
+  **Commit plan: two commits, one push**, after the review-round commit that lands this
+  phase's text, its five `CORRECTED` notes and the review record. First,
+  `feat(mpdf-001)`: `frontmatter.rs`, `template.typ`, `lib.rs`'s table, `golden_test.rs`,
+  the 33 goldens and the three samples. Second, `spec(mpdf-001)`: this phase's `shipped`
+  date, the rules passages and cap, the README, and both indexes regenerated.
 
 
 <!--

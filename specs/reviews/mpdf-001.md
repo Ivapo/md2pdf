@@ -2,6 +2,51 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 17 only — 2026-09-25 — the same generalist, resumed with the author's changelog — **READY (converged)**
+
+Verdict: `READY`, zero blocking. Phase 17's `reviewed` is set to 2026-09-25. Converged in two
+rounds.
+
+All three blockers are resolved in the file. The reviewer re-ran gate (4)'s sweep and got
+exactly the set the phase names: five sample sites and two doc comments before the build,
+and `figures.md:104`, five band comments in `lib.rs` and README `:73`/`:87` as the hits
+that stay true. The 33/33 golden count from round 1 stands. Five Phase 17 `CORRECTED` notes
+are in place.
+
+Non-blocking, noted for the build: gate (4) passes only if the sweep returns exactly the
+named survivors, so no rewritten comment or README sentence may introduce a new "two
+columns" phrase. At `showcase.md:67–70` the phrase "2 for an / article" breaks across lines,
+so the sweep meets that site through line 70; the scope names the whole range.
+
+### Round 1 — Phase 17 only — 2026-09-25 — one fresh generalist with repo access — **NOT READY**
+
+Round 0: the phase produces the observable. Every document that leaves `columns` out, under
+`article`, typesets in one column. It is the right thing to build because the author
+decided it. Only whether it can be built as written was under review.
+
+The reviewer made the change in a throwaway worktree. They reproduced 33 of 36 goldens
+moving by the one token, with 33 removed and 33 added content lines. The three that do not
+move are `citations_press_release`, `press_release` and `single_column`. With the goldens,
+the table and the inline header moved, only the frontmatter unit test failed, as the phase
+said.
+
+- **B1: `core/tests/golden_test.rs:DIAGRAM_LOOKS` was missed.** A second four-row table
+  reads `""` as article-at-two-columns. Left alone it would silently cover three
+  configurations under a doc comment that claims four. Accepted: both tables are
+  relabelled the same way, and gate (3) requires four distinct configurations in each.
+- **B2: three more sample sites state the old default, and gate (4)'s grep missed them.**
+  They are `showcase.md:67–70` and `press-release.md:32`'s `| article | 2 |`. Accepted:
+  five sites are listed, and gate (4) is one sweep whose before and after hits are named.
+- **B3: the scope misdescribed the unit tests.** The explicit-`columns: 2` cases live in
+  `an_explicit_column_count_wins_over_the_convention` and cover only `press-release`.
+  Accepted: both tests are named, and the two article blocks are new.
+
+Non-blocking, accepted: §1's example comment gets a fifth `CORRECTED` note. A paragraph
+says what now exercises the article at two columns. `parse`'s comment joins the rewrite.
+Gate (2)'s command names its range and counts content lines. The note-plus-phase
+mechanism is argued in Step 1: nothing is cut, and a shipped default moves. No change was
+needed for the rules cap, since the close-out already moves it.
+
 ### Round 2 — Phase 16 only — 2026-09-25 — the same generalist, resumed with the author's changelog — **READY (converged)**
 
 Verdict: `READY`, zero blocking. Phase 16's `reviewed` is set to 2026-09-25. Converged in two
