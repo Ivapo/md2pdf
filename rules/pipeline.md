@@ -37,7 +37,7 @@ covers: >
   compile reports,
   the Typst world and its bundled fonts, the CLI contract, and the fetch the CLI makes when
   asked and the guards it keeps
-max_lines: 1418
+max_lines: 1421
 generated: 2026-09-04
 ---
 
@@ -252,8 +252,11 @@ error with a name built where they stand rather than through `describe`, which n
 what the walk rejects wholesale.
 
 Every arm of `describe` is reachable, which is a property rather than an accident: a name
-refuses nothing until a parser option produces the event it names. Two arms remain, raw HTML
-and a footnote reference. `describe` names no math arm and no task list arm:
+refuses nothing until a parser option produces the event it names. One name remains, raw
+HTML. A footnote reference is not among them: the walk handles every one, and none can reach
+the alt capture, because a `[^1]` claims its own `]` and the image around it never forms —
+`core/src/emit.rs:no_footnote_reference_arrives_inside_an_image` pins that over twenty-five
+spellings. `describe` names no math arm and no task list arm:
 `Options::ENABLE_MATH` and `Options::ENABLE_TASKLISTS` now bring constructs the walk
 handles, and the sections above and below hold them. Typst has no checkbox element, which is
 why a task list's box is drawn by the look rather than named by the emitter.

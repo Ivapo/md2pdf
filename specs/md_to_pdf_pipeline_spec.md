@@ -85,7 +85,7 @@ phases:
     by: null
   - name: "Phase 16 — the footnote arm the reject path never sees"
     reviewed: 2026-09-25
-    shipped: null
+    shipped: 2026-09-25
     cut: null
     by: null
 
