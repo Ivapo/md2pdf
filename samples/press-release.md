@@ -29,7 +29,7 @@ through the same emitter:
 
 | Look | Columns |
 | --- | :---: |
-| article | 2 |
+| article | 1 |
 | press-release | 1 |
 
 > A block quote, set the way this look sets one.

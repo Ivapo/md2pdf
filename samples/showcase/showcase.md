@@ -48,7 +48,7 @@ may take. A document and the files it names travel as one folder.
 
 The block at the top of this file carries every key there is, and all eleven
 are optional. Delete the whole block and the PDF still compiles: it arrives with no
-title block, two columns, no numbers on anything, and no reference list.
+title block, one column, no numbers on anything, and no reference list.
 
 `title`, `author`, `affiliation` and `date` become the block at the top of the
 first page. `date` is your text and nothing else — md2pdf never reads a clock,
@@ -65,9 +65,9 @@ the markers are optional; with no `affiliation` key at all they are dropped.
 names the first; change that one word and convert again to read all of this in
 the other look, where a caption's number is separated by a dash rather than a
 full stop and the title block sets flush left over a rule. `columns` takes `1`
-or `2`; leave it out and you get the count your look brings, which is 2 for an
-article. This file says 1, which is why you are reading one wide column rather
-than two narrow ones.
+or `2`; leave it out and you get the count your look brings, which is 1 for
+either look. This file says 1 anyway, so the one wide column you are reading
+is written down rather than assumed.
 
 `equations: numbered` puts a number on every display formula, which is what
 lets a sentence point at one. `figures: sectioned` gives every figure, table

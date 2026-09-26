@@ -16,7 +16,7 @@
 // The defaults are the fallback for a hand-written call; core/src/frontmatter.rs
 // holds the ones a document actually gets.
 
-#let template(title: none, author: none, affiliation: none, columns: 2, date: none, equations: "plain", figures: "flat", headings: "plain", citations: "numeric", doc) = {
+#let template(title: none, author: none, affiliation: none, columns: 1, date: none, equations: "plain", figures: "flat", headings: "plain", citations: "numeric", doc) = {
   set page(paper: "a4", margin: 2.5cm, columns: columns)
   set text(font: "Libertinus Serif", size: 10pt, lang: "en")
   set par(justify: true, leading: 0.65em)

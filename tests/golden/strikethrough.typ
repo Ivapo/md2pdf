@@ -1,5 +1,5 @@
 #import "template.typ": template, divider
-#show: template.with(title: none, author: none, affiliation: none, columns: 2, date: none, equations: "plain", figures: "flat", headings: "plain", citations: "numeric")
+#show: template.with(title: none, author: none, affiliation: none, columns: 1, date: none, equations: "plain", figures: "flat", headings: "plain", citations: "numeric")
 
 = Strikethrough
 

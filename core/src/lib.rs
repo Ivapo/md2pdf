@@ -1147,8 +1147,8 @@ mod tests {
     /// What the frontmatter gains, then the look's caption size in pt, its
     /// margin in cm, and the column count that results.
     const LOOKS: [(&str, f64, f64, f64); 4] = [
-        ("", 9.0, 2.5, 2.0),
-        ("columns: 1\n", 9.0, 2.5, 1.0),
+        ("columns: 2\n", 9.0, 2.5, 2.0),
+        ("", 9.0, 2.5, 1.0),
         ("template: press-release\n", 9.5, 3.0, 1.0),
         ("template: press-release\ncolumns: 2\n", 9.5, 3.0, 2.0),
     ];

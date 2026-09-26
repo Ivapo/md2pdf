@@ -28,9 +28,9 @@ names none, so it gets the article look you are reading. The press-release
 sample beside it names the other one.
 
 The columns key takes 1 or 2. Leave it out and you get the count your look
-brings: 2 for an article, 1 for a press release. Delete the whole frontmatter
-block and the PDF still compiles: it simply arrives with no title block and
-two columns.
+brings, which is 1 for either look; this file asks for 2. Delete the whole
+frontmatter block and the PDF still compiles: it simply arrives with no title
+block, in one column.
 
 The equations key takes numbered or plain, and this file says numbered, which
 is why the two display formulas further down carry a number each. Leave it out

@@ -335,10 +335,23 @@ fn the_generated_source_carries_the_title_and_the_author() {
 fn absent_frontmatter_gets_every_default() {
     assert!(
         md_to_typst(BASIC_MD, &[]).unwrap().contains(
-            "template.with(title: none, author: none, affiliation: none, columns: 2, date: none, equations: \"plain\", figures: \"flat\", headings: \"plain\", citations: \"numeric\")"
+            "template.with(title: none, author: none, affiliation: none, columns: 1, date: none, equations: \"plain\", figures: \"flat\", headings: \"plain\", citations: \"numeric\")"
         ),
         "the defaults did not reach the template call"
     );
+}
+
+/// An article is one column until it asks for two.
+///
+/// `mpdf-001` Phase 17 moved the article's default from two columns to one, so
+/// no golden fixture exercises the article at two any more — this is the case
+/// that holds the key still reaching the call.
+#[test]
+fn an_article_is_one_column_until_it_asks_for_two() {
+    let two = md_to_typst("---\ncolumns: 2\n---\n\n# H\n", &[]).unwrap();
+    assert!(two.contains("columns: 2,"), "{two}");
+    let one = md_to_typst("# H\n", &[]).unwrap();
+    assert!(one.contains("columns: 1,"), "{one}");
 }
 
 #[test]
@@ -6281,8 +6294,8 @@ const DIAGRAMS_MD: &str = include_str!("../../tests/fixtures/diagrams.md");
 /// The four configurations the sizing rule is gated in: each look, at one
 /// column and at two. Written into the frontmatter the fixture already opens.
 const DIAGRAM_LOOKS: [&str; 4] = [
+    "columns: 2\n",
     "",
-    "columns: 1\n",
     "template: press-release\n",
     "template: press-release\ncolumns: 2\n",
 ];

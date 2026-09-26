@@ -49,11 +49,12 @@ impl Template {
 
     /// The column count this look's convention gives.
     ///
-    /// An article runs in two columns and a press release in one. This applies
-    /// only where the document left `columns` out.
+    /// Both looks run in one column: a document that wants two says
+    /// `columns: 2`. This applies only where the document left `columns` out,
+    /// and it stays per look, so a later look may bring a count of its own.
     pub fn columns(self) -> u8 {
         match self {
-            Template::Article => 2,
+            Template::Article => 1,
             Template::PressRelease => 1,
         }
     }
@@ -312,7 +313,7 @@ pub(crate) struct Frontmatter {
 }
 
 impl Default for Frontmatter {
-    /// The article look, in the two columns its convention gives.
+    /// The article look, in the one column its convention gives.
     ///
     /// The schema is the home of every shipped default, never a template:
     /// `template.typ` names its own fallbacks, but only for a hand-written
@@ -506,7 +507,8 @@ pub(crate) fn parse(block: &str, first_line: usize) -> Result<Frontmatter> {
     }
 
     // An explicit count wins. An absent one takes the selected look's
-    // convention, so a press release is single-column without saying so.
+    // convention, read once the whole block is, because `template` may sit
+    // below `columns`.
     out.columns = columns.unwrap_or(out.template.columns());
     resolve_affiliations(&mut out)?;
     Ok(out)
@@ -739,7 +741,7 @@ mod tests {
     /// An absent `columns` takes the selected look's convention.
     #[test]
     fn the_look_gives_the_column_count_the_document_left_out() {
-        assert_eq!(parse("template: article\n", 2).unwrap().columns, 2);
+        assert_eq!(parse("template: article\n", 2).unwrap().columns, 1);
         assert_eq!(parse("template: press-release\n", 2).unwrap().columns, 1);
     }
 
@@ -748,7 +750,9 @@ mod tests {
     fn an_explicit_column_count_wins_over_the_convention() {
         let below = "template: press-release\ncolumns: 2\n";
         let above = "columns: 2\ntemplate: press-release\n";
-        for block in [below, above] {
+        let article_below = "template: article\ncolumns: 2\n";
+        let article_above = "columns: 2\ntemplate: article\n";
+        for block in [below, above, article_below, article_above] {
             assert_eq!(parse(block, 2).unwrap().columns, 2, "block was: {block}");
         }
     }
