@@ -3988,10 +3988,13 @@ fn describe(event: &Event) -> &'static str {
             _ => "markdown construct",
         },
         Event::Html(_) | Event::InlineHtml(_) => "raw HTML",
-        Event::FootnoteReference(_) => "footnote reference",
         // The walk handles these, so they never reach this function. The match
-        // must still cover them.
-        Event::Text(_)
+        // must still cover them. A footnote reference belongs here too: the walk
+        // handles every one, and the alt capture never meets one, because a
+        // `[^1]` claims its own `]` and the image around it never forms —
+        // `tests::no_footnote_reference_arrives_inside_an_image` pins that.
+        Event::FootnoteReference(_)
+        | Event::Text(_)
         | Event::SoftBreak
         | Event::Code(_)
         | Event::HardBreak
@@ -4005,6 +4008,64 @@ fn describe(event: &Event) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A footnote reference never arrives inside an image, so the alt capture
+    /// never hands one to `describe`.
+    ///
+    /// The twenty-five spellings `mpdf-001` Phase 16 lists, verbatim. Each must
+    /// yield a reference somewhere, so no row passes by testing nothing, and
+    /// none may yield one while an image is open. A later pulldown-cmark that
+    /// nests one fails here, before the alt capture would refuse it with the
+    /// nonsense name `supported construct`.
+    #[test]
+    fn no_footnote_reference_arrives_inside_an_image() {
+        for spelling in [
+            "![a [^1] b](x.png)",
+            "![see[^1]](x.png)",
+            "![a[^1]](x.png)",
+            "![a [^1]b](x.png)",
+            "![[^1]](x.png)",
+            "![a[^1] ](x.png)",
+            "![ [^1] ](x.png)",
+            "![a[^1]][r]\n\n[r]: x.png",
+            "![a [^1]][r]\n\n[r]: x.png",
+            "![a[^1]]\n\n[a[^1]]: x.png",
+            "![a [^1]][]\n\n[a [^1]]: x.png",
+            "![a [^1]]: x.png",
+            "![a *[^1]*](x.png)",
+            "![a `x` [^1]](x.png)",
+            "![a [^1][] b](x.png)",
+            "![a [b [^1] c](y) d](x.png)",
+            "![a ![b[^1]](y.png) c](x.png)",
+            "![a\n[^1]](x.png)",
+            "![a [^1]](<x.png>)",
+            "![a [^1]] (x.png)",
+            "![a [^1]](x.png \"t\")",
+            "![a [^1]](x.png)[^1]",
+            "- ![a [^1]](x.png)",
+            "> ![a[^1]](x.png)",
+            "| h |\n|---|\n| ![a[^1]](x.png) |",
+        ] {
+            let md = format!("{spelling}\n\n[^1]: n\n");
+            let mut depth = 0;
+            let mut references = 0;
+            for event in parser(&md) {
+                match event {
+                    Event::Start(Tag::Image { .. }) => depth += 1,
+                    Event::End(TagEnd::Image) => depth -= 1,
+                    Event::FootnoteReference(_) => {
+                        assert_eq!(
+                            depth, 0,
+                            "a reference arrived inside an image: {spelling:?}"
+                        );
+                        references += 1;
+                    }
+                    _ => {}
+                }
+            }
+            assert!(references > 0, "no reference arrived at all: {spelling:?}");
+        }
+    }
 
     /// The name is FNV-1a 64, pinned by the published vectors.
     ///
