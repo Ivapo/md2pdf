@@ -37,7 +37,7 @@ covers: >
   compile reports,
   the Typst world and its bundled fonts, the CLI contract, and the fetch the CLI makes when
   asked and the guards it keeps
-max_lines: 1421
+max_lines: 1424
 generated: 2026-09-04
 ---
 
@@ -967,7 +967,7 @@ free string the template typesets verbatim; `columns`, `1` or `2`; `template`, t
 `sectioned`; `headings`, `plain` or a depth `1`–`6`; `citations`, `numeric` or
 `author-date`; and `bibliography`, a path. An absent
 block is valid, and `core/src/frontmatter.rs:Frontmatter::default` gives the article look,
-no title block, no author, no affiliation, no date, two columns, no equation numbers, flat
+no title block, no author, no affiliation, no date, one column, no equation numbers, flat
 figure numbers, unnumbered headings, numeric citation marks and no bibliography. Ten reach
 the look: `core/src/emit.rs:header` always names all nine arguments and the selected file.
 
@@ -1055,9 +1055,12 @@ oversight.** Typst numbers a display equation through `math.equation` and a figu
 `equations: numbered` keeps its `(1)` in a sectioned document and takes no section
 prefix.
 
-An absent `columns` takes the selected look's convention — `2` for `article`, `1` for
-`press-release` — resolved in `core/src/frontmatter.rs:parse` after the whole block is read,
-because `template` may sit below `columns`. An explicit value wins either way. The schema is
+An absent `columns` takes the selected look's convention, which is `1` for both `article`
+and `press-release` since `mpdf-001` Phase 17; two columns is the author's `columns: 2`. It
+is resolved in `core/src/frontmatter.rs:parse` after the whole block is read, because
+`template` may sit below `columns`. The resolution stays per look although both answer
+alike, so a later look may bring a count of its own. Until one does, no test can tell a
+resolution that reads `template` from one that ignores it. An explicit value wins either way. The schema is
 the home of every default; a template's own defaults are the fallback for a hand-written
 call and never reach a document.
 

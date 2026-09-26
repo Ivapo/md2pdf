@@ -90,7 +90,7 @@ phases:
     by: null
   - name: "Phase 17 — an article is one column until it asks for two"
     reviewed: 2026-09-25
-    shipped: null
+    shipped: 2026-09-25
     cut: null
     by: null
 

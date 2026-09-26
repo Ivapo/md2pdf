@@ -825,11 +825,11 @@ bibliography: refs.yml      # a Hayagriva .yml/.yaml or BibLaTeX .bib file
 
 | Name | The look | Columns without a `columns` key |
 | --- | --- | :---: |
-| `article` | the default: a centred title block, the affiliations under the authors | 2 |
+| `article` | the default: a centred title block, the affiliations under the authors | 1 |
 | `press-release` | a dateline above a flush-left title, over a rule | 1 |
 
-Each look brings its own column count, so a press release is a single column without
-saying so. A `columns` key of your own beats it.
+Both looks set a single column unless the document says `columns: 2`, and a `columns`
+key of your own always wins.
 
 `author` takes several names, separated by `;` — never a comma, because `Po, Iva` is an
 ordinary way to write one person's name. A `^` after a name points at an `affiliation`, and
