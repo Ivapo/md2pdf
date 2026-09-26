@@ -20,7 +20,7 @@ path = "src/main.rs"
 # **The `version` is not decoration.** A published crate cannot depend on a path,
 # so `cargo publish` refuses this crate outright without it; the path is what a
 # workspace build uses and the version is what the registry resolves.
-md2pdf-core = { path = "../core", version = "0.3.0" }
+md2pdf-core = { path = "../core", version = "0.4.0" }
 clap = { version = "4", features = ["derive"] }
 # The client `--fetch` downloads images with, and nothing else reaches it: `core`
 # stays network-free. `rustls` brings TLS with bundled webpki roots, so a fetch
