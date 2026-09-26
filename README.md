@@ -31,8 +31,8 @@ same crate compiled to WebAssembly, converting in the page — it sets out what 
 adds to markdown, and every example on it is one click away from a PDF in your own
 browser, the refusals included. Nothing is sent anywhere, and there is no server to
 send it to. **The twelve examples that page shows are fixtures here too**, frozen under
-`tests/fixtures/examples/`, where `core/tests/examples_test.rs` compiles the ten it
-accepts and holds the two it refuses to the sentence they print.
+`tests/fixtures/examples/`, where `core/tests/examples_test.rs` compiles the nine it
+accepts and holds the three it refuses to the sentence they print.
 
 Both that page and the macOS app that draws the PDF while you write it are **Letur**, a
 second front end over this crate: it converts exactly what the command converts and

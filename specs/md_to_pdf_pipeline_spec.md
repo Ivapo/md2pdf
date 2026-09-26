@@ -95,7 +95,7 @@ phases:
     by: null
   - name: "Phase 18 — the page's rows, re-mirrored"
     reviewed: 2026-09-25
-    shipped: null
+    shipped: 2026-09-25
     cut: null
     by: null
 
