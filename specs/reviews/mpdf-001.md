@@ -2,6 +2,47 @@
 
 Append-only. One heading per round, newest first.
 
+### Round 2 — Phase 16 only — 2026-09-25 — the same generalist, resumed with the author's changelog — **READY (converged)**
+
+Verdict: `READY`, zero blocking. Phase 16's `reviewed` is set to 2026-09-25. Converged in two
+rounds.
+
+Both blockers are resolved in the file. The reviewer copied the twenty-five listed
+literals verbatim into their probe and ran them with and without the `citation_reference`
+callback. Every spelling yielded at least one `FootnoteReference` (22 yielded one, 3 yielded
+two). None formed an image, and none nested a reference. The dropped
+`"![a\\[^1]](x.png)"` yields none. The count re-derived as eight rows of three plus one.
+Today `describe`'s body carries five literals, and four remain after the move. The
+opening-quote grep finds the definition refusal and `describe`'s arm today, and only the
+first after the change.
+
+### Round 1 — Phase 16 only — 2026-09-25 — one fresh generalist with repo access — **NOT READY**
+
+Round 0: the phase produces no observable and argues so in its header. It is the right thing
+to build because it restores Phase 8's checkable property, "every arm `describe` names is
+reachable", and corrects Phase 7's unmeasured premise, at the cost of one arm and one test.
+
+Every citation matched the code. The premise was re-derived independently: forty-five
+spellings, adversarial ones included, and none nested a `FootnoteReference` in an `Image`.
+
+- **B1: the "twenty-six spellings" were listed nowhere**, so an implementer had to invent
+  the set and no second person could check coverage. Accepted. The list is written out
+  verbatim. Re-measuring it found one spelling, the escaped bracket, that carries no
+  reference, so it was dropped and the list is twenty-five. The test also asserts that a
+  reference arrives for each spelling.
+- **B2: gate (3)'s grep did not produce what it promised.** With the closing quote it
+  matched only the arm being removed, and without quotes it depended on the new test's own
+  text. Accepted. The gate names `describe`'s literals exactly and greps with the opening
+  quote only.
+
+Non-blocking, accepted: the evidence sentence no longer claims nesting under code, since a
+reference inside a code span forms an image but is code text. The doc comment's truth is
+stated "by construct name", with the pre-existing unreachable `End(HtmlBlock)` arm named.
+Phase 15's `describe` paragraph gets a `CORRECTED` note too. Gate (4) states its diff base.
+
+Rejected: the objection that §6.1 step 1 says "never a phase". Phase 16 argues explicitly why
+it takes both the step-1 note and a step-2 phase, and the reviewer agreed that is defensible.
+
 ### Implementation note — Phase 15 — 2026-09-25 — gate (3) read, and two departures in the build
 
 **Gate (3), the page images.** `pdftoppm -r 150` over `tests/fixtures/task_list.md`, once as
