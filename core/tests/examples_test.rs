@@ -8,7 +8,9 @@
 //! become a landing site somewhere else.
 //!
 //! **The fixtures under `tests/fixtures/examples/` are the page's own bytes**,
-//! taken out of it at the split and frozen there. Neither asset could be
+//! taken out of it at the split and frozen there — or, for the ordered task
+//! list, from Letur's page at `50a73dd`, when the page replaced its task list
+//! row. Neither asset could be
 //! borrowed from this tree: `tests/fixtures/refs.yml` is keyed
 //! `DBLP:books/lib/Knuth86a` and the citation row cites `knuth1986`, and
 //! `samples/pipeline.svg` carries one trailing newline the page's does not —
@@ -37,13 +39,18 @@ const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/examp
 /// What each refusal row printed on the page, in name order.
 ///
 /// **The sentence is the one the reader was shown**, transcribed from the row's
-/// own visible `<code>` element at the split. `cli/src/main.rs` prints this same
+/// own visible `<code>` element at the split, or, for the ordered task list,
+/// from Letur's page at `50a73dd`. `cli/src/main.rs` prints this same
 /// `Display` after its `error: ` prefix, so a sentence that drifts here is a
 /// sentence that drifted at the terminal.
-const REFUSALS: [(&str, &str); 2] = [
+const REFUSALS: [(&str, &str); 3] = [
     (
         "math-refusal",
         "math error at line 1: unsupported command '\\includegraphics'",
+    ),
+    (
+        "ordered-task-list",
+        "unsupported markdown construct 'task list marker in an ordered list' at line 1",
     ),
     (
         "raw-html",
@@ -108,13 +115,13 @@ fn named(path: &str) -> Asset {
     }
 }
 
-/// The fixture set is the page's: twelve rows, ten of them accepted, and two files.
+/// The fixture set is the page's: twelve rows, nine of them accepted, and two files.
 ///
-/// The page showed nine accepted and three refused. `mpdf-001` Phase 15 took
-/// task lists into the dialect, so the task list row moved to `ok/` with its
-/// bytes unchanged: "frozen" meant the page's bytes, not its verdicts, and a
-/// promise the engine no longer keeps is not one this file should keep
-/// asserting.
+/// When `md2pdf-core` 0.4 took task lists into the dialect, Letur's page
+/// replaced its refused task list row with a refused ordered one,
+/// `1. [ ] a numbered task`, so the rows here follow it (`mpdf-001` Phase 18):
+/// the page's rows are what this file checks, and every file kept here is
+/// byte-identical to the row it mirrors.
 ///
 /// **The byte lengths are the point of the assertion, not decoration.** A later
 /// tidy-up that pointed either asset at the engine's own near-copy would leave
@@ -125,8 +132,8 @@ fn the_fixtures_are_the_pages_twelve_rows_and_its_two_assets() {
     let ok = rows("ok");
     let error = rows("error");
 
-    assert_eq!(ok.len(), 10, "ten of the page's rows are accepted");
-    assert_eq!(error.len(), 2, "two of the page's rows are refused");
+    assert_eq!(ok.len(), 9, "the page carries nine accepted rows");
+    assert_eq!(error.len(), 3, "the page carries three refusal rows");
 
     for (path, bytes) in [IMAGE, BIBLIOGRAPHY] {
         assert_eq!(
